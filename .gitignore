@@ -1,0 +1,3 @@
+lightpaper/*
+!lightpaper/index.tex
+.DS_Store
