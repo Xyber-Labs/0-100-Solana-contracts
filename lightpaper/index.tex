@@ -22,6 +22,19 @@
 \usepackage{fvextra}
 \DefineVerbatimEnvironment{code}{Verbatim}{breaklines=true, breakanywhere=true, fontsize=\small}
 
+% ------------------ WIP Watermark (toggle) ------------------
+% To disable the WIP overlay, change \wipwatermarktrue to \wipwatermarkfalse
+\usepackage{draftwatermark}
+\newif\ifwipwatermark
+\wipwatermarktrue
+\ifwipwatermark
+  % Diagonal, light gray "WIP" across all pages
+  \SetWatermarkText{FOR REVIEW ONLY}
+  \SetWatermarkScale{4}
+  \SetWatermarkColor[gray]{0.90}
+  \SetWatermarkAngle{45}
+\fi
+
 % ------------------ Typography & Styling ------------------
 \usepackage{titlesec} 
 
@@ -34,7 +47,7 @@
 \titleformat{\subsection}{\bfseries\large\color{black}}{\thesubsection}{1em}{}
 
 % ------------------ Document Meta ------------------
-\title{\Huge\bfseries Lumi Launch Protocol --- Technical LightPaper (MVP) \\ \vspace{1ex} \large Fair, capped, VRF-driven token launches with randomized LP \& fee buybacks}
+\title{\Huge\bfseries Lumi Launch Protocol --- Technical LightPaper \\ \vspace{1ex} \large Fair, capped, VRF-driven token launches with randomized LP \& fee buybacks}
 \author{Lumira Protocol Team | Xyber Collective}
 \date{\today}
 
