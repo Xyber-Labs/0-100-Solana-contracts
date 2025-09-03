@@ -16,6 +16,7 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{bookmark}
 \usepackage{amsmath}
+\usepackage{amssymb}  % for \mathbb, \mathfrak, etc.
 \usepackage{comment}
 % Code blocks with line wrapping
 \usepackage{fvextra}
@@ -33,7 +34,7 @@
 \titleformat{\subsection}{\bfseries\large\color{black}}{\thesubsection}{1em}{}
 
 % ------------------ Document Meta ------------------
-\title{\Huge\bfseries Lumi Launch Protocol --- Technical LightPaper (MVP) \\ \vspace{1ex} \large Fair, engagement-first token launches with provable randomness \& anti-snipe}
+\title{\Huge\bfseries Lumi Launch Protocol --- Technical LightPaper (MVP) \\ \vspace{1ex} \large Fair, capped, VRF-driven token launches with randomized LP \& fee buybacks}
 \author{Lumira Protocol Team | Xyber Collective}
 \date{\today}
 
@@ -58,107 +59,93 @@
 
 \section*{TL;DR}
 \begin{itemize}
-  \item \textbf{Capped Wallet Funding Pool:} Each wallet contributes up to per-wallet cap $C$; the launch targets hard cap $H$.
-  \item \textbf{Overflow + Randomised Allocation:} If demand $>$ $H$, we allocate by \emph{ticketized}, verifiably random selection; excess is auto-refunded.
-  \item \textbf{Immediate Engagement Hub:} Funding start instantly unlocks 5--10 quests to build hype and score for redistributions.
-  \item \textbf{Token Airdrop:} Selected participants receive tokens proportional to their \emph{approved} contribution.
-  \item \textbf{Randomised LP Creation:} LP on an open DEX (e.g., Raydium) is deployed at a random time within a configured window.
-  \item \textbf{Built-in Anti-Snipe:} Allocations precede trading; launch-time sniping is materially reduced; price MEV risk at listing can persist.
-  \item \textbf{Optional LBP Purchase + Redistribution:} Optional liquidity bootstrapping purchase at LP with bounded limits; tokens redistributed via quests or cross-platform airdrops.
-  \item \textbf{Lumi Revenue Model:} Lumira receives a small \% of each launch's supply; \emph{all} platform fees are used to buy back the Xyber token.
-  \item \textbf{Agent-Optional Launches:} Works for meme coins and agent-powered projects; agents are an opt-in composable layer.
+  \item \textbf{LaunchPool (Per-Wallet Cap):} A deposit pool with a hard per-wallet limit $C$ (e.g., $\le 1$ unit of the base asset) to keep whales from crowding out retail participants.
+  \item \textbf{VRF Selection (Overflow Only):} If demand exceeds the hard cap $H$, allocations are decided by verifiably random, uniform sampling over \emph{ticketized} deposits; unselected amounts are automatically refundable.
+  \item \textbf{VRF-Timed LP Window:} The creator commits an LP window $[t_{\mathrm{start}}, t_{\mathrm{end}}]$; a VRF draw picks the exact deploy time $t^\ast$ inside the window, reducing coordinated sniping.
+  \item \textbf{Fees $\rightarrow$ \$XYBER Buybacks:} Platform fees (target $\phi \ge 90\%$) are routed to market-buy \$XYBER with optional burn share $\beta$ for deflationary pressure.
 \end{itemize}
 
 \section*{Introduction}
-Open, decentralized launches are often dominated by bots and insiders. Retail contributors either miss allocations or chase volatile listings. Lumi addresses this with per-wallet caps, provable randomness, and an engagement-first experience that channels hype into measurable growth and fairer distribution.
+Open, decentralized token launches often suffer from gas wars, bot sniping, and opaque allocation rules. The Lumi MVP focuses on four primitives—\emph{per-wallet caps}, \emph{VRF-backed overflow selection}, \emph{VRF-timed LP deployment}, and \emph{fee-to-\$XYBER buybacks}—to deliver fairer distributions and reduce adversarial dynamics while staying minimal and auditable.
 
 \section*{Design Principles}
 \begin{itemize}
-  \item \textbf{Fairness-by-design:} Hard per-wallet cap + verifiable randomness $>$ gas wars and mempool games.
-  \item \textbf{Hype with purpose:} Quests incentivize creation, learning, and community without extractive spam.
-  \item \textbf{Simplicity \& composability:} Minimal, auditable contracts; permissionless where safe.
-  \item \textbf{Transparent economics:} Fees and supply policies are pre-declared; fees route to Xyber buybacks.
+  \item \textbf{Fairness-by-design:} A hard per-wallet cap $C$ and uniform ticket-level selection eliminate gas races and mempool games.
+  \item \textbf{Minimal \& auditable:} Small, self-contained programs with deterministic state transitions and explicit authority separation (program-derived addresses).
+  \item \textbf{Provable randomness:} Chain-oracle VRF for selection and LP time draws; blockhash-only RNG is \emph{not} used.
+  \item \textbf{Transparent economics:} A clear fee policy routes $\ge 90\%$ of fees to \$XYBER buybacks; an optional burn share $\beta$ can permanently reduce supply.
+  \item \textbf{Canonical pool commitment:} The launch precommits DEX pool parameters, and the deploy instruction verifies the commitment to prevent fake-pool front-runs.
 \end{itemize}
 
-\section*{System Overview}
-\textbf{Actors:} Contributors, Launch Creators, Lumi Protocol, (optional) Agents, DEX LP.
+\section*{System Overview (MVP)}
+\textbf{Actors:} Contributors, Launch Creators, Lumi Protocol, DEX LP.
 
-\textbf{Lifecycle (MVP):}
+\textbf{Lifecycle:}
 \begin{enumerate}[label=\arabic*)]
-  \item \emph{Create Launch:} Creator configures $H$, $C$, ticket size $\tau$, LP window $[t_{\text{start}}, t_{\text{end}}]$, and token allocations.
-  \item \emph{Funding Opens:} Deposits up to $C$; Engagement Hub quests unlock.
-  \item \emph{Selection:} If oversubscribed, run VRF-backed sampling of tickets to capacity.
-  \item \emph{Airdrop Assignment:} Tokens proportional to approved contributions.
-  \item \emph{Randomised LP:} LP deployable at VRF-drawn time $t^\ast$ inside the window.
-  \item \emph{Trading \& Optional LBP Purchase:} Optional bounded liquidity bootstrapping purchase and redistribution.
-  \item \emph{Post-Launch:} Fees route to Xyber buybacks; quests and agents continue evolving the community.
+  \item \emph{Create Launch:} The creator initializes a configuration account with $H$, $C$, ticket size $\tau$, LP window $[t_{\text{start}}, t_{\text{end}}]$, and token allocations; a canonical hash of LP parameters is committed.
+  \item \emph{Funding Opens:} Wallets deposit the base asset up to $C$; deposits are \emph{ticketized} in increments of $\tau$.
+  \item \emph{Selection (if oversubscribed):} A VRF seed drives uniform sampling of tickets up to capacity $K=\lfloor H/\tau \rfloor$; refunds are prepared for unselected amounts.
+  \item \emph{Airdrop Assignment:} Approved amounts map proportionally to token allocations; vesting (if any) is enforced by the airdrop vault.
+  \item \emph{Randomized LP:} A second VRF draw sets $t^\ast \in [t_{\text{start}}, t_{\text{end}}]$; at or after $t^\ast$, anyone may initialize the precommitted DEX pool via a permissionless instruction.
+  \item \emph{Post-Launch Fees:} Fees accrue and are periodically swept to execute \$XYBER buybacks; if $\beta>0$, a portion of purchased \$XYBER is burned.
 \end{enumerate}
 
 \section*{Core Mechanics}
 
 \subsection*{Capped Wallet Funding Pool}
-Per-wallet cap $C$ is enforced on-chain; multiple deposits allowed while cumulative $\le C$. The launch targets a hard cap $H$ in base asset. Deposits are \emph{ticketized} by atomic size $\tau$:
+Per-wallet cap $C$ is enforced on-chain across multiple deposits while cumulative $\le C$. Deposits are \emph{ticketized} by atomic size $\tau$:
 \[
 n_i = \left\lfloor \frac{\min(\text{deposit}_i, C)}{\tau} \right\rfloor
 \]
-with any remainder $< \tau$ held and later refunded if unused.
+with any remainder $< \tau$ held and later refunded if unused. Receipts are issued to each wallet for the number of tickets minted.
 
-\subsection*{Overflow + Randomised Allocation}
+\subsection*{Overflow + Randomized Allocation}
 If $\sum n_i \cdot \tau \le H$, all tickets are approved. If oversubscribed, define capacity $K = \left\lfloor \frac{H}{\tau} \right\rfloor$ and uniformly sample $K$ tickets without replacement from the multiset of all tickets using a VRF-derived seed. For wallet $i$, the selected tickets $y_i$ define approved amount $a_i = y_i \cdot \tau$ and refund $r_i = \text{deposit}_i - a_i$.
 
 \subsection*{Selection Probability (at least one ticket)}
-Let total ticket count be $N$ and capacity $K=\lfloor H/\tau \rfloor$. A wallet with $n_i$ tickets has probability of winning at least one selection:
+Let total ticket count be $N$ and capacity $K=\lfloor H/\tau \rfloor$. A wallet with $n_i$ tickets has probability of at least one selection:
 \[
-\mathbb{P}(Y_i \ge 1) = 1 - \frac{\binom{N - n_i}{K}}{\binom{N}{K}}\,.
+\mathbb{P}(Y_i \ge 1) = 1 - \frac{\binom{N - n_i}{K}}{\binom{N}{K}}\,,
 \]
-This follows the hypergeometric model with uniform sampling without replacement.
-
-\subsection*{Immediate Engagement Hub}
-At funding start, 5--10 quests unlock (e.g., follows/verify, content creation, meme contests, referrals, on-chain tasks, lore quizzes). Points contribute to future redistributions or micro-airdrops. Optional sybil friction includes allowlists, liveness checks, or social-graph scores.
-
-\subsection*{Sybil Controls (Optional)}
-Per-wallet caps alone do not prevent many-wallet strategies. Optional layers include allowlists, proof-of-personhood or social-graph scores, identity staking, and per-entity ticket caps. Creators can enable these gates depending on compliance and community needs.
+following the hypergeometric model with uniform sampling without replacement.
 
 \subsection*{Airdrop of Selected Participants}
 Let $A_{\text{airdrop}}$ be the airdrop pool. Each approved wallet $i$ receives
 \[
-\text{tokens}_i = \frac{a_i}{\sum_j a_j} \cdot A_{\text{airdrop}}
+\text{tokens}_i = \frac{a_i}{\sum_j a_j} \cdot A_{\text{airdrop}}\,,
 \]
-Optional vesting: cliff $T_{\text{cliff}}$ then linear over $T_{\text{vest}}$.
+with optional vesting (cliff $T_{\text{cliff}}$ then linear over $T_{\text{vest}}$).
 
-\subsection*{Randomised LP Creation (e.g., Raydium)}
+\subsection*{Randomized LP Creation (e.g., Raydium)}
 The creator commits an LP window $[t_{\text{LP\_start}}, t_{\text{LP\_end}}]$. A VRF draws $t^\ast \in [t_{\text{LP\_start}}, t_{\text{LP\_end}}]$. Anyone can execute LP deployment at or after $t^\ast$ with precommitted parameters. Initial price is set by the pair ratio:
 \[
-P_0 = \frac{\text{base}_{\text{LP}}}{\text{token}_{\text{LP}}}
+P_0 = \frac{\text{base}_{\text{LP}}}{\text{token}_{\text{LP}}}\,.
 \]
-Policy for LP tokens (lock/burn/vest) is declared pre-launch.
-
 \textbf{Canonical pool commitment:} The launch precommits a hash of LP parameters (token mints, fee tier, initial price ratio, pool program) and the expected pool address derivation. The deploy transaction verifies the commitment before initializing, preventing fake-pool front-runs.
 
-\textbf{Timeout \& fallback randomness:} If VRF is unavailable or the window elapses without execution, a timeout permits either a repeat draw or a commit-reveal fallback with anti-grinding rules and fixed deadlines.
+\textbf{Timeout \& fallback randomness:} If the VRF is unavailable or the window elapses without execution, a timeout permits either a repeat draw or a commit-reveal fallback with anti-grinding rules and fixed deadlines.
 
 \subsection*{Built-in Anti-Snipe}
-Because allocations are decided before trading, launch-time sniping impact on the initial distribution is materially reduced; price MEV on the first blocks of listing can still occur. Randomised LP timing further reduces coordinated bot positioning. Optionally, airdrop claims can open only post-LP to eliminate pre-LP leakage.
+Because allocations are decided before trading, launch-time sniping has limited impact on the initial distribution. Randomized LP timing further reduces coordinated positioning around the deploy moment.
 
-\subsection*{Liquidity Bootstrapping Purchase (LBP) \& Redistribution}
-A bounded LBP purchase may occur at LP creation with strict max-spend and slippage guards. Public limits include: (i) max percent of initial LP tokens, (ii) max base budget, (iii) optional no-sell period N days for LBP-held tokens. Purchases use a public vault address; receipts and post-trade balances are emitted on-chain. Tokens from LBP route to quest rewards, cross-platform airdrops, or partner campaigns.
-
-\subsection*{Lumi Revenue Model \& Xyber Buyback}
-Lumira receives a small protocol allocation $A_{\text{lumi}}$ of each launch's supply. Platform fees (creation, settlement, LP deploy) route 100\% to market-buy Xyber through a public route; execution transactions and amounts are emitted via events for transparency.
-
-\subsection*{Agent-Optional Launches}
-Agents are modular and permissioned: they can schedule quests, run micro-airdrops, propose governance changes, and triage community support. Launches function with or without agents.
+\subsection*{Fee Model \& \$XYBER Buyback}
+Let $\phi$ denote the fraction of platform fees routed to \$XYBER buybacks; policy targets $\phi \ge 0.90$. Let $\beta \in [0,1]$ denote the burn share of purchased \$XYBER. Each buyback emits \texttt{BuybackExecuted(amount\_base\_spent, xyber\_bought)} and, if $\beta>0$, \texttt{XyberBurned(amount\_xyber)}. Remaining \$XYBER (if any) recycles to incentives/treasury per pre-declared policy; all parameters and transactions are verifiable on-chain.
 
 \section*{On-Chain Architecture (MVP)}
-\textbf{Programs / Contracts}
+\textbf{Programs}
 \begin{itemize}
-  \item \textbf{FundingPool:} Stores $H$, $C$, $\tau$, LP window, status; accepts deposits; mints ticket receipts.
-  \item \textbf{RandomSelection:} Pulls VRF proof; samples $K$ tickets; emits approvals and prepares refunds.
-  \item \textbf{AirdropVault:} Holds project tokens; maps $a_i$ to token amounts; enforces vesting if enabled.
-  \item \textbf{LPDeployer:} Precommits LP params; after $t^\ast$, enables permissionless LP initialization.
-  \item \textbf{FeeCollector \& Buyback:} Accrues fees; executes Xyber buybacks; emits accounting events.
-  \item \textbf{EngagementHub:} Quest registry, scoring, proof adapters, reward bridges.
-  \item \textbf{AgentHub (optional):} Rate-limited actions with human override and audit log.
+  \item \textbf{FundingPool:} Configuration \& state accounts (program-derived) storing $H$, $C$, $\tau$, LP window, status; accepts deposits; mints ticket receipts.
+  \item \textbf{RandomSelection:} Requests VRF, samples $K$ tickets, emits approvals, and prepares refunds.
+  \item \textbf{AirdropVault:} Holds project tokens; maps approved amounts to token distributions; enforces vesting if enabled.
+  \item \textbf{LPDeployer:} Verifies canonical pool commitment; after $t^\ast$, enables permissionless pool initialization via a CPI into the DEX.
+  \item \textbf{FeeCollector \& Buyback:} Accrues fees; executes market buybacks of \$XYBER; optional burn; emits accounting events.
+\end{itemize}
+
+\textbf{Accounts \& Authorities (Sketch):}
+\begin{itemize}
+  \item Program-derived authority for FundingPool operations and LP deployment.
+  \item Separate authority for FeeCollector to execute buybacks and burns.
+  \item Deterministically derived state accounts for per-launch configuration and per-wallet receipts.
 \end{itemize}
 
 \section*{Algorithms (Pseudocode)}
@@ -174,7 +161,7 @@ function deposit(wallet, amount):
   mint TicketReceipts(wallet, tickets_new)
 \end{code}
 
-\subsection*{Randomised Allocation}
+\subsection*{Randomized Allocation}
 \begin{code}
 function run_selection():
   K = floor(H / tau)
@@ -182,13 +169,13 @@ function run_selection():
   if N <= K:
     approve all tickets; finalize
   else:
-    seed = get_vrf_seed()
+    seed = get_vrf_seed()    // distinct request id
     winners = sample_without_replacement(N, K, seed)
     for each wallet i:
       y_i = count_winner_tickets(wallet i)
       a_i = y_i * tau
       approve(wallet i, a_i)
-      refund(wallet i, deposited[i] - a_i)  // includes < tau remainder
+      refund_ready(wallet i, deposited[i] - a_i)  // includes < tau remainder
 \end{code}
 
 \subsection*{Airdrop Calculation}
@@ -197,16 +184,17 @@ function compute_airdrop(wallet i):
   tokens_i = (approved[i] / total_approved) * A_airdrop
 \end{code}
 
-\subsection*{Randomised LP Deployment}
+\subsection*{Randomized LP Deployment}
 \begin{code}
 function schedule_lp():
   (start, end) = LP_window
-  seed2 = get_vrf_seed()         // distinct or derived
+  seed2 = get_vrf_seed()        // distinct or derived
   t* = start + (seed2 mod (end - start))
   store t*
 function deploy_lp():
   require(blocktime >= t*)
-  initialize_pool(token_LP, base_LP, slippage_guard)
+  verify_canonical_pool_commit()
+  initialize_pool(token_LP, base_LP, price_ratio)
 \end{code}
 
 \section*{Parameters \& Defaults (Illustrative)}
@@ -216,34 +204,32 @@ function deploy_lp():
 \midrule
 Per-wallet cap $C$ & e.g., 1 unit of base asset \\
 Hard cap $H$ & e.g., 1000 units base \\
-Ticket size $\tau$ & e.g., 0.05 base (so $K = H/\tau = 20{,}000$ tickets) \\
+Ticket size $\tau$ & e.g., 0.05 base (so $K = H/\tau$ tickets) \\
 Airdrop pool $A_{\text{airdrop}}$ & e.g., 30\% of total supply \\
 LP allocation & e.g., 20\% of tokens paired with part of the raise \\
-Protocol allocation $A_{\text{lumi}}$ & small single-digit \% of supply \\
-LP window & e.g., 6--18h after selection finalize \\
+LP window & e.g., +6h to +18h after selection finalization \\
 Vesting (optional) & cliff 0--14d; linear 30--180d \\
+Fee-to-\$XYBER buybacks $\phi$ & target $\ge 90\%$ \\
+Burn share $\beta$ & e.g., 30--70\% of bought \$XYBER burned \\
 \bottomrule
 \end{tabularx}
 
 \section*{Parameter Guidance}
 \begin{itemize}
   \item Ticket size $\tau$: target 1--5\% of $C$ to balance granularity vs. on-chain state.
-  \item Max tickets $N_{\text{max}}$: enforce an upper bound to cap compute/time; refunds always return any remainder $<\tau$.
+  \item Enforce a maximum tickets bound $N_{\max}$ to cap compute/time; any remainder $<\tau$ is refundable.
   \item LP window: 4--24h typical; wider windows reduce coordination risk but delay price discovery.
-  \item Refunds: pull-model with clear claim UI; consider a claim-deadline reminder but do not reappropriate funds automatically.
+  \item Refunds: pull-model with a clear claim UI; funds are not reappropriated automatically.
 \end{itemize}
 
-\section*{Security, Fairness \& Risk}
+\section*{Security \& Risk (MVP)}
 \begin{itemize}
-  \item \textbf{Verifiable randomness:} Chain-native VRF or beacon; no blockhash-only RNG.
-  \item \textbf{Uniform ticket fairness:} Selection uniform at ticket level; contribution helps only up to $C$.
-  \item \textbf{Sybil resistance (optional):} Allowlists, liveness checks, social graph scoring, identity staking.
-  \item \textbf{Economic guardrails:} Pull-then-push refunds with re-entrancy guards; LP slippage bounds; bounded LBP purchase.
-  \item \textbf{LP token policy:} Lock/burn/vest per precommitted policy to mitigate rug risk.
-  \item \textbf{Upgrades \& observability:} Timelocked upgrades; exhaustive event logs; emergency pause to safe refund states only.
+  \item \textbf{Verifiable randomness:} Oracle VRF proofs for selection and LP timing; commit-reveal fallback with anti-grinding only as a reserve path.
+  \item \textbf{Uniform ticket fairness:} Selection is uniform at the ticket level; contribution helps only up to $C$.
   \item \textbf{Canonical pool commitment:} Precommitted hash and address verification to block fake-pool attacks.
-  \item \textbf{Fallback randomness:} Commit-reveal with anti-grinding as a reserve path if VRF is unavailable.
-  \item \textbf{LP tokens default:} Protocol-owned LP tokens locked for 90 days; custody via multisig; events LPLocked/LPUnlocked emitted.
+  \item \textbf{Economic guardrails:} Pull-then-claim refunds; bounded instruction compute; deterministic authorities.
+  \item \textbf{LP tokens default:} Protocol-owned LP tokens locked for 90 days; custody via multisig; events \texttt{LPLocked}/\texttt{LPUnlocked} emitted.
+  \item \textbf{Upgrades \& observability:} Timelocked releases; exhaustive program logs/events; emergency halt path to safe refund-only states.
 \end{itemize}
 
 \section*{Threats \& Mitigations}
@@ -251,38 +237,34 @@ Vesting (optional) & cliff 0--14d; linear 30--180d \\
 \toprule
 \textbf{Threat} & \textbf{Mitigation} \\
 \midrule
-Sybil (many wallets) & Allowlists, identity score, identity staking, per-entity ticket caps \\
-RNG manipulation & Chain VRF; audited sampling; commit-reveal fallback with anti-grinding \\
+Sybil (many wallets) & Not addressed in MVP beyond $C$; future identity gates out of scope \\
+RNG manipulation & Oracle VRF; audited sampling; commit-reveal fallback with anti-grinding \\
 Fake-pool front-run & Canonical pool commitment (hash/address) verified at deploy \\
-MEV on listing & Randomized LP time; bounded LBP purchase; initial slippage guards \\
+MEV on listing & Randomized LP time; initial slippage guards \\
 Creator rug risk & Precommitted supply/LP policies; LP tokens locked/vested; timelocked upgrades \\
-Refund griefing & Pull refunds, anyone-can-execute helpers, re-entrancy guards \\
+Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 \bottomrule
 \end{tabularx}
 
-\section*{Engagement Hub (MVP Spec)}
-Quest types include on-chain actions, social proof, content, quiz, referral, and bug hunts. Verification adapters: signatures, allowlist proofs, webhook attestations, oracle feeds. Scoring uses additive points with anti-farm rules (cooldowns, caps, diversity multipliers). Rewards: micro-airdrops, bonus allowlists, and seasonal leaderboards.
-
-\section*{Creator Controls}
+\section*{Creator Controls (MVP)}
 \begin{itemize}
-  \item \textbf{Launch config:} $H$, $C$, $\tau$, $A_{\text{airdrop}}$, $\text{token}_{\text{LP}}$, $\text{base}_{\text{LP}}$, LP window, vesting, $A_{\text{lumi}}$.
-  \item \textbf{Policies:} LP token handling (lock/burn/vest), optional LBP purchase bounds, claim timing.
-  \item \textbf{Agent settings (optional):} Rate limits, budgets, content templates, human approval thresholds.
+  \item \textbf{Launch config:} $H$, $C$, $\tau$, $A_{\text{airdrop}}$, LP window, vesting policy.
+  \item \textbf{Policies:} LP token handling (lock/vest), claim timing, fee routing parameters $(\phi, \beta)$.
 \end{itemize}
 
-\section*{Tokenomics Snapshot}
-Let total supply be $S_{\text{total}}$. An illustrative split:
+\section*{Tokenomics Snapshot (Illustrative)}
+Let total supply be $S_{\text{total}}$. An example split:
 \begin{itemize}
   \item $A_{\text{airdrop}}$ to selected participants (e.g., 30\%).
   \item $A_{\text{LP}}$ to LP (e.g., 20\%).
   \item Team/treasury with vesting (e.g., 20--30\%).
   \item Partnerships/reserves (e.g., 10--20\%).
-  \item Protocol allocation $A_{\text{lumi}}$ (small \%).
+  \item (Optional) Protocol allocation $A_{\text{lumi}}$ (small \%).
 \end{itemize}
-\textbf{Fees} (creation, settlement, deploy) route to public Xyber buybacks; policy may burn, treasury, or redistribute Xyber with on-chain accounting.
+\textbf{Fees:} Creation/settlement fees route to public \$XYBER buybacks; policy may burn, treasury, or redistribute \$XYBER with on-chain accounting.
 
 \section*{Example Walkthrough}
-Creator sets $H{=}1000$, $C{=}1$, $\tau{=}0.05$, $A_{\text{airdrop}}{=}30\%$, LP window $+6\text{h}\ldots+18\text{h}$. A user deposits $0.83$ base $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Airdrop share is $\frac{0.60}{\sum a_j} \cdot A_{\text{airdrop}}$. LP time is drawn at $+11$h and then deployed permissionlessly. Optional LBP purchase $\le s\%$; fees accrue and execute Xyber buybacks.
+Set $H{=}1000$, $C{=}1$, $\tau{=}0.05$, $A_{\text{airdrop}}{=}30\%$, LP window $+6\text{h}\ldots+18\text{h}$. A user deposits $0.83$ base $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Airdrop share is $\frac{0.60}{\sum a_j} \cdot A_{\text{airdrop}}$. LP time is drawn at $+11$h and then deployed permissionlessly. Fees accrue and execute \$XYBER buybacks with burn share $\beta$.
 
 \section*{Interfaces (Sketch)}
 
@@ -298,30 +280,26 @@ LPDeployed(pool_id, base_LP, token_LP)
 LPLocked(pool_id, unlock_time)
 LPUnlocked(pool_id)
 BuybackExecuted(amount_base_spent, xyber_bought)
+XyberBurned(amount_xyber)
+BuybackPolicyUpdated(phi, beta)
 \end{code}
 
 \subsection*{Views}
 \begin{code}
-getConfig() -> H, C, tau, A_airdrop, LP_window, A_lumi, policies
-getWalletState(wallet) -> deposited, tickets, approved, refund
+getConfig() -> H, C, tau, A_airdrop, LP_window, policies
+getWalletState(wallet) -> deposited, tickets, approved, refund_ready
 getLPStatus() -> scheduled_time, deployed, pool_id
-getEngagementScore(wallet) -> points, tier
+getBuybackStats() -> total_fees, total_xyber_bought, total_xyber_burned
 \end{code}
-
-\section*{Roadmap (Indicative)}
-\textbf{MVP:} FundingPool, RandomSelection (VRF), AirdropVault, LPDeployer, EngagementHub v1, FeeCollector+Buyback, basic UI. \\
-\textbf{v1.1:} Identity gates (optional), richer quest attestations, analytics, LP lock manager. \\
-\textbf{v1.2:} AgentHub beta, multi-DEX routing, cross-launch reward bridges. \\
-\textbf{v2+:} Cross-chain deployments, creator DAOs, programmable quests, dynamic vesting tied to community KPIs.
 
 \section*{Compliance \& Disclaimer}
 This LightPaper is \emph{not} financial advice. Token launches entail risk. Regional restrictions and KYC/AML gates can be toggled per launch where required by law. Seek legal review for token classifications, vesting, and disclosures per jurisdiction.
 
 \section*{Audit \& Bounty}
-Core contracts undergo third-party audit; a public bug-bounty program rewards responsibly disclosed issues prior to mainnet launches.
+Core programs undergo third-party audit; a public bug-bounty program rewards responsibly disclosed issues prior to mainnet launches.
 
 \section*{Why This Is Better \& Cooler}
-No more click-wars: allocation before trading, randomized and capped. Instant fun: quests unlock at $T{=}0$ to rally momentum. Transparent economics: fee-to-Xyber buyback is clear and auditable. Composability: meme coin today, agent-driven brand tomorrow --- on the same rails.
+No more click-wars: allocation before trading, randomized and capped. Reduced sniping: LP time is drawn randomly within a committed window. Transparent economics: fee-to-\$XYBER buyback is clear and auditable.
 
 \balance
 \end{document}
