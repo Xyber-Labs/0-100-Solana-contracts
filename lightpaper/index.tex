@@ -48,8 +48,9 @@
 \titleformat{\subsection}{\bfseries\large\color{black}}{\thesubsection}{1em}{}
 
 % ------------------ Document Meta ------------------
-\title{\Huge\bfseries Lumi Launch Protocol --- Technical LightPaper \\ \vspace{1ex} \large Fair, capped, VRF-driven token launches with randomized LP \& fee buybacks}
-\author{Lumira Protocol Team | Xyber Collective}
+\title{\Huge\bfseries 0--100 Protocol --- Technical LightPaper \\
+\vspace{1ex} \large Fair, capped, VRF-driven token launches with randomized LP, fee sharing, and LP burn}
+\author{0--100 Team | Xyber Collective}
 \date{\today}
 
 % ------------------ Helper Commands ------------------
@@ -73,14 +74,16 @@
 
 \section*{TL;DR}
 \begin{itemize}
-  \item \textbf{LaunchPool (Per-Wallet Cap):} A deposit pool with a hard per-wallet limit $C$ (e.g., $\le 1$ unit of the base asset) to keep whales from crowding out retail participants.
+  \item \textbf{LaunchPool (Per-Wallet Cap):} A deposit pool with a hard per-wallet limit $C$ (e.g., $\le 1$ SOL) to keep whales from crowding out retail participants; overflow handled by lottery with auto-refunds.
+  \item \textbf{Creator Self-Snipe with Vesting:} The creator may deposit up to $S_{\max}{=}10$ SOL into their own launch. Each full SOL deposited adds $24\,$h to the creator vesting period, capped at $T_{\text{vest,max}}{=}10$ days.
   \item \textbf{VRF Selection (Overflow Only):} If demand exceeds the hard cap $H$, allocations are decided by verifiably random, uniform sampling over \emph{ticketized} deposits; unselected amounts are automatically refundable.
   \item \textbf{VRF-Timed LP Window:} The creator commits an LP window $[t_{\mathrm{start}}, t_{\mathrm{end}}]$; a VRF draw picks the exact deploy time $t^\ast$ inside the window, reducing coordinated sniping.
-  \item \textbf{Fees $\rightarrow$ \$XYBER Buybacks:} Platform fees (target $\phi \ge 90\%$) are routed to market-buy \$XYBER with optional burn share $\beta$ for deflationary pressure.
+  \item \textbf{Fees: Buybacks \& Creator Share:} Platform fees (target $\phi \ge 90\%$) route to market-buy $\$XYBER with optional burn share $\beta$. A configurable creator revenue share applies to (i) protocol fees from 0--100 and (ii) post-graduation trading fees; schedule $\sigma(t)$ is on-chain and transparent.
+  \item \textbf{LP Burn on Deploy:} Liquidity provided at deploy has its LP tokens burned to signal immutable liquidity ("green" on screeners).
 \end{itemize}
 
 \section*{Introduction}
-Open, decentralized token launches often suffer from gas wars, bot sniping, and opaque allocation rules. The Lumi MVP focuses on four primitives—\emph{per-wallet caps}, \emph{VRF-backed overflow selection}, \emph{VRF-timed LP deployment}, and \emph{fee-to-\$XYBER buybacks}—to deliver fairer distributions and reduce adversarial dynamics while staying minimal and auditable.
+Open, decentralized token launches often suffer from gas wars, bot sniping, and opaque allocation rules. 0--100 focuses on five primitives—\emph{per-wallet caps}, \emph{VRF-backed overflow selection}, \emph{VRF-timed LP deployment}, \emph{creator self-snipe with vesting}, and \emph{fee-to-$\$XYBER buybacks with creator sharing}—to deliver fairer distributions and reduce adversarial dynamics while staying minimal and auditable.
 
 \section*{Design Principles}
 \begin{itemize}
@@ -91,8 +94,8 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
   \item \textbf{Canonical pool commitment:} The launch precommits DEX pool parameters, and the deploy instruction verifies the commitment to prevent fake-pool front-runs.
 \end{itemize}
 
-\section*{System Overview (MVP)}
-\textbf{Actors:} Contributors, Launch Creators, Lumi Protocol, DEX LP.
+\section*{System Overview}
+\textbf{Actors:} Contributors, Launch Creators, 0--100 Protocol, DEX LP.
 
 \textbf{Lifecycle:}
 \begin{enumerate}[label=\arabic*)]
@@ -108,11 +111,18 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.92\columnwidth]{figs/UserFlow.png}
-  \caption{End-to-end user flow for a Lumi launch: funding, VRF-based selection, randomized LP, and fee buybacks.}
+  \caption{End-to-end user flow for a 0--100 launch: funding, VRF-based selection, randomized LP, and fee buybacks.}
   \label{fig:user-flow}
 \end{figure}
 
 \section*{Core Mechanics}
+
+\subsection*{Creator Self-Snipe \& Vesting Extension}
+A launch creator may deposit up to $S_{\max}{=}10$ SOL into their own pool (outside the public per-wallet cap). For each full SOL deposited by the creator, the vesting period for the creator allocation extends by $24$ hours, up to $T_{\text{vest,max}}{=}10$ days. Let $s \in [0, S_{\max}]$ be the creator's self-snipe in SOL. The vesting time applied to the creator allocation is
+\[
+T_{\text{vest}}^{\text{creator}} = \min\big(24\,\text{h} \cdot \lfloor s \rfloor,\; T_{\text{vest,max}}\big)\,.
+\]
+The creator's self-snipe funds are otherwise treated as standard deposits for price discovery and LP formation but are subject to the above vesting when airdropped.
 
 \subsection*{Capped Wallet Funding Pool}
 Per-wallet cap $C$ is enforced on-chain across multiple deposits while cumulative $\le C$. Deposits are \emph{ticketized} by atomic size $\tau$:
@@ -150,8 +160,10 @@ P_0 = \frac{\text{base}_{\text{LP}}}{\text{token}_{\text{LP}}}\,.
 \subsection*{Built-in Anti-Snipe}
 Because allocations are decided before trading, launch-time sniping has limited impact on the initial distribution. Randomized LP timing further reduces coordinated positioning around the deploy moment.
 
-\subsection*{Fee Model \& \$XYBER Buyback}
-Let $\phi$ denote the fraction of platform fees routed to \$XYBER buybacks; policy targets $\phi \ge 0.90$. Let $\beta \in [0,1]$ denote the burn share of purchased \$XYBER. Each buyback emits \texttt{BuybackExecuted(amount\_base\_spent, xyber\_bought)} and, if $\beta>0$, \texttt{XyberBurned(amount\_xyber)}. Remaining \$XYBER (if any) recycles to incentives/treasury per pre-declared policy; all parameters and transactions are verifiable on-chain.
+\subsection*{Fee Model \& $\$XYBER Buyback}
+Let $\phi$ denote the fraction of platform fees routed to $\$XYBER buybacks; policy targets $\phi \ge 0.90$. Let $\beta \in [0,1]$ denote the burn share of purchased $\$XYBER. In addition, define a creator revenue share schedule $\sigma(t)$ that governs the fraction of (i) 0--100 protocol fees from creation/settlement and (ii) post-graduation trading fees attributable to the launch, remitted to the creator over time. Concretely, at sweep time $t$ the protocol computes creator due $F_{\text{creator}}(t) = \sigma(t) \cdot F_{\text{eligible}}(t)$ where $F_{\text{eligible}}$ aggregates eligible fees since the last sweep.
+
+Each buyback emits \texttt{BuybackExecuted(amount\_base\_spent, xyber\_bought)} and, if $\beta>0$, \texttt{XyberBurned(amount\_xyber)}. Creator distributions emit \texttt{CreatorFeeAccrued(amount\_base)} and \texttt{CreatorFeeTransferred(amount\_base)}. Remaining $\$XYBER (if any) recycles to incentives/treasury per pre-declared policy; all parameters and transactions are verifiable on-chain.
 
 \section*{On-Chain Architecture (MVP)}
 \textbf{Programs}
@@ -219,12 +231,15 @@ function deploy_lp():
   initialize_pool(token_LP, base_LP, price_ratio)
 \end{code}
 
+\subsection*{LP Burn on Deployment}
+Upon pool initialization, the LP tokens minted to the protocol-owned temporary authority are immediately burned, ensuring immutable liquidity. This action is recorded via \texttt{LPTokensBurned(pool\_id, amount\_burned)} and is intended to surface as a "green" LP status on popular screeners.
+
 \section*{Parameters \& Defaults (Illustrative)}
 \begin{tabularx}{\linewidth}{L{0.33\linewidth} L{0.67\linewidth}}
 \toprule
 \textbf{Parameter} & \textbf{Example / Notes} \\
 \midrule
-Per-wallet cap $C$ & e.g., 1 unit of base asset \\
+Per-wallet cap $C$ & e.g., 1 SOL \\
 Hard cap $H$ & e.g., 1000 units base \\
 Ticket size $\tau$ & e.g., 0.05 base (so $K = H/\tau$ tickets) \\
 Airdrop pool $A_{\text{airdrop}}$ & e.g., 30\% of total supply \\
@@ -233,6 +248,9 @@ LP window & e.g., +6h to +18h after selection finalization \\
 Vesting (optional) & cliff 0--14d; linear 30--180d \\
 Fee-to-\$XYBER buybacks $\phi$ & target $\ge 90\%$ \\
 Burn share $\beta$ & e.g., 30--70\% of bought \$XYBER burned \\
+Creator self-snipe $S_{\max}$ & 10 SOL maximum \\
+Vesting per SOL & +24h per full SOL self-sniped \\
+Creator vesting cap $T_{\text{vest,max}}$ & 10 days maximum \\
 \bottomrule
 \end{tabularx}
 
@@ -242,15 +260,16 @@ Burn share $\beta$ & e.g., 30--70\% of bought \$XYBER burned \\
   \item Enforce a maximum tickets bound $N_{\max}$ to cap compute/time; any remainder $<\tau$ is refundable.
   \item LP window: 4--24h typical; wider windows reduce coordination risk but delay price discovery.
   \item Refunds: pull-model with a clear claim UI; funds are not reappropriated automatically.
+  \item Creator self-snipe: enforce $S_{\max}{=}10$ SOL; vesting extends in 24h quanta per full SOL up to $10$ days.
 \end{itemize}
 
-\section*{Security \& Risk (MVP)}
+\section*{Security \& Risk}
 \begin{itemize}
   \item \textbf{Verifiable randomness:} Oracle VRF proofs for selection and LP timing; commit-reveal fallback with anti-grinding only as a reserve path.
   \item \textbf{Uniform ticket fairness:} Selection is uniform at the ticket level; contribution helps only up to $C$.
   \item \textbf{Canonical pool commitment:} Precommitted hash and address verification to block fake-pool attacks.
   \item \textbf{Economic guardrails:} Pull-then-claim refunds; bounded instruction compute; deterministic authorities.
-  \item \textbf{LP tokens default:} Protocol-owned LP tokens locked for 90 days; custody via multisig; events \texttt{LPLocked}/\texttt{LPUnlocked} emitted.
+  \item \textbf{LP tokens:} LP tokens are burned on deploy; the burn is irreversible and emits \texttt{LPTokensBurned}.
   \item \textbf{Upgrades \& observability:} Timelocked releases; exhaustive program logs/events; emergency halt path to safe refund-only states.
 \end{itemize}
 
@@ -268,7 +287,7 @@ Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 \bottomrule
 \end{tabularx}
 
-\section*{Creator Controls (MVP)}
+\section*{Creator Controls}
 \begin{itemize}
   \item \textbf{Launch config:} $H$, $C$, $\tau$, $A_{\text{airdrop}}$, LP window, vesting policy.
   \item \textbf{Policies:} LP token handling (lock/vest), claim timing, fee routing parameters $(\phi, \beta)$.
@@ -281,7 +300,7 @@ Let total supply be $S_{\text{total}}$. An example split:
   \item $A_{\text{LP}}$ to LP (e.g., 20\%).
   \item Team/treasury with vesting (e.g., 20--30\%).
   \item Partnerships/reserves (e.g., 10--20\%).
-  \item (Optional) Protocol allocation $A_{\text{lumi}}$ (small \%).
+  \item (Optional) Protocol allocation $A_{\text{protocol}}$ (small \%).
 \end{itemize}
 \textbf{Fees:} Creation/settlement fees route to public \$XYBER buybacks; policy may burn, treasury, or redistribute \$XYBER with on-chain accounting.
 
@@ -293,16 +312,19 @@ Set $H{=}1000$, $C{=}1$, $\tau{=}0.05$, $A_{\text{airdrop}}{=}30\%$, LP window $
 \subsection*{Events}
 \begin{code}
 Deposit(wallet, amount, tickets_issued)
+CreatorSnipe(amount_sol)
+VestingExtended(new_vesting_deadline)
 SelectionRun(seed, total_tickets, winners)
 Approved(wallet, approved_amount, tickets_selected)
 RefundReady(wallet, amount)
 AirdropAssigned(wallet, tokens)
 LPTimeDrawn(t_star)
 LPDeployed(pool_id, base_LP, token_LP)
-LPLocked(pool_id, unlock_time)
-LPUnlocked(pool_id)
 BuybackExecuted(amount_base_spent, xyber_bought)
 XyberBurned(amount_xyber)
+CreatorFeeAccrued(amount_base)
+CreatorFeeTransferred(amount_base)
+LPTokensBurned(pool_id, amount_burned)
 BuybackPolicyUpdated(phi, beta)
 \end{code}
 
