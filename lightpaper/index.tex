@@ -9,6 +9,7 @@
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{array}
+\usepackage[utf8]{inputenc}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{microtype}
@@ -69,7 +70,7 @@
 \section*{TL;DR}
 \begin{itemize}
   \item \textbf{LaunchPool (Per-Wallet Cap):} Standardized per-wallet limit $C{=}1$\,SOL; overflow handled by VRF lottery with auto-prepared refunds (one-click claim).
-  \item \textbf{Creator Self-Snipe with Vesting:} Creator may self-deposit up to $S_{\max}{=}8$\,SOL; each full SOL adds $24$\,h to creator vesting, capped at $T_{\text{vest,max}}{=}8$ days.
+  \item \textbf{Creator Self-Snipe with Vesting:} Creator may self-deposit up to $S_{\max}{=}8$\,SOL; each SOL adds $24$\,h to creator vesting linearly (pro-rata), up to $T_{\text{vest,max}}{=}8$ days.
   \item \textbf{VRF Selection (Overflow Only):} If demand exceeds hard cap $H$, allocation uses uniform VRF-backed sampling over \emph{ticketized} deposits.
   \item \textbf{VRF-Timed LP Window:} After selection finalization, a VRF draw picks an exact deploy time in a fixed $+6$\,h to $+18$\,h window.
   \item \textbf{Economics:} Platform-fee buybacks market-buy \textdollar XYB; the \emph{Creator Share} is paid only from DEX trading fees after listing with a standardized split of 75\% Xyber / 25\% Creator (periodic harvest to a creator payout vault).
@@ -103,28 +104,28 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
 \end{enumerate}
 
 % ----- User Flow Figure -----
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.92\columnwidth]{figs/UserFlow.png}
-  \caption{End-to-end user flow for a 0--100 launch: funding, VRF-based selection, randomized LP, and fee buybacks.}
-  \label{fig:user-flow}
-\end{figure}
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.92\columnwidth]{figs/UserFlow.png}
+%   \caption{End-to-end user flow for a 0--100 launch: funding, VRF-based selection, randomized LP, and fee buybacks.}
+%   \label{fig:user-flow}
+% \end{figure}
 
 \section*{Core Mechanics}
 
 \subsection*{Creator Self-Snipe \& Vesting Extension}
-A launch creator may deposit up to $S_{\max}{=}8$\,SOL into their own pool (outside the public per-wallet cap). For each full SOL deposited, the vesting period for the creator allocation extends by $24$ hours, up to $T_{\text{vest,max}}{=}8$ days. Let $s \in [0, S_{\max}]$ be the creator's self-snipe in SOL. The vesting time applied to the creator allocation is
+A launch creator may deposit up to $S_{\max}{=}8$\,SOL into their own pool (outside the public per-wallet cap). For each SOL deposited, the vesting period for the creator allocation increases linearly by $24$ hours per SOL. Let $s \in [0, S_{\max}]$ be the creator's self-snipe in SOL. The vesting time applied to the creator allocation is
 \[
-T_{\text{vest}}^{\text{creator}} = \min\big(24\,\text{h} \cdot \lfloor s \rfloor,\; T_{\text{vest,max}}\big)\,.
+T_{\text{vest}}^{\text{creator}} = 24\,\text{h} \cdot s\,.
 \]
-Self-snipe funds are treated as standard deposits for price discovery and LP formation; the vesting applies only to the creator's token claim. The self-snipe uses a dedicated instruction exempt from the public cap $C$ and gated by creator authority.
+No flooring is applied; fractional SOL extend vesting proportionally. Because $s \le S_{\max}$ and $S_{\max}{=}8$, it follows that $T_{\text{vest}}^{\text{creator}} \le 8$ days. Self-snipe funds are treated as standard deposits for price discovery and LP formation; the vesting applies only to the creator's token claim. The self-snipe uses a dedicated instruction exempt from the public cap $C$ and gated by creator authority.
 
 \subsection*{Capped Wallet Funding Pool}
-Per-wallet cap $C$ is enforced on-chain across multiple deposits while cumulative $\le C$. Deposits are \emph{ticketized} by atomic size $\tau$:
+Per-wallet cap $C$ is enforced on-chain. Deposits must be in exact multiples of the ticket size $\tau$; any non-multiple is \emph{immediately refunded in the same transaction}. Let a deposit amount be $\text{amount}_i = m_i\,\tau$ with integer $m_i \ge 0$. The number of tickets minted in this deposit is
 \[
-n_i = \left\lfloor \frac{\min(\text{deposit}_i, C)}{\tau} \right\rfloor
+k_i = \min\!\left( m_i,\; \left\lfloor \frac{C - \text{deposited}_i}{\tau} \right\rfloor \right),
 \]
-with any remainder $< \tau$ held and later refunded if unused. Receipts are issued to each wallet for the number of tickets minted.
+where $\text{deposited}_i$ is the wallet's cumulative accepted deposit before this transaction. Receipts are issued to each wallet for the number of tickets minted.
 
 \subsection*{Overflow + Randomized Allocation}
 If $\sum n_i \cdot \tau \le H$, all tickets are approved. If oversubscribed, define capacity $K = \left\lfloor \frac{H}{\tau} \right\rfloor$ and uniformly sample $K$ tickets without replacement from the multiset of all tickets using a VRF-derived seed. For wallet $i$, selected tickets $y_i$ define approved amount $a_i = y_i \cdot \tau$ and refund $r_i = \text{deposit}_i - a_i$.
@@ -132,8 +133,9 @@ If $\sum n_i \cdot \tau \le H$, all tickets are approved. If oversubscribed, def
 \subsection*{Selection Probability (at least one ticket)}
 Let total ticket count be $N$ and capacity $K=\lfloor H/\tau \rfloor$. A wallet with $n_i$ tickets has probability of at least one selection:
 \[
-\mathbb{P}(Y_i \ge 1) = 1 - \frac{\binom{N - n_i}{K}}{\binom{N}{K}}\,,
+\mathbb{P}(Y_i \ge 1) = 1 - \frac{\binom{N - n_i}{K}}{\binom{N}{K}}\,, 
 \]
+Tickets are \emph{non-transferable} (receipt mints are bound to the depositing wallet); they only confer selection and claim rights to that wallet.
 by the hypergeometric model.
 
 \subsection*{Sale Allocation \& Claim}
@@ -152,6 +154,9 @@ P_0 = \frac{\text{base}_{\text{LP}}}{\text{token}_{\text{LP}}}\,.
 
 \textbf{Randomness fallback:} If VRF is temporarily unavailable, the system retries; on repeated failure the window defaults to $+0$\,h to $+6$\,h.
 
+\textbf{Who executes deploy \& how they are paid:}
+In practice, any third party submits the deploy transaction at/after $t^\ast$. The submitter receives a small, capped \emph{LP-token bounty} as an execution fee. This bounty comes from the LP side (\emph{not} from Sale) and does not change contributor claims.
+ 
 \subsection*{Built-in Anti-Snipe}
 Because allocations are decided before trading, launch-time sniping has limited impact on initial distribution. Randomized LP timing further reduces coordinated positioning around the deploy moment.
 
@@ -184,9 +189,10 @@ Because allocations are decided before trading, launch-time sniping has limited 
 \begin{code}
 function deposit(wallet, amount):
   require(state == FundingOpen)
-  require(deposited[wallet] + amount <= C)
+  require(amount % tau == 0)                // only multiples of tau accepted
+  require(deposited[wallet] + amount <= C)  // enforce per-wallet cap
+  tickets_new = amount / tau
   deposited[wallet] += amount
-  tickets_new = floor(deposited[wallet] / tau) - tickets_issued[wallet]
   tickets_issued[wallet] += tickets_new
   mint TicketReceipts(wallet, tickets_new)
 \end{code}
@@ -205,7 +211,7 @@ function run_selection():
       y_i = count_winner_tickets(wallet i)
       a_i = y_i * tau
       approve(wallet i, a_i)
-      refund_ready(wallet i, deposited[i] - a_i)  // includes < tau remainder
+      refund_ready(wallet i, deposited[i] - a_i)  // no sub-tau remainder (deposits are multiples of tau)
 \end{code}
 
 \subsection*{Sale Allocation Calculation}
@@ -258,6 +264,7 @@ LP Deployment Window & VRF-randomized LP time after selection finalization & +6h
 Randomness Fallback & Fallback if VRF fails & Retry; if failed $\rightarrow$ +0--6h \\
 DEX Fee Split & Trading fees split on DEX & 75\% Xyber / 25\% Creator \\
 Default DEX for LP & DEX where pools are created & Raydium \\
+LP Deployer Reward & Incentive for calling LP deploy at/after $t^\ast$ & Small LP-token bounty (configurable) \\
 \bottomrule
 \end{tabularx}
 
