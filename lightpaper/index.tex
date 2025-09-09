@@ -69,7 +69,7 @@
 
 \section*{TL;DR}
 \begin{itemize}
-  \item \textbf{LaunchPool (Per-Wallet Cap):} Standardized per-wallet limit $C{=}1$\,SOL; overflow handled by VRF lottery with auto-prepared refunds (one-click claim).
+  \item \textbf{LaunchPool (Per-Wallet Cap):} Standardized per-wallet limit $C{=}1.1$\,SOL; overflow handled by VRF lottery with auto-prepared refunds (one-click claim).
   \item \textbf{Creator Self-Snipe with Vesting:} Creator may self-deposit up to $S_{\max}{=}8$\,SOL; each SOL adds $24$\,h to creator vesting linearly (pro-rata), up to $T_{\text{vest,max}}{=}8$ days.
   \item \textbf{VRF Selection (Overflow Only):} If demand exceeds hard cap $H$, allocation uses uniform VRF-backed sampling over \emph{ticketized} deposits.
   \item \textbf{VRF-Timed LP Window:} After selection finalization, a VRF draw picks an exact deploy time in a fixed $+6$\,h to $+18$\,h window.
@@ -95,7 +95,7 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
 
 \textbf{Lifecycle:}
 \begin{enumerate}[label=\arabic*)]
-  \item \emph{Create Launch:} Initialize with standardized parameters: $H{=}425$\,SOL, $C{=}1$\,SOL, ticket size $\tau{=}0.05$\,SOL, funding period $T_{\text{fund}}{=}192$\,h, LP window $+6$\,h to $+18$\,h; supply split Sale 54.054\% / LP 45.946\%. A canonical hash of LP parameters is committed.
+  \item \emph{Create Launch:} Initialize with standardized parameters: $H{=}425$\,SOL, $C{=}1.1$\,SOL, ticket size $\tau{=}0.05$\,SOL, funding period $T_{\text{fund}}{=}192$\,h, LP window $+6$\,h to $+18$\,h; supply split Sale 54.054\% / LP 45.946\%. A canonical hash of LP parameters is committed.
   \item \emph{Funding Opens:} Wallets deposit up to $C$; deposits are \emph{ticketized} in increments of $\tau$.
   \item \emph{Selection (if oversubscribed):} VRF-driven uniform sampling approves up to capacity $K=\lfloor H/\tau \rfloor$ tickets; unselected amounts are prepared for refund.
   \item \emph{Sale Allocation \& Claim:} Approved amounts map proportionally to the Sale bucket. Sale tokens have \emph{no vesting/cliff} and become claimable after LP deploy.
@@ -249,7 +249,7 @@ Protocol-owned LP is initialized with precommitted parameters. Immutability sema
 \addlinespace[0.3em]
 Maximum Raise (hard cap) & Maximum base asset that can be raised & 425 SOL \\
 Minimum Raise Requirement & Absolute raise required for success & 50 SOL \\
-Per-Wallet Limit & Max cumulative deposit per wallet & 1 SOL \\
+Per-Wallet Limit & Max cumulative deposit per wallet & 1.1 SOL \\
 Ticket Size & Deposit granularity (ticketized; remainders refunded) & 0.05 SOL \\
 Funding Period & Fixed deposits window & 192 hours (8 days) \\
 Overflow VRF & Oversubscription allocation method & Enabled (uniform ticket sampling) \\
@@ -306,7 +306,7 @@ Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 \end{itemize}
 
 \section*{Example Walkthrough}
-Set $H{=}425$\,SOL, $C{=}1$\,SOL, $\tau{=}0.05$\,SOL, Sale bucket $A_{\text{sale}}{=}54.054\%$, LP window $+6$\,h$\ldots+18$\,h. A user deposits $0.83$\,SOL $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Sale allocation is $\frac{0.60}{\sum a_j} \cdot A_{\text{sale}}$. After LP deploy, the user may claim tokens immediately. Fees subsequently accrue, driving \textdollar XYB buybacks and the 75/25 fee split from trading fees.
+Set $H{=}425$\,SOL, $C{=}1.1$\,SOL, $\tau{=}0.05$\,SOL, Sale bucket $A_{\text{sale}}{=}54.054\%$, LP window $+6$\,h$\ldots+18$\,h. A user deposits $0.83$\,SOL $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Sale allocation is $\frac{0.60}{\sum a_j} \cdot A_{\text{sale}}$. After LP deploy, the user may claim tokens immediately. Fees subsequently accrue, driving \textdollar XYB buybacks and the 75/25 fee split from trading fees.
 
 \section*{Interfaces (Sketch)}
 
