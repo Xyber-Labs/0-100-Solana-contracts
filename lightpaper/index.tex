@@ -51,6 +51,7 @@
 % ------------------ Helper Commands ------------------
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{M}[1]{>{\raggedright\arraybackslash}m{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}  % ragged-right flexible column for Tabularx
 
 % ------------------ Config Macros (One-Stop Values) ------------------
 % Edit these in one place to change values across the paper
@@ -181,6 +182,33 @@ Because allocations are decided before trading, launch-time sniping has limited 
 \textbf{Platform-fee buybacks.} Protocol platform fees designated for buybacks are used to market-buy \textdollar XYB. Routing (e.g., treasury or incentives) is configurable at the protocol level; cumulative totals and balances are publicly reported.
 
 \textbf{Creator Share from trading fees.} After listing, DEX trading fees accrue to the Xyber LP position and are harvested on a governance-defined cadence. Each harvest is split \DexSplitX\% to Xyber (treasury) and \DexSplitC\% to the launch's creator payout vault. Creator payouts are sourced only from these trading fees (not from platform fees).
+
+\subsection*{Dynamic Fee Split (Market-Cap Bands)}
+We use a \emph{market-cap–based dynamic split} of the trade commission between the \textbf{Creator} and the \textbf{Protocol (Xyber)}. The split is \emph{DEX-agnostic}:
+\begin{itemize}
+  \item on \textbf{Raydium} --- via \emph{harvest \& split} of LP commissions;
+  \item on the \textbf{proprietary DEX} --- applied \emph{per-swap}.
+\end{itemize}
+
+Let the DEX \emph{trade commission} be the 100\% pool collected for a swap. The share sent to Creator vs.\ Xyber is determined by the project's \textbf{market cap (in SOL)} and the band it falls into. Bands provide hysteresis (band~1 includes a buffer above the hard cap 450 to protect early-stage liquidity).
+
+\begin{tabularx}{\linewidth}{@{}>{\centering\arraybackslash}p{0.06\linewidth} >{\raggedright\arraybackslash}p{0.20\linewidth} >{\centering\arraybackslash}p{0.10\linewidth} >{\centering\arraybackslash}p{0.10\linewidth} Y@{}}
+\toprule
+\textbf{Step} & \textbf{Market Cap (SOL)} & \textbf{Creator} & \textbf{Xyber} & \textbf{Notes} \\
+\midrule
+1  & 0--500              & 20\% & 80\% & Early protocol protection; buffer above hard cap (450). \\
+2  & 501--1{,}500        & 70\% & 30\% & Peak for creator; wide ($\times3$) band to stay longer at peak. \\
+3  & 1{,}501--4{,}000    & 65\% & 35\% & Gradual decrease, still strong incentive. \\
+4  & 4{,}001--10{,}000   & 60\% & 40\% & As liquidity grows, more flows to the protocol. \\
+5  & 10{,}001--20{,}000  & 55\% & 45\% & Balanced incentives. \\
+6  & 20{,}001--30{,}000  & 50\% & 50\% & Symmetry at mid caps. \\
+7  & 30{,}001--50{,}000  & 45\% & 55\% & Shift toward Xyber. \\
+8  & 50{,}001--70{,}000  & 40\% & 60\% & More mature stage — strengthen \$XYB buybacks/treasury. \\
+9  & 70{,}001--100{,}000 & 30\% & 70\% & Pre-final stage, protocol priority. \\
+10 & $>$100{,}000       & 20\% & 80\% & Large projects: revert to step-1 split. \\
+\bottomrule
+\end{tabularx}
+
 
 \section*{On-Chain Architecture}
 \textbf{Programs}
