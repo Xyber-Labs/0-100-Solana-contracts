@@ -55,11 +55,11 @@
 
 % ------------------ Config Macros (One-Stop Values) ------------------
 % Edit these in one place to change values across the paper
-\newcommand{\Hcap}{425}            % SOL
-\newcommand{\MinRaise}{50}         % SOL
+\newcommand{\Hcap}{450}            % SOL
+\newcommand{\MinRaise}{100}        % SOL
 \newcommand{\Ccap}{1.1}            % SOL
 \newcommand{\TauVal}{0.05}         % SOL per ticket (tau)
-\newcommand{\FundHours}{192}       % hours
+\newcommand{\FundHours}{120}       % hours  % (= 5 days)
 \newcommand{\LPWinStart}{6}        % hours after selection
 \newcommand{\LPWinEnd}{18}         % hours after selection
 \newcommand{\LPFallbackEnd}{6}     % hours (fallback window end)
@@ -91,7 +91,7 @@
   \item \textbf{Creator Self-Snipe with Vesting:} Creator may self-deposit up to $S_{\max}{=}\CreatorSnipeMax$\,SOL; each SOL adds $\VestingPerSolHours$\,h to creator vesting linearly (pro-rata), up to $T_{\text{vest,max}}{=}\CreatorSnipeMax$ days.
   \item \textbf{VRF Selection (Overflow Only):} If demand exceeds hard cap $H$, allocation uses uniform VRF-backed sampling over \emph{ticketized} deposits.
   \item \textbf{VRF-Timed LP Window:} After selection finalization, a VRF draw picks an exact deploy time in a fixed $+\LPWinStart$\,h to $+\LPWinEnd$\,h window.
-  \item \textbf{Economics:} Platform-fee buybacks market-buy \textdollar XYB; the \emph{Creator Share} is paid only from DEX trading fees after listing with a standardized split of \DexSplitX\% Xyber / \DexSplitC\% Creator (periodic harvest to a creator payout vault).
+  \item \textbf{Economics:} Platform-fee buybacks market-buy \textdollar XYB (80\%) and fund treasury (20\%); the \emph{Creator Share} is paid only from DEX trading fees after listing with a \emph{dynamic split by market-cap bands} (see Appendix). Payouts follow the asset rule: SOL-fee proceeds to Xyber, token-fee proceeds to the creator (periodic harvest to a creator payout vault).
   \item \textbf{Single preset:} One standardized configuration (no creator-side tuning). Sale tokens are claimable after LP deploy; users have no vesting/cliff.
 \end{itemize}
 
@@ -104,7 +104,7 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
   \item \textbf{Fairness-by-design:} A hard per-wallet cap $C$ and uniform ticket-level selection eliminate gas races and mempool games.
   \item \textbf{Minimal \& auditable:} Small, self-contained programs with deterministic state transitions and explicit authority separation (program-derived addresses).
   \item \textbf{Provable randomness:} Chain-oracle VRF for selection and LP time draws; blockhash-only RNG is \emph{not} used.
-  \item \textbf{Transparent economics:} Platform-fee buybacks market-buy \textdollar XYB; the Creator Share is paid only from DEX trading fees after listing (standard \DexSplitX\% Xyber / \DexSplitC\% Creator).
+  \item \textbf{Transparent economics:} Platform-fee buybacks market-buy \textdollar XYB; the Creator Share is paid only from DEX trading fees after listing (dynamic split by market-cap bands; SOL fees to Xyber, token fees to creator; 80/20 platform-fee policy for $XYB$ buybacks/treasury).
   \item \textbf{Canonical pool commitment:} The launch precommits DEX pool parameters; the deploy instruction verifies the commitment to prevent fake-pool front-runs.
 \end{itemize}
 
@@ -118,7 +118,7 @@ Open, decentralized token launches often suffer from gas wars, bot sniping, and 
   \item \emph{Selection (if oversubscribed):} VRF-driven uniform sampling approves up to capacity $K=\lfloor H/\tau \rfloor$ tickets; unselected amounts are prepared for refund.
   \item \emph{Sale Allocation \& Claim:} Approved amounts map proportionally to the Sale bucket. Sale tokens have \emph{no vesting/cliff} and become claimable after LP deploy.
   \item \emph{Randomized LP:} A second VRF draw sets $t^\ast \in [+6\text{h}, +18\text{h}]$ after selection finalization; at or after $t^\ast$, anyone may initialize the precommitted Raydium pool.
-  \item \emph{Post-Listing Fees:} Platform fees are used to market-buy \textdollar XYB (totals publicly reported). Trading fees from the Xyber LP position are harvested and split \DexSplitX\% (Xyber) / \DexSplitC\% (Creator) to the creator payout vault on a governance-set cadence.
+  \item \emph{Post-Listing Fees:} Platform fees are used to market-buy \textdollar XYB (80\%) and fund treasury (20%). Trading fees from the Xyber LP position are harvested and split \emph{dynamically by market-cap bands} (Appendix), with SOL-fee proceeds routed to Xyber and token-fee proceeds to the creator payout vault on a governance-set cadence.
 \end{enumerate}
 
 % ----- User Flow Figure -----
@@ -179,9 +179,9 @@ In practice, any third party submits the deploy transaction at/after $t^\ast$. T
 Because allocations are decided before trading, launch-time sniping has limited impact on initial distribution. Randomized LP timing further reduces coordinated positioning around the deploy moment.
 
 \subsection*{Fee Model: \textdollar XYB Buybacks \& Creator Share}
-\textbf{Platform-fee buybacks.} Protocol platform fees designated for buybacks are used to market-buy \textdollar XYB. Routing (e.g., treasury or incentives) is configurable at the protocol level; cumulative totals and balances are publicly reported.
+\textbf{Platform-fee buybacks.} Xyber platform fees from DEX trades are allocated \emph{80\% to market-buy \textdollar XYB} and \emph{20\% to the Xyber Treasury}. Routing is policy-controlled; cumulative totals and balances are publicly reported.
 
-\textbf{Creator Share from trading fees.} After listing, DEX trading fees accrue to the Xyber LP position and are harvested on a governance-defined cadence. Each harvest is split \DexSplitX\% to Xyber (treasury) and \DexSplitC\% to the launch's creator payout vault. Creator payouts are sourced only from these trading fees (not from platform fees).
+\textbf{Creator Share from trading fees.} After listing, DEX trading fees accrue to the Xyber LP position and are harvested on a governance-defined cadence. Each harvest applies the \emph{dynamic split by market-cap bands} (Appendix). Payouts follow the asset rule: \emph{SOL-fee proceeds are routed to Xyber}, while \emph{token-fee proceeds are routed to the creator payout vault}.
 
 \subsection*{Dynamic Fee Split (Market-Cap Bands)}
 We use a \emph{market-cap–based dynamic split} of the trade commission between the \textbf{Creator} and the \textbf{Protocol (Xyber)}. The split is \emph{DEX-agnostic}:
@@ -218,7 +218,7 @@ Let the DEX \emph{trade commission} be the 100\% pool collected for a swap. The 
   \item \textbf{DistributionVault:} Holds project tokens; maps approved amounts to Sale distributions; opens claims after LP deploy.
   \item \textbf{LPDeployer:} Verifies canonical pool commitment; after $t^\ast$, enables permissionless pool initialization via a CPI into Raydium.
   \item \textbf{FeeCollector \& Buyback:} Accrues platform fees; executes market buybacks of \textdollar XYB; publishes cumulative totals/balances.
-  \item \textbf{DEXFeeHarvester \& CreatorPayout:} Harvests LP trading fees and splits 75\% to Xyber / 25\% to the creator payout vault; emits accounting events.
+  \item \textbf{DEXFeeHarvester \& CreatorPayout:} Harvests LP trading fees and applies the dynamic split by market-cap bands; routes SOL-fee proceeds to Xyber and token-fee proceeds to the creator payout vault; emits accounting events.
 \end{itemize}
 
 \textbf{Accounts \& Authorities (Sketch):}
@@ -296,19 +296,21 @@ Maximum Raise (hard cap) & Maximum base asset that can be raised & \Hcap\ SOL \\
 Minimum Raise Requirement & Absolute raise required for success & \MinRaise\ SOL \\
 Per-Wallet Limit & Max cumulative deposit per wallet & \Ccap\ SOL \\
 Ticket Size & Deposit granularity (ticketized; remainders refunded) & \TauVal\ SOL \\
-Funding Period & Fixed deposits window & \FundHours hours (8 days) \\
+Funding Period & Fixed deposits window & \FundHours hours (5 days) \\
 Overflow VRF & Oversubscription allocation method & Enabled (uniform ticket sampling) \\
 \midrule
 \multicolumn{3}{l}{\textbf{Supply, Fees \& Timing}} \\
 \addlinespace[0.3em]
 Sale Allocation & Portion distributed pro-rata to approved contributors & \SalePct\% of total supply \\
 Liquidity Allocation & Portion paired with collected SOL into the LP & \LPPct\% of total supply \\
+Total Supply & Total token supply at TGE & 1B tokens \\
 Token Claim Timing & Claim for Sale tokens & After LP deploy \\
 Creator Snipe & Extra creator deposit; extends vesting (+\VestingPerSolHours h/SOL) & Up to \CreatorSnipeMax\ SOL; max +\CreatorSnipeMax\ days \\
 LP Deployment Window & VRF-randomized LP time after selection finalization & +\LPWinStart h to +\LPWinEnd h \\
 Randomness Fallback & Fallback if VRF fails & Retry; if failed $\rightarrow$ +0--\LPFallbackEnd h \\
-DEX Fee Split & Trading fees split on DEX & \DexSplitX\% Xyber / \DexSplitC\% Creator \\
-Default DEX for LP & DEX where pools are created & Raydium \\
+DEX Fee Split & Trading fees split on DEX & Dynamic by market-cap bands (Appendix); SOL fees to Xyber, token fees to creator \\
+Platform-Fee Allocation & Allocation of Xyber platform fees from DEX trades & 80\% $XYB$ Buyback / 20\% Treasury \\
+Default DEX for LP & DEX where pools are created & Raydium (first 2--3 launches; Raydium-fork in progress) \\
 LP Deployer Reward & Incentive for calling LP deploy at/after $t^\ast$ & Small LP-token bounty (configurable) \\
 \bottomrule
 \end{tabularx}
@@ -345,6 +347,7 @@ Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 
 \section*{Standardized Supply \& Economics}
 \begin{itemize}
+  \item \textbf{Total supply:} 1B tokens at TGE.
   \item \textbf{Total supply split:} 54.054\% Sale, 45.946\% LP.
   \item \textbf{No reserves at TGE:} 100\% allocated across Sale + LP.
   \item \textbf{Claims:} Sale tokens claimable after LP deploy; no vesting/cliff for users.
