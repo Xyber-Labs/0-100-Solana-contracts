@@ -29,7 +29,7 @@
 \newif\ifwipwatermark
 \wipwatermarktrue
 \ifwipwatermark
-  \SetWatermarkText{DRAFT}
+  \SetWatermarkText{WIP}
   \SetWatermarkScale{4}
   \SetWatermarkColor[gray]{0.90}
   \SetWatermarkAngle{45}
@@ -67,9 +67,6 @@
 \newcommand{\LPPct}{45.946}        % percent
 \newcommand{\CreatorSnipeMax}{8}   % SOL
 \newcommand{\VestingPerSolHours}{24} % hours per SOL
-\newcommand{\DexSplitX}{75}        % percent Xyber
-\newcommand{\DexSplitC}{25}        % percent Creator
-
 \setlist{leftmargin=*, itemsep=0.2em, topsep=0.3em, partopsep=0em}
 \setlength{\tabcolsep}{4pt}
 
@@ -339,12 +336,6 @@ Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 \bottomrule
 \end{tabularx}
 
-\section*{Creator Controls}
-\begin{itemize}
-  \item \textbf{Launch config:} $H$, $C$, $\tau$, $A_{\text{sale}}$, funding window, LP window.
-  \item \textbf{Policies:} LP token handling (burn/lock policy), claim timing (Sale claims after LP), fee routing for platform buybacks.
-\end{itemize}
-
 \section*{Standardized Supply \& Economics}
 \begin{itemize}
   \item \textbf{Total supply:} 1B tokens at TGE.
@@ -354,7 +345,7 @@ Refund griefing & Pull refunds; anyone-can-execute helpers; idempotent flows \\
 \end{itemize}
 
 \section*{Example Walkthrough}
-Set $H{=}\Hcap$\,SOL, $C{=}\Ccap$\,SOL, $\tau{=}\TauVal$\,SOL, Sale bucket $A_{\text{sale}}{=}\SalePct\%$, LP window $+\LPWinStart$\,h$\ldots+\LPWinEnd$\,h. A user deposits $0.83$\,SOL $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Sale allocation is $\frac{0.60}{\sum a_j} \cdot A_{\text{sale}}$. After LP deploy, the user may claim tokens immediately. Fees subsequently accrue, driving \textdollar XYB buybacks and the \DexSplitX/\DexSplitC fee split from trading fees.
+Set $H{=}\Hcap$\,SOL, $C{=}\Ccap$\,SOL, $\tau{=}\TauVal$\,SOL, Sale bucket $A_{\text{sale}}{=}\SalePct\%$, LP window $+\LPWinStart$\,h$\ldots+\LPWinEnd$\,h. A user deposits $0.83$\,SOL $\Rightarrow$ $16$ tickets ($0.80$) + $0.03$ remainder. After oversubscription, selection picks $12$ tickets $\Rightarrow$ approved $0.60$; refund $0.23$. Sale allocation is $\frac{0.60}{\sum a_j} \cdot A_{\text{sale}}$. After LP deploy, the user may claim tokens immediately. Fees subsequently accrue, driving \textdollar XYB buybacks and the dynamic trading-fee split.
 
 \section*{Interfaces (Sketch)}
 
@@ -392,6 +383,6 @@ This LightPaper is \emph{not} financial advice. Token launches entail risk. Regi
 Core programs undergo third-party audit; a public bug-bounty program rewards responsibly disclosed issues prior to mainnet launches.
 
 \section*{Why This Is Better \& Cooler}
-No more click-wars: allocation before trading, randomized and capped. Reduced sniping: LP time is drawn randomly within a committed window. Transparent economics: platform-fee \textdollar XYB buybacks and a clear \DexSplitX/\DexSplitC trading-fee split.
+No more click-wars: allocation before trading, randomized and capped. Reduced sniping: LP time is drawn randomly within a committed window. Transparent economics: platform-fee \textdollar XYB buybacks and a clear dynamic trading-fee split.
 \balance
 \end{document}
