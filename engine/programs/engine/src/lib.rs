@@ -55,6 +55,23 @@ pub mod engine {
         // save sale mint
         state.sale_mint = ctx.accounts.sale_mint.key();
 
+        // Initialize escrow account
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.launch = ctx.accounts.launch_state.key();
+        escrow.balance = 0;
+
+        Ok(())
+    }
+
+    /// Initialize roster account.
+    pub fn init_roster(ctx: Context<InitRoster>) -> Result<()> {
+        let roster = &mut ctx.accounts.roster;
+        roster.launch = ctx.accounts.launch_state.key();
+        roster.wallets = Vec::new();
+        roster.counts = Vec::new();
+        roster.prefix = Vec::new();
+        roster.total_in_shard = 0;
+        roster.shard_base = 0;
         Ok(())
     }
 
@@ -251,8 +268,20 @@ pub mod engine {
             ],
         )?;
 
+        // Update escrow balance
+        ctx.accounts.escrow.balance += amount;
+
         // update user
         let user = &mut ctx.accounts.user_contribution;
+        
+        // Initialize wallet field if this is the first deposit
+        if user.wallet == Pubkey::default() {
+            user.launch = st.key();
+            user.wallet = ctx.accounts.user.key();
+            user.claimed_refund = false;
+            user.claimed_tokens = false;
+        }
+        
         let old_tickets = user.ticket_count;
         user.deposited = current + amount;
         let new_tickets = (user.deposited / st.tau_lamports) as u32;
@@ -281,16 +310,11 @@ pub mod engine {
         require!(user.deposited >= amount, ErrorCode::InsufficientDeposit);
 
         // return lamports from escrow to user
-        **ctx
-            .accounts
-            .escrow
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= amount;
-        **ctx
-            .accounts
-            .user
-            .to_account_info()
-            .try_borrow_mut_lamports()? += amount;
+        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
+        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += amount;
+
+        // Update escrow balance
+        ctx.accounts.escrow.balance -= amount;
 
         // recompute tickets
         let old_tickets = user.ticket_count;
@@ -486,6 +510,12 @@ pub struct HeapEntry {
 }
 
 #[account]
+pub struct EscrowAccount {
+    pub launch: Pubkey,
+    pub balance: u64,
+}
+
+#[account]
 pub struct SelectionState {
     pub launch: Pubkey,
     pub vrf_seed: [u8; 32],
@@ -512,23 +542,47 @@ pub struct InitLaunch<'info> {
             (8*6) + (4*2) + // lamports + ints
             32 + // sale_mint
             1 + 1 + 8 + 4 + 4 + // funding
-            1 + 4 + 1 + 16 + // selection
-            1 + 8, // claims
+            1 + 32 + 4 + 1 + 1 + 16 + // selection (Option<[u8;32]> + u32 + bool + Option<u128>)
+            1 + 1 + 8, // claims (bool + Option<u64>)
         seeds = [b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
 
-    /// Mint for sale tokens (program’s mint authority will be PDA)
+    /// Mint for sale tokens (program's mint authority will be PDA)
     #[account(mut)]
     pub sale_mint: Account<'info, Mint>,
 
-    /// System vault (native SOL) – simple system account PDA
-    /// In MVP you can just use the LaunchState account’s lamports for escrow,
-    /// but we create a separate PDA so balance is isolated.
-    #[account(mut, address = escrow_address(launch_state.key()))]
-    pub escrow: SystemAccount<'info>,
+    /// Escrow account (PDA off launch_state)
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + 32 + 8,
+        seeds = [b"escrow", launch_state.key().as_ref()],
+        bump
+    )]
+    pub escrow: Account<'info, EscrowAccount>,
 
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitRoster<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+    
+    #[account(mut)]
+    pub launch_state: Account<'info, LaunchState>,
+    
+    #[account(
+        init,
+        payer = admin,
+        space = 8 + 32 + (4 + 32 * 100) + (4 + 4 * 100) + (4 + 4 * 100) + 4 + 4,
+        seeds = [b"roster", launch_state.key().as_ref()],
+        bump
+    )]
+    pub roster: Account<'info, Roster>,
+    
     pub system_program: Program<'info, System>,
 }
 
@@ -549,7 +603,7 @@ pub struct OnlyAdminWithSelection<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + 4 + 1 + 4 + 4 + (16+32+4)*1_000, // rough MVP; adjust
+        space = 8 + 32 + 4 + 1 + 4 + 4 + (16+32+4)*100, // reduced for testing
         seeds = [b"selection", launch_state.key().as_ref()],
         bump
     )]
@@ -565,7 +619,9 @@ pub struct CloseDeposits<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
-    pub launch: SystemAccount<'info>,
+    /// CHECK: This is the launch account referenced by the roster
+    #[account(address = launch_state.key())]
+    pub launch: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -600,11 +656,13 @@ pub struct Deposit<'info> {
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
-    /// CHECK: simple system account as escrow (PDA off launch_state)
+    /// Escrow account (PDA off launch_state)
     #[account(mut, address = escrow_address(launch_state.key()))]
-    pub escrow: SystemAccount<'info>,
+    pub escrow: Account<'info, EscrowAccount>,
 
-    pub launch: SystemAccount<'info>,
+    /// CHECK: This is the launch account referenced by the roster
+    #[account(address = launch_state.key())]
+    pub launch: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -618,11 +676,15 @@ pub struct Withdraw<'info> {
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
-    /// CHECK:
+    /// Escrow account (PDA off launch_state)
     #[account(mut, address = escrow_address(launch_state.key()))]
-    pub escrow: SystemAccount<'info>,
+    pub escrow: Account<'info, EscrowAccount>,
 
-    pub launch: SystemAccount<'info>,
+    /// CHECK: This is the launch account referenced by the roster
+    #[account(address = launch_state.key())]
+    pub launch: UncheckedAccount<'info>,
+    
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -667,8 +729,11 @@ pub struct ClaimTokens<'info> {
 // -------------------------------
 
 fn escrow_address(launch: Pubkey) -> Pubkey {
-    Pubkey::create_with_seed(&launch, "escrow", &solana_program::system_program::id())
-        .unwrap_or_default()
+    let (address, _) = Pubkey::find_program_address(
+        &[b"escrow", launch.as_ref()],
+        &crate::ID,
+    );
+    address
 }
 
 /// Append or incr user's count; realloc roster if needed (MVP simplistic).
