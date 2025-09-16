@@ -5,7 +5,7 @@ use anchor_lang::solana_program;
 use solana_program::keccak;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 
 /// Domain separation for score hashing (fix this constant).
 const SCORE_DOMAIN: &[u8] = b"0-100/selection/v1";
@@ -293,6 +293,7 @@ pub mod engine {
         roster_add_or_incr(
             roster,
             user.wallet,
+            delta,
             &ctx.accounts.user,
             &ctx.accounts.system_program,
         )?;
@@ -698,7 +699,7 @@ pub struct ClaimRefund<'info> {
     pub selection_state: Account<'info, SelectionState>,
     /// CHECK:
     #[account(mut, address = escrow_address(launch_state.key()))]
-    pub escrow: SystemAccount<'info>,
+    pub escrow: Account<'info, EscrowAccount>,
 }
 
 #[derive(Accounts)]
@@ -716,7 +717,7 @@ pub struct ClaimTokens<'info> {
     pub sale_mint: Account<'info, Mint>,
     /// CHECK: mint authority PDA
     /// Seeds: ["mint_auth", launch_state]
-    #[account(seeds = [b"mint_auth", launch_state.key().as_ref()], bump)]
+    #[account(seeds = [b"mint_auth", launch_state.key().as_ref()], bump = 255)]
     pub mint_auth: UncheckedAccount<'info>,
 
     #[account(mut)]
@@ -740,16 +741,17 @@ fn escrow_address(launch: Pubkey) -> Pubkey {
 fn roster_add_or_incr(
     roster: &mut Account<Roster>,
     wallet: Pubkey,
+    delta: u32,
     _payer: &Signer,
     _system_program: &Program<System>,
 ) -> Result<()> {
     if let Some(pos) = roster.wallets.iter().position(|w| *w == wallet) {
-        roster.counts[pos] = roster.counts[pos].saturating_add(1);
+        roster.counts[pos] = roster.counts[pos].saturating_add(delta);
         return Ok(());
     }
     // append new
     roster.wallets.push(wallet);
-    roster.counts.push(1);
+    roster.counts.push(delta);
     Ok(())
 }
 

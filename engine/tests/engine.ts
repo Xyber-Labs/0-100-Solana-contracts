@@ -4,6 +4,8 @@ import { Engine } from "../target/types/engine";
 import { assert } from "chai";
 import {
   createInitializeMintInstruction,
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
@@ -88,7 +90,7 @@ describe("engine", () => {
       // Account doesn't exist, create it
       await program.methods
         .initRoster()
-        .accounts({
+        .accountsStrict({
           admin: admin.publicKey,
           launchState,
           roster,
@@ -230,12 +232,12 @@ describe("engine", () => {
 
     await program.methods
       .initRoster()
-      .accounts({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        roster: testRoster,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
+        .accountsStrict({
+          admin: admin.publicKey,
+          launchState: testLaunchState,
+          roster: testRoster,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
       .rpc();
 
     await program.methods
@@ -332,12 +334,12 @@ describe("engine", () => {
 
     await program.methods
       .initRoster()
-      .accounts({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        roster: testRoster,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
+        .accountsStrict({
+          admin: admin.publicKey,
+          launchState: testLaunchState,
+          roster: testRoster,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
       .rpc();
 
     const depositor = anchor.web3.Keypair.generate();
@@ -450,12 +452,12 @@ describe("engine", () => {
 
     await program.methods
       .initRoster()
-      .accounts({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        roster: testRoster,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
+        .accountsStrict({
+          admin: admin.publicKey,
+          launchState: testLaunchState,
+          roster: testRoster,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
       .rpc();
 
     const depositor = anchor.web3.Keypair.generate();
@@ -523,5 +525,300 @@ describe("engine", () => {
 
     const userAccount = await program.account.userContribution.fetch(userContribution);
     assert.equal(userAccount.deposited.toNumber(), 0);
+  });
+
+  it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
+    // Create a new launch state for this comprehensive test
+    const testSaleMint = anchor.web3.Keypair.generate();
+    const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
+      program.programId
+    );
+    const [testEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), testLaunchState.toBuffer()],
+      program.programId
+    );
+    
+    // Get the correct mint authority
+    const [mintAuth] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("mint_auth"), testLaunchState.toBuffer()],
+      program.programId
+    );
+
+    // Initialize launch with smaller caps for testing
+    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL); // 20 SOL hard cap
+    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL); // 5 SOL min raise
+    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL); // 3 SOL per wallet
+    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL); // 0.5 SOL per ticket
+
+    await program.methods
+      .initLaunch(
+        testHardCap,
+        testMinRaise,
+        testPerWalletCap,
+        testTau,
+        saleAllocation,
+        lpAllocation
+      )
+      .accountsStrict({
+        admin: admin.publicKey,
+        launchState: testLaunchState,
+        saleMint: testSaleMint.publicKey,
+        escrow: testEscrow,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([admin.payer, testSaleMint])
+      .preInstructions([
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: testSaleMint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          testSaleMint.publicKey,
+          6,
+          mintAuth,
+          admin.publicKey
+        ),
+      ])
+      .rpc();
+
+    // Open funding
+    await program.methods
+      .openFunding()
+      .accountsStrict({
+        admin: admin.publicKey,
+        launchState: testLaunchState,
+      })
+      .rpc();
+
+    // Initialize roster account
+    const [testRoster] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("roster"), testLaunchState.toBuffer()],
+      program.programId
+    );
+
+    await program.methods
+      .initRoster()
+        .accountsStrict({
+          admin: admin.publicKey,
+          launchState: testLaunchState,
+          roster: testRoster,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+      .rpc();
+
+    // Create multiple users and deposit funds
+    const users = [];
+    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL); // 2 SOL per user
+    
+    for (let i = 0; i < 15; i++) { // Create 15 users to exceed hard cap
+      const user = anchor.web3.Keypair.generate();
+      
+      // Airdrop SOL to the user
+      await provider.connection.requestAirdrop(
+        user.publicKey,
+        20 * anchor.web3.LAMPORTS_PER_SOL
+      );
+      
+      // Wait for the airdrop to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Confirm the user has SOL
+      const balance = await provider.connection.getBalance(user.publicKey);
+      console.log(`User ${i} balance: ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+      const [userContribution] = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("user"),
+          testLaunchState.toBuffer(),
+          user.publicKey.toBuffer(),
+        ],
+        program.programId
+      );
+
+      await program.methods
+        .deposit(depositAmount)
+        .accountsStrict({
+          user: user.publicKey,
+          launchState: testLaunchState,
+          userContribution,
+          roster: testRoster,
+          escrow: testEscrow,
+          launch: testLaunchState,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([user])
+        .rpc();
+
+      users.push({ keypair: user, contribution: userContribution });
+    }
+
+    // Verify total deposits exceed hard cap
+    let state = await program.account.launchState.fetch(testLaunchState);
+    assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
+    console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log(`Total tickets: ${state.totalTickets}`);
+
+    // Close deposits
+    await program.methods
+      .closeDeposits()
+      .accountsStrict({
+        admin: admin.publicKey,
+        launchState: testLaunchState,
+        roster: testRoster,
+        launch: testLaunchState,
+      })
+      .rpc();
+
+    state = await program.account.launchState.fetch(testLaunchState);
+    assert.isTrue(state.depositsClosed);
+    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber()); // K = hard_cap / tau
+
+    // Set VRF seed
+    const vrfSeed = anchor.web3.Keypair.generate().publicKey;
+    const [selectionState] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("selection"), testLaunchState.toBuffer()],
+      program.programId
+    );
+
+    await program.methods
+      // @ts-ignore
+      .setSeed(vrfSeed.toBuffer())
+      .accountsStrict({
+        admin: admin.publicKey,
+        launchState: testLaunchState,
+        selectionState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    state = await program.account.launchState.fetch(testLaunchState);
+    assert.ok(state.vrfSeed !== null);
+
+    // Store the total tickets count before processing
+    const totalTicketsToProcess = state.totalTickets;
+    console.log(`Total tickets to process: ${totalTicketsToProcess}`);
+
+    // Process all tickets in batches (cranking)
+    const maxItemsPerBatch = 10;
+    let processed = 0;
+    
+    while (processed < totalTicketsToProcess) {
+      await program.methods
+        .processBatch(maxItemsPerBatch)
+        .accountsStrict({
+          selectionState,
+          launchState: testLaunchState,
+          roster: testRoster,
+        })
+        .rpc();
+
+      const selectionAccount = await program.account.selectionState.fetch(selectionState);
+      processed = selectionAccount.processed;
+      console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
+      
+      // Add a small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // Verify all tickets are processed
+    const finalSelectionAccount = await program.account.selectionState.fetch(selectionState);
+    console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
+    console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
+    assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
+    assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
+
+    // Finalize selection
+    await program.methods
+      .finalizeSelection()
+      .accountsStrict({
+        selectionState,
+        launchState: testLaunchState,
+      })
+      .rpc();
+
+    state = await program.account.launchState.fetch(testLaunchState);
+    assert.isTrue(state.selectionFinalized);
+    assert.ok(state.thresholdScore !== null);
+    console.log(`Threshold score: ${state.thresholdScore}`);
+
+    // Open claims
+    await program.methods
+      .openClaims()
+      .accountsStrict({
+        admin: admin.publicKey,
+        launchState: testLaunchState,
+      })
+      .rpc();
+
+    state = await program.account.launchState.fetch(testLaunchState);
+    assert.isTrue(state.claimsOpen);
+    assert.ok(state.tokensPerTicket !== null);
+    console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
+
+    // Test claim refunds for some users (simulate losers)
+    const testUser = users[0];
+    const userAccountBefore = await program.account.userContribution.fetch(testUser.contribution);
+    const initialBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+
+    await program.methods
+      .claimRefund()
+      .accountsStrict({
+        user: testUser.keypair.publicKey,
+        launchState: testLaunchState,
+        userContribution: testUser.contribution,
+        selectionState,
+        escrow: testEscrow,
+      })
+      .signers([testUser.keypair])
+      .rpc();
+
+    const finalBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+    const userAccountAfter = await program.account.userContribution.fetch(testUser.contribution);
+    
+    assert.isTrue(userAccountAfter.claimedRefund);
+    console.log(`User refund claimed. Balance change: ${(finalBalance - initialBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+    // Test claim tokens for a user (simulate winner)
+    // First create a token account for the user
+    const userTokenAccount = await getAssociatedTokenAddress(
+      testSaleMint.publicKey,
+      testUser.keypair.publicKey
+    );
+
+    const createTokenAccountIx = createAssociatedTokenAccountInstruction(
+      admin.publicKey,
+      userTokenAccount,
+      testUser.keypair.publicKey,
+      testSaleMint.publicKey
+    );
+
+    await program.methods
+      .claimTokens()
+      .accountsStrict({
+        user: testUser.keypair.publicKey,
+        launchState: testLaunchState,
+        userContribution: testUser.contribution,
+        selectionState,
+        saleMint: testSaleMint.publicKey,
+        mintAuth: mintAuth,
+        userAta: userTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([testUser.keypair])
+      .preInstructions([createTokenAccountIx])
+      .rpc();
+
+    const finalTokenBalance = await provider.connection.getTokenAccountBalance(userTokenAccount);
+    const userAccountFinal = await program.account.userContribution.fetch(testUser.contribution);
+    
+    assert.isTrue(userAccountFinal.claimedTokens);
+    console.log(`User tokens claimed. Token balance: ${finalTokenBalance.value.uiAmount}`);
+
+    console.log("Complete flow test passed! All functions tested successfully.");
   });
 });
