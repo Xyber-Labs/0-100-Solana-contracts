@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
 import EngineSDK from 'zero-hundred-engine-sdk';
@@ -13,6 +13,46 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
+}
+
+// Error boundary component
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error?: Error}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="terminal-card">
+          <div className="terminal-prompt mb-4">
+            <span className="terminal-glow">error@engine:~$</span>
+            <span className="terminal-command ml-2">component-error</span>
+          </div>
+          <div className="text-xs terminal-error">
+            <div>Component crashed: {this.state.error?.message}</div>
+            <button 
+              onClick={() => this.setState({ hasError: false })}
+              className="terminal-button mt-2"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function EngineDemo() {
@@ -33,6 +73,19 @@ function EngineDemo() {
   const [showLaunchForm, setShowLaunchForm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<number>(0);
+  const [savedProjects, setSavedProjects] = useState<any[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [showProjectManager, setShowProjectManager] = useState(false);
+
+  // Helper function to safely get numeric values from BN or number
+  const safeToNumber = (value: any): number => {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    if (value.toNumber && typeof value.toNumber === 'function') {
+      return value.toNumber();
+    }
+    return 0;
+  };
   
   // Default launch configuration (matching tests)
   const defaultConfig: LaunchConfig = {
@@ -502,14 +555,207 @@ function EngineDemo() {
     setLaunchData(null);
     setUserContributions(null);
     setSelectionData(null);
+    setCurrentProjectId(null);
     addLog('State reset');
   };
+
+  const saveProject = useCallback(() => {
+    if (!launchState || !saleMint) {
+      addLog('ERROR: No active project to save');
+      return;
+    }
+
+    // Helper function to serialize BN objects
+    const serializeBNObjects = (obj: any): any => {
+      if (obj && typeof obj === 'object') {
+        if (obj.toNumber && typeof obj.toNumber === 'function') {
+          // This is a BN object
+          return obj.toNumber();
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(serializeBNObjects);
+        }
+        const serialized: any = {};
+        for (const key in obj) {
+          serialized[key] = serializeBNObjects(obj[key]);
+        }
+        return serialized;
+      }
+      return obj;
+    };
+
+    const project = {
+      id: Date.now().toString(),
+      name: `Project ${savedProjects.length + 1}`,
+      timestamp: new Date().toISOString(),
+      launchState: launchState.toString(),
+      saleMint: {
+        publicKey: saleMint.publicKey.toString(),
+        secretKey: Array.from(saleMint.secretKey)
+      },
+      escrow: escrow?.toString() || null,
+      roster: roster?.toString() || null,
+      selection: selection?.toString() || null,
+      launchConfig,
+      launchData: serializeBNObjects(launchData),
+      userContributions: serializeBNObjects(userContributions),
+      selectionData: serializeBNObjects(selectionData),
+    };
+
+    const updatedProjects = [...savedProjects, project];
+    setSavedProjects(updatedProjects);
+    setCurrentProjectId(project.id);
+    localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
+    addLog(`SUCCESS: Project saved as "${project.name}"`);
+  }, [launchState, saleMint, escrow, roster, selection, launchConfig, launchData, userContributions, selectionData, savedProjects]);
+
+  const loadProject = useCallback(async (project: any) => {
+    try {
+      setIsLoading(true);
+      addLog(`Loading project: ${project.name}`);
+      
+      // Step by step restoration with error handling
+      try {
+        addLog('Restoring launch state...');
+        setLaunchState(new PublicKey(project.launchState));
+      } catch (error) {
+        addLog(`ERROR: Failed to restore launch state - ${error}`);
+        throw error;
+      }
+      
+      try {
+        addLog('Restoring sale mint...');
+        // Handle both old format (string) and new format (object with secretKey)
+        let restoredSaleMint: Keypair;
+        if (typeof project.saleMint === 'string') {
+          // Old format - only public key, create a dummy keypair
+          addLog('WARNING: Project saved in old format, saleMint keypair cannot be fully restored');
+          restoredSaleMint = { publicKey: new PublicKey(project.saleMint) } as Keypair;
+        } else {
+          // New format - full keypair with secret key
+          restoredSaleMint = Keypair.fromSecretKey(new Uint8Array(project.saleMint.secretKey));
+        }
+        setSaleMint(restoredSaleMint);
+      } catch (error) {
+        addLog(`ERROR: Failed to restore sale mint - ${error}`);
+        throw error;
+      }
+      
+      try {
+        addLog('Restoring other accounts...');
+        setEscrow(project.escrow ? new PublicKey(project.escrow) : null);
+        setRoster(project.roster ? new PublicKey(project.roster) : null);
+        setSelection(project.selection ? new PublicKey(project.selection) : null);
+      } catch (error) {
+        addLog(`ERROR: Failed to restore accounts - ${error}`);
+        throw error;
+      }
+      
+      try {
+        addLog('Restoring configuration and data...');
+        setLaunchConfig(project.launchConfig || defaultConfig);
+        
+        // Helper function to convert numbers back to BN objects
+        const convertToBN = (obj: any): any => {
+          if (obj && typeof obj === 'object') {
+            if (typeof obj === 'number') {
+              return new BN(obj);
+            }
+            if (Array.isArray(obj)) {
+              return obj.map(convertToBN);
+            }
+            const converted: any = {};
+            for (const key in obj) {
+              converted[key] = convertToBN(obj[key]);
+            }
+            return converted;
+          }
+          return obj;
+        };
+        
+        // Restore launch data with proper BN conversion
+        if (project.launchData) {
+          const restoredLaunchData = convertToBN(project.launchData);
+          setLaunchData(restoredLaunchData);
+        }
+        
+        // Restore user contributions with proper BN conversion
+        if (project.userContributions) {
+          const restoredUserContributions = convertToBN(project.userContributions);
+          setUserContributions(restoredUserContributions);
+        }
+        
+        setSelectionData(project.selectionData);
+        setCurrentProjectId(project.id);
+      } catch (error) {
+        addLog(`ERROR: Failed to restore data - ${error}`);
+        throw error;
+      }
+      
+      addLog(`SUCCESS: Project "${project.name}" loaded`);
+    } catch (error) {
+      addLog(`ERROR: Failed to load project - ${error}`);
+      // Reset to safe state
+      resetState();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [defaultConfig]);
+
+  const deleteProject = useCallback((projectId: string) => {
+    const updatedProjects = savedProjects.filter(p => p.id !== projectId);
+    setSavedProjects(updatedProjects);
+    localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
+    
+    if (currentProjectId === projectId) {
+      resetState();
+    }
+    
+    addLog('Project deleted');
+  }, [savedProjects, currentProjectId]);
+
+  const renameProject = useCallback((projectId: string, newName: string) => {
+    const updatedProjects = savedProjects.map(p => 
+      p.id === projectId ? { ...p, name: newName } : p
+    );
+    setSavedProjects(updatedProjects);
+    localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
+    addLog(`Project renamed to "${newName}"`);
+  }, [savedProjects]);
+
+  // Load saved projects on component mount
+  useEffect(() => {
+    const saved = localStorage.getItem('savedProjects');
+    if (saved) {
+      try {
+        const projects = JSON.parse(saved);
+        // Validate project structure
+        const validProjects = projects.filter((project: any) => {
+          return project.id && project.name && project.launchState;
+        });
+        setSavedProjects(validProjects);
+        addLog(`Loaded ${validProjects.length} saved projects`);
+        
+        if (validProjects.length !== projects.length) {
+          addLog(`WARNING: ${projects.length - validProjects.length} invalid projects were filtered out`);
+        }
+      } catch (error) {
+        addLog('ERROR: Failed to load saved projects - clearing corrupted data');
+        localStorage.removeItem('savedProjects');
+        setSavedProjects([]);
+      }
+    }
+  }, []);
 
   // Auto-refresh data when launch state changes
   useEffect(() => {
     if (launchState && sdk) {
-      fetchLaunchData();
-      fetchUserData();
+      try {
+        fetchLaunchData();
+        fetchUserData();
+      } catch (error) {
+        addLog(`ERROR: Failed to refresh data after state change - ${error}`);
+      }
     }
   }, [launchState, sdk, fetchLaunchData, fetchUserData]);
 
@@ -521,7 +767,8 @@ function EngineDemo() {
   }, [publicKey, fetchBalance]);
 
   return (
-    <div className="space-y-4">
+    <ErrorBoundary>
+      <div className="space-y-4">
       {/* Launch Configuration Form */}
       <div className="terminal-card">
         <div className="flex justify-between items-center mb-4">
@@ -551,6 +798,12 @@ function EngineDemo() {
               />
               <span className="terminal-output">Customize Parameters</span>
             </label>
+            <button 
+              onClick={() => setShowProjectManager(!showProjectManager)} 
+              className="terminal-button text-xs bg-blue-600 hover:bg-blue-500"
+            >
+              📁 Projects ({savedProjects.length})
+            </button>
             <button onClick={resetState} className="terminal-button text-xs">
               Reset State
             </button>
@@ -619,6 +872,108 @@ function EngineDemo() {
             </div>
           </div>
         )}
+
+        {/* Project Manager Panel */}
+        {showProjectManager && (
+          <div className="mt-4 p-4 bg-black bg-opacity-30 rounded border">
+            <div className="flex justify-between items-center mb-4">
+              <div className="terminal-prompt text-sm">
+                <span className="terminal-glow">projects@engine:~$</span>
+                <span className="terminal-command ml-2">manage</span>
+              </div>
+              <div className="flex space-x-2">
+                <button 
+                  onClick={saveProject}
+                  className="terminal-button text-xs bg-green-600 hover:bg-green-500"
+                  disabled={!launchState || !saleMint}
+                >
+                  💾 Save Current Project
+                </button>
+                {savedProjects.length > 0 && (
+                  <button 
+                    onClick={() => {
+                      if (confirm('Clear all saved projects? This cannot be undone.')) {
+                        localStorage.removeItem('savedProjects');
+                        setSavedProjects([]);
+                        setCurrentProjectId(null);
+                        addLog('All projects cleared');
+                      }
+                    }}
+                    className="terminal-button text-xs bg-red-600 hover:bg-red-500"
+                  >
+                    🗑️ Clear All
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {savedProjects.length === 0 ? (
+              <div className="text-xs terminal-output text-center py-4">
+                No saved projects yet. Create a launch and save it to get started.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {savedProjects.map((project) => (
+                  <div 
+                    key={project.id} 
+                    className={`flex items-center justify-between p-3 rounded border ${
+                      currentProjectId === project.id 
+                        ? 'bg-green-900 bg-opacity-30 border-green-400' 
+                        : 'bg-gray-900 bg-opacity-30 border-gray-600'
+                    }`}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs terminal-success font-bold">
+                          {project.name}
+                        </span>
+                        {currentProjectId === project.id && (
+                          <span className="text-xs terminal-success">(ACTIVE)</span>
+                        )}
+                      </div>
+                      <div className="text-xs terminal-output mt-1">
+                        Created: {new Date(project.timestamp).toLocaleString()}
+                      </div>
+                      <div className="text-xs terminal-output">
+                        Launch: {project.launchState ? project.launchState.slice(0, 8) + '...' : 'Invalid'}
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => loadProject(project)}
+                        className="terminal-button text-xs"
+                        disabled={isLoading}
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newName = prompt('Enter new name:', project.name);
+                          if (newName && newName.trim()) {
+                            renameProject(project.id, newName.trim());
+                          }
+                        }}
+                        className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete project "${project.name}"?`)) {
+                            deleteProject(project.id);
+                          }
+                        }}
+                        className="terminal-button text-xs bg-red-600 hover:bg-red-500"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Grid */}
@@ -631,6 +986,12 @@ function EngineDemo() {
           </div>
           
           <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="terminal-output">Current Project:</span>
+              <span className={currentProjectId ? 'terminal-success' : 'terminal-error'}>
+                {currentProjectId ? savedProjects.find(p => p.id === currentProjectId)?.name || 'Unknown' : 'NONE'}
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="terminal-output">SDK Status:</span>
               <span className={sdk ? 'terminal-success' : 'terminal-error'}>
@@ -689,7 +1050,7 @@ function EngineDemo() {
                 <div className="flex justify-between">
                   <span className="terminal-output">Total Deposited:</span>
                   <span className="terminal-success">
-                    {(launchData.totalDeposited?.toNumber() / 1e9 || 0).toFixed(2)} SOL
+                    {(safeToNumber(launchData.totalDeposited) / 1e9).toFixed(2)} SOL
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -844,7 +1205,7 @@ function EngineDemo() {
                 <div className="flex justify-between">
                   <span className="terminal-output">Deposited:</span>
                   <span className="terminal-success">
-                    {(userContributions.deposited?.toNumber() / 1e9 || 0).toFixed(2)} SOL
+                    {(safeToNumber(userContributions.deposited) / 1e9).toFixed(2)} SOL
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -930,7 +1291,8 @@ function EngineDemo() {
           <div className="terminal-blink text-terminal-accent">█</div>
         </div>
       </div>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 

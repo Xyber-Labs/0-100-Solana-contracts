@@ -42,14 +42,33 @@ All methods from the test suite are available as UI buttons:
 - **Error Handling**: Clear error messages with context
 - **Timestamped Logs**: All actions are timestamped
 
+### 📁 Project Management
+- **Save Projects**: Save current launch state with all data
+- **Load Projects**: Switch between different saved projects
+- **Project List**: View all saved projects with timestamps
+- **Rename Projects**: Customize project names for easy identification
+- **Delete Projects**: Remove projects you no longer need
+- **Persistent Storage**: Projects saved in browser localStorage
+- **Active Project Indicator**: Shows which project is currently loaded
+
 ## Usage Flow
 
 1. **Connect Wallet**: Use the wallet button in the top-right to connect your Solana wallet
 2. **Initialize SDK**: Click "Initialize SDK" to connect to the smart contract
 3. **Configure Launch** (Optional): Check "Customize Parameters" to modify launch settings
 4. **Init Launch**: Create a new launch with your parameters
-5. **Test Flow**: Follow the complete flow:
+5. **Save Project**: Click "📁 Projects" → "💾 Save Current Project" to save your work
+6. **Test Flow**: Follow the complete flow:
    - Open Funding → Init Roster → Deposit → Close Deposits → Set VRF Seed → Process Batch → Finalize Selection → Open Claims → Claim Tokens/Refund
+7. **Switch Projects**: Use the project manager to load different saved projects and continue testing
+
+## Project Management Workflow
+
+1. **Create & Save**: After initializing a launch, save it as a project
+2. **Test Different Scenarios**: Create multiple projects with different configurations
+3. **Switch Between Projects**: Load different projects to test various states
+4. **Organize Projects**: Rename projects to reflect their purpose (e.g., "Test Launch", "High Cap Launch")
+5. **Clean Up**: Delete projects you no longer need
 
 ## Technical Details
 
