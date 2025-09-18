@@ -10,8 +10,17 @@ import {
 
 // ---- IDL ----
 // The path may differ in your repo. If you have a re-export of IDL types, adjust the import below.
-const idl = require("../idl/engine.json");
 import type { Engine as EngineIDL } from "../idl/engine";
+
+// Import IDL as a dynamic import to avoid require
+let idl: any;
+const loadIdl = async () => {
+  if (!idl) {
+    const idlModule = await import("../idl/engine.json");
+    idl = idlModule.default;
+  }
+  return idl;
+};
 
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey(
@@ -19,7 +28,8 @@ export const ENGINE_PROGRAM_ID = new PublicKey(
 );
 
 export default {
-    idlJson: idl,
+    idlJson: null, // Will be loaded dynamically
+    loadIdl,
     idlType: null as unknown as EngineIDL, // type‑only reference
 
     /**

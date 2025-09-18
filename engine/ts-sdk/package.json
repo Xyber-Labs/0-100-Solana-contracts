@@ -1,13 +1,16 @@
 {
     "name": "zero-hundred-engine-sdk",
     "version": "0.1.0",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "type": "module",
+    "main": "dist/src/engine.js",
+    "types": "dist/src/engine.d.ts",
     "scripts": {
         "build": "tsc -b"
     },
     "files": [
-        "dist"
+        "dist",
+        "src",
+        "idl"
     ],
     "dependencies": {
         "@coral-xyz/anchor": "^0.31.1",
