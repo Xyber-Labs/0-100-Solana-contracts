@@ -6,7 +6,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
-    "@solana/spl-token": "^0.4.14"
+    "@solana/spl-token": "^0.4.14",
+    "zero-hundred-engine-sdk": "file:./ts-sdk"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

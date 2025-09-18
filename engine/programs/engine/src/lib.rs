@@ -474,8 +474,17 @@ impl LaunchState {
         [b"mint_auth", self.admin.as_ref()]
     }
     pub fn mint_auth_bump(&self) -> u8 {
-        // For simplicity in MVP, assume bump=255 (not robust). In real code, store bump in state.
-        255
+        // Get the canonical bump for the mint authority PDA
+        // We need to derive the launch state key first
+        let launch_key = Pubkey::find_program_address(
+            &[b"launch", self.sale_mint.as_ref()],
+            &crate::ID,
+        ).0;
+        let (_, bump) = Pubkey::find_program_address(
+            &[b"mint_auth", launch_key.as_ref()],
+            &crate::ID,
+        );
+        bump
     }
 }
 
@@ -717,7 +726,7 @@ pub struct ClaimTokens<'info> {
     pub sale_mint: Account<'info, Mint>,
     /// CHECK: mint authority PDA
     /// Seeds: ["mint_auth", launch_state]
-    #[account(seeds = [b"mint_auth", launch_state.key().as_ref()], bump = 255)]
+    #[account(seeds = [b"mint_auth", launch_state.key().as_ref()], bump)]
     pub mint_auth: UncheckedAccount<'info>,
 
     #[account(mut)]

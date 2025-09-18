@@ -1,0 +1,19 @@
+{
+    "name": "zero-hundred-engine-sdk",
+    "version": "0.1.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc -b"
+    },
+    "files": [
+        "dist"
+    ],
+    "dependencies": {
+        "@coral-xyz/anchor": "^0.31.1",
+        "@solana/spl-token": "^0.4.13"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.3"
+    }
+}

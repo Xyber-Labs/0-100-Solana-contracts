@@ -9,6 +9,9 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
+// Import the TS-SDK
+import EngineSDK from "../ts-sdk/src/engine";
+
 describe("engine", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
@@ -16,6 +19,9 @@ describe("engine", () => {
 
   const program = anchor.workspace.engine as Program<Engine>;
   const admin = provider.wallet;
+
+  // Initialize SDK
+  const sdk = EngineSDK.create(provider, program);
 
   let saleMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
@@ -38,31 +44,21 @@ describe("engine", () => {
       program.programId
     );
 
-    await program.methods
-      .initLaunch(
-        hardCapLamports,
-        minRaiseLamports,
-        perWalletCap,
-        tauLamports,
-        saleAllocation,
-        lpAllocation
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState,
-        saleMint: saleMint.publicKey,
-        escrow,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer, saleMint])
-      .preInstructions([
+    // Use SDK to initialize launch
+    const { signature } = await sdk.initLaunch({
+      saleMint: saleMint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
           newAccountPubkey: saleMint.publicKey,
           space: 82, // Mint account size
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(
-            82
-          ),
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
           programId: TOKEN_PROGRAM_ID,
         }),
         createInitializeMintInstruction(
@@ -71,39 +67,15 @@ describe("engine", () => {
           admin.publicKey,
           admin.publicKey
         ),
-      ])
-      .rpc();
+      ],
+      signers: [admin.payer, saleMint],
+    });
+
+    console.log("Launch initialized with signature:", signature);
   });
 
-  // Helper function to initialize roster account
-  async function initializeRoster() {
-    const [roster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), launchState.toBuffer()],
-      program.programId
-    );
-
-    try {
-      // Check if roster account already exists
-      await program.account.roster.fetch(roster);
-      return roster;
-    } catch (error) {
-      // Account doesn't exist, create it
-      await program.methods
-        .initRoster()
-        .accountsStrict({
-          admin: admin.publicKey,
-          launchState,
-          roster,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .rpc();
-
-      return roster;
-    }
-  }
-
-  it("Initializes the launch state", async () => {
-    const state = await program.account.launchState.fetch(launchState);
+  it("Initializes the launch state correctly", async () => {
+    const state = await sdk.fetchLaunch(launchState);
 
     assert.ok(state.admin.equals(admin.publicKey));
     assert.equal(state.hardCapLamports.toNumber(), hardCapLamports.toNumber());
@@ -127,44 +99,29 @@ describe("engine", () => {
   });
 
   it("Opens funding", async () => {
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState,
-      })
-      .rpc();
+    const { signature } = await sdk.openFunding({ launch: launchState });
+    console.log("Funding opened with signature:", signature);
 
-    const state = await program.account.launchState.fetch(launchState);
+    const state = await sdk.fetchLaunch(launchState);
     assert.isTrue(state.fundingOpen);
   });
 
   it("Closes funding", async () => {
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState,
-      })
-      .rpc();
+    // First open funding
+    await sdk.openFunding({ launch: launchState });
 
-    let state = await program.account.launchState.fetch(launchState);
+    let state = await sdk.fetchLaunch(launchState);
     assert.isTrue(state.fundingOpen);
 
-    // Initialize roster account
-    const roster = await initializeRoster();
+    // Initialize roster account using SDK
+    const { rosterPda, signature: rosterSig } = await sdk.initRoster({ launch: launchState });
+    console.log("Roster initialized with signature:", rosterSig);
 
-    await program.methods
-      .closeDeposits()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState,
-        roster,
-        launch: launchState,
-      })
-      .rpc();
+    // Close deposits using SDK
+    const { signature } = await sdk.closeDeposits({ launch: launchState });
+    console.log("Deposits closed with signature:", signature);
 
-    state = await program.account.launchState.fetch(launchState);
+    state = await sdk.fetchLaunch(launchState);
     assert.isFalse(state.fundingOpen);
     assert.isTrue(state.depositsClosed);
   });
@@ -176,29 +133,17 @@ describe("engine", () => {
       [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
       program.programId
     );
-    const [testEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), testLaunchState.toBuffer()],
-      program.programId
-    );
 
-    await program.methods
-      .initLaunch(
-        hardCapLamports,
-        minRaiseLamports,
-        perWalletCap,
-        tauLamports,
-        saleAllocation,
-        lpAllocation
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        saleMint: testSaleMint.publicKey,
-        escrow: testEscrow,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer, testSaleMint])
-      .preInstructions([
+    // Initialize launch using SDK
+    await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
           newAccountPubkey: testSaleMint.publicKey,
@@ -212,62 +157,29 @@ describe("engine", () => {
           admin.publicKey,
           admin.publicKey
         ),
-      ])
-      .rpc();
+      ],
+      signers: [admin.payer, testSaleMint],
+    });
 
-    // Open funding
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Open funding using SDK
+    await sdk.openFunding({ launch: testLaunchState });
 
-    // Initialize roster account
-    const [testRoster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), testLaunchState.toBuffer()],
-      program.programId
-    );
+    // Initialize roster using SDK
+    await sdk.initRoster({ launch: testLaunchState });
 
-    await program.methods
-      .initRoster()
-        .accountsStrict({
-          admin: admin.publicKey,
-          launchState: testLaunchState,
-          roster: testRoster,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-      .rpc();
-
-    await program.methods
-      .closeDeposits()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        roster: testRoster,
-        launch: testLaunchState,
-      })
-      .rpc();
+    // Close deposits using SDK
+    await sdk.closeDeposits({ launch: testLaunchState });
 
     const vrfSeed = anchor.web3.Keypair.generate().publicKey;
-    const [selectionState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("selection"), testLaunchState.toBuffer()],
-      program.programId
-    );
 
-    await program.methods
-      // @ts-ignore
-      .setSeed(vrfSeed.toBuffer())
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        selectionState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
+    // Set seed using SDK
+    const { selectionPda, signature } = await sdk.setSeed({
+      launch: testLaunchState,
+      seed: vrfSeed.toBuffer(),
+    });
+    console.log("VRF seed set with signature:", signature);
 
-    const state = await program.account.launchState.fetch(testLaunchState);
+    const state = await sdk.fetchLaunch(testLaunchState);
     assert.ok(state.vrfSeed !== null);
     assert.deepEqual(state.vrfSeed, Array.from(vrfSeed.toBuffer()));
   });
@@ -279,29 +191,17 @@ describe("engine", () => {
       [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
       program.programId
     );
-    const [testEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), testLaunchState.toBuffer()],
-      program.programId
-    );
 
-    await program.methods
-      .initLaunch(
-        hardCapLamports,
-        minRaiseLamports,
-        perWalletCap,
-        tauLamports,
-        saleAllocation,
-        lpAllocation
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        saleMint: testSaleMint.publicKey,
-        escrow: testEscrow,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer, testSaleMint])
-      .preInstructions([
+    // Initialize launch using SDK
+    await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
           newAccountPubkey: testSaleMint.publicKey,
@@ -315,32 +215,15 @@ describe("engine", () => {
           admin.publicKey,
           admin.publicKey
         ),
-      ])
-      .rpc();
+      ],
+      signers: [admin.payer, testSaleMint],
+    });
 
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Open funding using SDK
+    await sdk.openFunding({ launch: testLaunchState });
 
-    // Initialize roster account
-    const [testRoster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), testLaunchState.toBuffer()],
-      program.programId
-    );
-
-    await program.methods
-      .initRoster()
-        .accountsStrict({
-          admin: admin.publicKey,
-          launchState: testLaunchState,
-          roster: testRoster,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-      .rpc();
+    // Initialize roster using SDK
+    await sdk.initRoster({ launch: testLaunchState });
 
     const depositor = anchor.web3.Keypair.generate();
     
@@ -355,36 +238,21 @@ describe("engine", () => {
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const [userContribution] = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user"),
-        testLaunchState.toBuffer(),
-        depositor.publicKey.toBuffer(),
-      ],
-      program.programId
-    );
+    // Deposit using SDK
+    const { userPda, signature } = await sdk.deposit({
+      launch: testLaunchState,
+      amountLamports: depositAmount,
+      userKeypair: depositor,
+    });
+    console.log("Deposit made with signature:", signature);
 
-    await program.methods
-      .deposit(depositAmount)
-      .accountsStrict({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution,
-        roster: testRoster,
-        escrow: testEscrow,
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([depositor])
-      .rpc();
-
-    const state = await program.account.launchState.fetch(testLaunchState);
+    const state = await sdk.fetchLaunch(testLaunchState);
     assert.equal(
       state.totalDeposited.toNumber(),
       depositAmount.toNumber()
     );
 
-    const userAccount = await program.account.userContribution.fetch(userContribution);
+    const userAccount = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
     assert.equal(userAccount.deposited.toNumber(), depositAmount.toNumber());
     assert.ok(userAccount.wallet.equals(depositor.publicKey));
   });
@@ -396,29 +264,17 @@ describe("engine", () => {
       [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
       program.programId
     );
-    const [testEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), testLaunchState.toBuffer()],
-      program.programId
-    );
 
-    await program.methods
-      .initLaunch(
-        hardCapLamports,
-        minRaiseLamports,
-        perWalletCap,
-        tauLamports,
-        saleAllocation,
-        lpAllocation
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        saleMint: testSaleMint.publicKey,
-        escrow: testEscrow,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer, testSaleMint])
-      .preInstructions([
+    // Initialize launch using SDK
+    await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
           newAccountPubkey: testSaleMint.publicKey,
@@ -432,33 +288,15 @@ describe("engine", () => {
           admin.publicKey,
           admin.publicKey
         ),
-      ])
-      .rpc();
+      ],
+      signers: [admin.payer, testSaleMint],
+    });
 
-    // First, deposit some funds
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Open funding using SDK
+    await sdk.openFunding({ launch: testLaunchState });
 
-    // Initialize roster account
-    const [testRoster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), testLaunchState.toBuffer()],
-      program.programId
-    );
-
-    await program.methods
-      .initRoster()
-        .accountsStrict({
-          admin: admin.publicKey,
-          launchState: testLaunchState,
-          roster: testRoster,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-      .rpc();
+    // Initialize roster using SDK
+    await sdk.initRoster({ launch: testLaunchState });
 
     const depositor = anchor.web3.Keypair.generate();
     
@@ -472,47 +310,25 @@ describe("engine", () => {
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const [userContribution] = anchor.web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user"),
-        testLaunchState.toBuffer(),
-        depositor.publicKey.toBuffer(),
-      ],
-      program.programId
-    );
 
-    await program.methods
-      .deposit(depositAmount)
-      .accountsStrict({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution,
-        roster: testRoster,
-        escrow: testEscrow,
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([depositor])
-      .rpc();
+    // Deposit using SDK
+    await sdk.deposit({
+      launch: testLaunchState,
+      amountLamports: depositAmount,
+      userKeypair: depositor,
+    });
 
-    // Now, withdraw the funds
+    // Now, withdraw the funds using SDK
     const initialBalance = await provider.connection.getBalance(
       depositor.publicKey
     );
 
-    await program.methods
-      .withdraw(depositAmount)
-      .accountsStrict({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution,
-        roster: testRoster,
-        escrow: testEscrow,
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([depositor])
-      .rpc();
+    const { signature } = await sdk.withdraw({
+      launch: testLaunchState,
+      amountLamports: depositAmount,
+      userKeypair: depositor,
+    });
+    console.log("Withdrawal made with signature:", signature);
 
     const finalBalance = await provider.connection.getBalance(
       depositor.publicKey
@@ -520,10 +336,10 @@ describe("engine", () => {
 
     assert.isAbove(finalBalance, initialBalance);
 
-    const state = await program.account.launchState.fetch(testLaunchState);
+    const state = await sdk.fetchLaunch(testLaunchState);
     assert.equal(state.totalDeposited.toNumber(), 0);
 
-    const userAccount = await program.account.userContribution.fetch(userContribution);
+    const userAccount = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
     assert.equal(userAccount.deposited.toNumber(), 0);
   });
 
@@ -532,10 +348,6 @@ describe("engine", () => {
     const testSaleMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
-      program.programId
-    );
-    const [testEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), testLaunchState.toBuffer()],
       program.programId
     );
     
@@ -551,24 +363,16 @@ describe("engine", () => {
     const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL); // 3 SOL per wallet
     const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL); // 0.5 SOL per ticket
 
-    await program.methods
-      .initLaunch(
-        testHardCap,
-        testMinRaise,
-        testPerWalletCap,
-        testTau,
-        saleAllocation,
-        lpAllocation
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        saleMint: testSaleMint.publicKey,
-        escrow: testEscrow,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer, testSaleMint])
-      .preInstructions([
+    // Initialize launch using SDK
+    await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports: testHardCap,
+      minRaiseLamports: testMinRaise,
+      perWalletCap: testPerWalletCap,
+      tauLamports: testTau,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
           newAccountPubkey: testSaleMint.publicKey,
@@ -582,33 +386,15 @@ describe("engine", () => {
           mintAuth,
           admin.publicKey
         ),
-      ])
-      .rpc();
+      ],
+      signers: [admin.payer, testSaleMint],
+    });
 
-    // Open funding
-    await program.methods
-      .openFunding()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Open funding using SDK
+    await sdk.openFunding({ launch: testLaunchState });
 
-    // Initialize roster account
-    const [testRoster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), testLaunchState.toBuffer()],
-      program.programId
-    );
-
-    await program.methods
-      .initRoster()
-        .accountsStrict({
-          admin: admin.publicKey,
-          launchState: testLaunchState,
-          roster: testRoster,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-      .rpc();
+    // Initialize roster using SDK
+    await sdk.initRoster({ launch: testLaunchState });
 
     // Create multiple users and deposit funds
     const users = [];
@@ -630,94 +416,56 @@ describe("engine", () => {
       const balance = await provider.connection.getBalance(user.publicKey);
       console.log(`User ${i} balance: ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-      const [userContribution] = anchor.web3.PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("user"),
-          testLaunchState.toBuffer(),
-          user.publicKey.toBuffer(),
-        ],
-        program.programId
-      );
+      // Deposit using SDK
+      const { userPda, signature } = await sdk.deposit({
+        launch: testLaunchState,
+        amountLamports: depositAmount,
+        userKeypair: user,
+      });
 
-      await program.methods
-        .deposit(depositAmount)
-        .accountsStrict({
-          user: user.publicKey,
-          launchState: testLaunchState,
-          userContribution,
-          roster: testRoster,
-          escrow: testEscrow,
-          launch: testLaunchState,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .signers([user])
-        .rpc();
-
-      users.push({ keypair: user, contribution: userContribution });
+      users.push({ keypair: user, contribution: userPda });
     }
 
     // Verify total deposits exceed hard cap
-    let state = await program.account.launchState.fetch(testLaunchState);
+    let state = await sdk.fetchLaunch(testLaunchState);
     assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Total tickets: ${state.totalTickets}`);
 
-    // Close deposits
-    await program.methods
-      .closeDeposits()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        roster: testRoster,
-        launch: testLaunchState,
-      })
-      .rpc();
+    // Close deposits using SDK
+    await sdk.closeDeposits({ launch: testLaunchState });
 
-    state = await program.account.launchState.fetch(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(state.depositsClosed);
     assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber()); // K = hard_cap / tau
 
-    // Set VRF seed
+    // Set VRF seed using SDK
     const vrfSeed = anchor.web3.Keypair.generate().publicKey;
-    const [selectionState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("selection"), testLaunchState.toBuffer()],
-      program.programId
-    );
+    const { selectionPda, signature: seedSig } = await sdk.setSeed({
+      launch: testLaunchState,
+      seed: vrfSeed.toBuffer(),
+    });
+    console.log("VRF seed set with signature:", seedSig);
 
-    await program.methods
-      // @ts-ignore
-      .setSeed(vrfSeed.toBuffer())
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-        selectionState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-
-    state = await program.account.launchState.fetch(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
     assert.ok(state.vrfSeed !== null);
 
     // Store the total tickets count before processing
     const totalTicketsToProcess = state.totalTickets;
     console.log(`Total tickets to process: ${totalTicketsToProcess}`);
 
-    // Process all tickets in batches (cranking)
+    // Process all tickets in batches (cranking) using SDK
     const maxItemsPerBatch = 10;
     let processed = 0;
     
     while (processed < totalTicketsToProcess) {
-      await program.methods
-        .processBatch(maxItemsPerBatch)
-        .accountsStrict({
-          selectionState,
-          launchState: testLaunchState,
-          roster: testRoster,
-        })
-        .rpc();
+      const { signature: batchSig } = await sdk.processBatch({
+        launch: testLaunchState,
+        maxItems: maxItemsPerBatch,
+      });
 
-      const selectionAccount = await program.account.selectionState.fetch(selectionState);
+      const selectionAccount = await sdk.fetchSelection(testLaunchState);
       processed = selectionAccount.processed;
       console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
       
@@ -726,99 +474,101 @@ describe("engine", () => {
     }
 
     // Verify all tickets are processed
-    const finalSelectionAccount = await program.account.selectionState.fetch(selectionState);
+    const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
     console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
     console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
     assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
     assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
 
-    // Finalize selection
-    await program.methods
-      .finalizeSelection()
-      .accountsStrict({
-        selectionState,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Finalize selection using SDK
+    const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });
+    console.log("Selection finalized with signature:", finalizeSig);
 
-    state = await program.account.launchState.fetch(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(state.selectionFinalized);
     assert.ok(state.thresholdScore !== null);
     console.log(`Threshold score: ${state.thresholdScore}`);
 
-    // Open claims
-    await program.methods
-      .openClaims()
-      .accountsStrict({
-        admin: admin.publicKey,
-        launchState: testLaunchState,
-      })
-      .rpc();
+    // Open claims using SDK
+    const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
+    console.log("Claims opened with signature:", claimsSig);
 
-    state = await program.account.launchState.fetch(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(state.claimsOpen);
     assert.ok(state.tokensPerTicket !== null);
     console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
 
-    // Test claim refunds for some users (simulate losers)
+    // Test claim refunds for some users (simulate losers) using SDK
     const testUser = users[0];
-    const userAccountBefore = await program.account.userContribution.fetch(testUser.contribution);
+    const userAccountBefore = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
     const initialBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
 
-    await program.methods
-      .claimRefund()
-      .accountsStrict({
-        user: testUser.keypair.publicKey,
-        launchState: testLaunchState,
-        userContribution: testUser.contribution,
-        selectionState,
-        escrow: testEscrow,
-      })
-      .signers([testUser.keypair])
-      .rpc();
+    const { signature: refundSig } = await sdk.claimRefund({
+      launch: testLaunchState,
+      userKeypair: testUser.keypair,
+    });
+    console.log("Refund claimed with signature:", refundSig);
 
     const finalBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
-    const userAccountAfter = await program.account.userContribution.fetch(testUser.contribution);
+    const userAccountAfter = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
     
     assert.isTrue(userAccountAfter.claimedRefund);
     console.log(`User refund claimed. Balance change: ${(finalBalance - initialBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-    // Test claim tokens for a user (simulate winner)
-    // First create a token account for the user
-    const userTokenAccount = await getAssociatedTokenAddress(
-      testSaleMint.publicKey,
-      testUser.keypair.publicKey
-    );
+    // Test claim tokens for a user (simulate winner) using SDK
+    const { userAta, signature: tokenSig } = await sdk.claimTokens({
+      launch: testLaunchState,
+      saleMint: testSaleMint.publicKey,
+      userKeypair: testUser.keypair,
+      createAtaIfMissing: true,
+    });
+    console.log("Tokens claimed with signature:", tokenSig);
 
-    const createTokenAccountIx = createAssociatedTokenAccountInstruction(
-      admin.publicKey,
-      userTokenAccount,
-      testUser.keypair.publicKey,
-      testSaleMint.publicKey
-    );
-
-    await program.methods
-      .claimTokens()
-      .accountsStrict({
-        user: testUser.keypair.publicKey,
-        launchState: testLaunchState,
-        userContribution: testUser.contribution,
-        selectionState,
-        saleMint: testSaleMint.publicKey,
-        mintAuth: mintAuth,
-        userAta: userTokenAccount,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .signers([testUser.keypair])
-      .preInstructions([createTokenAccountIx])
-      .rpc();
-
-    const finalTokenBalance = await provider.connection.getTokenAccountBalance(userTokenAccount);
-    const userAccountFinal = await program.account.userContribution.fetch(testUser.contribution);
+    const finalTokenBalance = await provider.connection.getTokenAccountBalance(userAta);
+    const userAccountFinal = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
     
     assert.isTrue(userAccountFinal.claimedTokens);
     console.log(`User tokens claimed. Token balance: ${finalTokenBalance.value.uiAmount}`);
 
     console.log("Complete flow test passed! All functions tested successfully.");
+  });
+
+  it("PDA derivation consistency", async () => {
+    // Test that SDK PDA derivation matches direct program derivation
+    const testMint = anchor.web3.Keypair.generate();
+    
+    // SDK PDAs
+    const sdkPdas = sdk.deriveAllPdas(testMint.publicKey);
+    
+    // Direct program PDAs
+    const [directLaunch] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("launch"), testMint.publicKey.toBuffer()],
+      program.programId
+    );
+    const [directEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("escrow"), directLaunch.toBuffer()],
+      program.programId
+    );
+    const [directRoster] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("roster"), directLaunch.toBuffer()],
+      program.programId
+    );
+    const [directSelection] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("selection"), directLaunch.toBuffer()],
+      program.programId
+    );
+    const [directMintAuth] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("mint_auth"), directLaunch.toBuffer()],
+      program.programId
+    );
+
+    // Verify all PDAs match
+    assert.ok(sdkPdas.launch.equals(directLaunch));
+    assert.ok(sdkPdas.escrow.equals(directEscrow));
+    assert.ok(sdkPdas.roster.equals(directRoster));
+    assert.ok(sdkPdas.selection.equals(directSelection));
+    assert.ok(sdkPdas.mintAuth.equals(directMintAuth));
+
+    console.log("All PDA derivations are consistent between SDK and direct program calls");
   });
 });
