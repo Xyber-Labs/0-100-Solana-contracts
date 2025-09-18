@@ -77,12 +77,21 @@ function EngineDemo() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [showProjectManager, setShowProjectManager] = useState(false);
 
-  // Helper function to safely get numeric values from BN or number
+  // Helper function to safely get numeric values from BN, string, or number
   const safeToNumber = (value: any): number => {
     if (!value) return 0;
     if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    }
     if (value.toNumber && typeof value.toNumber === 'function') {
-      return value.toNumber();
+      try {
+        return value.toNumber();
+      } catch (error) {
+        // If toNumber() fails due to 53-bit limit, use toString() and convert
+        return Number(value.toString());
+      }
     }
     return 0;
   };
@@ -569,8 +578,8 @@ function EngineDemo() {
     const serializeBNObjects = (obj: any): any => {
       if (obj && typeof obj === 'object') {
         if (obj.toNumber && typeof obj.toNumber === 'function') {
-          // This is a BN object
-          return obj.toNumber();
+          // This is a BN object - use toString() to avoid 53-bit limit
+          return obj.toString();
         }
         if (Array.isArray(obj)) {
           return obj.map(serializeBNObjects);
@@ -605,8 +614,13 @@ function EngineDemo() {
     const updatedProjects = [...savedProjects, project];
     setSavedProjects(updatedProjects);
     setCurrentProjectId(project.id);
-    localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
-    addLog(`SUCCESS: Project saved as "${project.name}"`);
+    
+    try {
+      localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
+      addLog(`SUCCESS: Project saved as "${project.name}"`);
+    } catch (error) {
+      addLog(`ERROR: Failed to save to localStorage - ${error}`);
+    }
   }, [launchState, saleMint, escrow, roster, selection, launchConfig, launchData, userContributions, selectionData, savedProjects]);
 
   const loadProject = useCallback(async (project: any) => {
@@ -655,10 +669,14 @@ function EngineDemo() {
         addLog('Restoring configuration and data...');
         setLaunchConfig(project.launchConfig || defaultConfig);
         
-        // Helper function to convert numbers back to BN objects
+        // Helper function to convert strings/numbers back to BN objects
         const convertToBN = (obj: any): any => {
           if (obj && typeof obj === 'object') {
             if (typeof obj === 'number') {
+              return new BN(obj);
+            }
+            if (typeof obj === 'string' && !isNaN(Number(obj))) {
+              // Check if this looks like a BN value (large numbers)
               return new BN(obj);
             }
             if (Array.isArray(obj)) {
