@@ -16,7 +16,7 @@ const wallets = [
 
 function App() {
   return (
-    <ConnectionProvider endpoint={clusterApiUrl('devnet')}>
+    <ConnectionProvider endpoint="http://127.0.0.1:8899">
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <div className="min-h-screen bg-black">

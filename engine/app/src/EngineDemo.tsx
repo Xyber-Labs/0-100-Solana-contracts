@@ -1,8 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
 import EngineSDK from 'zero-hundred-engine-sdk';
-import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
+import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+
+// Launch configuration interface
+interface LaunchConfig {
+  hardCapLamports: number;
+  minRaiseLamports: number;
+  perWalletCap: number;
+  tauLamports: number;
+  saleAllocation: number;
+  lpAllocation: number;
+}
 
 function EngineDemo() {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
@@ -16,6 +27,24 @@ function EngineDemo() {
   const [roster, setRoster] = useState<PublicKey | null>(null);
   const [selection, setSelection] = useState<PublicKey | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [launchData, setLaunchData] = useState<any>(null);
+  const [userContributions, setUserContributions] = useState<any>(null);
+  const [selectionData, setSelectionData] = useState<any>(null);
+  const [showLaunchForm, setShowLaunchForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [balance, setBalance] = useState<number>(0);
+  
+  // Default launch configuration (matching tests)
+  const defaultConfig: LaunchConfig = {
+    hardCapLamports: 100 * 1e9, // 100 SOL
+    minRaiseLamports: 10 * 1e9, // 10 SOL
+    perWalletCap: 5 * 1e9, // 5 SOL
+    tauLamports: 1 * 1e9, // 1 SOL
+    saleAllocation: 1000000,
+    lpAllocation: 500000,
+  };
+  
+  const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -30,6 +59,7 @@ function EngineDemo() {
     }
 
     try {
+      setIsLoading(true);
       addLog('Initializing SDK...');
       
       // Create wallet adapter
@@ -57,260 +87,824 @@ function EngineDemo() {
       addLog('SUCCESS: SDK initialized successfully');
     } catch (error) {
       addLog(`ERROR: Failed to initialize SDK - ${error}`);
+    } finally {
+      setIsLoading(false);
     }
   }, [publicKey, signTransaction, signAllTransactions, connection]);
 
-  const createLaunchState = useCallback(async () => {
+  const initLaunch = useCallback(async () => {
     if (!sdk || !program) {
       addLog('ERROR: SDK not initialized');
       return;
     }
 
     try {
-      addLog('Creating launch state...');
+      setIsLoading(true);
+      addLog('Initializing launch with custom parameters...');
       
       const saleMintKeypair = Keypair.generate();
       const [launchPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("launch"), saleMintKeypair.publicKey.toBuffer()],
         program.programId
       );
+      const [escrowPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("escrow"), launchPda.toBuffer()],
+        program.programId
+      );
 
-      const tx = await sdk.createLaunchState({
+      // Get mint authority PDA
+      const [mintAuth] = PublicKey.findProgramAddressSync(
+        [Buffer.from("mint_auth"), launchPda.toBuffer()],
+        program.programId
+      );
+
+      const { signature } = await sdk.initLaunch({
         saleMint: saleMintKeypair.publicKey,
-        launchState: launchPda,
+        hardCapLamports: new BN(launchConfig.hardCapLamports),
+        minRaiseLamports: new BN(launchConfig.minRaiseLamports),
+        perWalletCap: new BN(launchConfig.perWalletCap),
+        tauLamports: new BN(launchConfig.tauLamports),
+        saleAllocation: new BN(launchConfig.saleAllocation),
+        lpAllocation: new BN(launchConfig.lpAllocation),
+        preInstructions: [
+          // Create mint account
+          SystemProgram.createAccount({
+            fromPubkey: publicKey!,
+            newAccountPubkey: saleMintKeypair.publicKey,
+            space: 82, // Mint account size
+            lamports: await connection.getMinimumBalanceForRentExemption(82),
+            programId: TOKEN_PROGRAM_ID,
+          }),
+          // Initialize mint
+          createInitializeMintInstruction(
+            saleMintKeypair.publicKey,
+            6,
+            mintAuth,
+            publicKey!
+          ),
+        ],
+        signers: [saleMintKeypair],
       });
-
-      await tx.rpc();
       
       setLaunchState(launchPda);
       setSaleMint(saleMintKeypair);
-      
-      addLog(`SUCCESS: Launch state created - ${launchPda.toString()}`);
-    } catch (error) {
-      addLog(`ERROR: Failed to create launch state - ${error}`);
-    }
-  }, [sdk, program]);
-
-  const createSaleMint = useCallback(async () => {
-    if (!saleMint) {
-      addLog('ERROR: Sale mint not created');
-      return;
-    }
-
-    try {
-      addLog('Creating sale mint...');
-      
-      const tx = await sdk.createSaleMint({
-        saleMint: saleMint.publicKey,
-        decimals: 6,
-      });
-
-      await tx.rpc();
-      
-      addLog(`SUCCESS: Sale mint created - ${saleMint.publicKey.toString()}`);
-    } catch (error) {
-      addLog(`ERROR: Failed to create sale mint - ${error}`);
-    }
-  }, [sdk, saleMint]);
-
-  const createEscrow = useCallback(async () => {
-    if (!saleMint) {
-      addLog('ERROR: Sale mint not available');
-      return;
-    }
-
-    try {
-      addLog('Creating escrow...');
-      
-      const [escrowPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("escrow"), saleMint.publicKey.toBuffer()],
-        program.programId
-      );
-
-      const tx = await sdk.createEscrow({
-        saleMint: saleMint.publicKey,
-        escrow: escrowPda,
-      });
-
-      await tx.rpc();
-      
       setEscrow(escrowPda);
-      addLog(`SUCCESS: Escrow created - ${escrowPda.toString()}`);
+      
+      addLog(`SUCCESS: Launch initialized - Signature: ${signature}`);
+      addLog(`Launch PDA: ${launchPda.toString()}`);
+      addLog(`Sale Mint: ${saleMintKeypair.publicKey.toString()}`);
+      
+      // Fetch initial launch data
+      await fetchLaunchData();
     } catch (error) {
-      addLog(`ERROR: Failed to create escrow - ${error}`);
+      addLog(`ERROR: Failed to initialize launch - ${error}`);
+    } finally {
+      setIsLoading(false);
     }
-  }, [sdk, program, saleMint]);
+  }, [sdk, program, publicKey, launchConfig]);
 
-  const createRoster = useCallback(async () => {
-    if (!saleMint) {
-      addLog('ERROR: Sale mint not available');
+  const fetchLaunchData = useCallback(async () => {
+    if (!sdk || !launchState) return;
+    
+    try {
+      const data = await sdk.fetchLaunch(launchState);
+      setLaunchData(data);
+      addLog('Launch data refreshed');
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch launch data - ${error}`);
+    }
+  }, [sdk, launchState]);
+
+  const fetchUserData = useCallback(async () => {
+    if (!sdk || !launchState || !publicKey) return;
+    
+    try {
+      const data = await sdk.fetchUserContribution(launchState, publicKey);
+      setUserContributions(data);
+      addLog('User contribution data refreshed');
+    } catch (error: any) {
+      // User account doesn't exist yet - this is normal before first deposit
+      if (error.message?.includes('Account does not exist')) {
+        setUserContributions(null);
+        addLog('User account not created yet (normal before first deposit)');
+      } else {
+        addLog(`ERROR: Failed to fetch user data - ${error}`);
+      }
+    }
+  }, [sdk, launchState, publicKey]);
+
+  const fetchSelectionData = useCallback(async () => {
+    if (!sdk || !launchState) return;
+    
+    try {
+      const data = await sdk.fetchSelection(launchState);
+      setSelectionData(data);
+      addLog('Selection data refreshed');
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch selection data - ${error}`);
+    }
+  }, [sdk, launchState]);
+
+  const openFunding = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
       return;
     }
 
     try {
-      addLog('Creating roster...');
-      
-      const [rosterPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("roster"), saleMint.publicKey.toBuffer()],
-        program.programId
-      );
+      setIsLoading(true);
+      addLog('Opening funding...');
+      const { signature } = await sdk.openFunding({ launch: launchState });
+      addLog(`SUCCESS: Funding opened - Signature: ${signature}`);
+      await fetchLaunchData();
+    } catch (error) {
+      addLog(`ERROR: Failed to open funding - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData]);
 
-      const tx = await sdk.createRoster({
-        saleMint: saleMint.publicKey,
-        roster: rosterPda,
-      });
+  const initRoster = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
 
-      await tx.rpc();
-      
+    try {
+      setIsLoading(true);
+      addLog('Initializing roster...');
+      const { rosterPda, signature } = await sdk.initRoster({ launch: launchState });
       setRoster(rosterPda);
-      addLog(`SUCCESS: Roster created - ${rosterPda.toString()}`);
+      addLog(`SUCCESS: Roster initialized - Signature: ${signature}`);
+      addLog(`Roster PDA: ${rosterPda.toString()}`);
     } catch (error) {
-      addLog(`ERROR: Failed to create roster - ${error}`);
+      addLog(`ERROR: Failed to initialize roster - ${error}`);
+    } finally {
+      setIsLoading(false);
     }
-  }, [sdk, program, saleMint]);
+  }, [sdk, launchState]);
 
-  const createSelection = useCallback(async () => {
-    if (!saleMint) {
-      addLog('ERROR: Sale mint not available');
+  const closeDeposits = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
       return;
     }
 
     try {
-      addLog('Creating selection...');
-      
-      const [selectionPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("selection"), saleMint.publicKey.toBuffer()],
-        program.programId
-      );
-
-      const tx = await sdk.createSelection({
-        saleMint: saleMint.publicKey,
-        selection: selectionPda,
-      });
-
-      await tx.rpc();
-      
-      setSelection(selectionPda);
-      addLog(`SUCCESS: Selection created - ${selectionPda.toString()}`);
+      setIsLoading(true);
+      addLog('Closing deposits...');
+      const { signature } = await sdk.closeDeposits({ launch: launchState });
+      addLog(`SUCCESS: Deposits closed - Signature: ${signature}`);
+      await fetchLaunchData();
     } catch (error) {
-      addLog(`ERROR: Failed to create selection - ${error}`);
+      addLog(`ERROR: Failed to close deposits - ${error}`);
+    } finally {
+      setIsLoading(false);
     }
-  }, [sdk, program, saleMint]);
+  }, [sdk, launchState, fetchLaunchData]);
+
+  const setSeed = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Setting VRF seed...');
+      const vrfSeed = Keypair.generate().publicKey;
+      const { selectionPda, signature } = await sdk.setSeed({
+        launch: launchState,
+        seed: vrfSeed.toBuffer(),
+      });
+      setSelection(selectionPda);
+      addLog(`SUCCESS: VRF seed set - Signature: ${signature}`);
+      addLog(`Selection PDA: ${selectionPda.toString()}`);
+      await fetchLaunchData();
+    } catch (error) {
+      addLog(`ERROR: Failed to set seed - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData]);
+
+  const processBatch = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Processing batch...');
+      const { signature } = await sdk.processBatch({
+        launch: launchState,
+        maxItems: 10,
+      });
+      addLog(`SUCCESS: Batch processed - Signature: ${signature}`);
+      await fetchSelectionData();
+    } catch (error) {
+      addLog(`ERROR: Failed to process batch - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchSelectionData]);
+
+  const finalizeSelection = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Finalizing selection...');
+      const { signature } = await sdk.finalizeSelection({ launch: launchState });
+      addLog(`SUCCESS: Selection finalized - Signature: ${signature}`);
+      await fetchLaunchData();
+      await fetchSelectionData();
+    } catch (error) {
+      addLog(`ERROR: Failed to finalize selection - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData, fetchSelectionData]);
+
+  const openClaims = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Opening claims...');
+      const { signature } = await sdk.openClaims({ launch: launchState });
+      addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
+      await fetchLaunchData();
+    } catch (error) {
+      addLog(`ERROR: Failed to open claims - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData]);
+
+  const deposit = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const depositAmount = new BN(2 * 1e9); // 2 SOL
+      addLog(`Depositing ${depositAmount.toNumber() / 1e9} SOL...`);
+      const { userPda, signature } = await sdk.deposit({
+        launch: launchState,
+        amountLamports: depositAmount,
+      });
+      addLog(`SUCCESS: Deposit made - Signature: ${signature}`);
+      addLog(`User PDA: ${userPda.toString()}`);
+      await fetchLaunchData();
+      await fetchUserData();
+      await fetchBalance();
+    } catch (error) {
+      addLog(`ERROR: Failed to deposit - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData, fetchUserData]);
+
+  const withdraw = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const withdrawAmount = new BN(2 * 1e9); // 2 SOL
+      addLog(`Withdrawing ${withdrawAmount.toNumber() / 1e9} SOL...`);
+      const { signature } = await sdk.withdraw({
+        launch: launchState,
+        amountLamports: withdrawAmount,
+      });
+      addLog(`SUCCESS: Withdrawal made - Signature: ${signature}`);
+      await fetchLaunchData();
+      await fetchUserData();
+      await fetchBalance();
+    } catch (error) {
+      addLog(`ERROR: Failed to withdraw - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchLaunchData, fetchUserData]);
+
+  const claimRefund = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Claiming refund...');
+      const { signature } = await sdk.claimRefund({ launch: launchState });
+      addLog(`SUCCESS: Refund claimed - Signature: ${signature}`);
+      await fetchUserData();
+    } catch (error) {
+      addLog(`ERROR: Failed to claim refund - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, fetchUserData]);
+
+  const claimTokens = useCallback(async () => {
+    if (!sdk || !launchState || !saleMint) {
+      addLog('ERROR: Launch or sale mint not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Claiming tokens...');
+      const { userAta, signature } = await sdk.claimTokens({
+        launch: launchState,
+        saleMint: saleMint.publicKey,
+        createAtaIfMissing: true,
+      });
+      addLog(`SUCCESS: Tokens claimed - Signature: ${signature}`);
+      addLog(`User ATA: ${userAta.toString()}`);
+      await fetchUserData();
+    } catch (error) {
+      addLog(`ERROR: Failed to claim tokens - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, saleMint, fetchUserData]);
+
+  const fetchBalance = useCallback(async () => {
+    if (!publicKey) return;
+    
+    try {
+      const currentBalance = await connection.getBalance(publicKey);
+      setBalance(currentBalance);
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch balance - ${error}`);
+    }
+  }, [publicKey, connection]);
+
+  const requestFaucet = useCallback(async () => {
+    if (!publicKey) {
+      addLog('ERROR: Wallet not connected');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog('Requesting 10 SOL from faucet...');
+      
+      // Request airdrop from localnet faucet
+      const signature = await connection.requestAirdrop(
+        publicKey,
+        10 * 1e9 // 10 SOL in lamports
+      );
+      
+      // Wait for confirmation
+      await connection.confirmTransaction(signature);
+      
+      // Update balance
+      await fetchBalance();
+      
+      // Get fresh balance for logging
+      const freshBalance = await connection.getBalance(publicKey);
+      
+      addLog(`SUCCESS: Faucet request completed - Signature: ${signature}`);
+      addLog(`New balance: ${(freshBalance / 1e9).toFixed(2)} SOL`);
+    } catch (error) {
+      addLog(`ERROR: Failed to request faucet - ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [publicKey, connection, fetchBalance, balance]);
 
   const clearLogs = () => {
     setLogs([]);
     addLog('Logs cleared');
   };
 
+  const resetState = () => {
+    setLaunchState(null);
+    setSaleMint(null);
+    setEscrow(null);
+    setRoster(null);
+    setSelection(null);
+    setLaunchData(null);
+    setUserContributions(null);
+    setSelectionData(null);
+    addLog('State reset');
+  };
+
+  // Auto-refresh data when launch state changes
+  useEffect(() => {
+    if (launchState && sdk) {
+      fetchLaunchData();
+      fetchUserData();
+    }
+  }, [launchState, sdk, fetchLaunchData, fetchUserData]);
+
+  // Auto-fetch balance when wallet connects
+  useEffect(() => {
+    if (publicKey) {
+      fetchBalance();
+    }
+  }, [publicKey, fetchBalance]);
+
   return (
-    <div className="terminal-grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {/* Status Panel */}
+    <div className="space-y-4">
+      {/* Launch Configuration Form */}
       <div className="terminal-card">
-        <div className="terminal-prompt mb-4">
-          <span className="terminal-glow">system@engine:~$</span>
-          <span className="terminal-command ml-2">status</span>
+        <div className="flex justify-between items-center mb-4">
+          <div className="terminal-prompt">
+            <span className="terminal-glow">config@engine:~$</span>
+            <span className="terminal-command ml-2">launch-parameters</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs terminal-output">
+                Balance: <span className="terminal-success">{(balance / 1e9).toFixed(2)} SOL</span>
+              </span>
+              <button 
+                onClick={requestFaucet} 
+                className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
+                disabled={!publicKey || isLoading}
+              >
+                💧 Request 10 SOL
+              </button>
+            </div>
+            <label className="flex items-center space-x-2 text-xs">
+              <input
+                type="checkbox"
+                checked={showLaunchForm}
+                onChange={(e) => setShowLaunchForm(e.target.checked)}
+                className="terminal-input"
+              />
+              <span className="terminal-output">Customize Parameters</span>
+            </label>
+            <button onClick={resetState} className="terminal-button text-xs">
+              Reset State
+            </button>
+          </div>
         </div>
         
-        <div className="space-y-2 text-xs">
-          <div className="flex justify-between">
-            <span className="terminal-output">SDK Status:</span>
-            <span className={sdk ? 'terminal-success' : 'terminal-error'}>
-              {sdk ? 'INITIALIZED' : 'NOT INITIALIZED'}
-            </span>
+        {showLaunchForm && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-black bg-opacity-30 rounded border">
+            <div>
+              <label className="block text-xs terminal-output mb-1">Hard Cap (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.hardCapLamports / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, hardCapLamports: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Min Raise (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.minRaiseLamports / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, minRaiseLamports: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Per Wallet Cap (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.perWalletCap / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, perWalletCap: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Tau (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.tauLamports / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, tauLamports: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Sale Allocation</label>
+              <input
+                type="number"
+                value={launchConfig.saleAllocation}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">LP Allocation</label>
+              <input
+                type="number"
+                value={launchConfig.lpAllocation}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpAllocation: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="terminal-output">Launch State:</span>
-            <span className={launchState ? 'terminal-success' : 'terminal-error'}>
-              {launchState ? launchState.toString().slice(0, 8) + '...' : 'NONE'}
-            </span>
+        )}
+      </div>
+
+      {/* Main Grid */}
+      <div className="terminal-grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Status Panel */}
+        <div className="terminal-card">
+          <div className="terminal-prompt mb-4">
+            <span className="terminal-glow">system@engine:~$</span>
+            <span className="terminal-command ml-2">status</span>
           </div>
-          <div className="flex justify-between">
-            <span className="terminal-output">Sale Mint:</span>
-            <span className={saleMint ? 'terminal-success' : 'terminal-error'}>
-              {saleMint ? saleMint.publicKey.toString().slice(0, 8) + '...' : 'NONE'}
-            </span>
+          
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="terminal-output">SDK Status:</span>
+              <span className={sdk ? 'terminal-success' : 'terminal-error'}>
+                {sdk ? 'INITIALIZED' : 'NOT INITIALIZED'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="terminal-output">Launch State:</span>
+              <span className={launchState ? 'terminal-success' : 'terminal-error'}>
+                {launchState ? launchState.toString().slice(0, 8) + '...' : 'NONE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="terminal-output">Sale Mint:</span>
+              <span className={saleMint ? 'terminal-success' : 'terminal-error'}>
+                {saleMint ? saleMint.publicKey.toString().slice(0, 8) + '...' : 'NONE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="terminal-output">Escrow:</span>
+              <span className={escrow ? 'terminal-success' : 'terminal-error'}>
+                {escrow ? escrow.toString().slice(0, 8) + '...' : 'NONE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="terminal-output">Roster:</span>
+              <span className={roster ? 'terminal-success' : 'terminal-error'}>
+                {roster ? roster.toString().slice(0, 8) + '...' : 'NONE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="terminal-output">Selection:</span>
+              <span className={selection ? 'terminal-success' : 'terminal-error'}>
+                {selection ? selection.toString().slice(0, 8) + '...' : 'NONE'}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="terminal-output">Escrow:</span>
-            <span className={escrow ? 'terminal-success' : 'terminal-error'}>
-              {escrow ? escrow.toString().slice(0, 8) + '...' : 'NONE'}
-            </span>
+
+          {/* Launch Data Display */}
+          {launchData && (
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <div className="terminal-prompt mb-2 text-xs">Launch Data:</div>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="terminal-output">Funding Open:</span>
+                  <span className={launchData.fundingOpen ? 'terminal-success' : 'terminal-error'}>
+                    {launchData.fundingOpen ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Deposits Closed:</span>
+                  <span className={launchData.depositsClosed ? 'terminal-success' : 'terminal-error'}>
+                    {launchData.depositsClosed ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Total Deposited:</span>
+                  <span className="terminal-success">
+                    {(launchData.totalDeposited?.toNumber() / 1e9 || 0).toFixed(2)} SOL
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Total Tickets:</span>
+                  <span className="terminal-success">{launchData.totalTickets || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Selection Finalized:</span>
+                  <span className={launchData.selectionFinalized ? 'terminal-success' : 'terminal-error'}>
+                    {launchData.selectionFinalized ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Claims Open:</span>
+                  <span className={launchData.claimsOpen ? 'terminal-success' : 'terminal-error'}>
+                    {launchData.claimsOpen ? 'YES' : 'NO'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Control Panel */}
+        <div className="terminal-card">
+          <div className="terminal-prompt mb-4">
+            <span className="terminal-glow">admin@engine:~$</span>
+            <span className="terminal-command ml-2">controls</span>
           </div>
-          <div className="flex justify-between">
-            <span className="terminal-output">Roster:</span>
-            <span className={roster ? 'terminal-success' : 'terminal-error'}>
-              {roster ? roster.toString().slice(0, 8) + '...' : 'NONE'}
-            </span>
+          
+          <div className="space-y-2">
+            <button 
+              onClick={initializeSDK}
+              className="terminal-button w-full text-left"
+              disabled={!publicKey || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Initialize SDK
+            </button>
+            
+            <button 
+              onClick={initLaunch}
+              className="terminal-button w-full text-left"
+              disabled={!sdk || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Init Launch
+            </button>
+            
+            <button 
+              onClick={openFunding}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Open Funding
+            </button>
+            
+            <button 
+              onClick={initRoster}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Init Roster
+            </button>
+            
+            <button 
+              onClick={closeDeposits}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Close Deposits
+            </button>
+            
+            <button 
+              onClick={setSeed}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Set VRF Seed
+            </button>
+            
+            <button 
+              onClick={processBatch}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Process Batch
+            </button>
+            
+            <button 
+              onClick={finalizeSelection}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Finalize Selection
+            </button>
+            
+            <button 
+              onClick={openClaims}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Open Claims
+            </button>
           </div>
-          <div className="flex justify-between">
-            <span className="terminal-output">Selection:</span>
-            <span className={selection ? 'terminal-success' : 'terminal-error'}>
-              {selection ? selection.toString().slice(0, 8) + '...' : 'NONE'}
-            </span>
+        </div>
+
+        {/* User Actions Panel */}
+        <div className="terminal-card">
+          <div className="terminal-prompt mb-4">
+            <span className="terminal-glow">user@engine:~$</span>
+            <span className="terminal-command ml-2">actions</span>
           </div>
+          
+          <div className="space-y-2">
+            <button 
+              onClick={deposit}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || !roster || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Deposit (2 SOL)
+            </button>
+            
+            <button 
+              onClick={withdraw}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Withdraw (2 SOL)
+            </button>
+            
+            <button 
+              onClick={claimRefund}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Claim Refund
+            </button>
+            
+            <button 
+              onClick={claimTokens}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || !saleMint || isLoading}
+            >
+              <span className="terminal-prompt">$</span> Claim Tokens
+            </button>
+          </div>
+
+          {/* User Data Display */}
+          {userContributions && (
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <div className="terminal-prompt mb-2 text-xs">User Data:</div>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="terminal-output">Deposited:</span>
+                  <span className="terminal-success">
+                    {(userContributions.deposited?.toNumber() / 1e9 || 0).toFixed(2)} SOL
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Claimed Refund:</span>
+                  <span className={userContributions.claimedRefund ? 'terminal-success' : 'terminal-error'}>
+                    {userContributions.claimedRefund ? 'YES' : 'NO'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Claimed Tokens:</span>
+                  <span className={userContributions.claimedTokens ? 'terminal-success' : 'terminal-error'}>
+                    {userContributions.claimedTokens ? 'YES' : 'NO'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Selection Data Display */}
+          {selectionData && (
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <div className="terminal-prompt mb-2 text-xs">Selection Data:</div>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="terminal-output">Processed:</span>
+                  <span className="terminal-success">{selectionData.processed || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Heap Length:</span>
+                  <span className="terminal-success">{selectionData.heap?.length || 0}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Control Panel */}
+      {/* Flow Guide */}
       <div className="terminal-card">
         <div className="terminal-prompt mb-4">
-          <span className="terminal-glow">admin@engine:~$</span>
-          <span className="terminal-command ml-2">controls</span>
+          <span className="terminal-glow">guide@engine:~$</span>
+          <span className="terminal-command ml-2">testing-flow</span>
         </div>
-        
-        <div className="space-y-2">
-          <button 
-            onClick={initializeSDK}
-            className="terminal-button w-full text-left"
-            disabled={!publicKey}
-          >
-            <span className="terminal-prompt">$</span> Initialize SDK
-          </button>
-          
-          <button 
-            onClick={createLaunchState}
-            className="terminal-button w-full text-left"
-            disabled={!sdk}
-          >
-            <span className="terminal-prompt">$</span> Create Launch State
-          </button>
-          
-          <button 
-            onClick={createSaleMint}
-            className="terminal-button w-full text-left"
-            disabled={!saleMint}
-          >
-            <span className="terminal-prompt">$</span> Create Sale Mint
-          </button>
-          
-          <button 
-            onClick={createEscrow}
-            className="terminal-button w-full text-left"
-            disabled={!saleMint}
-          >
-            <span className="terminal-prompt">$</span> Create Escrow
-          </button>
-          
-          <button 
-            onClick={createRoster}
-            className="terminal-button w-full text-left"
-            disabled={!saleMint}
-          >
-            <span className="terminal-prompt">$</span> Create Roster
-          </button>
-          
-          <button 
-            onClick={createSelection}
-            className="terminal-button w-full text-left"
-            disabled={!saleMint}
-          >
-            <span className="terminal-prompt">$</span> Create Selection
-          </button>
+        <div className="text-xs terminal-output space-y-1">
+          <div><span className="terminal-success">1.</span> Initialize SDK</div>
+          <div><span className="terminal-success">2.</span> Init Launch</div>
+          <div><span className="terminal-success">3.</span> Open Funding</div>
+          <div><span className="terminal-success">4.</span> Init Roster <span className="terminal-error">(Required before deposits!)</span></div>
+          <div><span className="terminal-success">5.</span> Deposit SOL</div>
+          <div><span className="terminal-success">6.</span> Close Deposits</div>
+          <div><span className="terminal-success">7.</span> Set VRF Seed</div>
+          <div><span className="terminal-success">8.</span> Process Batch</div>
+          <div><span className="terminal-success">9.</span> Finalize Selection</div>
+          <div><span className="terminal-success">10.</span> Open Claims</div>
+          <div><span className="terminal-success">11.</span> Claim Tokens/Refund</div>
         </div>
       </div>
 
       {/* Logs Panel */}
-      <div className="terminal-card lg:col-span-2">
+      <div className="terminal-card">
         <div className="flex justify-between items-center mb-4">
           <div className="terminal-prompt">
             <span className="terminal-glow">logs@engine:~$</span>
@@ -321,7 +915,7 @@ function EngineDemo() {
           </button>
         </div>
         
-        <div className="terminal-scroll bg-black bg-opacity-50 p-3 rounded border">
+        <div className="terminal-scroll bg-black bg-opacity-50 p-3 rounded border max-h-64">
           {logs.length === 0 ? (
             <div className="terminal-output text-xs">
               <div>No logs yet. Initialize the SDK to start...</div>

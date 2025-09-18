@@ -85,6 +85,18 @@
     animation: glow 2s ease-in-out infinite alternate;
   }
   
+  .terminal-accent {
+    @apply text-yellow-400;
+  }
+  
+  .terminal-input[type="checkbox"] {
+    @apply w-4 h-4 accent-green-400;
+  }
+  
+  .terminal-input[type="number"] {
+    @apply bg-black border border-green-400 text-green-400 px-2 py-1 rounded font-mono text-xs focus:outline-none focus:ring-1 focus:ring-yellow-400;
+  }
+  
   @keyframes blink {
     0%, 50% { opacity: 1; }
     51%, 100% { opacity: 0; }
