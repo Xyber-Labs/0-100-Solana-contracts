@@ -337,6 +337,37 @@ export type Engine = {
                     "signer": true;
                 },
                 {
+                    "name": "projectCounter";
+                    "docs": [
+                        "Global project counter"
+                    ];
+                    "writable": true;
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const";
+                                "value": [
+                                    112,
+                                    114,
+                                    111,
+                                    106,
+                                    101,
+                                    99,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    117,
+                                    110,
+                                    116,
+                                    101,
+                                    114
+                                ];
+                            }
+                        ];
+                    };
+                },
+                {
                     "name": "launchState";
                     "writable": true;
                     "pda": {
@@ -745,6 +776,19 @@ export type Engine = {
             ];
         },
         {
+            "name": "projectCounter";
+            "discriminator": [
+                210,
+                217,
+                66,
+                75,
+                194,
+                9,
+                88,
+                148
+            ];
+        },
+        {
             "name": "roster";
             "discriminator": [
                 211,
@@ -944,6 +988,10 @@ export type Engine = {
                 "kind": "struct";
                 "fields": [
                     {
+                        "name": "projectId";
+                        "type": "u64";
+                    },
+                    {
                         "name": "admin";
                         "type": "pubkey";
                     },
@@ -1029,6 +1077,18 @@ export type Engine = {
                         "type": {
                             "option": "u64";
                         };
+                    }
+                ];
+            };
+        },
+        {
+            "name": "projectCounter";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "nextProjectId";
+                        "type": "u64";
                     }
                 ];
             };

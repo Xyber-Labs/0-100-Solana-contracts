@@ -331,6 +331,37 @@
                     "signer": true
                 },
                 {
+                    "name": "project_counter",
+                    "docs": [
+                        "Global project counter"
+                    ],
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    112,
+                                    114,
+                                    111,
+                                    106,
+                                    101,
+                                    99,
+                                    116,
+                                    95,
+                                    99,
+                                    111,
+                                    117,
+                                    110,
+                                    116,
+                                    101,
+                                    114
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
                     "name": "launch_state",
                     "writable": true,
                     "pda": {
@@ -739,6 +770,19 @@
             ]
         },
         {
+            "name": "ProjectCounter",
+            "discriminator": [
+                210,
+                217,
+                66,
+                75,
+                194,
+                9,
+                88,
+                148
+            ]
+        },
+        {
             "name": "Roster",
             "discriminator": [
                 211,
@@ -938,6 +982,10 @@
                 "kind": "struct",
                 "fields": [
                     {
+                        "name": "project_id",
+                        "type": "u64"
+                    },
+                    {
                         "name": "admin",
                         "type": "pubkey"
                     },
@@ -1023,6 +1071,18 @@
                         "type": {
                             "option": "u64"
                         }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "ProjectCounter",
+            "type": {
+                "kind": "struct",
+                "fields": [
+                    {
+                        "name": "next_project_id",
+                        "type": "u64"
                     }
                 ]
             }

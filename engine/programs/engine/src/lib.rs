@@ -29,7 +29,14 @@ pub mod engine {
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
     ) -> Result<()> {
         require!(tau_lamports > 0, ErrorCode::InvalidTau);
+        
+        // Get and increment project ID
+        let counter = &mut ctx.accounts.project_counter;
+        let project_id = counter.next_project_id;
+        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        
         let state = &mut ctx.accounts.launch_state;
+        state.project_id = project_id;
         state.admin = ctx.accounts.admin.key();
         state.hard_cap_lamports = hard_cap_lamports;
         state.min_raise_lamports = min_raise_lamports;
@@ -437,6 +444,9 @@ pub mod engine {
 
 #[account]
 pub struct LaunchState {
+    // Project identification
+    pub project_id: u64,
+
     // admin
     pub admin: Pubkey,
 
@@ -535,6 +545,11 @@ pub struct SelectionState {
     pub heap: Vec<HeapEntry>, // size ≤ K
 }
 
+#[account]
+pub struct ProjectCounter {
+    pub next_project_id: u64,
+}
+
 // -------------------------------
 // Contexts (#[derive(Accounts)])
 // -------------------------------
@@ -544,10 +559,21 @@ pub struct InitLaunch<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
+    /// Global project counter
+    #[account(
+        init_if_needed,
+        payer = admin,
+        space = 8 + 8, // discriminator + u64
+        seeds = [b"project_counter"],
+        bump
+    )]
+    pub project_counter: Account<'info, ProjectCounter>,
+
     #[account(
         init,
         payer = admin,
         space = 8 +  // disc
+            8 + // project_id
             32 + // admin
             (8*6) + (4*2) + // lamports + ints
             32 + // sale_mint

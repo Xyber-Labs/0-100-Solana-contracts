@@ -595,8 +595,9 @@ function EngineDemo() {
 
     const project = {
       id: Date.now().toString(),
-      name: `Project ${savedProjects.length + 1}`,
+      name: `Project #${launchData?.projectId ? safeToNumber(launchData.projectId) : savedProjects.length + 1}`,
       timestamp: new Date().toISOString(),
+      projectId: launchData?.projectId ? safeToNumber(launchData.projectId) : null,
       launchState: launchState.toString(),
       saleMint: {
         publicKey: saleMint.publicKey.toString(),
@@ -953,6 +954,9 @@ function EngineDemo() {
                         Created: {new Date(project.timestamp).toLocaleString()}
                       </div>
                       <div className="text-xs terminal-output">
+                        Project ID: {project.projectId ? `#${project.projectId}` : 'Unknown'}
+                      </div>
+                      <div className="text-xs terminal-output">
                         Launch: {project.launchState ? project.launchState.slice(0, 8) + '...' : 'Invalid'}
                       </div>
                     </div>
@@ -1011,6 +1015,12 @@ function EngineDemo() {
               </span>
             </div>
             <div className="flex justify-between">
+              <span className="terminal-output">Project ID:</span>
+              <span className={launchData?.projectId ? 'terminal-success' : 'terminal-error'}>
+                {launchData?.projectId ? `#${safeToNumber(launchData.projectId)}` : 'NONE'}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="terminal-output">SDK Status:</span>
               <span className={sdk ? 'terminal-success' : 'terminal-error'}>
                 {sdk ? 'INITIALIZED' : 'NOT INITIALIZED'}
@@ -1053,6 +1063,12 @@ function EngineDemo() {
             <div className="mt-4 pt-4 border-t border-gray-600">
               <div className="terminal-prompt mb-2 text-xs">Launch Data:</div>
               <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="terminal-output">Project ID:</span>
+                  <span className="terminal-success">
+                    #{safeToNumber(launchData.projectId)}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="terminal-output">Funding Open:</span>
                   <span className={launchData.fundingOpen ? 'terminal-success' : 'terminal-error'}>

@@ -86,6 +86,13 @@ export default {
             );
         }
 
+        function getProjectCounterPda(): [PublicKey, number] {
+            return PublicKey.findProgramAddressSync(
+                [Buffer.from("project_counter")],
+                program.programId
+            );
+        }
+
         // -------------- Utility --------------
         function ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
             const buf = Buffer.from(seed);
@@ -137,6 +144,7 @@ export default {
         }): Promise<{ launchPda: PublicKey; escrowPda: PublicKey; signature: string }> {
             const [launchPda] = getLaunchPda(args.saleMint);
             const [escrowPda] = getEscrowPda(launchPda);
+            const [projectCounterPda] = getProjectCounterPda();
 
             const rpc = program.methods
                 .initLaunch(
@@ -149,6 +157,7 @@ export default {
                 )
                 .accountsStrict({
                     admin: payer,
+                    projectCounter: projectCounterPda,
                     launchState: launchPda,
                     saleMint: args.saleMint,
                     escrow: escrowPda,
@@ -426,7 +435,8 @@ export default {
             const [roster] = getRosterPda(launch);
             const [selection] = getSelectionPda(launch);
             const [mintAuth] = getMintAuthPda(launch);
-            return { launch, escrow, roster, selection, mintAuth };
+            const [projectCounter] = getProjectCounterPda();
+            return { launch, escrow, roster, selection, mintAuth, projectCounter };
         }
 
         // ---- Returned API ----
@@ -442,6 +452,7 @@ export default {
             getSelectionPda,
             getUserContributionPda,
             getMintAuthPda,
+            getProjectCounterPda,
             deriveAllPdas,
 
             // Utils

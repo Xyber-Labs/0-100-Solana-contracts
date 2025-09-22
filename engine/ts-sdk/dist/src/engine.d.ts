@@ -21,12 +21,14 @@ declare const _default: {
         getSelectionPda: (launch: PublicKey) => [PublicKey, number];
         getUserContributionPda: (launch: PublicKey, user: PublicKey) => [PublicKey, number];
         getMintAuthPda: (launch: PublicKey) => [PublicKey, number];
+        getProjectCounterPda: () => [PublicKey, number];
         deriveAllPdas: (saleMint: PublicKey) => {
             launch: anchor.web3.PublicKey;
             escrow: anchor.web3.PublicKey;
             roster: anchor.web3.PublicKey;
             selection: anchor.web3.PublicKey;
             mintAuth: anchor.web3.PublicKey;
+            projectCounter: anchor.web3.PublicKey;
         };
         getUserAta: (mint: PublicKey, owner: PublicKey) => PublicKey;
         buildCreateAtaIx: (args: {
@@ -139,6 +141,7 @@ declare const _default: {
             userAta: PublicKey;
         }>;
         fetchLaunch: (launch: PublicKey) => Promise<{
+            projectId: anchor.BN;
             admin: anchor.web3.PublicKey;
             hardCapLamports: anchor.BN;
             minRaiseLamports: anchor.BN;

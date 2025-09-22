@@ -77,6 +77,8 @@ describe("engine", () => {
   it("Initializes the launch state correctly", async () => {
     const state = await sdk.fetchLaunch(launchState);
 
+    // Check project ID (should be a valid number >= 0)
+    assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
     assert.ok(state.admin.equals(admin.publicKey));
     assert.equal(state.hardCapLamports.toNumber(), hardCapLamports.toNumber());
     assert.equal(state.minRaiseLamports.toNumber(), minRaiseLamports.toNumber());
@@ -533,6 +535,127 @@ describe("engine", () => {
     console.log("Complete flow test passed! All functions tested successfully.");
   });
 
+  it("Project ID increments correctly", async () => {
+    // Get the project counter PDA to check current state
+    const [projectCounterPda] = sdk.getProjectCounterPda();
+    
+    // Create multiple projects and verify IDs increment
+    const project1Mint = anchor.web3.Keypair.generate();
+    const project2Mint = anchor.web3.Keypair.generate();
+    const project3Mint = anchor.web3.Keypair.generate();
+
+    // Initialize first project
+    const [project1Launch] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("launch"), project1Mint.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await sdk.initLaunch({
+      saleMint: project1Mint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: project1Mint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          project1Mint.publicKey,
+          6,
+          admin.publicKey,
+          admin.publicKey
+        ),
+      ],
+      signers: [admin.payer, project1Mint],
+    });
+
+    // Initialize second project
+    const [project2Launch] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("launch"), project2Mint.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await sdk.initLaunch({
+      saleMint: project2Mint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: project2Mint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          project2Mint.publicKey,
+          6,
+          admin.publicKey,
+          admin.publicKey
+        ),
+      ],
+      signers: [admin.payer, project2Mint],
+    });
+
+    // Initialize third project
+    const [project3Launch] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("launch"), project3Mint.publicKey.toBuffer()],
+      program.programId
+    );
+
+    await sdk.initLaunch({
+      saleMint: project3Mint.publicKey,
+      hardCapLamports,
+      minRaiseLamports,
+      perWalletCap,
+      tauLamports,
+      saleAllocation,
+      lpAllocation,
+      preInstructions: [
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: project3Mint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          project3Mint.publicKey,
+          6,
+          admin.publicKey,
+          admin.publicKey
+        ),
+      ],
+      signers: [admin.payer, project3Mint],
+    });
+
+    // Verify project IDs
+    const project1State = await sdk.fetchLaunch(project1Launch);
+    const project2State = await sdk.fetchLaunch(project2Launch);
+    const project3State = await sdk.fetchLaunch(project3Launch);
+
+    // Verify that IDs are sequential and increment correctly
+    assert.equal(project2State.projectId.toNumber(), project1State.projectId.toNumber() + 1);
+    assert.equal(project3State.projectId.toNumber(), project2State.projectId.toNumber() + 1);
+
+    console.log("Project IDs increment correctly:", {
+      project1: project1State.projectId.toNumber(),
+      project2: project2State.projectId.toNumber(),
+      project3: project3State.projectId.toNumber(),
+    });
+  });
+
   it("PDA derivation consistency", async () => {
     // Test that SDK PDA derivation matches direct program derivation
     const testMint = anchor.web3.Keypair.generate();
@@ -561,6 +684,10 @@ describe("engine", () => {
       [Buffer.from("mint_auth"), directLaunch.toBuffer()],
       program.programId
     );
+    const [directProjectCounter] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("project_counter")],
+      program.programId
+    );
 
     // Verify all PDAs match
     assert.ok(sdkPdas.launch.equals(directLaunch));
@@ -568,6 +695,7 @@ describe("engine", () => {
     assert.ok(sdkPdas.roster.equals(directRoster));
     assert.ok(sdkPdas.selection.equals(directSelection));
     assert.ok(sdkPdas.mintAuth.equals(directMintAuth));
+    assert.ok(sdkPdas.projectCounter.equals(directProjectCounter));
 
     console.log("All PDA derivations are consistent between SDK and direct program calls");
   });

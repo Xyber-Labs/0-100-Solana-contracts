@@ -1,1 +1,1 @@
-{"root":["../src/engine.ts","../idl/engine.ts"],"version":"5.9.2"}
+{"root":["../src/engine.ts","../idl/engine.ts","../types.d.ts"],"version":"5.9.2"}
