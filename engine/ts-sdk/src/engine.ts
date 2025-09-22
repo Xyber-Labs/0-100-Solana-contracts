@@ -424,6 +424,65 @@ export default {
             return program.account.userContribution.fetch(pda);
         }
 
+        async function fetchProjectCounter() {
+            const [pda] = getProjectCounterPda();
+            return program.account.projectCounter.fetch(pda);
+        }
+
+        // Get all launch states (projects) from the blockchain
+        async function fetchAllProjects() {
+            try {
+                console.log('Fetching all launch states from blockchain...');
+                const allLaunchStates = await program.account.launchState.all();
+                console.log(`Found ${allLaunchStates.length} launch states`);
+                
+                const projects = allLaunchStates.map(account => {
+                    const projectId = account.account.projectId.toNumber();
+                    console.log(`Project #${projectId}: Launch PDA = ${account.publicKey.toString()}`);
+                    return {
+                        projectId,
+                        launchPda: account.publicKey,
+                        account: account.account,
+                        // Try to derive sale mint from launch PDA
+                        saleMint: account.account.saleMint
+                    };
+                }).sort((a, b) => a.projectId - b.projectId);
+                
+                console.log(`Sorted projects:`, projects.map(p => `#${p.projectId}`));
+                return projects;
+            } catch (error) {
+                console.error('Error fetching all projects:', error);
+                return [];
+            }
+        }
+
+        // Find project by project ID
+        async function findProjectById(projectId: number) {
+            try {
+                const allProjects = await fetchAllProjects();
+                return allProjects.find(project => project.projectId === projectId) || null;
+            } catch (error) {
+                console.error('Error finding project by ID:', error);
+                return null;
+            }
+        }
+
+        // Get project by launch PDA
+        async function getProjectByLaunchPda(launchPda: PublicKey) {
+            try {
+                const launchData = await fetchLaunch(launchPda);
+                return {
+                    projectId: launchData.projectId.toNumber(),
+                    launchPda,
+                    account: launchData,
+                    saleMint: launchData.saleMint
+                };
+            } catch (error) {
+                console.error('Error getting project by launch PDA:', error);
+                return null;
+            }
+        }
+
         // =============================
         //        HIGH-LEVEL flows
         // =============================
@@ -479,6 +538,10 @@ export default {
             fetchRoster,
             fetchSelection,
             fetchUserContribution,
+            fetchProjectCounter,
+            fetchAllProjects,
+            findProjectById,
+            getProjectByLaunchPda,
         };
     },
 };

@@ -76,6 +76,10 @@ function EngineDemo() {
   const [savedProjects, setSavedProjects] = useState<any[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [showProjectManager, setShowProjectManager] = useState(false);
+  const [blockchainProjects, setBlockchainProjects] = useState<any[]>([]);
+  const [projectSearchId, setProjectSearchId] = useState<string>('');
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+  const [isProjectManagerCollapsed, setIsProjectManagerCollapsed] = useState(true);
 
   // Helper function to safely get numeric values from BN, string, or number
   const safeToNumber = (value: any): number => {
@@ -568,62 +572,6 @@ function EngineDemo() {
     addLog('State reset');
   };
 
-  const saveProject = useCallback(() => {
-    if (!launchState || !saleMint) {
-      addLog('ERROR: No active project to save');
-      return;
-    }
-
-    // Helper function to serialize BN objects
-    const serializeBNObjects = (obj: any): any => {
-      if (obj && typeof obj === 'object') {
-        if (obj.toNumber && typeof obj.toNumber === 'function') {
-          // This is a BN object - use toString() to avoid 53-bit limit
-          return obj.toString();
-        }
-        if (Array.isArray(obj)) {
-          return obj.map(serializeBNObjects);
-        }
-        const serialized: any = {};
-        for (const key in obj) {
-          serialized[key] = serializeBNObjects(obj[key]);
-        }
-        return serialized;
-      }
-      return obj;
-    };
-
-    const project = {
-      id: Date.now().toString(),
-      name: `Project #${launchData?.projectId ? safeToNumber(launchData.projectId) : savedProjects.length + 1}`,
-      timestamp: new Date().toISOString(),
-      projectId: launchData?.projectId ? safeToNumber(launchData.projectId) : null,
-      launchState: launchState.toString(),
-      saleMint: {
-        publicKey: saleMint.publicKey.toString(),
-        secretKey: Array.from(saleMint.secretKey)
-      },
-      escrow: escrow?.toString() || null,
-      roster: roster?.toString() || null,
-      selection: selection?.toString() || null,
-      launchConfig,
-      launchData: serializeBNObjects(launchData),
-      userContributions: serializeBNObjects(userContributions),
-      selectionData: serializeBNObjects(selectionData),
-    };
-
-    const updatedProjects = [...savedProjects, project];
-    setSavedProjects(updatedProjects);
-    setCurrentProjectId(project.id);
-    
-    try {
-      localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
-      addLog(`SUCCESS: Project saved as "${project.name}"`);
-    } catch (error) {
-      addLog(`ERROR: Failed to save to localStorage - ${error}`);
-    }
-  }, [launchState, saleMint, escrow, roster, selection, launchConfig, launchData, userContributions, selectionData, savedProjects]);
-
   const loadProject = useCallback(async (project: any) => {
     try {
       setIsLoading(true);
@@ -733,14 +681,115 @@ function EngineDemo() {
     addLog('Project deleted');
   }, [savedProjects, currentProjectId]);
 
-  const renameProject = useCallback((projectId: string, newName: string) => {
-    const updatedProjects = savedProjects.map(p => 
-      p.id === projectId ? { ...p, name: newName } : p
-    );
-    setSavedProjects(updatedProjects);
-    localStorage.setItem('savedProjects', JSON.stringify(updatedProjects));
-    addLog(`Project renamed to "${newName}"`);
-  }, [savedProjects]);
+  // Load all projects from blockchain
+  const loadBlockchainProjects = useCallback(async () => {
+    if (!sdk) {
+      addLog('ERROR: SDK not initialized');
+      return;
+    }
+
+    try {
+      setIsLoadingProjects(true);
+      addLog('Loading projects from blockchain...');
+      
+      // Debug: Check what functions are available in SDK
+      addLog(`SDK functions available: ${Object.keys(sdk).join(', ')}`);
+      
+      if (!sdk.fetchAllProjects) {
+        addLog('ERROR: fetchAllProjects function not found in SDK');
+        return;
+      }
+      
+      const projects = await sdk.fetchAllProjects();
+      setBlockchainProjects(projects);
+      
+      addLog(`SUCCESS: Loaded ${projects.length} projects from blockchain`);
+    } catch (error) {
+      addLog(`ERROR: Failed to load projects from blockchain - ${error}`);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  }, [sdk]);
+
+  // Load project by ID
+  const loadProjectById = useCallback(async (projectId: number) => {
+    if (!sdk) {
+      addLog('ERROR: SDK not initialized');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      addLog(`Loading project #${projectId} from blockchain...`);
+      
+      // First, let's check if the project exists
+      addLog(`Searching for project #${projectId}...`);
+      
+      if (!sdk.findProjectById) {
+        addLog('ERROR: findProjectById function not found in SDK');
+        addLog(`Available SDK functions: ${Object.keys(sdk).join(', ')}`);
+        return;
+      }
+      
+      const project = await sdk.findProjectById(projectId);
+      
+      if (!project) {
+        addLog(`ERROR: Project #${projectId} not found in blockchain`);
+        
+        // Let's also try to get all projects to see what's available
+        addLog('Fetching all available projects...');
+        const allProjects = await sdk.fetchAllProjects();
+        addLog(`Found ${allProjects.length} projects in blockchain:`);
+        allProjects.forEach((p: any) => {
+          addLog(`  - Project #${p.projectId} (Launch: ${p.launchPda.toString().slice(0, 8)}...)`);
+        });
+        return;
+      }
+
+      addLog(`Found project #${projectId}, loading...`);
+      addLog(`Launch PDA: ${project.launchPda.toString()}`);
+      addLog(`Sale Mint: ${project.saleMint.toString()}`);
+
+      // Set the project data
+      setLaunchState(project.launchPda);
+      setSaleMint({ publicKey: project.saleMint } as Keypair); // We can't restore the full keypair, but we can use the public key
+      
+      // Derive other PDAs
+      addLog('Deriving PDAs...');
+      const pdas = sdk.deriveAllPdas(project.saleMint);
+      setEscrow(pdas.escrow);
+      setRoster(pdas.roster);
+      setSelection(pdas.selection);
+      
+      addLog(`Escrow PDA: ${pdas.escrow.toString()}`);
+      addLog(`Roster PDA: ${pdas.roster.toString()}`);
+      addLog(`Selection PDA: ${pdas.selection.toString()}`);
+      
+      // Fetch current data
+      addLog('Fetching launch data...');
+      await fetchLaunchData();
+      addLog('Fetching user data...');
+      await fetchUserData();
+      
+      addLog(`SUCCESS: Project #${projectId} loaded from blockchain`);
+    } catch (error) {
+      addLog(`ERROR: Failed to load project #${projectId} - ${error}`);
+      console.error('Detailed error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, fetchLaunchData, fetchUserData]);
+
+  // Search for project by ID
+  const searchProjectById = useCallback(async () => {
+    const projectId = parseInt(projectSearchId);
+    if (isNaN(projectId)) {
+      addLog('ERROR: Please enter a valid project ID number');
+      return;
+    }
+    
+    await loadProjectById(projectId);
+  }, [projectSearchId, loadProjectById]);
 
   // Load saved projects on component mount
   useEffect(() => {
@@ -818,10 +867,15 @@ function EngineDemo() {
               <span className="terminal-output">Customize Parameters</span>
             </label>
             <button 
-              onClick={() => setShowProjectManager(!showProjectManager)} 
+              onClick={() => {
+                setShowProjectManager(!showProjectManager);
+                if (!showProjectManager) {
+                  setIsProjectManagerCollapsed(false);
+                }
+              }} 
               className="terminal-button text-xs bg-blue-600 hover:bg-blue-500"
             >
-              📁 Projects ({savedProjects.length})
+              📁 Projects ({blockchainProjects.length}) {showProjectManager && !isProjectManagerCollapsed ? '▼' : '▶'}
             </button>
             <button onClick={resetState} className="terminal-button text-xs">
               Reset State
@@ -898,45 +952,68 @@ function EngineDemo() {
             <div className="flex justify-between items-center mb-4">
               <div className="terminal-prompt text-sm">
                 <span className="terminal-glow">projects@engine:~$</span>
-                <span className="terminal-command ml-2">manage</span>
+                <span className="terminal-command ml-2">blockchain-manage</span>
               </div>
               <div className="flex space-x-2">
                 <button 
-                  onClick={saveProject}
-                  className="terminal-button text-xs bg-green-600 hover:bg-green-500"
-                  disabled={!launchState || !saleMint}
+                  onClick={() => setIsProjectManagerCollapsed(!isProjectManagerCollapsed)}
+                  className="terminal-button text-xs"
                 >
-                  💾 Save Current Project
+                  {isProjectManagerCollapsed ? '▼ Expand' : '▲ Collapse'}
                 </button>
-                {savedProjects.length > 0 && (
-                  <button 
-                    onClick={() => {
-                      if (confirm('Clear all saved projects? This cannot be undone.')) {
-                        localStorage.removeItem('savedProjects');
-                        setSavedProjects([]);
-                        setCurrentProjectId(null);
-                        addLog('All projects cleared');
-                      }
-                    }}
-                    className="terminal-button text-xs bg-red-600 hover:bg-red-500"
-                  >
-                    🗑️ Clear All
-                  </button>
-                )}
+                <button 
+                  onClick={loadBlockchainProjects}
+                  className="terminal-button text-xs bg-green-600 hover:bg-green-500"
+                  disabled={!sdk || isLoadingProjects}
+                >
+                  🔄 Refresh Projects
+                </button>
               </div>
             </div>
             
-            {savedProjects.length === 0 ? (
+            {!isProjectManagerCollapsed && (
+              <>
+            
+            {/* Project Search */}
+            <div className="mb-4 p-3 bg-black bg-opacity-50 rounded border">
+              <div className="terminal-prompt mb-2 text-xs">
+                <span className="terminal-glow">search@engine:~$</span>
+                <span className="terminal-command ml-2">find-project-by-id</span>
+              </div>
+              <div className="flex space-x-2">
+                <input
+                  type="number"
+                  placeholder="Enter Project ID..."
+                  value={projectSearchId}
+                  onChange={(e) => setProjectSearchId(e.target.value)}
+                  className="terminal-input flex-1"
+                />
+                <button
+                  onClick={searchProjectById}
+                  className="terminal-button text-xs"
+                  disabled={!projectSearchId || isLoading}
+                >
+                  🔍 Load Project
+                </button>
+              </div>
+            </div>
+            
+            {/* Blockchain Projects List */}
+            {blockchainProjects.length === 0 ? (
               <div className="text-xs terminal-output text-center py-4">
-                No saved projects yet. Create a launch and save it to get started.
+                No projects found on blockchain. Click "Refresh Projects" to load them.
               </div>
             ) : (
               <div className="space-y-2">
-                {savedProjects.map((project) => (
+                <div className="terminal-prompt mb-2 text-xs">
+                  <span className="terminal-glow">list@engine:~$</span>
+                  <span className="terminal-command ml-2">blockchain-projects</span>
+                </div>
+                {blockchainProjects.map((project) => (
                   <div 
-                    key={project.id} 
+                    key={project.projectId} 
                     className={`flex items-center justify-between p-3 rounded border ${
-                      currentProjectId === project.id 
+                      launchData?.projectId && safeToNumber(launchData.projectId) === project.projectId
                         ? 'bg-green-900 bg-opacity-30 border-green-400' 
                         : 'bg-gray-900 bg-opacity-30 border-gray-600'
                     }`}
@@ -944,55 +1021,93 @@ function EngineDemo() {
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         <span className="text-xs terminal-success font-bold">
-                          {project.name}
+                          Project #{project.projectId}
                         </span>
-                        {currentProjectId === project.id && (
+                        {launchData?.projectId && safeToNumber(launchData.projectId) === project.projectId && (
                           <span className="text-xs terminal-success">(ACTIVE)</span>
                         )}
                       </div>
                       <div className="text-xs terminal-output mt-1">
-                        Created: {new Date(project.timestamp).toLocaleString()}
+                        Launch PDA: {project.launchPda.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
-                        Project ID: {project.projectId ? `#${project.projectId}` : 'Unknown'}
+                        Sale Mint: {project.saleMint.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
-                        Launch: {project.launchState ? project.launchState.slice(0, 8) + '...' : 'Invalid'}
+                        Funding Open: {project.account.fundingOpen ? 'YES' : 'NO'}
+                      </div>
+                      <div className="text-xs terminal-output">
+                        Total Deposited: {(safeToNumber(project.account.totalDeposited) / 1e9).toFixed(2)} SOL
                       </div>
                     </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => loadProject(project)}
+                        onClick={() => loadProjectById(project.projectId)}
                         className="terminal-button text-xs"
                         disabled={isLoading}
                       >
                         Load
                       </button>
-                      <button
-                        onClick={() => {
-                          const newName = prompt('Enter new name:', project.name);
-                          if (newName && newName.trim()) {
-                            renameProject(project.id, newName.trim());
-                          }
-                        }}
-                        className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete project "${project.name}"?`)) {
-                            deleteProject(project.id);
-                          }
-                        }}
-                        className="terminal-button text-xs bg-red-600 hover:bg-red-500"
-                      >
-                        Delete
-                      </button>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Legacy Saved Projects (for backward compatibility) */}
+            {savedProjects.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-600">
+                <div className="terminal-prompt mb-2 text-xs">
+                  <span className="terminal-glow">legacy@engine:~$</span>
+                  <span className="terminal-command ml-2">saved-projects</span>
+                </div>
+                <div className="text-xs terminal-output mb-2">
+                  Legacy saved projects (localStorage):
+                </div>
+                <div className="space-y-2">
+                  {savedProjects.map((project) => (
+                    <div 
+                      key={project.id} 
+                      className="flex items-center justify-between p-2 rounded border bg-gray-800 bg-opacity-30 border-gray-700"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs terminal-output">
+                            {project.name}
+                          </span>
+                          {currentProjectId === project.id && (
+                            <span className="text-xs terminal-success">(ACTIVE)</span>
+                          )}
+                        </div>
+                        <div className="text-xs terminal-output">
+                          Project ID: {project.projectId ? `#${project.projectId}` : 'Unknown'}
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => loadProject(project)}
+                          className="terminal-button text-xs"
+                          disabled={isLoading}
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete project "${project.name}"?`)) {
+                              deleteProject(project.id);
+                            }
+                          }}
+                          className="terminal-button text-xs bg-red-600 hover:bg-red-500"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+              </>
             )}
           </div>
         )}
@@ -1010,8 +1125,8 @@ function EngineDemo() {
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="terminal-output">Current Project:</span>
-              <span className={currentProjectId ? 'terminal-success' : 'terminal-error'}>
-                {currentProjectId ? savedProjects.find(p => p.id === currentProjectId)?.name || 'Unknown' : 'NONE'}
+              <span className={launchData?.projectId ? 'terminal-success' : 'terminal-error'}>
+                {launchData?.projectId ? `Project #${safeToNumber(launchData.projectId)}` : 'NONE'}
               </span>
             </div>
             <div className="flex justify-between">
