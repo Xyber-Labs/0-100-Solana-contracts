@@ -10,6 +10,105 @@ declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 /// Domain separation for score hashing (fix this constant).
 const SCORE_DOMAIN: &[u8] = b"0-100/selection/v1";
 
+// -------------------------------
+// Events
+// -------------------------------
+
+#[event]
+pub struct LaunchInitialized {
+    pub project_id: u64,
+    pub admin: Pubkey,
+    pub sale_mint: Pubkey,
+    pub hard_cap_lamports: u64,
+    pub min_raise_lamports: u64,
+    pub per_wallet_cap: u64,
+    pub tau_lamports: u64,
+    pub sale_allocation: u64,
+    pub lp_allocation: u64,
+}
+
+#[event]
+pub struct RosterInitialized {
+    pub launch: Pubkey,
+}
+
+#[event]
+pub struct FundingOpened {
+    pub launch: Pubkey,
+}
+
+#[event]
+pub struct DepositMade {
+    pub launch: Pubkey,
+    pub user: Pubkey,
+    pub amount: u64,
+    pub tickets_before: u32,
+    pub tickets_after: u32,
+    pub total_deposited: u64,
+    pub total_tickets: u32,
+}
+
+#[event]
+pub struct Withdrawn {
+    pub launch: Pubkey,
+    pub user: Pubkey,
+    pub amount: u64,
+    pub tickets_before: u32,
+    pub tickets_after: u32,
+    pub total_deposited: u64,
+    pub total_tickets: u32,
+}
+
+#[event]
+pub struct DepositsClosed {
+    pub launch: Pubkey,
+    pub total_tickets: u32,
+    pub k_capacity: u32,
+}
+
+#[event]
+pub struct SeedSet {
+    pub launch: Pubkey,
+    pub seed_hash: [u8; 32],
+}
+
+#[event]
+pub struct BatchProcessed {
+    pub launch: Pubkey,
+    pub from_t: u32,
+    pub processed: u32,
+    pub heap_len: u32,
+}
+
+#[event]
+pub struct SelectionFinalized {
+    pub launch: Pubkey,
+    pub threshold: u128,
+    pub k_capacity: u32,
+}
+
+#[event]
+pub struct ClaimsOpened {
+    pub launch: Pubkey,
+    pub tokens_per_ticket: u64,
+}
+
+#[event]
+pub struct RefundClaimed {
+    pub launch: Pubkey,
+    pub user: Pubkey,
+    pub refunded_lamports: u64,
+    pub y_approved: u32,
+}
+
+#[event]
+pub struct TokensClaimed {
+    pub launch: Pubkey,
+    pub user: Pubkey,
+    pub amount: u64,
+    pub y_approved: u32,
+}
+
 #[program]
 pub mod engine {
     use super::*;
@@ -67,6 +166,18 @@ pub mod engine {
         escrow.launch = ctx.accounts.launch_state.key();
         escrow.balance = 0;
 
+        emit!(LaunchInitialized {
+            project_id,
+            admin: ctx.accounts.admin.key(),
+            sale_mint: ctx.accounts.sale_mint.key(),
+            hard_cap_lamports,
+            min_raise_lamports,
+            per_wallet_cap,
+            tau_lamports,
+            sale_allocation,
+            lp_allocation,
+        });
+
         Ok(())
     }
 
@@ -79,6 +190,11 @@ pub mod engine {
         roster.prefix = Vec::new();
         roster.total_in_shard = 0;
         roster.shard_base = 0;
+
+        emit!(RosterInitialized {
+            launch: ctx.accounts.launch_state.key(),
+        });
+
         Ok(())
     }
 
@@ -88,6 +204,11 @@ pub mod engine {
         require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
         require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
         st.funding_open = true;
+
+        emit!(FundingOpened {
+            launch: ctx.accounts.launch_state.key(),
+        });
+
         Ok(())
     }
 
@@ -107,6 +228,14 @@ pub mod engine {
 
         // compute K
         st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+
+        let launch_key = st.key();
+        emit!(DepositsClosed {
+            launch: launch_key,
+            total_tickets: st.total_tickets,
+            k_capacity: st.k_capacity,
+        });
+
         Ok(())
     }
 
@@ -127,6 +256,15 @@ pub mod engine {
         sel.heap = Vec::new();
 
         st.vrf_seed = Some(seed);
+
+        // Hash the seed for security (don't expose raw seed)
+        let seed_hash = keccak::hash(&seed);
+        
+        emit!(SeedSet {
+            launch: ctx.accounts.launch_state.key(),
+            seed_hash: seed_hash.0,
+        });
+
         Ok(())
     }
 
@@ -163,6 +301,14 @@ pub mod engine {
 
         st.selection_finalized = true;
         st.threshold_score = Some(thr);
+
+        let launch_key = st.key();
+        emit!(SelectionFinalized {
+            launch: launch_key,
+            threshold: thr,
+            k_capacity: st.k_capacity,
+        });
+
         Ok(())
     }
 
@@ -177,6 +323,12 @@ pub mod engine {
         let per = st.sale_allocation / k; // floor; small remainder stays unminted in MVP
         st.tokens_per_ticket = Some(per);
         st.claims_open = true;
+
+        emit!(ClaimsOpened {
+            launch: ctx.accounts.launch_state.key(),
+            tokens_per_ticket: per,
+        });
+
         Ok(())
     }
 
@@ -190,6 +342,7 @@ pub mod engine {
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
         let k = st.k_capacity as usize;
 
+        let from_t = sel.processed; // Capture initial value for event
         let mut steps = 0usize;
         while sel.processed < st.total_tickets && steps < max_items as usize {
             let t = sel.processed;
@@ -237,6 +390,14 @@ pub mod engine {
             sel.processed += 1;
             steps += 1;
         }
+
+        emit!(BatchProcessed {
+            launch: ctx.accounts.launch_state.key(),
+            from_t,
+            processed: sel.processed,
+            heap_len: sel.heap.len() as u32,
+        });
+
         Ok(())
     }
 
@@ -307,6 +468,17 @@ pub mod engine {
 
         st.total_deposited = st.total_deposited.saturating_add(amount);
         st.total_tickets = st.total_tickets.saturating_add(delta);
+
+        emit!(DepositMade {
+            launch: st.key(),
+            user: ctx.accounts.user.key(),
+            amount,
+            tickets_before: old_tickets,
+            tickets_after: new_tickets,
+            total_deposited: st.total_deposited,
+            total_tickets: st.total_tickets,
+        });
+
         Ok(())
     }
 
@@ -336,6 +508,17 @@ pub mod engine {
         roster_decr(roster, user.wallet, lost)?;
         st.total_tickets = st.total_tickets.saturating_sub(lost);
         st.total_deposited = st.total_deposited.saturating_sub(amount);
+
+        emit!(Withdrawn {
+            launch: st.key(),
+            user: ctx.accounts.user.key(),
+            amount,
+            tickets_before: old_tickets,
+            tickets_after: new_tickets,
+            total_deposited: st.total_deposited,
+            total_tickets: st.total_tickets,
+        });
+
         Ok(())
     }
 
@@ -380,6 +563,14 @@ pub mod engine {
                 .try_borrow_mut_lamports()? += refund;
         }
         user.claimed_refund = true;
+
+        emit!(RefundClaimed {
+            launch: st.key(),
+            user: ctx.accounts.user.key(),
+            refunded_lamports: refund,
+            y_approved: y,
+        });
+
         Ok(())
     }
 
@@ -434,6 +625,14 @@ pub mod engine {
         token::mint_to(cpi_ctx, amount)?;
 
         user.claimed_tokens = true;
+
+        emit!(TokensClaimed {
+            launch: st.key(),
+            user: ctx.accounts.user.key(),
+            amount,
+            y_approved: y,
+        });
+
         Ok(())
     }
 }
