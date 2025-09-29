@@ -2,7 +2,13 @@ import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useState } from 'react';
+import { Keypair } from '@solana/web3.js';
 import EngineDemo from './EngineDemo';
+import EnvironmentSwitcher from './components/EnvironmentSwitcher';
+import TestWallet from './components/TestWallet';
+import { getCurrentEnvironmentConfig } from './config/environments';
+import type { EnvironmentConfig } from './config/environments';
 
 // Import styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -14,8 +20,23 @@ const wallets = [
 ];
 
 function App() {
+  const [environmentConfig, setEnvironmentConfig] = useState<EnvironmentConfig>(getCurrentEnvironmentConfig());
+  const [testWallet, setTestWallet] = useState<Keypair | null>(null);
+
+  const handleEnvironmentChange = (config: EnvironmentConfig) => {
+    setEnvironmentConfig(config);
+    // Keep test wallet for both local and remote nodes
+    // if (config.name !== 'Remote') {
+    //   setTestWallet(null);
+    // }
+  };
+
+  const handleTestWalletChange = (keypair: Keypair | null) => {
+    setTestWallet(keypair);
+  };
+
   return (
-    <ConnectionProvider endpoint="http://127.0.0.1:8899">
+    <ConnectionProvider endpoint={environmentConfig.rpcUrl}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <div className="min-h-screen bg-black">
@@ -35,14 +56,22 @@ function App() {
                     <span className="terminal-glow">root@engine:~$</span>
                     <span className="terminal-command ml-2">./zero-to-hundred-engine</span>
                   </div>
-                  <WalletMultiButton />
+                  <div className="flex items-center space-x-2">
+                    <EnvironmentSwitcher onEnvironmentChange={handleEnvironmentChange} />
+                    <TestWallet 
+                      onWalletChange={handleTestWalletChange} 
+                      currentWallet={testWallet} 
+                      isRemoteNode={environmentConfig.name === 'Remote'}
+                    />
+                    {!testWallet && <WalletMultiButton />}
+                  </div>
                 </div>
                 <div className="terminal-output text-xs mb-4">
                   <div>Initializing Zero to Hundred Engine SDK...</div>
-                  <div>Connecting to Solana Devnet...</div>
+                  <div>Connecting to {environmentConfig.name} ({environmentConfig.rpcUrl})...</div>
                   <div>Loading smart contract interface...</div>
                 </div>
-                <EngineDemo />
+                <EngineDemo key={environmentConfig.rpcUrl} testWallet={testWallet} />
               </div>
             </div>
           </div>

@@ -13,15 +13,22 @@ help:
 	@echo "  validator     - Start local validator"
 	@echo "  validator-stop - Stop local validator"
 	@echo "  setup         - Full setup (build + deploy + test)"
+	@echo ""
+	@echo "Remote development:"
+	@echo "  config-remote - Set config to remote server (10.186.0.84)"
+	@echo "  deploy-remote - Deploy to remote server"
+	@echo "  test-remote   - Run tests on remote server"
+	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
 ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
 ANCHOR_WALLET := ~/.config/solana/id.json
 SOLANA_URL := http://127.0.0.1:8899
+REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
 # Test commands
 .PHONY: test
-test: build deploy
+test: validator-bg build deploy
 	@echo "Running tests..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
@@ -31,7 +38,7 @@ test-quick:
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
 .PHONY: test-verbose
-test-verbose: build deploy
+test-verbose: validator-bg build deploy
 	@echo "Running tests with verbose output..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --reporter spec
 
@@ -80,6 +87,11 @@ config-local:
 	@echo "Setting Solana config to localhost..."
 	solana config set --url $(SOLANA_URL)
 
+.PHONY: config-remote
+config-remote:
+	@echo "Setting Solana config to remote server..."
+	solana config set --url $(REMOTE_SOLANA_URL)
+
 .PHONY: config-devnet
 config-devnet:
 	@echo "Setting Solana config to devnet..."
@@ -112,7 +124,7 @@ check:
 
 # Individual test commands
 .PHONY: test-basic
-test-basic: build deploy
+test-basic: validator-bg build deploy
 	@echo "Running basic tests only..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --grep "Initializes the launch state|Opens funding|Closes funding|Sets the VRF seed|Allows deposits|Allows withdrawals"
 
@@ -125,6 +137,24 @@ debug:
 	@echo "ANCHOR_WALLET: $(ANCHOR_WALLET)"
 	@echo "SOLANA_URL: $(SOLANA_URL)"
 	solana config get
+
+# Remote development commands
+.PHONY: deploy-remote
+deploy-remote: config-remote
+	@echo "Deploying to remote server..."
+	anchor deploy
+
+.PHONY: test-remote
+test-remote: config-remote
+	@echo "Running tests on remote server..."
+	ANCHOR_PROVIDER_URL=$(REMOTE_SOLANA_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
+
+.PHONY: build-deploy-remote
+build-deploy-remote: config-remote build deploy-remote
+
+.PHONY: setup-remote
+setup-remote: build-deploy-remote test-remote
+	@echo "Remote setup completed!"
 
 # Install dependencies
 .PHONY: install

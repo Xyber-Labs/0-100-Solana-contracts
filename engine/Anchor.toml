@@ -8,6 +8,9 @@ skip-lint = false
 [programs.localnet]
 engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
 
+# [programs.remote]
+# engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
+
 [registry]
 url = "https://api.apr.dev"
 
