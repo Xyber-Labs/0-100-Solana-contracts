@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Keypair, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Keypair, TransactionInstruction, Transaction } from "@solana/web3.js";
 import {
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -22,6 +22,8 @@ const loadIdl = async () => {
   return idl;
 };
 
+import { TxBuilder } from "./txBuilder";
+
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey(
     "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
@@ -39,6 +41,7 @@ export default {
      */
     create(provider: anchor.Provider, program: Program<EngineIDL>) {
         const payer = provider.publicKey!;
+        const txBuilder = new TxBuilder(program);
 
         // -------------- PDA helpers --------------
         function getLaunchPda(saleMint: PublicKey): [PublicKey, number] {
@@ -142,37 +145,29 @@ export default {
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
         }): Promise<{ launchPda: PublicKey; escrowPda: PublicKey; signature: string }> {
-            const [launchPda] = getLaunchPda(args.saleMint);
-            const [escrowPda] = getEscrowPda(launchPda);
-            const [projectCounterPda] = getProjectCounterPda();
+            const { instruction, launchState, escrow } = await txBuilder.initLaunchIx({
+                admin: payer,
+                saleMint: args.saleMint,
+                hardCapLamports: args.hardCapLamports,
+                minRaiseLamports: args.minRaiseLamports,
+                perWalletCap: args.perWalletCap,
+                tauLamports: args.tauLamports,
+                saleAllocation: args.saleAllocation,
+                lpAllocation: args.lpAllocation,
+            });
 
-            const rpc = program.methods
-                .initLaunch(
-                    args.hardCapLamports,
-                    args.minRaiseLamports,
-                    args.perWalletCap,
-                    args.tauLamports,
-                    args.saleAllocation,
-                    args.lpAllocation
-                )
-                .accountsStrict({
-                    admin: payer,
-                    projectCounter: projectCounterPda,
-                    launchState: launchPda,
-                    saleMint: args.saleMint,
-                    escrow: escrowPda,
-                    systemProgram: SystemProgram.programId,
-                });
-
+            const tx = new Transaction();
+            
             if (args.preInstructions && args.preInstructions.length) {
-                rpc.preInstructions(args.preInstructions);
+                tx.add(...args.preInstructions);
             }
-            if (args.signers && args.signers.length) {
-                rpc.signers(args.signers);
-            }
+            
+            tx.add(instruction);
+            
+            const signers = args.signers || [];
 
-            const signature = await rpc.rpc();
-            return { launchPda, escrowPda, signature };
+            const signature = await provider.sendAndConfirm(tx, signers);
+            return { launchPda: launchState, escrowPda: escrow, signature };
         }
 
         async function initRoster(args: {
@@ -532,6 +527,11 @@ export default {
             withdraw,
             claimRefund,
             claimTokens,
+
+            initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
+            initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
+            openFundingTx: txBuilder.openFundingTx.bind(txBuilder),
+            openFundingIx: txBuilder.openFundingIx.bind(txBuilder),
 
             // Fetch
             fetchLaunch,
