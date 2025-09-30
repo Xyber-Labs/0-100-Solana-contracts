@@ -61,12 +61,6 @@ pub struct Withdrawn {
     pub total_tickets: u32,
 }
 
-#[event]
-pub struct DepositsClosed {
-    pub launch: Pubkey,
-    pub total_tickets: u32,
-    pub k_capacity: u32,
-}
 
 #[event]
 pub struct SeedSet {
@@ -162,7 +156,6 @@ pub mod engine {
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
         state.funding_period_end = current_time + duration_seconds;
-        state.deposits_closed = false;
         state.total_deposited = 0;
         state.total_tickets = 0;
         state.k_capacity = 0;
@@ -222,42 +215,16 @@ pub mod engine {
         Ok(())
     }
 
-    /// Close deposits automatically when funding period ends (called by anyone).
-    /// This function can be called by anyone once the funding period has ended.
-    pub fn close_deposits(ctx: Context<CloseDeposits>) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
-        
-        // Check if funding period has ended
-        let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
-        
-        st.deposits_closed = true;
-
-        // build prefix inside roster
-        let roster = &mut ctx.accounts.roster;
-        roster_build_prefix(roster)?;
-        roster.shard_base = 0; // single-shard MVP
-        st.total_tickets = roster.total_in_shard;
-
-        // compute K
-        st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
-
-        let launch_key = st.key();
-        emit!(DepositsClosed {
-            launch: launch_key,
-            total_tickets: st.total_tickets,
-            k_capacity: st.k_capacity,
-        });
-
-        Ok(())
-    }
 
     /// MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed.
     pub fn set_seed(ctx: Context<OnlyAdminWithSelection>, seed: [u8; 32]) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        
         require!(st.vrf_seed.is_none(), ErrorCode::SeedAlreadySet);
 
         // Initialize SelectionState
@@ -287,7 +254,11 @@ pub mod engine {
     pub fn finalize_selection(ctx: Context<FinalizeSelection>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let sel = &mut ctx.accounts.selection_state;
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        
         require!(sel.vrf_seed.len() == 32, ErrorCode::SeedMissing);
         require!(!sel.finalized, ErrorCode::AlreadyFinalized);
         require!(
@@ -350,10 +321,23 @@ pub mod engine {
     pub fn process_batch(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let sel = &mut ctx.accounts.selection_state;
-        let roster = &ctx.accounts.roster;
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        let roster = &mut ctx.accounts.roster;
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        
         require!(sel.finalized == false, ErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+        
+        // Auto-calculate k_capacity and total_tickets if not done yet
+        if st.k_capacity == 0 {
+            st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+            roster_build_prefix(roster)?;
+            roster.shard_base = 0; // single-shard MVP
+            st.total_tickets = roster.total_in_shard;
+        }
+        
         let k = st.k_capacity as usize;
 
         let from_t = sel.processed; // Capture initial value for event
@@ -422,7 +406,6 @@ pub mod engine {
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
         
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
@@ -503,7 +486,6 @@ pub mod engine {
     /// Withdraw during funding window (reduces ticket_count and returns lamports).
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
         
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
@@ -685,7 +667,6 @@ pub struct LaunchState {
 
     // Funding
     pub funding_period_end: i64, // Unix timestamp when funding period ends
-    pub deposits_closed: bool,
     pub total_deposited: u64,
     pub total_tickets: u32,
     pub k_capacity: u32,
@@ -871,22 +852,14 @@ pub struct OnlyAdminWithSelection<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct CloseDeposits<'info> {
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, has_one = launch)]
-    pub roster: Account<'info, Roster>,
-    /// CHECK: This is the launch account referenced by the roster
-    #[account(address = launch_state.key())]
-    pub launch: UncheckedAccount<'info>,
-}
 
 #[derive(Accounts)]
 pub struct ProcessBatch<'info> {
     #[account(mut)]
     pub selection_state: Account<'info, SelectionState>,
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+    #[account(mut)]
     pub roster: Account<'info, Roster>,
 }
 
@@ -1102,10 +1075,6 @@ pub enum ErrorCode {
     InvalidFundingDuration,
     #[msg("Claims are not open")]
     ClaimsNotOpen,
-    #[msg("Deposits already closed")]
-    AlreadyClosed,
-    #[msg("Deposits not closed")]
-    NotClosed,
     #[msg("Unauthorized")]
     Unauthorized,
     #[msg("Amount must be multiple of tau")]

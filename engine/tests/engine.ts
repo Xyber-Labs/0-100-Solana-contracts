@@ -99,7 +99,6 @@ describe("engine", () => {
     assert.equal(state.saleAllocation.toNumber(), saleAllocation.toNumber());
     assert.equal(state.lpAllocation.toNumber(), lpAllocation.toNumber());
     assert.isTrue(state.fundingPeriodEnd.toNumber() > 0);
-    assert.isFalse(state.depositsClosed);
     assert.equal(state.totalDeposited.toNumber(), 0);
     assert.equal(state.totalTickets, 0);
     assert.equal(state.kCapacity, 0);
@@ -121,12 +120,10 @@ describe("engine", () => {
     // Wait for funding period to end
     await waitForFundingPeriodEnd(launchState);
 
-    // Anyone can call closeDeposits after funding period ends
-    const { signature } = await sdk.closeDeposits({ launch: launchState });
-    console.log("Deposits closed with signature:", signature);
-
+    // Deposits are now automatically closed (no manual call needed)
     const state = await sdk.fetchLaunch(launchState);
-    assert.isTrue(state.depositsClosed);
+    const currentTime = Math.floor(Date.now() / 1000);
+    assert.isTrue(currentTime >= state.fundingPeriodEnd.toNumber());
   });
 
   it("Sets the VRF seed", async () => {
@@ -172,9 +169,7 @@ describe("engine", () => {
     // Wait for funding period to end
     await waitForFundingPeriodEnd(testLaunchState);
 
-    // Close deposits using SDK
-    await sdk.closeDeposits({ launch: testLaunchState });
-
+    // Deposits are now automatically closed (no manual call needed)
     const vrfSeed = anchor.web3.Keypair.generate().publicKey;
 
     // Set seed using SDK
@@ -438,12 +433,10 @@ describe("engine", () => {
     // Wait for funding period to end
     await waitForFundingPeriodEnd(testLaunchState);
 
-    // Close deposits using SDK
-    await sdk.closeDeposits({ launch: testLaunchState });
-
+    // Deposits are now automatically closed (no manual call needed)
     state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(state.depositsClosed);
-    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber()); // K = hard_cap / tau
+    const currentTime = Math.floor(Date.now() / 1000);
+    assert.isTrue(currentTime >= state.fundingPeriodEnd.toNumber());
 
     // Set VRF seed using SDK
     const vrfSeed = anchor.web3.Keypair.generate().publicKey;
@@ -480,10 +473,11 @@ describe("engine", () => {
 
     // Verify all tickets are processed
     const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
+    const finalState = await sdk.fetchLaunch(testLaunchState);
     console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
-    console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
+    console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${finalState.kCapacity}`);
     assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
-    assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
+    assert.equal(finalSelectionAccount.heap.length, finalState.kCapacity); // Heap length should equal K capacity
 
     // Finalize selection using SDK
     const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });

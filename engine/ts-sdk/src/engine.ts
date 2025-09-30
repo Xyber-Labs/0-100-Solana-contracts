@@ -197,22 +197,6 @@ export default {
         }
 
 
-        async function closeDeposits(args: {
-            launch: PublicKey;
-            roster?: PublicKey; // if not provided — will be computed
-            signers?: Keypair[];
-        }): Promise<{ signature: string }> {
-            const roster = args.roster ?? getRosterPda(args.launch)[0];
-            const rpc = program.methods
-                .closeDeposits()
-                .accountsStrict({
-                    launchState: args.launch,
-                    roster,
-                    launch: args.launch,
-                });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
 
         async function setSeed(args: {
             launch: PublicKey;
@@ -513,7 +497,6 @@ export default {
             // TX
             initLaunch,
             initRoster,
-            closeDeposits,
             setSeed,
             processBatch,
             finalizeSelection,

@@ -171,40 +171,6 @@ export type Engine = {
       "args": []
     },
     {
-      "name": "closeDeposits",
-      "docs": [
-        "Close deposits automatically when funding period ends (called by anyone).",
-        "This function can be called by anyone once the funding period has ended."
-      ],
-      "discriminator": [
-        32,
-        132,
-        87,
-        145,
-        240,
-        56,
-        34,
-        245
-      ],
-      "accounts": [
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true
-        },
-        {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "deposit",
       "docs": [
         "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -559,10 +525,12 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "launchState"
+          "name": "launchState",
+          "writable": true
         },
         {
-          "name": "roster"
+          "name": "roster",
+          "writable": true
         }
       ],
       "args": [
@@ -841,19 +809,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "depositsClosed",
-      "discriminator": [
-        171,
-        1,
-        250,
-        190,
-        118,
-        244,
-        97,
-        228
-      ]
-    },
-    {
       "name": "fundingPeriodStarted",
       "discriminator": [
         24,
@@ -981,106 +936,96 @@ export type Engine = {
     },
     {
       "code": 6004,
-      "name": "alreadyClosed",
-      "msg": "Deposits already closed"
-    },
-    {
-      "code": 6005,
-      "name": "notClosed",
-      "msg": "Deposits not closed"
-    },
-    {
-      "code": 6006,
       "name": "unauthorized",
       "msg": "unauthorized"
     },
     {
-      "code": 6007,
+      "code": 6005,
       "name": "amountNotMultipleTau",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6008,
+      "code": 6006,
       "name": "perWalletCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6009,
+      "code": 6007,
       "name": "insufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6010,
+      "code": 6008,
       "name": "seedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6011,
+      "code": 6009,
       "name": "seedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6012,
+      "code": 6010,
       "name": "alreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6013,
+      "code": 6011,
       "name": "notFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6014,
+      "code": 6012,
       "name": "thresholdMissing",
       "msg": "Threshold missing"
     },
     {
-      "code": 6015,
+      "code": 6013,
       "name": "tokensPerTicketMissing",
       "msg": "Tokens per ticket missing"
     },
     {
-      "code": 6016,
+      "code": 6014,
       "name": "invalidTau",
       "msg": "Invalid tau"
     },
     {
-      "code": 6017,
+      "code": 6015,
       "name": "invalidK",
       "msg": "Invalid K"
     },
     {
-      "code": 6018,
+      "code": 6016,
       "name": "notFullyProcessed",
       "msg": "Not fully processed"
     },
     {
-      "code": 6019,
+      "code": 6017,
       "name": "heapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6020,
+      "code": 6018,
       "name": "userNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6021,
+      "code": 6019,
       "name": "tOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6022,
+      "code": 6020,
       "name": "mappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6023,
+      "code": 6021,
       "name": "alreadyClaimedRefund",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6024,
+      "code": 6022,
       "name": "alreadyClaimedTokens",
       "msg": "Already claimed tokens"
     }
@@ -1157,26 +1102,6 @@ export type Engine = {
           },
           {
             "name": "totalTickets",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "depositsClosed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "totalTickets",
-            "type": "u32"
-          },
-          {
-            "name": "kCapacity",
             "type": "u32"
           }
         ]
@@ -1322,10 +1247,6 @@ export type Engine = {
           {
             "name": "fundingPeriodEnd",
             "type": "i64"
-          },
-          {
-            "name": "depositsClosed",
-            "type": "bool"
           },
           {
             "name": "totalDeposited",

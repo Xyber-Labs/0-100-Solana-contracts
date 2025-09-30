@@ -482,24 +482,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, launchState]);
 
-  const closeDeposits = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Closing deposits (anyone can call this after funding period ends)...');
-      const { signature } = await sdk.closeDeposits({ launch: launchState });
-      addLog(`SUCCESS: Deposits closed - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to close deposits - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
 
   const setSeed = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -1393,12 +1375,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="terminal-output">Deposits Closed:</span>
-                  <span className={launchData.depositsClosed ? 'terminal-success' : 'terminal-error'}>
-                    {launchData.depositsClosed ? 'YES' : 'NO'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
                   <span className="terminal-output">Total Deposited:</span>
                   <span className="terminal-success">
                     {(safeToNumber(launchData.totalDeposited) / 1e9).toFixed(2)} SOL
@@ -1458,13 +1434,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <span className="terminal-prompt">$</span> Init Roster
             </button>
             
-            <button 
-              onClick={closeDeposits}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
-            >
-              <span className="terminal-prompt">$</span> Close Deposits
-            </button>
             
             <button 
               onClick={setSeed}

@@ -63,13 +63,6 @@ declare const _default: {
             rosterPda: PublicKey;
             signature: string;
         }>;
-        closeDeposits: (args: {
-            launch: PublicKey;
-            roster?: PublicKey;
-            signers?: Keypair[];
-        }) => Promise<{
-            signature: string;
-        }>;
         setSeed: (args: {
             launch: PublicKey;
             seed: Uint8Array | number[] | Buffer;
@@ -146,7 +139,6 @@ declare const _default: {
             saleAllocation: anchor.BN;
             lpAllocation: anchor.BN;
             fundingPeriodEnd: anchor.BN;
-            depositsClosed: boolean;
             totalDeposited: anchor.BN;
             totalTickets: number;
             kCapacity: number;
@@ -202,7 +194,6 @@ declare const _default: {
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
                 fundingPeriodEnd: anchor.BN;
-                depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;
@@ -229,7 +220,6 @@ declare const _default: {
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
                 fundingPeriodEnd: anchor.BN;
-                depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;
@@ -256,7 +246,6 @@ declare const _default: {
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
                 fundingPeriodEnd: anchor.BN;
-                depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;

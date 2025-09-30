@@ -165,40 +165,6 @@
       "args": []
     },
     {
-      "name": "close_deposits",
-      "docs": [
-        "Close deposits automatically when funding period ends (called by anyone).",
-        "This function can be called by anyone once the funding period has ended."
-      ],
-      "discriminator": [
-        32,
-        132,
-        87,
-        145,
-        240,
-        56,
-        34,
-        245
-      ],
-      "accounts": [
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true
-        },
-        {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "deposit",
       "docs": [
         "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -553,10 +519,12 @@
           "writable": true
         },
         {
-          "name": "launch_state"
+          "name": "launch_state",
+          "writable": true
         },
         {
-          "name": "roster"
+          "name": "roster",
+          "writable": true
         }
       ],
       "args": [
@@ -835,19 +803,6 @@
       ]
     },
     {
-      "name": "DepositsClosed",
-      "discriminator": [
-        171,
-        1,
-        250,
-        190,
-        118,
-        244,
-        97,
-        228
-      ]
-    },
-    {
       "name": "FundingPeriodStarted",
       "discriminator": [
         24,
@@ -975,106 +930,96 @@
     },
     {
       "code": 6004,
-      "name": "AlreadyClosed",
-      "msg": "Deposits already closed"
-    },
-    {
-      "code": 6005,
-      "name": "NotClosed",
-      "msg": "Deposits not closed"
-    },
-    {
-      "code": 6006,
       "name": "Unauthorized",
       "msg": "Unauthorized"
     },
     {
-      "code": 6007,
+      "code": 6005,
       "name": "AmountNotMultipleTau",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6008,
+      "code": 6006,
       "name": "PerWalletCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6009,
+      "code": 6007,
       "name": "InsufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6010,
+      "code": 6008,
       "name": "SeedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6011,
+      "code": 6009,
       "name": "SeedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6012,
+      "code": 6010,
       "name": "AlreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6013,
+      "code": 6011,
       "name": "NotFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6014,
+      "code": 6012,
       "name": "ThresholdMissing",
       "msg": "Threshold missing"
     },
     {
-      "code": 6015,
+      "code": 6013,
       "name": "TokensPerTicketMissing",
       "msg": "Tokens per ticket missing"
     },
     {
-      "code": 6016,
+      "code": 6014,
       "name": "InvalidTau",
       "msg": "Invalid tau"
     },
     {
-      "code": 6017,
+      "code": 6015,
       "name": "InvalidK",
       "msg": "Invalid K"
     },
     {
-      "code": 6018,
+      "code": 6016,
       "name": "NotFullyProcessed",
       "msg": "Not fully processed"
     },
     {
-      "code": 6019,
+      "code": 6017,
       "name": "HeapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6020,
+      "code": 6018,
       "name": "UserNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6021,
+      "code": 6019,
       "name": "TOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6022,
+      "code": 6020,
       "name": "MappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6023,
+      "code": 6021,
       "name": "AlreadyClaimedRefund",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6024,
+      "code": 6022,
       "name": "AlreadyClaimedTokens",
       "msg": "Already claimed tokens"
     }
@@ -1151,26 +1096,6 @@
           },
           {
             "name": "total_tickets",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "DepositsClosed",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "k_capacity",
             "type": "u32"
           }
         ]
@@ -1316,10 +1241,6 @@
           {
             "name": "funding_period_end",
             "type": "i64"
-          },
-          {
-            "name": "deposits_closed",
-            "type": "bool"
           },
           {
             "name": "total_deposited",

@@ -105,19 +105,6 @@ export default {
             const signature = await rpc.rpc();
             return { rosterPda, signature };
         }
-        async function closeDeposits(args) {
-            const roster = args.roster ?? getRosterPda(args.launch)[0];
-            const rpc = program.methods
-                .closeDeposits()
-                .accountsStrict({
-                launchState: args.launch,
-                roster,
-                launch: args.launch,
-            });
-            if (args.signers && args.signers.length)
-                rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
         async function setSeed(args) {
             const [selectionPda] = getSelectionPda(args.launch);
             const seed32 = ensure32Bytes(args.seed);
@@ -359,7 +346,6 @@ export default {
             // TX
             initLaunch,
             initRoster,
-            closeDeposits,
             setSeed,
             processBatch,
             finalizeSelection,
