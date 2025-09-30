@@ -93,7 +93,7 @@ src/
 ├── EngineDemo.tsx       # Main demo component with SDK integration
 └── sdk/                 # Zero to Hundred Engine SDK
     ├── src/
-    │   └── engine.ts    # SDK implementation
+    │   └── engine.ts    # SDK implementation (used by UI, not test file)
     └── idl/             # Program IDL and types
 ```
 

@@ -328,6 +328,74 @@ export default {
             return { signature: await rpc.rpc() };
         }
 
+        async function withdrawTx(args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.withdrawTx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+
+        async function withdrawIx(args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.withdrawIx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+
+        async function depositTx(args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.depositTx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+
+        async function depositIx(args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.depositIx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+
         async function claimRefund(args: {
             launch: PublicKey;
             userKeypair?: Keypair;
@@ -401,30 +469,25 @@ export default {
         // =============================
 
         async function fetchLaunch(launch: PublicKey) {
-            return program.account.launchState.fetch(launch);
+            return txBuilder.fetchLaunch(launch);
         }
 
         async function fetchRoster(launch: PublicKey) {
-            const [pda] = getRosterPda(launch);
-            return program.account.roster.fetch(pda);
+            return txBuilder.fetchRoster(launch);
         }
 
         async function fetchSelection(launch: PublicKey) {
-            const [pda] = getSelectionPda(launch);
-            return program.account.selectionState.fetch(pda);
+            return txBuilder.fetchSelection(launch);
         }
 
         async function fetchUserContribution(launch: PublicKey, user: PublicKey) {
-            const [pda] = getUserContributionPda(launch, user);
-            return program.account.userContribution.fetch(pda);
+            return txBuilder.fetchUserContribution(launch, user);
         }
 
         async function fetchProjectCounter() {
-            const [pda] = getProjectCounterPda();
-            return program.account.projectCounter.fetch(pda);
+            return txBuilder.fetchProjectCounter();
         }
 
-        // Get all launch states (projects) from the blockchain
         async function fetchAllProjects() {
             try {
                 console.log('Fetching all launch states from blockchain...');
@@ -514,7 +577,6 @@ export default {
             buildCreateAtaIx,
             ensure32Bytes,
 
-            // TX
             initLaunch,
             initRoster,
             openFunding,
@@ -532,8 +594,17 @@ export default {
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
             openFundingTx: txBuilder.openFundingTx.bind(txBuilder),
             openFundingIx: txBuilder.openFundingIx.bind(txBuilder),
+            initRosterTx: txBuilder.initRosterTx.bind(txBuilder),
+            initRosterIx: txBuilder.initRosterIx.bind(txBuilder),
+            closeDepositsTx: txBuilder.closeDepositsTx.bind(txBuilder),
+            closeDepositsIx: txBuilder.closeDepositsIx.bind(txBuilder),
+            setSeedTx: txBuilder.setSeedTx.bind(txBuilder),
+            setSeedIx: txBuilder.setSeedIx.bind(txBuilder),
+            depositTx,
+            depositIx,
+            withdrawTx,
+            withdrawIx,
 
-            // Fetch
             fetchLaunch,
             fetchRoster,
             fetchSelection,

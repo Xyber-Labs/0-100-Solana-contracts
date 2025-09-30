@@ -1,91 +1,71 @@
+import { startAnchor } from "solana-bankrun";
+import { BankrunProvider } from "anchor-bankrun";
 import * as anchor from "@coral-xyz/anchor";
+import { assert } from "chai";
 import { Program } from "@coral-xyz/anchor";
 import { Engine } from "../target/types/engine";
-import { assert } from "chai";
+import EngineSDK from "../ts-sdk/src/engine";
 import {
   createInitializeMintInstruction,
-  createAssociatedTokenAccountInstruction,
-  getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
+  unpackAccount,
 } from "@solana/spl-token";
 
-// Import the TS-SDK
-import EngineSDK from "../ts-sdk/src/engine";
-
-describe("engine", () => {
-  // Configure the client to use the local cluster.
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  const program = anchor.workspace.engine as Program<Engine>;
-  const admin = provider.wallet;
-
-  // Initialize SDK
-  const sdk = EngineSDK.create(provider, program);
+describe("engine bankrun", () => {
+  let context: any;
+  let provider: BankrunProvider;
+  let program: Program<Engine>;
+  let admin: anchor.Wallet;
+  let sdk: any;
 
   let saleMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
-  let escrow: anchor.web3.PublicKey;
-  const hardCapLamports = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
-  const minRaiseLamports = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-  const perWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-  const tauLamports = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-  const saleAllocation = new anchor.BN(1000000);
-  const lpAllocation = new anchor.BN(500000);
+
+  const HARD_CAP_LAMPORTS = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
+  const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
+  const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+  const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+  const SALE_ALLOCATION = new anchor.BN(1000000);
+  const LP_ALLOCATION = new anchor.BN(500000);
 
   before(async () => {
-    saleMint = anchor.web3.Keypair.generate();
-    [launchState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), saleMint.publicKey.toBuffer()],
-      program.programId
-    );
-    [escrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), launchState.toBuffer()],
-      program.programId
-    );
-
-    // Use SDK to initialize launch
-    const { signature } = await sdk.initLaunch({
-      saleMint: saleMint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: saleMint.publicKey,
-          space: 82, // Mint account size
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          saleMint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, saleMint],
-    });
-
-    console.log("Launch initialized with signature:", signature);
+    context = await startAnchor("./", [], []);
+    provider = new BankrunProvider(context);
+    anchor.setProvider(provider);
+    program = anchor.workspace.engine as Program<Engine>;
+    admin = provider.wallet;
+    sdk = EngineSDK.create(provider, program);
   });
 
   it("Initializes the launch state correctly", async () => {
+    saleMint = anchor.web3.Keypair.generate();
+
+    const result = await sdk.initLaunchTx({
+      admin: admin.publicKey,
+      saleMint: saleMint,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
+      provider,
+    });
+
+    const initTx = await provider.sendAndConfirm(result.transaction, [admin.payer, ...result.signers]);
+    console.log("Init launch tx signature:", initTx);
+
+    launchState = result.launchState;
     const state = await sdk.fetchLaunch(launchState);
 
-    // Check project ID (should be a valid number >= 0)
     assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
     assert.ok(state.admin.equals(admin.publicKey));
-    assert.equal(state.hardCapLamports.toNumber(), hardCapLamports.toNumber());
-    assert.equal(state.minRaiseLamports.toNumber(), minRaiseLamports.toNumber());
-    assert.equal(state.perWalletCap.toNumber(), perWalletCap.toNumber());
-    assert.equal(state.tauLamports.toNumber(), tauLamports.toNumber());
-    assert.equal(state.saleAllocation.toNumber(), saleAllocation.toNumber());
-    assert.equal(state.lpAllocation.toNumber(), lpAllocation.toNumber());
+    assert.equal(state.hardCapLamports.toNumber(), HARD_CAP_LAMPORTS.toNumber());
+    assert.equal(state.minRaiseLamports.toNumber(), MIN_RAISE_LAMPORTS.toNumber());
+    assert.equal(state.perWalletCap.toNumber(), PER_WALLET_CAP.toNumber());
+    assert.equal(state.tauLamports.toNumber(), TAU_LAMPORTS.toNumber());
+    assert.equal(state.saleAllocation.toNumber(), SALE_ALLOCATION.toNumber());
+    assert.equal(state.lpAllocation.toNumber(), LP_ALLOCATION.toNumber());
     assert.isFalse(state.fundingOpen);
     assert.isFalse(state.depositsClosed);
     assert.equal(state.totalDeposited.toNumber(), 0);
@@ -101,279 +81,209 @@ describe("engine", () => {
   });
 
   it("Opens funding", async () => {
-    const { signature } = await sdk.openFunding({ launch: launchState });
-    console.log("Funding opened with signature:", signature);
+    const openFundingTx = await sdk.openFundingTx({
+      launch: launchState,
+      admin: admin.publicKey,
+    });
+
+    const openTx = await provider.sendAndConfirm(openFundingTx, [admin.payer]);
+    console.log("Open funding tx signature:", openTx);
 
     const state = await sdk.fetchLaunch(launchState);
     assert.isTrue(state.fundingOpen);
   });
 
+
   it("Closes funding", async () => {
-    // First open funding
-    await sdk.openFunding({ launch: launchState });
+    const { transaction: initRosterTx, rosterPda } = await sdk.initRosterTx({
+      launch: launchState,
+      admin: admin.publicKey,
+    });
 
-    let state = await sdk.fetchLaunch(launchState);
-    assert.isTrue(state.fundingOpen);
+    const rosterTx = await provider.sendAndConfirm(initRosterTx, [admin.payer]);
+    console.log("Init roster tx signature:", rosterTx);
 
-    // Initialize roster account using SDK
-    const { rosterPda, signature: rosterSig } = await sdk.initRoster({ launch: launchState });
-    console.log("Roster initialized with signature:", rosterSig);
+    const closeDepositsTx = await sdk.closeDepositsTx({
+      launch: launchState,
+      admin: admin.publicKey,
+      roster: rosterPda,
+    });
 
-    // Close deposits using SDK
-    const { signature } = await sdk.closeDeposits({ launch: launchState });
-    console.log("Deposits closed with signature:", signature);
+    const closeTx = await provider.sendAndConfirm(closeDepositsTx, [admin.payer]);
+    console.log("Close deposits tx signature:", closeTx);
 
-    state = await sdk.fetchLaunch(launchState);
+    const state = await sdk.fetchLaunch(launchState);
     assert.isFalse(state.fundingOpen);
     assert.isTrue(state.depositsClosed);
   });
 
   it("Sets the VRF seed", async () => {
-    // Create a new launch state for this test
-    const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
-      program.programId
-    );
+    const testSeed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      testSeed[i] = i + 1;
+    }
 
-    // Initialize launch using SDK
-    await sdk.initLaunch({
-      saleMint: testSaleMint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: testSaleMint.publicKey,
-          space: 82,
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          testSaleMint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, testSaleMint],
+    const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
+      launch: launchState,
+      admin: admin.publicKey,
+      seed: testSeed,
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
+    const seedTx = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
+    console.log("Set VRF seed tx signature:", seedTx);
 
-    // Initialize roster using SDK
-    await sdk.initRoster({ launch: testLaunchState });
+    const state = await sdk.fetchLaunch(launchState);
+    assert.isNotNull(state.vrfSeed);
 
-    // Close deposits using SDK
-    await sdk.closeDeposits({ launch: testLaunchState });
-
-    const vrfSeed = anchor.web3.Keypair.generate().publicKey;
-
-    // Set seed using SDK
-    const { selectionPda, signature } = await sdk.setSeed({
-      launch: testLaunchState,
-      seed: vrfSeed.toBuffer(),
-    });
-    console.log("VRF seed set with signature:", signature);
-
-    const state = await sdk.fetchLaunch(testLaunchState);
-    assert.ok(state.vrfSeed !== null);
-    assert.deepEqual(state.vrfSeed, Array.from(vrfSeed.toBuffer()));
+    const selectionState = await sdk.fetchSelection(launchState);
+    assert.deepEqual(Array.from(selectionState.vrfSeed), Array.from(testSeed));
   });
 
-  it("Allows deposits", async () => {
-    // Create a new launch state for this test
-    const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
-      program.programId
-    );
 
-    // Initialize launch using SDK
-    await sdk.initLaunch({
-      saleMint: testSaleMint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: testSaleMint.publicKey,
-          space: 82,
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          testSaleMint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, testSaleMint],
+  it("Allows deposits", async () => {
+    const testSaleMint = anchor.web3.Keypair.generate();
+
+    const { transaction, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
+      admin: admin.publicKey,
+      saleMint: testSaleMint,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
+      provider,
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
+    await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-    // Initialize roster using SDK
-    await sdk.initRoster({ launch: testLaunchState });
+    await provider.sendAndConfirm(await sdk.openFundingTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    }), [admin.payer]);
+
+    await provider.sendAndConfirm((await sdk.initRosterTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    })).transaction, [admin.payer]);
 
     const depositor = anchor.web3.Keypair.generate();
-    
-    // Airdrop SOL to the depositor
-    await provider.connection.requestAirdrop(
-      depositor.publicKey,
-      20 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    
-    // Wait for the airdrop to complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const transferIx = anchor.web3.SystemProgram.transfer({
+      fromPubkey: context.payer.publicKey,
+      toPubkey: depositor.publicKey,
+      lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
+    });
+    const transferTx = new anchor.web3.Transaction().add(transferIx);
+    await provider.sendAndConfirm(transferTx, [context.payer]);
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    // Deposit using SDK
-    const { userPda, signature } = await sdk.deposit({
+    const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
       launch: testLaunchState,
       amountLamports: depositAmount,
-      userKeypair: depositor,
+      userPubkey: depositor.publicKey,
     });
-    console.log("Deposit made with signature:", signature);
+
+    const depTx = await provider.sendAndConfirm(depositTx, [depositor]);
+    console.log("Deposit tx signature:", depTx);
+
+    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
+    assert.equal(userContrib.deposited.toNumber(), depositAmount.toNumber());
+    assert.equal(userContrib.ticketCount, 2);
 
     const state = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(
-      state.totalDeposited.toNumber(),
-      depositAmount.toNumber()
-    );
-
-    const userAccount = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userAccount.deposited.toNumber(), depositAmount.toNumber());
-    assert.ok(userAccount.wallet.equals(depositor.publicKey));
+    assert.equal(state.totalDeposited.toNumber(), depositAmount.toNumber());
+    assert.equal(state.totalTickets, 2);
   });
 
   it("Allows withdrawals", async () => {
-    // Create a new launch state for this test
     const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
-      program.programId
-    );
 
-    // Initialize launch using SDK
-    await sdk.initLaunch({
-      saleMint: testSaleMint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: testSaleMint.publicKey,
-          space: 82,
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          testSaleMint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, testSaleMint],
+    const { transaction, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
+      admin: admin.publicKey,
+      saleMint: testSaleMint,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
+      provider,
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
+    await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-    // Initialize roster using SDK
-    await sdk.initRoster({ launch: testLaunchState });
+    await provider.sendAndConfirm(await sdk.openFundingTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    }), [admin.payer]);
+
+    await provider.sendAndConfirm((await sdk.initRosterTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    })).transaction, [admin.payer]);
 
     const depositor = anchor.web3.Keypair.generate();
-    
-    // Airdrop SOL to the depositor
-    await provider.connection.requestAirdrop(
-      depositor.publicKey,
-      20 * anchor.web3.LAMPORTS_PER_SOL
-    );
-    
-    // Wait for the airdrop to complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const transferIx = anchor.web3.SystemProgram.transfer({
+      fromPubkey: context.payer.publicKey,
+      toPubkey: depositor.publicKey,
+      lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
+    });
+    const transferTx = new anchor.web3.Transaction().add(transferIx);
+    await provider.sendAndConfirm(transferTx, [context.payer]);
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    // Deposit using SDK
-    await sdk.deposit({
+    const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
       launch: testLaunchState,
       amountLamports: depositAmount,
-      userKeypair: depositor,
+      userPubkey: depositor.publicKey,
     });
 
-    // Now, withdraw the funds using SDK
-    const initialBalance = await provider.connection.getBalance(
-      depositor.publicKey
-    );
+    await provider.sendAndConfirm(depositTx, [depositor]);
 
-    const { signature } = await sdk.withdraw({
+    const initialBalance = await context.banksClient.getBalance(depositor.publicKey);
+
+    const { transaction: withdrawTx } = await sdk.withdrawTx({
       launch: testLaunchState,
       amountLamports: depositAmount,
-      userKeypair: depositor,
+      userPubkey: depositor.publicKey,
     });
-    console.log("Withdrawal made with signature:", signature);
 
-    const finalBalance = await provider.connection.getBalance(
-      depositor.publicKey
-    );
+    const withdrawSig = await provider.sendAndConfirm(withdrawTx, [depositor]);
+    console.log("Withdraw tx signature:", withdrawSig);
 
-    assert.isAbove(finalBalance, initialBalance);
+    const finalBalance = await context.banksClient.getBalance(depositor.publicKey);
+
+    assert.isAbove(Number(finalBalance), Number(initialBalance));
 
     const state = await sdk.fetchLaunch(testLaunchState);
     assert.equal(state.totalDeposited.toNumber(), 0);
 
-    const userAccount = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userAccount.deposited.toNumber(), 0);
+    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
+    assert.equal(userContrib.deposited.toNumber(), 0);
   });
 
   it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
-    // Create a new launch state for this comprehensive test
     const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
-      program.programId
-    );
-    
-    // Get the correct mint authority
-    const [mintAuth] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("mint_auth"), testLaunchState.toBuffer()],
-      program.programId
-    );
+    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
+    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
 
-    // Initialize launch with smaller caps for testing
-    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL); // 20 SOL hard cap
-    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL); // 5 SOL min raise
-    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL); // 3 SOL per wallet
-    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL); // 0.5 SOL per ticket
+    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL);
+    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
+    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
 
-    // Initialize launch using SDK
     await sdk.initLaunch({
       saleMint: testSaleMint.publicKey,
       hardCapLamports: testHardCap,
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
       tauLamports: testTau,
-      saleAllocation,
-      lpAllocation,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -389,100 +299,108 @@ describe("engine", () => {
           admin.publicKey
         ),
       ],
-      signers: [admin.payer, testSaleMint],
+      signers: [testSaleMint],
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
+    await provider.sendAndConfirm(await sdk.openFundingTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    }), [admin.payer]);
 
-    // Initialize roster using SDK
-    await sdk.initRoster({ launch: testLaunchState });
+    const { transaction: rosterTx, rosterPda } = await sdk.initRosterTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    });
+    await provider.sendAndConfirm(rosterTx, [admin.payer]);
 
-    // Create multiple users and deposit funds
     const users = [];
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL); // 2 SOL per user
-    
-    for (let i = 0; i < 15; i++) { // Create 15 users to exceed hard cap
-      const user = anchor.web3.Keypair.generate();
-      
-      // Airdrop SOL to the user
-      await provider.connection.requestAirdrop(
-        user.publicKey,
-        20 * anchor.web3.LAMPORTS_PER_SOL
-      );
-      
-      // Wait for the airdrop to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Confirm the user has SOL
-      const balance = await provider.connection.getBalance(user.publicKey);
-      console.log(`User ${i} balance: ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-      // Deposit using SDK
-      const { userPda, signature } = await sdk.deposit({
+    for (let i = 0; i < 15; i++) {
+      const user = anchor.web3.Keypair.generate();
+
+      const transferIx = anchor.web3.SystemProgram.transfer({
+        fromPubkey: context.payer.publicKey,
+        toPubkey: user.publicKey,
+        lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
+      });
+      const transferTx = new anchor.web3.Transaction().add(transferIx);
+      await provider.sendAndConfirm(transferTx, [context.payer]);
+
+      const balance = await context.banksClient.getBalance(user.publicKey);
+      console.log(`User ${i} balance: ${Number(balance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+      const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
         launch: testLaunchState,
         amountLamports: depositAmount,
-        userKeypair: user,
+        userPubkey: user.publicKey,
       });
+      await provider.sendAndConfirm(depositTx, [user]);
 
       users.push({ keypair: user, contribution: userPda });
     }
 
-    // Verify total deposits exceed hard cap
     let state = await sdk.fetchLaunch(testLaunchState);
     assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Total tickets: ${state.totalTickets}`);
 
-    // Close deposits using SDK
-    await sdk.closeDeposits({ launch: testLaunchState });
+    await provider.sendAndConfirm(await sdk.closeDepositsTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    }), [admin.payer]);
 
     state = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(state.depositsClosed);
-    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber()); // K = hard_cap / tau
+    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
 
-    // Set VRF seed using SDK
     const vrfSeed = anchor.web3.Keypair.generate().publicKey;
-    const { selectionPda, signature: seedSig } = await sdk.setSeed({
+    const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: testLaunchState,
+      admin: admin.publicKey,
       seed: vrfSeed.toBuffer(),
     });
+    const seedSig = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
     console.log("VRF seed set with signature:", seedSig);
 
     state = await sdk.fetchLaunch(testLaunchState);
     assert.ok(state.vrfSeed !== null);
 
-    // Store the total tickets count before processing
     const totalTicketsToProcess = state.totalTickets;
     console.log(`Total tickets to process: ${totalTicketsToProcess}`);
 
-    // Process all tickets in batches (cranking) using SDK
     const maxItemsPerBatch = 10;
     let processed = 0;
-    
+    let currentSlot = 100n;
+
     while (processed < totalTicketsToProcess) {
-      const { signature: batchSig } = await sdk.processBatch({
-        launch: testLaunchState,
-        maxItems: maxItemsPerBatch,
-      });
+      currentSlot += 1n;
+      context.warpToSlot(currentSlot);
+
+      const processBatchIx = await program.methods
+        .processBatch(maxItemsPerBatch)
+        .accounts({
+          selectionState: selectionPda,
+          launchState: testLaunchState,
+          roster: rosterPda,
+        })
+        .instruction();
+
+      const processBatchTx = new anchor.web3.Transaction().add(processBatchIx);
+      await provider.sendAndConfirm(processBatchTx, [admin.payer]);
 
       const selectionAccount = await sdk.fetchSelection(testLaunchState);
       processed = selectionAccount.processed;
       console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
-      
-      // Add a small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Verify all tickets are processed
     const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
     console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
     console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
     assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
     assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
 
-    // Finalize selection using SDK
     const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });
     console.log("Selection finalized with signature:", finalizeSig);
 
@@ -491,7 +409,6 @@ describe("engine", () => {
     assert.ok(state.thresholdScore !== null);
     console.log(`Threshold score: ${state.thresholdScore}`);
 
-    // Open claims using SDK
     const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
     console.log("Claims opened with signature:", claimsSig);
 
@@ -500,10 +417,9 @@ describe("engine", () => {
     assert.ok(state.tokensPerTicket !== null);
     console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
 
-    // Test claim refunds for some users (simulate losers) using SDK
     const testUser = users[0];
     const userAccountBefore = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
-    const initialBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+    const initialBalance = await context.banksClient.getBalance(testUser.keypair.publicKey);
 
     const { signature: refundSig } = await sdk.claimRefund({
       launch: testLaunchState,
@@ -511,13 +427,12 @@ describe("engine", () => {
     });
     console.log("Refund claimed with signature:", refundSig);
 
-    const finalBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+    const finalBalance = await context.banksClient.getBalance(testUser.keypair.publicKey);
     const userAccountAfter = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
-    
-    assert.isTrue(userAccountAfter.claimedRefund);
-    console.log(`User refund claimed. Balance change: ${(finalBalance - initialBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-    // Test claim tokens for a user (simulate winner) using SDK
+    assert.isTrue(userAccountAfter.claimedRefund);
+    console.log(`User refund claimed. Balance change: ${(Number(finalBalance) - Number(initialBalance)) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
     const { userAta, signature: tokenSig } = await sdk.claimTokens({
       launch: testLaunchState,
       saleMint: testSaleMint.publicKey,
@@ -526,38 +441,33 @@ describe("engine", () => {
     });
     console.log("Tokens claimed with signature:", tokenSig);
 
-    const finalTokenBalance = await provider.connection.getTokenAccountBalance(userAta);
+    const tokenAccountInfo = await context.banksClient.getAccount(userAta);
+    const tokenAccount = unpackAccount(userAta, tokenAccountInfo);
     const userAccountFinal = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
-    
+
     assert.isTrue(userAccountFinal.claimedTokens);
-    console.log(`User tokens claimed. Token balance: ${finalTokenBalance.value.uiAmount}`);
+    console.log(`User tokens claimed. Token balance: ${Number(tokenAccount.amount) / 1_000_000}`);
 
     console.log("Complete flow test passed! All functions tested successfully.");
   });
 
   it("Project ID increments correctly", async () => {
-    // Get the project counter PDA to check current state
     const [projectCounterPda] = sdk.getProjectCounterPda();
-    
-    // Create multiple projects and verify IDs increment
+
     const project1Mint = anchor.web3.Keypair.generate();
     const project2Mint = anchor.web3.Keypair.generate();
     const project3Mint = anchor.web3.Keypair.generate();
 
-    // Initialize first project
-    const [project1Launch] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), project1Mint.publicKey.toBuffer()],
-      program.programId
-    );
+    const [project1Launch] = sdk.getLaunchPda(project1Mint.publicKey);
 
     await sdk.initLaunch({
       saleMint: project1Mint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -576,20 +486,16 @@ describe("engine", () => {
       signers: [admin.payer, project1Mint],
     });
 
-    // Initialize second project
-    const [project2Launch] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), project2Mint.publicKey.toBuffer()],
-      program.programId
-    );
+    const [project2Launch] = sdk.getLaunchPda(project2Mint.publicKey);
 
     await sdk.initLaunch({
       saleMint: project2Mint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -608,20 +514,16 @@ describe("engine", () => {
       signers: [admin.payer, project2Mint],
     });
 
-    // Initialize third project
-    const [project3Launch] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), project3Mint.publicKey.toBuffer()],
-      program.programId
-    );
+    const [project3Launch] = sdk.getLaunchPda(project3Mint.publicKey);
 
     await sdk.initLaunch({
       saleMint: project3Mint.publicKey,
-      hardCapLamports,
-      minRaiseLamports,
-      perWalletCap,
-      tauLamports,
-      saleAllocation,
-      lpAllocation,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -640,12 +542,10 @@ describe("engine", () => {
       signers: [admin.payer, project3Mint],
     });
 
-    // Verify project IDs
     const project1State = await sdk.fetchLaunch(project1Launch);
     const project2State = await sdk.fetchLaunch(project2Launch);
     const project3State = await sdk.fetchLaunch(project3Launch);
 
-    // Verify that IDs are sequential and increment correctly
     assert.equal(project2State.projectId.toNumber(), project1State.projectId.toNumber() + 1);
     assert.equal(project3State.projectId.toNumber(), project2State.projectId.toNumber() + 1);
 
@@ -657,39 +557,17 @@ describe("engine", () => {
   });
 
   it("PDA derivation consistency", async () => {
-    // Test that SDK PDA derivation matches direct program derivation
     const testMint = anchor.web3.Keypair.generate();
-    
-    // SDK PDAs
-    const sdkPdas = sdk.deriveAllPdas(testMint.publicKey);
-    
-    // Direct program PDAs
-    const [directLaunch] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("launch"), testMint.publicKey.toBuffer()],
-      program.programId
-    );
-    const [directEscrow] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("escrow"), directLaunch.toBuffer()],
-      program.programId
-    );
-    const [directRoster] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("roster"), directLaunch.toBuffer()],
-      program.programId
-    );
-    const [directSelection] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("selection"), directLaunch.toBuffer()],
-      program.programId
-    );
-    const [directMintAuth] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("mint_auth"), directLaunch.toBuffer()],
-      program.programId
-    );
-    const [directProjectCounter] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("project_counter")],
-      program.programId
-    );
 
-    // Verify all PDAs match
+    const sdkPdas = sdk.deriveAllPdas(testMint.publicKey);
+
+    const [directLaunch] = sdk.getLaunchPda(testMint.publicKey);
+    const [directEscrow] = sdk.getEscrowPda(directLaunch);
+    const [directRoster] = sdk.getRosterPda(directLaunch);
+    const [directSelection] = sdk.getSelectionPda(directLaunch);
+    const [directMintAuth] = sdk.getMintAuthPda(directLaunch);
+    const [directProjectCounter] = sdk.getProjectCounterPda();
+
     assert.ok(sdkPdas.launch.equals(directLaunch));
     assert.ok(sdkPdas.escrow.equals(directEscrow));
     assert.ok(sdkPdas.roster.equals(directRoster));
@@ -699,4 +577,5 @@ describe("engine", () => {
 
     console.log("All PDA derivations are consistent between SDK and direct program calls");
   });
+
 });

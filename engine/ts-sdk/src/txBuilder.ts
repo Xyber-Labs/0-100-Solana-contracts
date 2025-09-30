@@ -3,49 +3,11 @@ import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram 
 import { Engine as EngineIDL } from "../idl/engine";
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
 
-type LaunchState = Extract<EngineIDL["accounts"][number], { name: "launchState" }>["type"];
-type UserContribution = Extract<EngineIDL["accounts"][number], { name: "userContribution" }>["type"];  
-type RosterAccount = Extract<EngineIDL["accounts"][number], { name: "rosterAccount" }>["type"];
-type SelectionState = Extract<EngineIDL["accounts"][number], { name: "selectionState" }>["type"];
-
 export class TxBuilder {
   private program: Program<EngineIDL>;
 
   constructor(program: Program<EngineIDL>) {
     this.program = program;
-  }
-
-  async fetchAccount<T>(
-    accountType: string,
-    address: PublicKey,
-    provider: any
-  ): Promise<T> {
-    const accountInfo = await provider.connection.getAccountInfo(address);
-    if (!accountInfo) {
-      throw new Error(`${accountType} account not found at ${address.toString()}`);
-    }
-    
-    return this.program.coder.accounts.decode(accountType, accountInfo.data);
-  }
-
-  async fetchLaunchState(address: PublicKey, provider: any): Promise<LaunchState> {
-    return this.fetchAccount<LaunchState>("launchState", address, provider);
-  }
-
-  async fetchUserContribution(address: PublicKey, provider: any): Promise<UserContribution> {
-    return this.fetchAccount<UserContribution>("userContribution", address, provider);
-  }
-
-  async fetchRosterAccount(address: PublicKey, provider: any): Promise<RosterAccount> {
-    return this.fetchAccount<RosterAccount>("rosterAccount", address, provider);
-  }
-
-  async fetchSelectionState(address: PublicKey, provider: any): Promise<SelectionState> {
-    return this.fetchAccount<SelectionState>("selectionState", address, provider);
-  }
-
-  async fetchUserContribution(address: PublicKey, provider: any): Promise<UserContribution> {
-    return this.fetchAccount<UserContribution>("userContribution", address, provider);
   }
 
   getPda(seeds: (string | Buffer | PublicKey)[]): [PublicKey, number] {
@@ -310,9 +272,72 @@ export class TxBuilder {
     return { transaction, userContribution };
   }
 
+  async withdrawIx(params: {
+    launch: PublicKey;
+    user: PublicKey;
+    amount: BN;
+    roster?: PublicKey;
+    escrow?: PublicKey;
+  }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
+    const [userContribution] = this.getPda(["user", params.launch, params.user]);
+    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
+    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
+
+    const instruction = await this.program.methods
+      .withdraw(params.amount)
+      .accounts({
+        user: params.user,
+        launchState: params.launch,
+        userContribution: userContribution,
+        roster: roster,
+        escrow: escrow,
+        launch: params.launch,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    return { instruction, userContribution };
+  }
+
+  async withdrawTx(params: {
+    launch: PublicKey;
+    user: PublicKey;
+    amount: BN;
+    roster?: PublicKey;
+    escrow?: PublicKey;
+  }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+    const { instruction, userContribution } = await this.withdrawIx(params);
+    const transaction = new Transaction().add(instruction);
+    return { transaction, userContribution };
+  }
+
   private ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
     const buf = Buffer.from(seed);
     if (buf.length !== 32) throw new Error("seed must be 32 bytes");
     return buf;
+  }
+
+  async fetchLaunch(launch: PublicKey) {
+    return this.program.account.launchState.fetch(launch);
+  }
+
+  async fetchRoster(launch: PublicKey) {
+    const [pda] = this.getPda(["roster", launch]);
+    return this.program.account.roster.fetch(pda);
+  }
+
+  async fetchSelection(launch: PublicKey) {
+    const [pda] = this.getPda(["selection", launch]);
+    return this.program.account.selectionState.fetch(pda);
+  }
+
+  async fetchUserContribution(launch: PublicKey, user: PublicKey) {
+    const [pda] = this.getPda(["user", launch, user]);
+    return this.program.account.userContribution.fetch(pda);
+  }
+
+  async fetchProjectCounter() {
+    const [pda] = this.getPda(["project_counter"]);
+    return this.program.account.projectCounter.fetch(pda);
   }
 }

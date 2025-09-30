@@ -113,10 +113,6 @@ pub struct TokensClaimed {
 pub mod engine {
     use super::*;
 
-    // -------------------------------
-    // Admin / Orchestrator
-    // -------------------------------
-
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
     pub fn init_launch(
         ctx: Context<InitLaunch>,
