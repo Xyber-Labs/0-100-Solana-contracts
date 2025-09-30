@@ -224,6 +224,7 @@ pub mod engine {
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
         require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         
         require!(st.vrf_seed.is_none(), ErrorCode::SeedAlreadySet);
 
@@ -258,6 +259,7 @@ pub mod engine {
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
         require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         
         require!(sel.vrf_seed.len() == 32, ErrorCode::SeedMissing);
         require!(!sel.finalized, ErrorCode::AlreadyFinalized);
@@ -302,6 +304,7 @@ pub mod engine {
         let st = &mut ctx.accounts.launch_state;
         require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
         require!(st.selection_finalized, ErrorCode::NotFinalized);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         let k = st.k_capacity as u64;
         require!(k > 0, ErrorCode::InvalidK);
 
@@ -326,6 +329,7 @@ pub mod engine {
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
         require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         
         require!(sel.finalized == false, ErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
@@ -529,13 +533,34 @@ pub mod engine {
     /// Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ).
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.selection_finalized, ErrorCode::NotFinalized);
-        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let user = &mut ctx.accounts.user_contribution;
         require!(!user.claimed_refund, ErrorCode::AlreadyClaimedRefund);
 
-        // recompute y_i by scanning user's own tickets 0..ticket_count-1
+        // If funding is complete and min raise is not met, issue a full refund without selection
+        let current_time = Clock::get()?.unix_timestamp;
+        if current_time >= st.funding_period_end && st.total_deposited < st.min_raise_lamports {
+            let refund = user.deposited;
+            if refund > 0 {
+                **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
+                **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
+            }
+            user.claimed_refund = true;
+
+            emit!(RefundClaimed {
+                launch: st.key(),
+                user: ctx.accounts.user.key(),
+                refunded_lamports: refund,
+                y_approved: 0,
+            });
+
+            return Ok(());
+        }
+
+        // Otherwise, proceed as before: requires finalized selection and y calculation
+        require!(st.selection_finalized, ErrorCode::NotFinalized);
+        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+
         let mut y = 0u32;
         for j in 0..user.ticket_count {
             let s = ticket_score(&seed, &user.wallet, j);
@@ -585,6 +610,10 @@ pub mod engine {
         let per = st
             .tokens_per_ticket
             .ok_or(ErrorCode::TokensPerTicketMissing)?;
+
+        // Tokens are claimed only if the raise was successful
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        
         let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
 
@@ -1067,6 +1096,8 @@ fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Minimum raise not met")]
+    MinRaiseNotMet,
     #[msg("Funding period has ended")]
     FundingPeriodEnded,
     #[msg("Funding period has not ended yet")]

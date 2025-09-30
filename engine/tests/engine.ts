@@ -27,7 +27,7 @@ describe("engine", () => {
   let launchState: anchor.web3.PublicKey;
   let escrow: anchor.web3.PublicKey;
   const hardCapLamports = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
-  const minRaiseLamports = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
+  const minRaiseLamports = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
   const perWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const tauLamports = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const saleAllocation = new anchor.BN(1000000);
@@ -165,6 +165,21 @@ describe("engine", () => {
 
     // Initialize roster using SDK
     await sdk.initRoster({ launch: testLaunchState });
+
+    // Deposit enough to meet the minimum raise
+    const depositor = anchor.web3.Keypair.generate();
+    await provider.connection.requestAirdrop(
+      depositor.publicKey,
+      20 * anchor.web3.LAMPORTS_PER_SOL
+    );
+    // Wait for airdrop
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    await sdk.deposit({
+      launch: testLaunchState,
+      amountLamports: minRaiseLamports, // Deposit exactly min raise
+      userKeypair: depositor,
+    });
 
     // Wait for funding period to end
     await waitForFundingPeriodEnd(testLaunchState);

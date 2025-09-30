@@ -910,116 +910,121 @@
   "errors": [
     {
       "code": 6000,
+      "name": "MinRaiseNotMet",
+      "msg": "Minimum raise not met"
+    },
+    {
+      "code": 6001,
       "name": "FundingPeriodEnded",
       "msg": "Funding period has ended"
     },
     {
-      "code": 6001,
+      "code": 6002,
       "name": "FundingPeriodNotEnded",
       "msg": "Funding period has not ended yet"
     },
     {
-      "code": 6002,
+      "code": 6003,
       "name": "InvalidFundingDuration",
       "msg": "Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "ClaimsNotOpen",
       "msg": "Claims are not open"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "Unauthorized",
       "msg": "Unauthorized"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "AmountNotMultipleTau",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "PerWalletCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "InsufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "SeedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6009,
+      "code": 6010,
       "name": "SeedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "AlreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "NotFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "ThresholdMissing",
       "msg": "Threshold missing"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "TokensPerTicketMissing",
       "msg": "Tokens per ticket missing"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "InvalidTau",
       "msg": "Invalid tau"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "InvalidK",
       "msg": "Invalid K"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "NotFullyProcessed",
       "msg": "Not fully processed"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "HeapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "UserNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "TOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "MappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "AlreadyClaimedRefund",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "AlreadyClaimedTokens",
       "msg": "Already claimed tokens"
     }

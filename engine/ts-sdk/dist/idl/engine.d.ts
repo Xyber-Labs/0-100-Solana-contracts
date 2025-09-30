@@ -916,116 +916,121 @@ export type Engine = {
     "errors": [
         {
             "code": 6000;
+            "name": "minRaiseNotMet";
+            "msg": "Minimum raise not met";
+        },
+        {
+            "code": 6001;
             "name": "fundingPeriodEnded";
             "msg": "Funding period has ended";
         },
         {
-            "code": 6001;
+            "code": 6002;
             "name": "fundingPeriodNotEnded";
             "msg": "Funding period has not ended yet";
         },
         {
-            "code": 6002;
+            "code": 6003;
             "name": "invalidFundingDuration";
             "msg": "Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)";
         },
         {
-            "code": 6003;
+            "code": 6004;
             "name": "claimsNotOpen";
             "msg": "Claims are not open";
         },
         {
-            "code": 6004;
+            "code": 6005;
             "name": "unauthorized";
             "msg": "unauthorized";
         },
         {
-            "code": 6005;
+            "code": 6006;
             "name": "amountNotMultipleTau";
             "msg": "Amount must be multiple of tau";
         },
         {
-            "code": 6006;
+            "code": 6007;
             "name": "perWalletCapExceeded";
             "msg": "Per-wallet cap exceeded";
         },
         {
-            "code": 6007;
+            "code": 6008;
             "name": "insufficientDeposit";
             "msg": "Insufficient deposit";
         },
         {
-            "code": 6008;
+            "code": 6009;
             "name": "seedAlreadySet";
             "msg": "Seed already set";
         },
         {
-            "code": 6009;
+            "code": 6010;
             "name": "seedMissing";
             "msg": "Seed missing";
         },
         {
-            "code": 6010;
+            "code": 6011;
             "name": "alreadyFinalized";
             "msg": "Selection already finalized";
         },
         {
-            "code": 6011;
+            "code": 6012;
             "name": "notFinalized";
             "msg": "Selection not finalized";
         },
         {
-            "code": 6012;
+            "code": 6013;
             "name": "thresholdMissing";
             "msg": "Threshold missing";
         },
         {
-            "code": 6013;
+            "code": 6014;
             "name": "tokensPerTicketMissing";
             "msg": "Tokens per ticket missing";
         },
         {
-            "code": 6014;
+            "code": 6015;
             "name": "invalidTau";
             "msg": "Invalid tau";
         },
         {
-            "code": 6015;
+            "code": 6016;
             "name": "invalidK";
             "msg": "Invalid K";
         },
         {
-            "code": 6016;
+            "code": 6017;
             "name": "notFullyProcessed";
             "msg": "Not fully processed";
         },
         {
-            "code": 6017;
+            "code": 6018;
             "name": "heapNotFull";
             "msg": "Heap not full";
         },
         {
-            "code": 6018;
+            "code": 6019;
             "name": "userNotFoundInRoster";
             "msg": "User not found in roster";
         },
         {
-            "code": 6019;
+            "code": 6020;
             "name": "tOutOfRange";
             "msg": "t out of range";
         },
         {
-            "code": 6020;
+            "code": 6021;
             "name": "mappingError";
             "msg": "Mapping error";
         },
         {
-            "code": 6021;
+            "code": 6022;
             "name": "alreadyClaimedRefund";
             "msg": "Already claimed refund";
         },
         {
-            "code": 6022;
+            "code": 6023;
             "name": "alreadyClaimedTokens";
             "msg": "Already claimed tokens";
         }
