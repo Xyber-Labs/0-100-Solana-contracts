@@ -642,6 +642,7 @@ pub mod engine {
 // -------------------------------
 
 #[account]
+#[derive(InitSpace)]
 pub struct LaunchState {
     // Project identification
     pub project_id: u64,
@@ -698,6 +699,7 @@ impl LaunchState {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct UserContribution {
     pub launch: Pubkey,
     pub wallet: Pubkey,
@@ -708,20 +710,24 @@ pub struct UserContribution {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct Roster {
     pub launch: Pubkey,
 
     // dynamic until close; then frozen
+    #[max_len(100)]
     pub wallets: Vec<Pubkey>,
+    #[max_len(100)]
     pub counts: Vec<u32>,
 
     // built at close
+    #[max_len(100)]
     pub prefix: Vec<u32>, // prefix[u] = Σ counts[k], k<u
     pub total_in_shard: u32,
     pub shard_base: u32, // 0 in MVP
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, BorshSchema)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, BorshSchema, InitSpace)]
 pub struct HeapEntry {
     pub score: u128,
     pub wallet: Pubkey,
@@ -729,22 +735,26 @@ pub struct HeapEntry {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct EscrowAccount {
     pub launch: Pubkey,
     pub balance: u64,
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct SelectionState {
     pub launch: Pubkey,
     pub vrf_seed: [u8; 32],
     pub processed: u32,
     pub finalized: bool,
     pub threshold: Option<u128>,
+    #[max_len(100)]
     pub heap: Vec<HeapEntry>, // size ≤ K
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct ProjectCounter {
     pub next_project_id: u64,
 }
@@ -762,7 +772,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init_if_needed,
         payer = admin,
-        space = 8 + 8, // discriminator + u64
+        space = 8 + ProjectCounter::INIT_SPACE,
         seeds = [b"project_counter"],
         bump
     )]
@@ -771,14 +781,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 +  // disc
-            8 + // project_id
-            32 + // admin
-            (8*6) + (4*2) + // lamports + ints
-            32 + // sale_mint
-            1 + 1 + 8 + 4 + 4 + // funding
-            1 + 32 + 4 + 1 + 1 + 16 + // selection (Option<[u8;32]> + u32 + bool + Option<u128>)
-            1 + 1 + 8, // claims (bool + Option<u64>)
+        space = 8 + LaunchState::INIT_SPACE,
         seeds = [b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
         bump
     )]
@@ -792,7 +795,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + 8,
+        space = 8 + EscrowAccount::INIT_SPACE,
         seeds = [b"escrow", launch_state.key().as_ref()],
         bump
     )]
@@ -812,7 +815,7 @@ pub struct InitRoster<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + (4 + 32 * 100) + (4 + 4 * 100) + (4 + 4 * 100) + 4 + 4,
+        space = 8 + Roster::INIT_SPACE,
         seeds = [b"roster", launch_state.key().as_ref()],
         bump
     )]
@@ -838,7 +841,7 @@ pub struct OnlyAdminWithSelection<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + 4 + 1 + 4 + 4 + (16+32+4)*100, // reduced for testing
+        space = 8 + SelectionState::INIT_SPACE,
         seeds = [b"selection", launch_state.key().as_ref()],
         bump
     )]
@@ -884,7 +887,7 @@ pub struct Deposit<'info> {
     #[account(
         init_if_needed,
         payer = user,
-        space = 8 + 32 + 32 + 8 + 4 + 1 + 1,
+        space = 8 + UserContribution::INIT_SPACE,
         seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()],
         bump
     )]
