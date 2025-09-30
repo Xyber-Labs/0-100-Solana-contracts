@@ -185,18 +185,16 @@ describe("engine", () => {
     await waitForFundingPeriodEnd(testLaunchState);
 
     // Deposits are now automatically closed (no manual call needed)
-    const vrfSeed = anchor.web3.Keypair.generate().publicKey;
 
     // Set seed using SDK
     const { selectionPda, signature } = await sdk.setSeed({
       launch: testLaunchState,
-      seed: vrfSeed.toBuffer(),
     });
     console.log("VRF seed set with signature:", signature);
 
     const state = await sdk.fetchLaunch(testLaunchState);
     assert.ok(state.vrfSeed !== null);
-    assert.deepEqual(state.vrfSeed, Array.from(vrfSeed.toBuffer()));
+    // Note: We can't assert the exact seed value since it's now derived from blockhash
   });
 
   it("Allows deposits", async () => {
@@ -454,10 +452,8 @@ describe("engine", () => {
     assert.isTrue(currentTime >= state.fundingPeriodEnd.toNumber());
 
     // Set VRF seed using SDK
-    const vrfSeed = anchor.web3.Keypair.generate().publicKey;
     const { selectionPda, signature: seedSig } = await sdk.setSeed({
       launch: testLaunchState,
-      seed: vrfSeed.toBuffer(),
     });
     console.log("VRF seed set with signature:", seedSig);
 

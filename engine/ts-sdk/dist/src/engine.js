@@ -1,3 +1,4 @@
+import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, } from "@solana/spl-token";
 // Import IDL as a dynamic import to avoid require
@@ -45,12 +46,6 @@ export default {
             return PublicKey.findProgramAddressSync([Buffer.from("project_counter")], program.programId);
         }
         // -------------- Utility --------------
-        function ensure32Bytes(seed) {
-            const buf = Buffer.from(seed);
-            if (buf.length !== 32)
-                throw new Error("seed must be 32 bytes");
-            return buf;
-        }
         function getUserAta(mint, owner) {
             return getAssociatedTokenAddressSync(mint, owner, true);
         }
@@ -107,18 +102,18 @@ export default {
         }
         async function setSeed(args) {
             const [selectionPda] = getSelectionPda(args.launch);
-            const seed32 = ensure32Bytes(args.seed);
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
             const rpc = program.methods
-                // @ts-ignore – Anchor генерит u8[32]
-                .setSeed(seed32)
+                .setSeed()
                 .accountsStrict({
-                admin: payer,
+                payer: payerPubkey,
                 launchState: args.launch,
                 selectionState: selectionPda,
+                slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
                 systemProgram: SystemProgram.programId,
             });
-            if (args.signers && args.signers.length)
-                rpc.signers(args.signers);
+            if (args.payerKeypair)
+                rpc.signers([args.payerKeypair]);
             return { selectionPda, signature: await rpc.rpc() };
         }
         async function processBatch(args) {
@@ -342,7 +337,6 @@ export default {
             // Utils
             getUserAta,
             buildCreateAtaIx,
-            ensure32Bytes,
             // TX
             initLaunch,
             initRoster,

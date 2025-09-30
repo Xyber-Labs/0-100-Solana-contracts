@@ -543,7 +543,7 @@ export type Engine = {
     {
       "name": "setSeed",
       "docs": [
-        "MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed."
+        "Permissionless seed setter using recent blockhash."
       ],
       "discriminator": [
         63,
@@ -557,7 +557,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "payer",
           "writable": true,
           "signer": true
         },
@@ -592,21 +592,15 @@ export type Engine = {
           }
         },
         {
+          "name": "slotHashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "seed",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "withdraw",
@@ -1033,6 +1027,11 @@ export type Engine = {
       "code": 6023,
       "name": "alreadyClaimedTokens",
       "msg": "Already claimed tokens"
+    },
+    {
+      "code": 6024,
+      "name": "noRecentBlockhashes",
+      "msg": "No recent blockhashes found in SlotHashes sysvar"
     }
   ],
   "types": [

@@ -491,14 +491,12 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     try {
       setIsLoading(true);
-      addLog('Setting VRF seed...');
-      const vrfSeed = Keypair.generate().publicKey;
+      addLog('Setting VRF seed using blockhash...');
       const { selectionPda, signature } = await sdk.setSeed({
         launch: launchState,
-        seed: vrfSeed.toBuffer(),
       });
       setSelection(selectionPda);
-      addLog(`SUCCESS: VRF seed set - Signature: ${signature}`);
+      addLog(`SUCCESS: VRF seed set using blockhash - Signature: ${signature}`);
       addLog(`Selection PDA: ${selectionPda.toString()}`);
       await fetchLaunchData();
     } catch (error) {

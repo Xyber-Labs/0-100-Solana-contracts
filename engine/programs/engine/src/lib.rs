@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use solana_program::keccak;
 use solana_program::sysvar::clock::Clock;
+use solana_program::sysvar::{self, Sysvar};
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
@@ -216,10 +217,9 @@ pub mod engine {
     }
 
 
-    /// MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed.
-    pub fn set_seed(ctx: Context<OnlyAdminWithSelection>, seed: [u8; 32]) -> Result<()> {
+    /// Permissionless seed setter using recent blockhash.
+    pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
         
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
@@ -227,6 +227,19 @@ pub mod engine {
         require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         
         require!(st.vrf_seed.is_none(), ErrorCode::SeedAlreadySet);
+
+        // Get the most recent blockhash from the SlotHashes sysvar
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
+        
+        // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
+        // We take the most recent one.
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, ErrorCode::NoRecentBlockhashes);
+        
+        // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
+        let last_hash_pos = 8 + ((num_hashes - 1) * 40) + 8; // 8 for slot
+        let seed: [u8; 32] = data[last_hash_pos as usize..(last_hash_pos + 32) as usize].try_into().unwrap();
 
         // Initialize SelectionState
         let sel = &mut ctx.accounts.selection_state;
@@ -865,19 +878,22 @@ pub struct OnlyAdmin<'info> {
 }
 
 #[derive(Accounts)]
-pub struct OnlyAdminWithSelection<'info> {
+pub struct SetSeed<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub payer: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         init,
-        payer = admin,
+        payer = payer,
         space = 8 + SelectionState::INIT_SPACE,
         seeds = [b"selection", launch_state.key().as_ref()],
         bump
     )]
     pub selection_state: Account<'info, SelectionState>,
+    /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
+    #[account(address = sysvar::slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -1144,4 +1160,6 @@ pub enum ErrorCode {
     AlreadyClaimedRefund,
     #[msg("Already claimed tokens")]
     AlreadyClaimedTokens,
+    #[msg("No recent blockhashes found in SlotHashes sysvar")]
+    NoRecentBlockhashes,
 }

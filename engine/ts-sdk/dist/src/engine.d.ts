@@ -39,7 +39,6 @@ declare const _default: {
             ata: PublicKey;
             ix: TransactionInstruction;
         };
-        ensure32Bytes: (seed: Uint8Array | number[] | Buffer) => Buffer;
         initLaunch: (args: {
             saleMint: PublicKey;
             hardCapLamports: BN;
@@ -65,8 +64,7 @@ declare const _default: {
         }>;
         setSeed: (args: {
             launch: PublicKey;
-            seed: Uint8Array | number[] | Buffer;
-            signers?: Keypair[];
+            payerKeypair?: Keypair;
         }) => Promise<{
             selectionPda: PublicKey;
             signature: string;

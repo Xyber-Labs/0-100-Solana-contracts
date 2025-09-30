@@ -537,7 +537,7 @@
     {
       "name": "set_seed",
       "docs": [
-        "MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed."
+        "Permissionless seed setter using recent blockhash."
       ],
       "discriminator": [
         63,
@@ -551,7 +551,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "payer",
           "writable": true,
           "signer": true
         },
@@ -586,21 +586,15 @@
           }
         },
         {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "seed",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        }
-      ]
+      "args": []
     },
     {
       "name": "withdraw",
@@ -1027,6 +1021,11 @@
       "code": 6023,
       "name": "AlreadyClaimedTokens",
       "msg": "Already claimed tokens"
+    },
+    {
+      "code": 6024,
+      "name": "NoRecentBlockhashes",
+      "msg": "No recent blockhashes found in SlotHashes sysvar"
     }
   ],
   "types": [

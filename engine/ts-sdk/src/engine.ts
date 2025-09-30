@@ -94,12 +94,6 @@ export default {
         }
 
         // -------------- Utility --------------
-        function ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
-            const buf = Buffer.from(seed);
-            if (buf.length !== 32) throw new Error("seed must be 32 bytes");
-            return buf;
-        }
-
         function getUserAta(mint: PublicKey, owner: PublicKey): PublicKey {
             return getAssociatedTokenAddressSync(mint, owner, true);
         }
@@ -200,21 +194,21 @@ export default {
 
         async function setSeed(args: {
             launch: PublicKey;
-            seed: Uint8Array | number[] | Buffer; // 32 bytes
-            signers?: Keypair[];
+            payerKeypair?: Keypair; // if payer is not provider.wallet
         }): Promise<{ selectionPda: PublicKey; signature: string }> {
             const [selectionPda] = getSelectionPda(args.launch);
-            const seed32 = ensure32Bytes(args.seed);
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+
             const rpc = program.methods
-                // @ts-ignore – Anchor генерит u8[32]
-                .setSeed(seed32)
+                .setSeed()
                 .accountsStrict({
-                    admin: payer,
+                    payer: payerPubkey,
                     launchState: args.launch,
                     selectionState: selectionPda,
+                    slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
                     systemProgram: SystemProgram.programId,
                 });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
+            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
             return { selectionPda, signature: await rpc.rpc() };
         }
 
@@ -492,7 +486,6 @@ export default {
             // Utils
             getUserAta,
             buildCreateAtaIx,
-            ensure32Bytes,
 
             // TX
             initLaunch,
