@@ -8,6 +8,9 @@ help:
 	@echo "  test-quick    - Run tests without rebuilding"
 	@echo "  test-basic    - Run only basic tests (6 tests)"
 	@echo "  build         - Build the program"
+	@echo "  build-all     - Build program + sync IDL + build SDK"
+	@echo "  sync-idl      - Sync IDL files to SDK"
+	@echo "  build-sdk     - Build SDK only"
 	@echo "  deploy        - Deploy the program"
 	@echo "  clean         - Clean build artifacts"
 	@echo "  validator     - Start local validator"
@@ -28,7 +31,7 @@ REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
 # Test commands
 .PHONY: test
-test: validator-bg build deploy
+test: validator-bg build-all deploy
 	@echo "Running tests..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
@@ -38,7 +41,7 @@ test-quick:
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
 .PHONY: test-verbose
-test-verbose: validator-bg build deploy
+test-verbose: validator-bg build-all deploy
 	@echo "Running tests with verbose output..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --reporter spec
 
@@ -47,6 +50,23 @@ test-verbose: validator-bg build deploy
 build:
 	@echo "Building program..."
 	anchor build
+
+.PHONY: sync-idl
+sync-idl:
+	@echo "Syncing IDL files to SDK..."
+	cp target/types/engine.ts ts-sdk/idl/engine.ts
+	cp target/idl/engine.json ts-sdk/idl/engine.json
+	@echo "IDL files synced successfully!"
+
+.PHONY: build-sdk
+build-sdk:
+	@echo "Building SDK..."
+	cd ts-sdk && npm run build
+	@echo "SDK built successfully!"
+
+.PHONY: build-all
+build-all: build sync-idl build-sdk
+	@echo "Full build completed (program + IDL sync + SDK)!"
 
 .PHONY: deploy
 deploy:
@@ -74,11 +94,11 @@ validator-bg:
 
 # Setup commands
 .PHONY: setup
-setup: validator-bg build-deploy test
+setup: validator-bg build-all deploy test
 	@echo "Full setup completed!"
 
 .PHONY: setup-quick
-setup-quick: build-deploy test-quick
+setup-quick: build-all deploy test-quick
 	@echo "Quick setup completed!"
 
 # Configuration commands
@@ -124,9 +144,9 @@ check:
 
 # Individual test commands
 .PHONY: test-basic
-test-basic: validator-bg build deploy
+test-basic: validator-bg build-all deploy
 	@echo "Running basic tests only..."
-	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --grep "Initializes the launch state|Opens funding|Closes funding|Sets the VRF seed|Allows deposits|Allows withdrawals"
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --grep "Initializes the launch state|Closes funding after period ends|Sets the VRF seed|Allows deposits|Allows withdrawals"
 
 
 # Debug commands

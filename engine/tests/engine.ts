@@ -33,6 +33,17 @@ describe("engine", () => {
   const saleAllocation = new anchor.BN(1000000);
   const lpAllocation = new anchor.BN(500000);
 
+  // Helper to wait for funding period to end (for testing)
+  async function waitForFundingPeriodEnd(launchPda: anchor.web3.PublicKey) {
+    const state = await sdk.fetchLaunch(launchPda);
+    const currentTime = Math.floor(Date.now() / 1000);
+    const waitTime = state.fundingPeriodEnd.toNumber() - currentTime;
+    if (waitTime > 0) {
+      console.log(`Waiting ${waitTime} seconds for funding period to end...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime * 1000 + 2000)); // +2 second buffer
+    }
+  }
+
   before(async () => {
     saleMint = anchor.web3.Keypair.generate();
     [launchState] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -53,6 +64,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -86,7 +98,7 @@ describe("engine", () => {
     assert.equal(state.tauLamports.toNumber(), tauLamports.toNumber());
     assert.equal(state.saleAllocation.toNumber(), saleAllocation.toNumber());
     assert.equal(state.lpAllocation.toNumber(), lpAllocation.toNumber());
-    assert.isFalse(state.fundingOpen);
+    assert.isTrue(state.fundingPeriodEnd.toNumber() > 0);
     assert.isFalse(state.depositsClosed);
     assert.equal(state.totalDeposited.toNumber(), 0);
     assert.equal(state.totalTickets, 0);
@@ -100,31 +112,20 @@ describe("engine", () => {
     assert.ok(state.saleMint.equals(saleMint.publicKey));
   });
 
-  it("Opens funding", async () => {
-    const { signature } = await sdk.openFunding({ launch: launchState });
-    console.log("Funding opened with signature:", signature);
 
-    const state = await sdk.fetchLaunch(launchState);
-    assert.isTrue(state.fundingOpen);
-  });
-
-  it("Closes funding", async () => {
-    // First open funding
-    await sdk.openFunding({ launch: launchState });
-
-    let state = await sdk.fetchLaunch(launchState);
-    assert.isTrue(state.fundingOpen);
-
+  it("Closes funding after period ends", async () => {
     // Initialize roster account using SDK
     const { rosterPda, signature: rosterSig } = await sdk.initRoster({ launch: launchState });
     console.log("Roster initialized with signature:", rosterSig);
 
-    // Close deposits using SDK
+    // Wait for funding period to end
+    await waitForFundingPeriodEnd(launchState);
+
+    // Anyone can call closeDeposits after funding period ends
     const { signature } = await sdk.closeDeposits({ launch: launchState });
     console.log("Deposits closed with signature:", signature);
 
-    state = await sdk.fetchLaunch(launchState);
-    assert.isFalse(state.fundingOpen);
+    const state = await sdk.fetchLaunch(launchState);
     assert.isTrue(state.depositsClosed);
   });
 
@@ -145,6 +146,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -163,11 +165,12 @@ describe("engine", () => {
       signers: [admin.payer, testSaleMint],
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
 
     // Initialize roster using SDK
     await sdk.initRoster({ launch: testLaunchState });
+
+    // Wait for funding period to end
+    await waitForFundingPeriodEnd(testLaunchState);
 
     // Close deposits using SDK
     await sdk.closeDeposits({ launch: testLaunchState });
@@ -203,6 +206,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -221,8 +225,6 @@ describe("engine", () => {
       signers: [admin.payer, testSaleMint],
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
 
     // Initialize roster using SDK
     await sdk.initRoster({ launch: testLaunchState });
@@ -276,6 +278,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -294,8 +297,6 @@ describe("engine", () => {
       signers: [admin.payer, testSaleMint],
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
 
     // Initialize roster using SDK
     await sdk.initRoster({ launch: testLaunchState });
@@ -374,6 +375,7 @@ describe("engine", () => {
       tauLamports: testTau,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 1, // Use 30 seconds for this comprehensive test (1 = 30 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -392,8 +394,6 @@ describe("engine", () => {
       signers: [admin.payer, testSaleMint],
     });
 
-    // Open funding using SDK
-    await sdk.openFunding({ launch: testLaunchState });
 
     // Initialize roster using SDK
     await sdk.initRoster({ launch: testLaunchState });
@@ -434,6 +434,9 @@ describe("engine", () => {
     console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Total tickets: ${state.totalTickets}`);
+
+    // Wait for funding period to end
+    await waitForFundingPeriodEnd(testLaunchState);
 
     // Close deposits using SDK
     await sdk.closeDeposits({ launch: testLaunchState });
@@ -558,6 +561,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -590,6 +594,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -622,6 +627,7 @@ describe("engine", () => {
       tauLamports,
       saleAllocation,
       lpAllocation,
+      fundingDurationDays: 0, // Use 10 seconds for tests (0 = 10 seconds for testing)
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,

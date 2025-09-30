@@ -167,7 +167,8 @@
     {
       "name": "close_deposits",
       "docs": [
-        "Close deposits, build prefix, set N and K."
+        "Close deposits automatically when funding period ends (called by anyone).",
+        "This function can be called by anyone once the funding period has ended."
       ],
       "discriminator": [
         32,
@@ -180,11 +181,6 @@
         245
       ],
       "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
         {
           "name": "launch_state",
           "writable": true
@@ -446,6 +442,10 @@
         {
           "name": "lp_allocation",
           "type": "u64"
+        },
+        {
+          "name": "funding_duration_days",
+          "type": "u8"
         }
       ]
     },
@@ -518,34 +518,6 @@
         90,
         24,
         228
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "open_funding",
-      "docs": [
-        "Open funding window."
-      ],
-      "discriminator": [
-        255,
-        94,
-        231,
-        132,
-        50,
-        44,
-        163,
-        83
       ],
       "accounts": [
         {
@@ -822,124 +794,388 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "BatchProcessed",
+      "discriminator": [
+        199,
+        28,
+        80,
+        191,
+        111,
+        11,
+        127,
+        180
+      ]
+    },
+    {
+      "name": "ClaimsOpened",
+      "discriminator": [
+        126,
+        92,
+        24,
+        148,
+        242,
+        66,
+        8,
+        28
+      ]
+    },
+    {
+      "name": "DepositMade",
+      "discriminator": [
+        210,
+        201,
+        130,
+        183,
+        244,
+        203,
+        155,
+        199
+      ]
+    },
+    {
+      "name": "DepositsClosed",
+      "discriminator": [
+        171,
+        1,
+        250,
+        190,
+        118,
+        244,
+        97,
+        228
+      ]
+    },
+    {
+      "name": "FundingPeriodStarted",
+      "discriminator": [
+        24,
+        17,
+        247,
+        144,
+        200,
+        76,
+        119,
+        198
+      ]
+    },
+    {
+      "name": "LaunchInitialized",
+      "discriminator": [
+        60,
+        143,
+        196,
+        55,
+        214,
+        166,
+        10,
+        63
+      ]
+    },
+    {
+      "name": "RefundClaimed",
+      "discriminator": [
+        136,
+        64,
+        242,
+        99,
+        4,
+        244,
+        208,
+        130
+      ]
+    },
+    {
+      "name": "RosterInitialized",
+      "discriminator": [
+        111,
+        28,
+        99,
+        210,
+        82,
+        158,
+        188,
+        249
+      ]
+    },
+    {
+      "name": "SeedSet",
+      "discriminator": [
+        9,
+        179,
+        143,
+        172,
+        250,
+        146,
+        42,
+        6
+      ]
+    },
+    {
+      "name": "SelectionFinalized",
+      "discriminator": [
+        111,
+        84,
+        253,
+        234,
+        76,
+        136,
+        103,
+        185
+      ]
+    },
+    {
+      "name": "TokensClaimed",
+      "discriminator": [
+        25,
+        128,
+        244,
+        55,
+        241,
+        136,
+        200,
+        91
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "discriminator": [
+        20,
+        89,
+        223,
+        198,
+        194,
+        124,
+        219,
+        13
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
-      "name": "NotOpen",
-      "msg": "Funding window is not open"
+      "name": "FundingPeriodEnded",
+      "msg": "Funding period has ended"
     },
     {
       "code": 6001,
+      "name": "FundingPeriodNotEnded",
+      "msg": "Funding period has not ended yet"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidFundingDuration",
+      "msg": "Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)"
+    },
+    {
+      "code": 6003,
       "name": "ClaimsNotOpen",
       "msg": "Claims are not open"
     },
     {
-      "code": 6002,
+      "code": 6004,
       "name": "AlreadyClosed",
       "msg": "Deposits already closed"
     },
     {
-      "code": 6003,
+      "code": 6005,
       "name": "NotClosed",
       "msg": "Deposits not closed"
     },
     {
-      "code": 6004,
+      "code": 6006,
       "name": "Unauthorized",
       "msg": "Unauthorized"
     },
     {
-      "code": 6005,
+      "code": 6007,
       "name": "AmountNotMultipleTau",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6006,
+      "code": 6008,
       "name": "PerWalletCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6007,
+      "code": 6009,
       "name": "InsufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6008,
+      "code": 6010,
       "name": "SeedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6009,
+      "code": 6011,
       "name": "SeedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6010,
+      "code": 6012,
       "name": "AlreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6011,
+      "code": 6013,
       "name": "NotFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6012,
+      "code": 6014,
       "name": "ThresholdMissing",
       "msg": "Threshold missing"
     },
     {
-      "code": 6013,
+      "code": 6015,
       "name": "TokensPerTicketMissing",
       "msg": "Tokens per ticket missing"
     },
     {
-      "code": 6014,
+      "code": 6016,
       "name": "InvalidTau",
       "msg": "Invalid tau"
     },
     {
-      "code": 6015,
+      "code": 6017,
       "name": "InvalidK",
       "msg": "Invalid K"
     },
     {
-      "code": 6016,
+      "code": 6018,
       "name": "NotFullyProcessed",
       "msg": "Not fully processed"
     },
     {
-      "code": 6017,
+      "code": 6019,
       "name": "HeapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6018,
+      "code": 6020,
       "name": "UserNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6019,
+      "code": 6021,
       "name": "TOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6020,
+      "code": 6022,
       "name": "MappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6021,
+      "code": 6023,
       "name": "AlreadyClaimedRefund",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6022,
+      "code": 6024,
       "name": "AlreadyClaimedTokens",
       "msg": "Already claimed tokens"
     }
   ],
   "types": [
+    {
+      "name": "BatchProcessed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "from_t",
+            "type": "u32"
+          },
+          {
+            "name": "processed",
+            "type": "u32"
+          },
+          {
+            "name": "heap_len",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimsOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokens_per_ticket",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositMade",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "tickets_before",
+            "type": "u32"
+          },
+          {
+            "name": "tickets_after",
+            "type": "u32"
+          },
+          {
+            "name": "total_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "total_tickets",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepositsClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_tickets",
+            "type": "u32"
+          },
+          {
+            "name": "k_capacity",
+            "type": "u32"
+          }
+        ]
+      }
+    },
     {
       "name": "EscrowAccount",
       "type": {
@@ -952,6 +1188,22 @@
           {
             "name": "balance",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FundingPeriodStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "funding_period_end",
+            "type": "i64"
           }
         ]
       }
@@ -972,6 +1224,50 @@
           {
             "name": "local_j",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "project_id",
+            "type": "u64"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "sale_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "hard_cap_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_raise_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "per_wallet_cap",
+            "type": "u64"
+          },
+          {
+            "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "sale_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "lp_allocation",
+            "type": "u64"
           }
         ]
       }
@@ -1018,8 +1314,8 @@
             "type": "u64"
           },
           {
-            "name": "funding_open",
-            "type": "bool"
+            "name": "funding_period_end",
+            "type": "i64"
           },
           {
             "name": "deposits_closed",
@@ -1088,6 +1384,30 @@
       }
     },
     {
+      "name": "RefundClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "refunded_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "y_approved",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
       "name": "Roster",
       "type": {
         "kind": "struct",
@@ -1120,6 +1440,59 @@
           },
           {
             "name": "shard_base",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RosterInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SeedSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "seed_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SelectionFinalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "threshold",
+            "type": "u128"
+          },
+          {
+            "name": "k_capacity",
             "type": "u32"
           }
         ]
@@ -1171,6 +1544,30 @@
       }
     },
     {
+      "name": "TokensClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "y_approved",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
       "name": "UserContribution",
       "type": {
         "kind": "struct",
@@ -1198,6 +1595,42 @@
           {
             "name": "claimed_tokens",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Withdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "tickets_before",
+            "type": "u32"
+          },
+          {
+            "name": "tickets_after",
+            "type": "u32"
+          },
+          {
+            "name": "total_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "total_tickets",
+            "type": "u32"
           }
         ]
       }

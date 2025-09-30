@@ -138,6 +138,7 @@ export default {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
+            fundingDurationDays: number; // 0-5 (0 = 10 seconds for testing, 1-5 = days)
             // In tests you can pass preInstructions to create/init mint
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
@@ -153,7 +154,8 @@ export default {
                     args.perWalletCap,
                     args.tauLamports,
                     args.saleAllocation,
-                    args.lpAllocation
+                    args.lpAllocation,
+                    args.fundingDurationDays
                 )
                 .accountsStrict({
                     admin: payer,
@@ -194,16 +196,6 @@ export default {
             return { rosterPda, signature };
         }
 
-        async function openFunding(args: {
-            launch: PublicKey;
-            signers?: Keypair[];
-        }): Promise<{ signature: string }> {
-            const rpc = program.methods
-                .openFunding()
-                .accountsStrict({ admin: payer, launchState: args.launch });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
 
         async function closeDeposits(args: {
             launch: PublicKey;
@@ -214,7 +206,6 @@ export default {
             const rpc = program.methods
                 .closeDeposits()
                 .accountsStrict({
-                    admin: payer,
                     launchState: args.launch,
                     roster,
                     launch: args.launch,
@@ -522,7 +513,6 @@ export default {
             // TX
             initLaunch,
             initRoster,
-            openFunding,
             closeDeposits,
             setSeed,
             processBatch,

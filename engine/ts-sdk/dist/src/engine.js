@@ -72,7 +72,7 @@ export default {
             const [escrowPda] = getEscrowPda(launchPda);
             const [projectCounterPda] = getProjectCounterPda();
             const rpc = program.methods
-                .initLaunch(args.hardCapLamports, args.minRaiseLamports, args.perWalletCap, args.tauLamports, args.saleAllocation, args.lpAllocation)
+                .initLaunch(args.hardCapLamports, args.minRaiseLamports, args.perWalletCap, args.tauLamports, args.saleAllocation, args.lpAllocation, args.fundingDurationDays)
                 .accountsStrict({
                 admin: payer,
                 projectCounter: projectCounterPda,
@@ -105,20 +105,11 @@ export default {
             const signature = await rpc.rpc();
             return { rosterPda, signature };
         }
-        async function openFunding(args) {
-            const rpc = program.methods
-                .openFunding()
-                .accountsStrict({ admin: payer, launchState: args.launch });
-            if (args.signers && args.signers.length)
-                rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
         async function closeDeposits(args) {
             const roster = args.roster ?? getRosterPda(args.launch)[0];
             const rpc = program.methods
                 .closeDeposits()
                 .accountsStrict({
-                admin: payer,
                 launchState: args.launch,
                 roster,
                 launch: args.launch,
@@ -368,7 +359,6 @@ export default {
             // TX
             initLaunch,
             initRoster,
-            openFunding,
             closeDeposits,
             setSeed,
             processBatch,

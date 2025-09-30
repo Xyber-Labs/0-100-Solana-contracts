@@ -3,6 +3,7 @@ use anchor_lang::prelude::borsh::BorshSchema;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use solana_program::keccak;
+use solana_program::sysvar::clock::Clock;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
@@ -33,8 +34,9 @@ pub struct RosterInitialized {
 }
 
 #[event]
-pub struct FundingOpened {
+pub struct FundingPeriodStarted {
     pub launch: Pubkey,
+    pub funding_period_end: i64,
 }
 
 #[event]
@@ -126,8 +128,21 @@ pub mod engine {
         tau_lamports: u64,
         sale_allocation: u64, // number of sale tokens
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
+        funding_duration_days: u8, // funding period duration in days (max 5 days)
     ) -> Result<()> {
         require!(tau_lamports > 0, ErrorCode::InvalidTau);
+        require!(funding_duration_days <= 5, ErrorCode::InvalidFundingDuration);
+        
+        // For testing: allow very short periods (seconds instead of days)
+        let duration_seconds = if funding_duration_days == 0 {
+            // Special case: 0 means 10 seconds for testing
+            10
+        } else if funding_duration_days == 1 {
+            // Special case: 1 means 30 seconds for testing
+            30
+        } else {
+            funding_duration_days as i64 * 24 * 60 * 60
+        };
         
         // Get and increment project ID
         let counter = &mut ctx.accounts.project_counter;
@@ -144,7 +159,9 @@ pub mod engine {
         state.sale_allocation = sale_allocation;
         state.lp_allocation = lp_allocation;
 
-        state.funding_open = false;
+        // Set funding period end time (current time + duration)
+        let current_time = Clock::get()?.unix_timestamp;
+        state.funding_period_end = current_time + duration_seconds;
         state.deposits_closed = false;
         state.total_deposited = 0;
         state.total_tickets = 0;
@@ -163,7 +180,9 @@ pub mod engine {
 
         // Initialize escrow account
         let escrow = &mut ctx.accounts.escrow;
-        escrow.launch = ctx.accounts.launch_state.key();
+        let launch_key = state.key();
+        let funding_end = state.funding_period_end;
+        escrow.launch = launch_key;
         escrow.balance = 0;
 
         emit!(LaunchInitialized {
@@ -176,6 +195,11 @@ pub mod engine {
             tau_lamports,
             sale_allocation,
             lp_allocation,
+        });
+
+        emit!(FundingPeriodStarted {
+            launch: launch_key,
+            funding_period_end: funding_end,
         });
 
         Ok(())
@@ -198,26 +222,16 @@ pub mod engine {
         Ok(())
     }
 
-    /// Open funding window.
-    pub fn open_funding(ctx: Context<OnlyAdmin>) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
-        st.funding_open = true;
-
-        emit!(FundingOpened {
-            launch: ctx.accounts.launch_state.key(),
-        });
-
-        Ok(())
-    }
-
-    /// Close deposits, build prefix, set N and K.
+    /// Close deposits automatically when funding period ends (called by anyone).
+    /// This function can be called by anyone once the funding period has ended.
     pub fn close_deposits(ctx: Context<CloseDeposits>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(st.funding_open, ErrorCode::NotOpen);
-        st.funding_open = false;
+        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        
         st.deposits_closed = true;
 
         // build prefix inside roster
@@ -408,7 +422,11 @@ pub mod engine {
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.funding_open, ErrorCode::NotOpen);
+        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
+        
+        // Check if funding period is still active
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
         require!(
             amount > 0 && amount % st.tau_lamports == 0,
             ErrorCode::AmountNotMultipleTau
@@ -485,7 +503,11 @@ pub mod engine {
     /// Withdraw during funding window (reduces ticket_count and returns lamports).
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.funding_open, ErrorCode::NotOpen);
+        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
+        
+        // Check if funding period is still active
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
         let user = &mut ctx.accounts.user_contribution;
         require!(user.deposited >= amount, ErrorCode::InsufficientDeposit);
 
@@ -662,7 +684,7 @@ pub struct LaunchState {
     pub lp_allocation: u64,
 
     // Funding
-    pub funding_open: bool,
+    pub funding_period_end: i64, // Unix timestamp when funding period ends
     pub deposits_closed: bool,
     pub total_deposited: u64,
     pub total_tickets: u32,
@@ -851,8 +873,6 @@ pub struct OnlyAdminWithSelection<'info> {
 
 #[derive(Accounts)]
 pub struct CloseDeposits<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, has_one = launch)]
@@ -1074,8 +1094,12 @@ fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Funding window is not open")]
-    NotOpen,
+    #[msg("Funding period has ended")]
+    FundingPeriodEnded,
+    #[msg("Funding period has not ended yet")]
+    FundingPeriodNotEnded,
+    #[msg("Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)")]
+    InvalidFundingDuration,
     #[msg("Claims are not open")]
     ClaimsNotOpen,
     #[msg("Deposits already closed")]

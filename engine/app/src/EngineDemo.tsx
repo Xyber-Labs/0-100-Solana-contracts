@@ -13,6 +13,7 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
+  fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
 }
 
 // Error boundary component
@@ -112,6 +113,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     tauLamports: 1 * 1e9, // 1 SOL
     saleAllocation: 1000000,
     lpAllocation: 500000,
+    fundingDurationDays: 5, // 5 days for production
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -295,7 +297,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           new BN(launchConfig.perWalletCap),
           new BN(launchConfig.tauLamports),
           new BN(launchConfig.saleAllocation),
-          new BN(launchConfig.lpAllocation)
+          new BN(launchConfig.lpAllocation),
+          launchConfig.fundingDurationDays
         )
         .accountsStrict({
           admin: (testWallet?.publicKey || publicKey)!,
@@ -457,24 +460,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, launchState]);
 
-  const openFunding = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Opening funding...');
-      const { signature } = await sdk.openFunding({ launch: launchState });
-      addLog(`SUCCESS: Funding opened - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to open funding - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
+ // Removed function dependencies
 
   const initRoster = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -504,7 +490,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     try {
       setIsLoading(true);
-      addLog('Closing deposits...');
+      addLog('Closing deposits (anyone can call this after funding period ends)...');
       const { signature } = await sdk.closeDeposits({ launch: launchState });
       addLog(`SUCCESS: Deposits closed - Signature: ${signature}`);
       await fetchLaunchData();
@@ -1138,6 +1124,21 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 className="terminal-input w-full"
               />
             </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Funding Duration</label>
+              <select
+                value={launchConfig.fundingDurationDays}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationDays: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              >
+                <option value={0}>10 seconds (testing)</option>
+                <option value={1}>30 seconds (testing)</option>
+                <option value={2}>2 days</option>
+                <option value={3}>3 days</option>
+                <option value={4}>4 days</option>
+                <option value={5}>5 days</option>
+              </select>
+            </div>
           </div>
         )}
 
@@ -1229,7 +1230,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                         Sale Mint: {project.saleMint.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
-                        Funding Open: {project.account.fundingOpen ? 'YES' : 'NO'}
+                        Funding Period End: {new Date(safeToNumber(project.account.fundingPeriodEnd) * 1000).toLocaleString()}
                       </div>
                       <div className="text-xs terminal-output">
                         Total Deposited: {(safeToNumber(project.account.totalDeposited) / 1e9).toFixed(2)} SOL
@@ -1380,9 +1381,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="terminal-output">Funding Open:</span>
-                  <span className={launchData.fundingOpen ? 'terminal-success' : 'terminal-error'}>
-                    {launchData.fundingOpen ? 'YES' : 'NO'}
+                  <span className="terminal-output">Funding Period End:</span>
+                  <span className="terminal-success">
+                    {new Date(safeToNumber(launchData.fundingPeriodEnd) * 1000).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Funding Active:</span>
+                  <span className={Date.now() / 1000 < safeToNumber(launchData.fundingPeriodEnd) ? 'terminal-success' : 'terminal-error'}>
+                    {Date.now() / 1000 < safeToNumber(launchData.fundingPeriodEnd) ? 'YES' : 'NO'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1442,13 +1449,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <span className="terminal-prompt">$</span> Init Launch
             </button>
             
-            <button 
-              onClick={openFunding}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
-            >
-              <span className="terminal-prompt">$</span> Open Funding
-            </button>
             
             <button 
               onClick={initRoster}

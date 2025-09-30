@@ -48,6 +48,7 @@ declare const _default: {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
+            fundingDurationDays: number;
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[];
         }) => Promise<{
@@ -60,12 +61,6 @@ declare const _default: {
             signers?: Keypair[];
         }) => Promise<{
             rosterPda: PublicKey;
-            signature: string;
-        }>;
-        openFunding: (args: {
-            launch: PublicKey;
-            signers?: Keypair[];
-        }) => Promise<{
             signature: string;
         }>;
         closeDeposits: (args: {
@@ -150,7 +145,7 @@ declare const _default: {
             saleMint: anchor.web3.PublicKey;
             saleAllocation: anchor.BN;
             lpAllocation: anchor.BN;
-            fundingOpen: boolean;
+            fundingPeriodEnd: anchor.BN;
             depositsClosed: boolean;
             totalDeposited: anchor.BN;
             totalTickets: number;
@@ -206,7 +201,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
+                fundingPeriodEnd: anchor.BN;
                 depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
@@ -233,7 +228,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
+                fundingPeriodEnd: anchor.BN;
                 depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
@@ -260,7 +255,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
+                fundingPeriodEnd: anchor.BN;
                 depositsClosed: boolean;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
