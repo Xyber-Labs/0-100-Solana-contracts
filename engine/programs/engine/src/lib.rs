@@ -106,6 +106,14 @@ pub struct TokensClaimed {
     pub y_approved: u32,
 }
 
+#[event]
+pub struct PoolCreated {
+    pub launch: Pubkey,
+    pub pool_id: u64,
+    pub blockhash: [u8; 32],
+    pub slot: u64,
+}
+
 #[program]
 pub mod engine {
     use super::*;
@@ -681,6 +689,75 @@ pub mod engine {
 
         Ok(())
     }
+
+    /// Create pool with blockhash verification
+    /// Checks if any of the last 10 blockhashes meets the probability threshold
+    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
+        let st = &mut ctx.accounts.launch_state;
+        let pool_state = &mut ctx.accounts.pool_state;
+        
+        // Check if selection is finalized and claims are open
+        require!(st.selection_finalized, ErrorCode::NotFinalized);
+        require!(st.claims_open, ErrorCode::ClaimsNotOpen);
+        require!(!pool_state.created, ErrorCode::PoolAlreadyCreated);
+        
+        // Get the SlotHashes sysvar
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
+        
+        // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, ErrorCode::NoRecentBlockhashes);
+        
+        // Check last 10 blockhashes (or all available if less than 10)
+        let hashes_to_check = std::cmp::min(10, num_hashes);
+        let mut found_valid_hash = false;
+        let mut valid_slot = 0u64;
+        let mut valid_hash = [0u8; 32];
+        
+        for i in 0..hashes_to_check {
+            // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+            let hash_pos = 8 + ((num_hashes - 1 - i) * 40);
+            let slot_pos = hash_pos;
+            let blockhash_pos = hash_pos + 8; // 8 bytes for slot
+            
+            let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
+            let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
+            
+            // Check if this blockhash meets our probability threshold
+            if is_blockhash_valid(&blockhash) {
+                found_valid_hash = true;
+                valid_slot = slot;
+                valid_hash = blockhash;
+                break;
+            }
+        }
+        
+        require!(found_valid_hash, ErrorCode::NoValidBlockhash);
+        
+        // Get pool ID from project counter
+        let counter = &mut ctx.accounts.project_counter;
+        let pool_id = counter.next_project_id;
+        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        
+        // Initialize pool state
+        pool_state.launch = st.key();
+        pool_state.pool_id = pool_id;
+        pool_state.created_slot = valid_slot;
+        pool_state.created_blockhash = valid_hash;
+        pool_state.created = true;
+        
+        // TODO: Add CPI call to Raydium here
+        
+        emit!(PoolCreated {
+            launch: st.key(),
+            pool_id,
+            blockhash: valid_hash,
+            slot: valid_slot,
+        });
+        
+        Ok(())
+    }
 }
 
 // -------------------------------
@@ -802,6 +879,16 @@ pub struct SelectionState {
 #[derive(InitSpace)]
 pub struct ProjectCounter {
     pub next_project_id: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct PoolState {
+    pub launch: Pubkey,
+    pub pool_id: u64,
+    pub created_slot: u64,
+    pub created_blockhash: [u8; 32],
+    pub created: bool,
 }
 
 // -------------------------------
@@ -1000,6 +1087,33 @@ pub struct ClaimTokens<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct CreatePool<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    
+    #[account(mut)]
+    pub launch_state: Account<'info, LaunchState>,
+    
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + PoolState::INIT_SPACE,
+        seeds = [b"pool", launch_state.key().as_ref()],
+        bump
+    )]
+    pub pool_state: Account<'info, PoolState>,
+    
+    #[account(mut)]
+    pub project_counter: Account<'info, ProjectCounter>,
+    
+    /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
+    #[account(address = sysvar::slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
 // -------------------------------
 // Utility / helpers
 // -------------------------------
@@ -1106,6 +1220,38 @@ fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>
         .any(|e| e.score == threshold && e.wallet == wallet && e.local_j == j)
 }
 
+/// Check if a blockhash meets the probability threshold for pool creation
+/// Target: 1/54000 probability (6 hours average deployment time)
+fn is_blockhash_valid(blockhash: &[u8; 32]) -> bool {
+    // Convert blockhash to u256 (big-endian)
+    let hash_as_u256 = u256_from_bytes(blockhash);
+    
+    // Calculate threshold: (1 / 54000) * (2^256)
+    // 2^256 = 115792089237316195423570985008687907853269984665640564039457584007913129639936
+    // 1/54000 ≈ 0.0000185185
+    let threshold = u256_from_hex("0x6C6B935B8BBD4000000000000000000000000000000000000000000000000000");
+    
+    hash_as_u256 < threshold
+}
+
+/// Convert 32-byte array to u256 (big-endian)
+fn u256_from_bytes(bytes: &[u8; 32]) -> [u8; 32] {
+    *bytes
+}
+
+/// Create u256 from hex string
+fn u256_from_hex(hex: &str) -> [u8; 32] {
+    let hex = hex.strip_prefix("0x").unwrap_or(hex);
+    let mut result = [0u8; 32];
+    for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
+        if i < 32 {
+            let byte_str = std::str::from_utf8(chunk).unwrap();
+            result[i] = u8::from_str_radix(byte_str, 16).unwrap_or(0);
+        }
+    }
+    result
+}
+
 // -------------------------------
 // Errors
 // -------------------------------
@@ -1162,4 +1308,8 @@ pub enum ErrorCode {
     AlreadyClaimedTokens,
     #[msg("No recent blockhashes found in SlotHashes sysvar")]
     NoRecentBlockhashes,
+    #[msg("Pool already created")]
+    PoolAlreadyCreated,
+    #[msg("No valid blockhash found in recent blocks")]
+    NoValidBlockhash,
 }
