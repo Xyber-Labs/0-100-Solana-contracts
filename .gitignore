@@ -1,3 +1,4 @@
 lightpaper/*
 !lightpaper/index.tex
 .DS_Store
+CLAUDE.md
