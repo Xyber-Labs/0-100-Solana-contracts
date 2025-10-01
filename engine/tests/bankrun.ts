@@ -1,4 +1,4 @@
-import { startAnchor } from "solana-bankrun";
+import { Clock, startAnchor } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
 import * as anchor from "@coral-xyz/anchor";
 import { assert } from "chai";
@@ -124,9 +124,16 @@ describe("engine bankrun", () => {
       admin: admin.publicKey,
     });
 
-    // Warp time forward by 20 seconds (funding_duration_days=0 means 10 seconds)
-    const currentSlot = await context.banksClient.getSlot();
-    context.warpToSlot(currentSlot + 10000n); // ~20 seconds at 400ms/slot
+    const currentClock = await context.banksClient.getClock();
+    context.setClock(
+      new Clock(
+        currentClock.slot + 10,
+        currentClock.epochStartTimestamp,
+        currentClock.epoch,
+        currentClock.leaderScheduleEpoch,
+        currentClock.unixTimestamp + 10n,
+      ),
+    );
 
     const seedTx = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
     console.log("Set VRF seed tx signature:", seedTx);
