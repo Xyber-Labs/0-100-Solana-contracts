@@ -233,6 +233,73 @@ export type Engine = {
             "args": [];
         },
         {
+            "name": "createPoolInternal";
+            "docs": [
+                "Internal function that handles pool creation logic",
+                "skip_validation: if true, skips blockhash validation (for testing)"
+            ];
+            "discriminator": [
+                69,
+                110,
+                78,
+                61,
+                47,
+                49,
+                49,
+                169
+            ];
+            "accounts": [
+                {
+                    "name": "payer";
+                    "writable": true;
+                    "signer": true;
+                },
+                {
+                    "name": "launchState";
+                    "writable": true;
+                },
+                {
+                    "name": "poolState";
+                    "writable": true;
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const";
+                                "value": [
+                                    112,
+                                    111,
+                                    111,
+                                    108
+                                ];
+                            },
+                            {
+                                "kind": "account";
+                                "path": "launchState";
+                            }
+                        ];
+                    };
+                },
+                {
+                    "name": "projectCounter";
+                    "writable": true;
+                },
+                {
+                    "name": "slotHashes";
+                    "address": "SysvarS1otHashes111111111111111111111111111";
+                },
+                {
+                    "name": "systemProgram";
+                    "address": "11111111111111111111111111111111";
+                }
+            ];
+            "args": [
+                {
+                    "name": "skipValidation";
+                    "type": "bool";
+                }
+            ];
+        },
+        {
             "name": "deposit";
             "docs": [
                 "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."

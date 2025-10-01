@@ -227,6 +227,73 @@
             "args": []
         },
         {
+            "name": "create_pool_internal",
+            "docs": [
+                "Internal function that handles pool creation logic",
+                "skip_validation: if true, skips blockhash validation (for testing)"
+            ],
+            "discriminator": [
+                69,
+                110,
+                78,
+                61,
+                47,
+                49,
+                49,
+                169
+            ],
+            "accounts": [
+                {
+                    "name": "payer",
+                    "writable": true,
+                    "signer": true
+                },
+                {
+                    "name": "launch_state",
+                    "writable": true
+                },
+                {
+                    "name": "pool_state",
+                    "writable": true,
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const",
+                                "value": [
+                                    112,
+                                    111,
+                                    111,
+                                    108
+                                ]
+                            },
+                            {
+                                "kind": "account",
+                                "path": "launch_state"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "project_counter",
+                    "writable": true
+                },
+                {
+                    "name": "slot_hashes",
+                    "address": "SysvarS1otHashes111111111111111111111111111"
+                },
+                {
+                    "name": "system_program",
+                    "address": "11111111111111111111111111111111"
+                }
+            ],
+            "args": [
+                {
+                    "name": "skip_validation",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
             "name": "deposit",
             "docs": [
                 "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."

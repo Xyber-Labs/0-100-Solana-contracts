@@ -601,6 +601,12 @@ pub mod engine {
     /// Create pool with blockhash verification
     /// Checks if any of the last 10 blockhashes meets the probability threshold
     pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool_internal(ctx, false) // false = validate blockhash
+    }
+
+    /// Internal function that handles pool creation logic
+    /// skip_validation: if true, skips blockhash validation (for testing)
+    pub fn create_pool_internal(ctx: Context<CreatePool>, skip_validation: bool) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let pool_state = &mut ctx.accounts.pool_state;
         
@@ -617,31 +623,44 @@ pub mod engine {
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
         
-        // Check last 10 blockhashes (or all available if less than 10)
-        let hashes_to_check = std::cmp::min(10, num_hashes);
-        let mut found_valid_hash = false;
-        let mut valid_slot = 0u64;
-        let mut valid_hash = [0u8; 32];
-        
-        for i in 0..hashes_to_check {
-            // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
-            let hash_pos = 8 + ((num_hashes - 1 - i) * 40);
+        let (valid_slot, valid_hash) = if skip_validation {
+            // Use the most recent blockhash (skip validation in test mode)
+            let hash_pos = 8 + ((num_hashes - 1) * 40);
             let slot_pos = hash_pos;
             let blockhash_pos = hash_pos + 8; // 8 bytes for slot
             
             let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
             let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
             
-            // Check if this blockhash is within the project's personal range
-            if utils::is_blockhash_in_project_range(&blockhash, st.project_id) {
-                found_valid_hash = true;
-                valid_slot = slot;
-                valid_hash = blockhash;
-                break;
+            (slot, blockhash)
+        } else {
+            // Check last 10 blockhashes (or all available if less than 10)
+            let hashes_to_check = std::cmp::min(10, num_hashes);
+            let mut found_valid_hash = false;
+            let mut valid_slot = 0u64;
+            let mut valid_hash = [0u8; 32];
+            
+            for i in 0..hashes_to_check {
+                // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+                let hash_pos = 8 + ((num_hashes - 1 - i) * 40);
+                let slot_pos = hash_pos;
+                let blockhash_pos = hash_pos + 8; // 8 bytes for slot
+                
+                let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
+                let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
+                
+                // Check if this blockhash is within the project's personal range
+                if utils::is_blockhash_in_project_range(&blockhash, st.project_id) {
+                    found_valid_hash = true;
+                    valid_slot = slot;
+                    valid_hash = blockhash;
+                    break;
+                }
             }
-        }
-        
-        require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
+            
+            require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
+            (valid_slot, valid_hash)
+        };
         
         // Get pool ID from project counter
         let counter = &mut ctx.accounts.project_counter;
@@ -674,6 +693,13 @@ pub mod engine {
         });
         
         Ok(())
+    }
+
+    /// Test version of create_pool that bypasses blockhash validation
+    /// This is for testing purposes only and should not be used in production
+    #[cfg(feature = "test")]
+    pub fn create_pool_test(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool_internal(ctx, true) // true = skip validation
     }
 }
 
