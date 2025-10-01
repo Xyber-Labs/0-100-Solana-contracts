@@ -83,24 +83,13 @@ describe("engine bankrun", () => {
   });
 
   it("Sets the VRF seed", async () => {
-    await sdk.initRoster({
-      launch: launchState,
-      signers: [admin.payer],
-    });
+    await sdk.initRoster({ launch: launchState, signers: [admin.payer] });
 
     const depositor = await createAndFundAccount(context, provider, 20);
-    await sdk.deposit({
-      launch: launchState,
-      amountLamports: PER_WALLET_CAP,
-      userKeypair: depositor,
-    });
+    await sdk.deposit({ launch: launchState, amountLamports: PER_WALLET_CAP, userKeypair: depositor });
 
     const depositor2 = await createAndFundAccount(context, provider, 20);
-    await sdk.deposit({
-      launch: launchState,
-      amountLamports: PER_WALLET_CAP,
-      userKeypair: depositor2,
-    });
+    await sdk.deposit({ launch: launchState, amountLamports: PER_WALLET_CAP, userKeypair: depositor2 });
 
     await advanceTime(context, { slots: 10n, seconds: 10n });
 
@@ -136,23 +125,17 @@ describe("engine bankrun", () => {
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
 
-    await provider.sendAndConfirm((await sdk.initRosterTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    })).transaction, [admin.payer]);
+    await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
     const depositor = await createAndFundAccount(context, provider, 20);
-
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
+    const { signature: depositTx } = await sdk.deposit({
       launch: testLaunchState,
       amountLamports: depositAmount,
-      userPubkey: depositor.publicKey,
+      userKeypair: depositor,
     });
-
-    const depTx = await provider.sendAndConfirm(depositTx, [depositor]);
-    console.log("Deposit tx signature:", depTx);
+    console.log("Deposit tx signature:", depositTx);
 
     const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
     assert.equal(userContrib.deposited.toNumber(), depositAmount.toNumber());
@@ -183,22 +166,12 @@ describe("engine bankrun", () => {
 
 
 
-    await provider.sendAndConfirm((await sdk.initRosterTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    })).transaction, [admin.payer]);
+    await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
     const depositor = await createAndFundAccount(context, provider, 20);
-
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
-      launch: testLaunchState,
-      amountLamports: depositAmount,
-      userPubkey: depositor.publicKey,
-    });
-
-    await provider.sendAndConfirm(depositTx, [depositor]);
+    await sdk.deposit({ launch: testLaunchState, amountLamports: depositAmount, userKeypair: depositor });
 
     const initialBalance = await context.banksClient.getBalance(depositor.publicKey);
 
@@ -455,11 +428,7 @@ describe("engine bankrun", () => {
 
 
 
-    const { transaction: rosterTx, rosterPda } = await sdk.initRosterTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    });
-    await provider.sendAndConfirm(rosterTx, [admin.payer]);
+    const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
     const users = [];
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
@@ -470,12 +439,11 @@ describe("engine bankrun", () => {
       const balance = await context.banksClient.getBalance(user.publicKey);
       console.log(`User ${i} balance: ${Number(balance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-      const { transaction: depositTx, userContribution: userPda } = await sdk.depositTx({
+      const { userPda } = await sdk.deposit({
         launch: testLaunchState,
         amountLamports: depositAmount,
-        userPubkey: user.publicKey,
+        userKeypair: user,
       });
-      await provider.sendAndConfirm(depositTx, [user]);
 
       users.push({ keypair: user, contribution: userPda });
     }
