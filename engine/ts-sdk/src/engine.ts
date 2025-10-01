@@ -149,7 +149,7 @@ export default {
                 tauLamports: args.tauLamports,
                 saleAllocation: args.saleAllocation,
                 lpAllocation: args.lpAllocation,
-                fundingDurationDay: args.fundingDurationDays
+                fundingDurationDays: args.fundingDurationDays
             });
 
             const tx = new Transaction();

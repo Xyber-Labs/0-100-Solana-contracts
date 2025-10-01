@@ -49,6 +49,7 @@ describe("engine bankrun", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
+      fundingDurationDays: 0,
       provider,
     });
 
@@ -66,8 +67,8 @@ describe("engine bankrun", () => {
     assert.equal(state.tauLamports.toNumber(), TAU_LAMPORTS.toNumber());
     assert.equal(state.saleAllocation.toNumber(), SALE_ALLOCATION.toNumber());
     assert.equal(state.lpAllocation.toNumber(), LP_ALLOCATION.toNumber());
-    assert.isFalse(state.fundingOpen);
-    assert.isFalse(state.depositsClosed);
+    // assert.isFalse(state.fundingOpen);
+    // assert.isFalse(state.depositsClosed);
     assert.equal(state.totalDeposited.toNumber(), 0);
     assert.equal(state.totalTickets, 0);
     assert.equal(state.kCapacity, 0);
@@ -80,54 +81,52 @@ describe("engine bankrun", () => {
     assert.ok(state.saleMint.equals(saleMint.publicKey));
   });
 
-  it("Opens funding", async () => {
-    const openFundingTx = await sdk.openFundingTx({
-      launch: launchState,
-      admin: admin.publicKey,
-    });
+  // it("Opens funding", async () => {
+  //   const openFundingTx = await sdk.openFundingTx({
+  //     launch: launchState,
+  //     admin: admin.publicKey,
+  //   });
+  //
+  //   const openTx = await provider.sendAndConfirm(openFundingTx, [admin.payer]);
+  //   console.log("Open funding tx signature:", openTx);
+  //
+  //   const state = await sdk.fetchLaunch(launchState);
+  //   assert.isTrue(state.fundingOpen);
+  // });
 
-    const openTx = await provider.sendAndConfirm(openFundingTx, [admin.payer]);
-    console.log("Open funding tx signature:", openTx);
 
-    const state = await sdk.fetchLaunch(launchState);
-    assert.isTrue(state.fundingOpen);
-  });
-
-
-  it("Closes funding", async () => {
-    const { transaction: initRosterTx, rosterPda } = await sdk.initRosterTx({
-      launch: launchState,
-      admin: admin.publicKey,
-    });
-
-    const rosterTx = await provider.sendAndConfirm(initRosterTx, [admin.payer]);
-    console.log("Init roster tx signature:", rosterTx);
-
-    const closeDepositsTx = await sdk.closeDepositsTx({
-      launch: launchState,
-      admin: admin.publicKey,
-      roster: rosterPda,
-    });
-
-    const closeTx = await provider.sendAndConfirm(closeDepositsTx, [admin.payer]);
-    console.log("Close deposits tx signature:", closeTx);
-
-    const state = await sdk.fetchLaunch(launchState);
-    assert.isFalse(state.fundingOpen);
-    assert.isTrue(state.depositsClosed);
-  });
+  // it("Closes funding", async () => {
+  //   const { transaction: initRosterTx, rosterPda } = await sdk.initRosterTx({
+  //     launch: launchState,
+  //     admin: admin.publicKey,
+  //   });
+  //
+  //   const rosterTx = await provider.sendAndConfirm(initRosterTx, [admin.payer]);
+  //   console.log("Init roster tx signature:", rosterTx);
+  //
+  //   const closeDepositsTx = await sdk.closeDepositsTx({
+  //     launch: launchState,
+  //     admin: admin.publicKey,
+  //     roster: rosterPda,
+  //   });
+  //
+  //   const closeTx = await provider.sendAndConfirm(closeDepositsTx, [admin.payer]);
+  //   console.log("Close deposits tx signature:", closeTx);
+  //
+  //   const state = await sdk.fetchLaunch(launchState);
+  //   assert.isFalse(state.fundingOpen);
+  //   assert.isTrue(state.depositsClosed);
+  // });
 
   it("Sets the VRF seed", async () => {
-    const testSeed = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      testSeed[i] = i + 1;
-    }
-
     const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: launchState,
       admin: admin.publicKey,
-      seed: testSeed,
     });
+
+    // Warp time forward by 20 seconds (funding_duration_days=0 means 10 seconds)
+    const currentSlot = await context.banksClient.getSlot();
+    context.warpToSlot(currentSlot + 10000n); // ~20 seconds at 400ms/slot
 
     const seedTx = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
     console.log("Set VRF seed tx signature:", seedTx);
@@ -135,8 +134,8 @@ describe("engine bankrun", () => {
     const state = await sdk.fetchLaunch(launchState);
     assert.isNotNull(state.vrfSeed);
 
-    const selectionState = await sdk.fetchSelection(launchState);
-    assert.deepEqual(Array.from(selectionState.vrfSeed), Array.from(testSeed));
+    // const selectionState = await sdk.fetchSelection(launchState);
+    // assert.deepEqual(Array.from(selectionState.vrfSeed), Array.from(testSeed));
   });
 
 
@@ -152,15 +151,12 @@ describe("engine bankrun", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
+      fundingDurationDays: 0,
       provider,
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-    await provider.sendAndConfirm(await sdk.openFundingTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    }), [admin.payer]);
 
     await provider.sendAndConfirm((await sdk.initRosterTx({
       launch: testLaunchState,
@@ -209,15 +205,13 @@ describe("engine bankrun", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
+      fundingDurationDays: 0,
       provider,
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-    await provider.sendAndConfirm(await sdk.openFundingTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    }), [admin.payer]);
+
 
     await provider.sendAndConfirm((await sdk.initRosterTx({
       launch: testLaunchState,
@@ -266,6 +260,200 @@ describe("engine bankrun", () => {
     assert.equal(userContrib.deposited.toNumber(), 0);
   });
 
+
+  //
+  //
+  // it("from the main brunch Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
+  //   // Create a new launch state for this comprehensive test
+  //   const testSaleMint = anchor.web3.Keypair.generate();
+  //   const [testLaunchState] = anchor.web3.PublicKey.findProgramAddressSync(
+  //     [Buffer.from("launch"), testSaleMint.publicKey.toBuffer()],
+  //     program.programId
+  //   );
+  //
+  //   // Get the correct mint authority
+  //   const [mintAuth] = anchor.web3.PublicKey.findProgramAddressSync(
+  //     [Buffer.from("mint_auth"), testLaunchState.toBuffer()],
+  //     program.programId
+  //   );
+  //
+  //   // Initialize launch with smaller caps for testing
+  //   const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL); // 20 SOL hard cap
+  //   const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL); // 5 SOL min raise
+  //   const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL); // 3 SOL per wallet
+  //   const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL); // 0.5 SOL per ticket
+  //
+  //   // Initialize launch using SDK
+  //   await sdk.initLaunch({
+  //     saleMint: testSaleMint.publicKey,
+  //     hardCapLamports: testHardCap,
+  //     minRaiseLamports: testMinRaise,
+  //     perWalletCap: testPerWalletCap,
+  //     tauLamports: testTau,
+  //     saleAllocation,
+  //     lpAllocation,
+  //     fundingDurationDays: 1, // Use 30 seconds for this comprehensive test (1 = 30 seconds for testing)
+  //     preInstructions: [
+  //       anchor.web3.SystemProgram.createAccount({
+  //         fromPubkey: admin.publicKey,
+  //         newAccountPubkey: testSaleMint.publicKey,
+  //         space: 82,
+  //         lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+  //         programId: TOKEN_PROGRAM_ID,
+  //       }),
+  //       createInitializeMintInstruction(
+  //         testSaleMint.publicKey,
+  //         6,
+  //         mintAuth,
+  //         admin.publicKey
+  //       ),
+  //     ],
+  //     signers: [admin.payer, testSaleMint],
+  //   });
+  //
+  //
+  //   // Initialize roster using SDK
+  //   await sdk.initRoster({ launch: testLaunchState });
+  //
+  //   // Create multiple users and deposit funds
+  //   const users = [];
+  //   const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL); // 2 SOL per user
+  //
+  //   for (let i = 0; i < 15; i++) { // Create 15 users to exceed hard cap
+  //     const user = anchor.web3.Keypair.generate();
+  //
+  //     // Airdrop SOL to the user
+  //     await provider.connection.requestAirdrop(
+  //       user.publicKey,
+  //       20 * anchor.web3.LAMPORTS_PER_SOL
+  //     );
+  //
+  //     // Wait for the airdrop to complete
+  //     await new Promise(resolve => setTimeout(resolve, 1000));
+  //
+  //     // Confirm the user has SOL
+  //     const balance = await provider.connection.getBalance(user.publicKey);
+  //     console.log(`User ${i} balance: ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+  //
+  //     // Deposit using SDK
+  //     const { userPda, signature } = await sdk.deposit({
+  //       launch: testLaunchState,
+  //       amountLamports: depositAmount,
+  //       userKeypair: user,
+  //     });
+  //
+  //     users.push({ keypair: user, contribution: userPda });
+  //   }
+  //
+  //   // Verify total deposits exceed hard cap
+  //   let state = await sdk.fetchLaunch(testLaunchState);
+  //   assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
+  //   console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+  //   console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+  //   console.log(`Total tickets: ${state.totalTickets}`);
+  //
+  //   // Wait for funding period to end
+  //   await waitForFundingPeriodEnd(testLaunchState);
+  //
+  //   // Deposits are now automatically closed (no manual call needed)
+  //   state = await sdk.fetchLaunch(testLaunchState);
+  //   const currentTime = Math.floor(Date.now() / 1000);
+  //   assert.isTrue(currentTime >= state.fundingPeriodEnd.toNumber());
+  //
+  //   // Set VRF seed using SDK
+  //   const { selectionPda, signature: seedSig } = await sdk.setSeed({
+  //     launch: testLaunchState,
+  //   });
+  //   console.log("VRF seed set with signature:", seedSig);
+  //
+  //   state = await sdk.fetchLaunch(testLaunchState);
+  //   assert.ok(state.vrfSeed !== null);
+  //
+  //   // Store the total tickets count before processing
+  //   const totalTicketsToProcess = state.totalTickets;
+  //   console.log(`Total tickets to process: ${totalTicketsToProcess}`);
+  //
+  //   // Process all tickets in batches (cranking) using SDK
+  //   const maxItemsPerBatch = 10;
+  //   let processed = 0;
+  //
+  //   while (processed < totalTicketsToProcess) {
+  //     const { signature: batchSig } = await sdk.processBatch({
+  //       launch: testLaunchState,
+  //       maxItems: maxItemsPerBatch,
+  //     });
+  //
+  //     const selectionAccount = await sdk.fetchSelection(testLaunchState);
+  //     processed = selectionAccount.processed;
+  //     console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
+  //
+  //     // Add a small delay to avoid rate limiting
+  //     await new Promise(resolve => setTimeout(resolve, 100));
+  //   }
+  //
+  //   // Verify all tickets are processed
+  //   const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
+  //   const finalState = await sdk.fetchLaunch(testLaunchState);
+  //   console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
+  //   console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${finalState.kCapacity}`);
+  //   assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
+  //   assert.equal(finalSelectionAccount.heap.length, finalState.kCapacity); // Heap length should equal K capacity
+  //
+  //   // Finalize selection using SDK
+  //   const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });
+  //   console.log("Selection finalized with signature:", finalizeSig);
+  //
+  //   state = await sdk.fetchLaunch(testLaunchState);
+  //   assert.isTrue(state.selectionFinalized);
+  //   assert.ok(state.thresholdScore !== null);
+  //   console.log(`Threshold score: ${state.thresholdScore}`);
+  //
+  //   // Open claims using SDK
+  //   const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
+  //   console.log("Claims opened with signature:", claimsSig);
+  //
+  //   state = await sdk.fetchLaunch(testLaunchState);
+  //   assert.isTrue(state.claimsOpen);
+  //   assert.ok(state.tokensPerTicket !== null);
+  //   console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
+  //
+  //   // Test claim refunds for some users (simulate losers) using SDK
+  //   const testUser = users[0];
+  //   const userAccountBefore = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
+  //   const initialBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+  //
+  //   const { signature: refundSig } = await sdk.claimRefund({
+  //     launch: testLaunchState,
+  //     userKeypair: testUser.keypair,
+  //   });
+  //   console.log("Refund claimed with signature:", refundSig);
+  //
+  //   const finalBalance = await provider.connection.getBalance(testUser.keypair.publicKey);
+  //   const userAccountAfter = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
+  //
+  //   assert.isTrue(userAccountAfter.claimedRefund);
+  //   console.log(`User refund claimed. Balance change: ${(finalBalance - initialBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+  //
+  //   // Test claim tokens for a user (simulate winner) using SDK
+  //   const { userAta, signature: tokenSig } = await sdk.claimTokens({
+  //     launch: testLaunchState,
+  //     saleMint: testSaleMint.publicKey,
+  //     userKeypair: testUser.keypair,
+  //     createAtaIfMissing: true,
+  //   });
+  //   console.log("Tokens claimed with signature:", tokenSig);
+  //
+  //   const finalTokenBalance = await provider.connection.getTokenAccountBalance(userAta);
+  //   const userAccountFinal = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
+  //
+  //   assert.isTrue(userAccountFinal.claimedTokens);
+  //   console.log(`User tokens claimed. Token balance: ${finalTokenBalance.value.uiAmount}`);
+  //
+  //   console.log("Complete flow test passed! All functions tested successfully.");
+  // });
+
+
+
   it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
     const testSaleMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
@@ -284,6 +472,7 @@ describe("engine bankrun", () => {
       tauLamports: testTau,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
+      fundingDurationDays: 0,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -302,10 +491,7 @@ describe("engine bankrun", () => {
       signers: [testSaleMint],
     });
 
-    await provider.sendAndConfirm(await sdk.openFundingTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    }), [admin.payer]);
+
 
     const { transaction: rosterTx, rosterPda } = await sdk.initRosterTx({
       launch: testLaunchState,
@@ -346,20 +532,13 @@ describe("engine bankrun", () => {
     console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Total tickets: ${state.totalTickets}`);
 
-    await provider.sendAndConfirm(await sdk.closeDepositsTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    }), [admin.payer]);
+    // Warp time forward so funding period ends
+    const currentSlot = await context.banksClient.getSlot();
+    context.warpToSlot(currentSlot + 1000n);
 
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(state.depositsClosed);
-    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
-
-    const vrfSeed = anchor.web3.Keypair.generate().publicKey;
     const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: testLaunchState,
       admin: admin.publicKey,
-      seed: vrfSeed.toBuffer(),
     });
     const seedSig = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
     console.log("VRF seed set with signature:", seedSig);
@@ -372,11 +551,11 @@ describe("engine bankrun", () => {
 
     const maxItemsPerBatch = 10;
     let processed = 0;
-    let currentSlot = 100n;
+    let batchSlot = await context.banksClient.getSlot();
 
     while (processed < totalTicketsToProcess) {
-      currentSlot += 1n;
-      context.warpToSlot(currentSlot);
+      batchSlot += 1n;
+      context.warpToSlot(batchSlot);
 
       const processBatchIx = await program.methods
         .processBatch(maxItemsPerBatch)
@@ -396,9 +575,11 @@ describe("engine bankrun", () => {
     }
 
     const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
     console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
     console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
     assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
+    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
     assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
 
     const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });

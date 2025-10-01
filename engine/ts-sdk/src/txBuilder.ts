@@ -2,6 +2,7 @@ import { Program, BN } from "@coral-xyz/anchor";
 import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Engine as EngineIDL } from "../idl/engine";
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
+import * as anchor from "@coral-xyz/anchor";
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -33,6 +34,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
+    fundingDurationDays: number;
   }): Promise<{
     instruction: TransactionInstruction;
     launchState: PublicKey;
@@ -50,7 +52,8 @@ export class TxBuilder {
         params.perWalletCap,
         params.tauLamports,
         params.saleAllocation,
-        params.lpAllocation
+        params.lpAllocation,
+        params.fundingDurationDays
       )
       .accounts({
         admin: params.admin,
@@ -201,21 +204,21 @@ export class TxBuilder {
     return new Transaction().add(ix);
   }
 
+
+
   async setSeedIx(params: {
     launch: PublicKey;
     admin: PublicKey;
-    seed: Uint8Array | number[] | Buffer;
   }): Promise<{ instruction: TransactionInstruction; selectionPda: PublicKey }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
     
-    const seed32 = this.ensure32Bytes(params.seed);
-
     const instruction = await this.program.methods
-      .setSeed(seed32)
-      .accounts({
-        admin: params.admin,
+      .setSeed()
+      .accountsStrict({
+        payer: params.admin,
         launchState: params.launch,
         selectionState: selectionPda,
+        slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
@@ -226,7 +229,6 @@ export class TxBuilder {
   async setSeedTx(params: {
     launch: PublicKey;
     admin: PublicKey;
-    seed: Uint8Array | number[] | Buffer;
   }): Promise<{ transaction: Transaction; selectionPda: PublicKey }> {
     const { instruction, selectionPda } = await this.setSeedIx(params);
     const transaction = new Transaction().add(instruction);
