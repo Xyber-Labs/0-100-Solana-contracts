@@ -593,12 +593,8 @@ export default {
 
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
-            openFundingTx: txBuilder.openFundingTx.bind(txBuilder),
-            openFundingIx: txBuilder.openFundingIx.bind(txBuilder),
             initRosterTx: txBuilder.initRosterTx.bind(txBuilder),
             initRosterIx: txBuilder.initRosterIx.bind(txBuilder),
-            closeDepositsTx: txBuilder.closeDepositsTx.bind(txBuilder),
-            closeDepositsIx: txBuilder.closeDepositsIx.bind(txBuilder),
             setSeedTx: txBuilder.setSeedTx.bind(txBuilder),
             setSeedIx: txBuilder.setSeedIx.bind(txBuilder),
             depositTx,

@@ -128,26 +128,6 @@ export class TxBuilder {
     };
   }
 
-  async openFundingIx(params: {
-    launch: PublicKey;
-    admin: PublicKey;
-  }): Promise<TransactionInstruction> {
-    return await this.program.methods
-      .openFunding()
-      .accounts({
-        admin: params.admin,
-        launchState: params.launch,
-      })
-      .instruction();
-  }
-
-  async openFundingTx(params: {
-    launch: PublicKey;
-    admin: PublicKey;
-  }): Promise<Transaction> {
-    const ix = await this.openFundingIx(params);
-    return new Transaction().add(ix);
-  }
 
   async initRosterIx(params: {
     launch: PublicKey;
@@ -176,35 +156,6 @@ export class TxBuilder {
     const transaction = new Transaction().add(instruction);
     return { transaction, rosterPda };
   }
-
-  async closeDepositsIx(params: {
-    launch: PublicKey;
-    admin: PublicKey;
-    roster?: PublicKey;
-  }): Promise<TransactionInstruction> {
-    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
-
-    return await this.program.methods
-      .closeDeposits()
-      .accounts({
-        admin: params.admin,
-        launchState: params.launch,
-        roster: roster,
-        launch: params.launch,
-      })
-      .instruction();
-  }
-
-  async closeDepositsTx(params: {
-    launch: PublicKey;
-    admin: PublicKey;
-    roster?: PublicKey;
-  }): Promise<Transaction> {
-    const ix = await this.closeDepositsIx(params);
-    return new Transaction().add(ix);
-  }
-
-
 
   async setSeedIx(params: {
     launch: PublicKey;
