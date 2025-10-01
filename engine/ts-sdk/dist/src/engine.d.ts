@@ -39,7 +39,6 @@ declare const _default: {
             ata: PublicKey;
             ix: TransactionInstruction;
         };
-        ensure32Bytes: (seed: Uint8Array | number[] | Buffer) => Buffer;
         initLaunch: (args: {
             saleMint: PublicKey;
             hardCapLamports: BN;
@@ -48,6 +47,7 @@ declare const _default: {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
+            fundingDurationDays: number;
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[];
         }) => Promise<{
@@ -62,23 +62,9 @@ declare const _default: {
             rosterPda: PublicKey;
             signature: string;
         }>;
-        openFunding: (args: {
-            launch: PublicKey;
-            signers?: Keypair[];
-        }) => Promise<{
-            signature: string;
-        }>;
-        closeDeposits: (args: {
-            launch: PublicKey;
-            roster?: PublicKey;
-            signers?: Keypair[];
-        }) => Promise<{
-            signature: string;
-        }>;
         setSeed: (args: {
             launch: PublicKey;
-            seed: Uint8Array | number[] | Buffer;
-            signers?: Keypair[];
+            payerKeypair?: Keypair;
         }) => Promise<{
             selectionPda: PublicKey;
             signature: string;
@@ -150,8 +136,7 @@ declare const _default: {
             saleMint: anchor.web3.PublicKey;
             saleAllocation: anchor.BN;
             lpAllocation: anchor.BN;
-            fundingOpen: boolean;
-            depositsClosed: boolean;
+            fundingPeriodEnd: anchor.BN;
             totalDeposited: anchor.BN;
             totalTickets: number;
             kCapacity: number;
@@ -206,8 +191,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
-                depositsClosed: boolean;
+                fundingPeriodEnd: anchor.BN;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;
@@ -233,8 +217,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
-                depositsClosed: boolean;
+                fundingPeriodEnd: anchor.BN;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;
@@ -260,8 +243,7 @@ declare const _default: {
                 saleMint: anchor.web3.PublicKey;
                 saleAllocation: anchor.BN;
                 lpAllocation: anchor.BN;
-                fundingOpen: boolean;
-                depositsClosed: boolean;
+                fundingPeriodEnd: anchor.BN;
                 totalDeposited: anchor.BN;
                 totalTickets: number;
                 kCapacity: number;

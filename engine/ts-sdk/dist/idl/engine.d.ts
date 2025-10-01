@@ -171,44 +171,6 @@ export type Engine = {
             "args": [];
         },
         {
-            "name": "closeDeposits";
-            "docs": [
-                "Close deposits, build prefix, set N and K."
-            ];
-            "discriminator": [
-                32,
-                132,
-                87,
-                145,
-                240,
-                56,
-                34,
-                245
-            ];
-            "accounts": [
-                {
-                    "name": "admin";
-                    "writable": true;
-                    "signer": true;
-                },
-                {
-                    "name": "launchState";
-                    "writable": true;
-                },
-                {
-                    "name": "roster";
-                    "writable": true;
-                },
-                {
-                    "name": "launch";
-                    "relations": [
-                        "roster"
-                    ];
-                }
-            ];
-            "args": [];
-        },
-        {
             "name": "deposit";
             "docs": [
                 "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -452,6 +414,10 @@ export type Engine = {
                 {
                     "name": "lpAllocation";
                     "type": "u64";
+                },
+                {
+                    "name": "fundingDurationDays";
+                    "type": "u8";
                 }
             ];
         },
@@ -539,34 +505,6 @@ export type Engine = {
             "args": [];
         },
         {
-            "name": "openFunding";
-            "docs": [
-                "Open funding window."
-            ];
-            "discriminator": [
-                255,
-                94,
-                231,
-                132,
-                50,
-                44,
-                163,
-                83
-            ];
-            "accounts": [
-                {
-                    "name": "admin";
-                    "writable": true;
-                    "signer": true;
-                },
-                {
-                    "name": "launchState";
-                    "writable": true;
-                }
-            ];
-            "args": [];
-        },
-        {
             "name": "processBatch";
             "docs": [
                 "Permissionless crank: process up to max_items tickets (t = processed ..)."
@@ -588,9 +526,11 @@ export type Engine = {
                 },
                 {
                     "name": "launchState";
+                    "writable": true;
                 },
                 {
                     "name": "roster";
+                    "writable": true;
                 }
             ];
             "args": [
@@ -603,7 +543,7 @@ export type Engine = {
         {
             "name": "setSeed";
             "docs": [
-                "MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed."
+                "Permissionless seed setter using recent blockhash."
             ];
             "discriminator": [
                 63,
@@ -617,7 +557,7 @@ export type Engine = {
             ];
             "accounts": [
                 {
-                    "name": "admin";
+                    "name": "payer";
                     "writable": true;
                     "signer": true;
                 },
@@ -652,21 +592,15 @@ export type Engine = {
                     };
                 },
                 {
+                    "name": "slotHashes";
+                    "address": "SysvarS1otHashes111111111111111111111111111";
+                },
+                {
                     "name": "systemProgram";
                     "address": "11111111111111111111111111111111";
                 }
             ];
-            "args": [
-                {
-                    "name": "seed";
-                    "type": {
-                        "array": [
-                            "u8",
-                            32
-                        ];
-                    };
-                }
-            ];
+            "args": [];
         },
         {
             "name": "withdraw";
@@ -828,124 +762,355 @@ export type Engine = {
             ];
         }
     ];
+    "events": [
+        {
+            "name": "batchProcessed";
+            "discriminator": [
+                199,
+                28,
+                80,
+                191,
+                111,
+                11,
+                127,
+                180
+            ];
+        },
+        {
+            "name": "claimsOpened";
+            "discriminator": [
+                126,
+                92,
+                24,
+                148,
+                242,
+                66,
+                8,
+                28
+            ];
+        },
+        {
+            "name": "depositMade";
+            "discriminator": [
+                210,
+                201,
+                130,
+                183,
+                244,
+                203,
+                155,
+                199
+            ];
+        },
+        {
+            "name": "fundingPeriodStarted";
+            "discriminator": [
+                24,
+                17,
+                247,
+                144,
+                200,
+                76,
+                119,
+                198
+            ];
+        },
+        {
+            "name": "launchInitialized";
+            "discriminator": [
+                60,
+                143,
+                196,
+                55,
+                214,
+                166,
+                10,
+                63
+            ];
+        },
+        {
+            "name": "refundClaimed";
+            "discriminator": [
+                136,
+                64,
+                242,
+                99,
+                4,
+                244,
+                208,
+                130
+            ];
+        },
+        {
+            "name": "rosterInitialized";
+            "discriminator": [
+                111,
+                28,
+                99,
+                210,
+                82,
+                158,
+                188,
+                249
+            ];
+        },
+        {
+            "name": "seedSet";
+            "discriminator": [
+                9,
+                179,
+                143,
+                172,
+                250,
+                146,
+                42,
+                6
+            ];
+        },
+        {
+            "name": "selectionFinalized";
+            "discriminator": [
+                111,
+                84,
+                253,
+                234,
+                76,
+                136,
+                103,
+                185
+            ];
+        },
+        {
+            "name": "tokensClaimed";
+            "discriminator": [
+                25,
+                128,
+                244,
+                55,
+                241,
+                136,
+                200,
+                91
+            ];
+        },
+        {
+            "name": "withdrawn";
+            "discriminator": [
+                20,
+                89,
+                223,
+                198,
+                194,
+                124,
+                219,
+                13
+            ];
+        }
+    ];
     "errors": [
         {
             "code": 6000;
-            "name": "notOpen";
-            "msg": "Funding window is not open";
+            "name": "minRaiseNotMet";
+            "msg": "Minimum raise not met";
         },
         {
             "code": 6001;
+            "name": "fundingPeriodEnded";
+            "msg": "Funding period has ended";
+        },
+        {
+            "code": 6002;
+            "name": "fundingPeriodNotEnded";
+            "msg": "Funding period has not ended yet";
+        },
+        {
+            "code": 6003;
+            "name": "invalidFundingDuration";
+            "msg": "Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)";
+        },
+        {
+            "code": 6004;
             "name": "claimsNotOpen";
             "msg": "Claims are not open";
         },
         {
-            "code": 6002;
-            "name": "alreadyClosed";
-            "msg": "Deposits already closed";
-        },
-        {
-            "code": 6003;
-            "name": "notClosed";
-            "msg": "Deposits not closed";
-        },
-        {
-            "code": 6004;
+            "code": 6005;
             "name": "unauthorized";
             "msg": "unauthorized";
         },
         {
-            "code": 6005;
+            "code": 6006;
             "name": "amountNotMultipleTau";
             "msg": "Amount must be multiple of tau";
         },
         {
-            "code": 6006;
+            "code": 6007;
             "name": "perWalletCapExceeded";
             "msg": "Per-wallet cap exceeded";
         },
         {
-            "code": 6007;
+            "code": 6008;
             "name": "insufficientDeposit";
             "msg": "Insufficient deposit";
         },
         {
-            "code": 6008;
+            "code": 6009;
             "name": "seedAlreadySet";
             "msg": "Seed already set";
         },
         {
-            "code": 6009;
+            "code": 6010;
             "name": "seedMissing";
             "msg": "Seed missing";
         },
         {
-            "code": 6010;
+            "code": 6011;
             "name": "alreadyFinalized";
             "msg": "Selection already finalized";
         },
         {
-            "code": 6011;
+            "code": 6012;
             "name": "notFinalized";
             "msg": "Selection not finalized";
         },
         {
-            "code": 6012;
+            "code": 6013;
             "name": "thresholdMissing";
             "msg": "Threshold missing";
         },
         {
-            "code": 6013;
+            "code": 6014;
             "name": "tokensPerTicketMissing";
             "msg": "Tokens per ticket missing";
         },
         {
-            "code": 6014;
+            "code": 6015;
             "name": "invalidTau";
             "msg": "Invalid tau";
         },
         {
-            "code": 6015;
+            "code": 6016;
             "name": "invalidK";
             "msg": "Invalid K";
         },
         {
-            "code": 6016;
+            "code": 6017;
             "name": "notFullyProcessed";
             "msg": "Not fully processed";
         },
         {
-            "code": 6017;
+            "code": 6018;
             "name": "heapNotFull";
             "msg": "Heap not full";
         },
         {
-            "code": 6018;
+            "code": 6019;
             "name": "userNotFoundInRoster";
             "msg": "User not found in roster";
         },
         {
-            "code": 6019;
+            "code": 6020;
             "name": "tOutOfRange";
             "msg": "t out of range";
         },
         {
-            "code": 6020;
+            "code": 6021;
             "name": "mappingError";
             "msg": "Mapping error";
         },
         {
-            "code": 6021;
+            "code": 6022;
             "name": "alreadyClaimedRefund";
             "msg": "Already claimed refund";
         },
         {
-            "code": 6022;
+            "code": 6023;
             "name": "alreadyClaimedTokens";
             "msg": "Already claimed tokens";
+        },
+        {
+            "code": 6024;
+            "name": "noRecentBlockhashes";
+            "msg": "No recent blockhashes found in SlotHashes sysvar";
         }
     ];
     "types": [
+        {
+            "name": "batchProcessed";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "fromT";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "processed";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "heapLen";
+                        "type": "u32";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "claimsOpened";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "tokensPerTicket";
+                        "type": "u64";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "depositMade";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "user";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "amount";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "ticketsBefore";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "ticketsAfter";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "totalDeposited";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "totalTickets";
+                        "type": "u32";
+                    }
+                ];
+            };
+        },
         {
             "name": "escrowAccount";
             "type": {
@@ -958,6 +1123,22 @@ export type Engine = {
                     {
                         "name": "balance";
                         "type": "u64";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "fundingPeriodStarted";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "fundingPeriodEnd";
+                        "type": "i64";
                     }
                 ];
             };
@@ -978,6 +1159,50 @@ export type Engine = {
                     {
                         "name": "localJ";
                         "type": "u32";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "launchInitialized";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "projectId";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "admin";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "saleMint";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "hardCapLamports";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "minRaiseLamports";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "perWalletCap";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "tauLamports";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "saleAllocation";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "lpAllocation";
+                        "type": "u64";
                     }
                 ];
             };
@@ -1024,12 +1249,8 @@ export type Engine = {
                         "type": "u64";
                     },
                     {
-                        "name": "fundingOpen";
-                        "type": "bool";
-                    },
-                    {
-                        "name": "depositsClosed";
-                        "type": "bool";
+                        "name": "fundingPeriodEnd";
+                        "type": "i64";
                     },
                     {
                         "name": "totalDeposited";
@@ -1094,6 +1315,30 @@ export type Engine = {
             };
         },
         {
+            "name": "refundClaimed";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "user";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "refundedLamports";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "yApproved";
+                        "type": "u32";
+                    }
+                ];
+            };
+        },
+        {
             "name": "roster";
             "type": {
                 "kind": "struct";
@@ -1126,6 +1371,59 @@ export type Engine = {
                     },
                     {
                         "name": "shardBase";
+                        "type": "u32";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "rosterInitialized";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "seedSet";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "seedHash";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    }
+                ];
+            };
+        },
+        {
+            "name": "selectionFinalized";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "threshold";
+                        "type": "u128";
+                    },
+                    {
+                        "name": "kCapacity";
                         "type": "u32";
                     }
                 ];
@@ -1177,6 +1475,30 @@ export type Engine = {
             };
         },
         {
+            "name": "tokensClaimed";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "user";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "amount";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "yApproved";
+                        "type": "u32";
+                    }
+                ];
+            };
+        },
+        {
             "name": "userContribution";
             "type": {
                 "kind": "struct";
@@ -1204,6 +1526,42 @@ export type Engine = {
                     {
                         "name": "claimedTokens";
                         "type": "bool";
+                    }
+                ];
+            };
+        },
+        {
+            "name": "withdrawn";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "user";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "amount";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "ticketsBefore";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "ticketsAfter";
+                        "type": "u32";
+                    },
+                    {
+                        "name": "totalDeposited";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "totalTickets";
+                        "type": "u32";
                     }
                 ];
             };

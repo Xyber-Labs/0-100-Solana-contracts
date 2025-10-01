@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
+import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
 import EngineSDK from 'zero-hundred-engine-sdk';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
@@ -13,6 +13,7 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
+  fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
 }
 
 // Error boundary component
@@ -55,7 +56,11 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-function EngineDemo() {
+interface EngineDemoProps {
+  testWallet?: Keypair | null;
+}
+
+function EngineDemo({ testWallet }: EngineDemoProps) {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const { connection } = useConnection();
   
@@ -108,6 +113,7 @@ function EngineDemo() {
     tauLamports: 1 * 1e9, // 1 SOL
     saleAllocation: 1000000,
     lpAllocation: 500000,
+    fundingDurationDays: 5, // 5 days for production
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -119,8 +125,76 @@ function EngineDemo() {
   };
 
   const initializeSDK = useCallback(async () => {
-    if (!publicKey || !signTransaction || !signAllTransactions) {
-      addLog('ERROR: Wallet not connected');
+    // Use test wallet if available, otherwise use connected wallet
+    let activeWallet;
+    
+    if (testWallet) {
+      // Create wallet adapter for test wallet
+      activeWallet = {
+        publicKey: testWallet.publicKey,
+        signTransaction: async <T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> => {
+          if (transaction instanceof Transaction) {
+            // Sign with test wallet
+            transaction.sign(testWallet);
+            console.log('TestWallet signed transaction with:', testWallet.publicKey.toString());
+            console.log('Transaction signers before additional signing:', transaction.signatures.map(sig => sig.publicKey.toString()));
+            
+            // Check if there are any unsigned signers that need to be signed
+            const unsignedSigners = transaction.signatures.filter(sig => sig.signature === null);
+            console.log('Unsigned signers:', unsignedSigners.map(sig => sig.publicKey.toString()));
+            
+            // If there are unsigned signers, we need to handle them
+            // This is a workaround for the case where rpc.signers() doesn't work with custom wallet
+            if (unsignedSigners.length > 0) {
+              console.log('Warning: Some signers are not signed. This may cause signature verification to fail.');
+              
+              // Try to sign with any additional signers that might be available
+              // This is a workaround for the rpc.signers() issue
+              for (const unsignedSig of unsignedSigners) {
+                console.log('Attempting to sign with additional signer:', unsignedSig.publicKey.toString());
+                // Note: We can't sign with arbitrary keypairs here as we don't have access to them
+                // This is a limitation of the current approach
+              }
+            }
+          }
+          return transaction;
+        },
+        signAllTransactions: async <T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> => {
+          transactions.forEach(tx => {
+            if (tx instanceof Transaction) {
+              // Sign with test wallet
+              tx.sign(testWallet);
+              console.log('TestWallet signed transaction with:', testWallet.publicKey.toString());
+              console.log('Transaction signers before additional signing:', tx.signatures.map(sig => sig.publicKey.toString()));
+              
+              // Check if there are any unsigned signers that need to be signed
+              const unsignedSigners = tx.signatures.filter(sig => sig.signature === null);
+              console.log('Unsigned signers:', unsignedSigners.map(sig => sig.publicKey.toString()));
+              
+              if (unsignedSigners.length > 0) {
+                console.log('Warning: Some signers are not signed. This may cause signature verification to fail.');
+                
+                // Try to sign with any additional signers that might be available
+                for (const unsignedSig of unsignedSigners) {
+                  console.log('Attempting to sign with additional signer:', unsignedSig.publicKey.toString());
+                  // Note: We can't sign with arbitrary keypairs here as we don't have access to them
+                }
+              }
+            }
+          });
+          return transactions;
+        },
+      };
+    } else if (publicKey && signTransaction && signAllTransactions) {
+      activeWallet = {
+        publicKey,
+        signTransaction,
+        signAllTransactions,
+      };
+    }
+
+    if (!activeWallet) {
+      addLog('ERROR: No wallet available (connect wallet or create test wallet)');
       return;
     }
 
@@ -128,15 +202,17 @@ function EngineDemo() {
       setIsLoading(true);
       addLog('Initializing SDK...');
       
-      // Create wallet adapter
-      const wallet = {
-        publicKey,
-        signTransaction,
-        signAllTransactions,
-      };
+      if (testWallet) {
+        addLog(`Using test wallet: ${testWallet.publicKey.toString().slice(0, 8)}...`);
+      } else {
+        addLog(`Using connected wallet: ${publicKey?.toString().slice(0, 8)}...`);
+      }
 
-      // Create provider
-      const provider = new AnchorProvider(connection, wallet, {});
+      // Create provider with custom wallet that handles additional signers
+      const provider = new AnchorProvider(connection, activeWallet, {
+        commitment: 'confirmed',
+        preflightCommitment: 'confirmed',
+      });
       
       // Load IDL dynamically
       const idl = await EngineSDK.loadIdl();
@@ -156,7 +232,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, signTransaction, signAllTransactions, connection]);
+  }, [publicKey, signTransaction, signAllTransactions, connection, testWallet]);
 
   const initLaunch = useCallback(async () => {
     if (!sdk || !program) {
@@ -184,41 +260,139 @@ function EngineDemo() {
         program.programId
       );
 
-      const { signature } = await sdk.initLaunch({
-        saleMint: saleMintKeypair.publicKey,
-        hardCapLamports: new BN(launchConfig.hardCapLamports),
-        minRaiseLamports: new BN(launchConfig.minRaiseLamports),
-        perWalletCap: new BN(launchConfig.perWalletCap),
-        tauLamports: new BN(launchConfig.tauLamports),
-        saleAllocation: new BN(launchConfig.saleAllocation),
-        lpAllocation: new BN(launchConfig.lpAllocation),
-        preInstructions: [
-          // Create mint account
-          SystemProgram.createAccount({
-            fromPubkey: publicKey!,
-            newAccountPubkey: saleMintKeypair.publicKey,
-            space: 82, // Mint account size
-            lamports: await connection.getMinimumBalanceForRentExemption(82),
-            programId: TOKEN_PROGRAM_ID,
-          }),
-          // Initialize mint
-          createInitializeMintInstruction(
-            saleMintKeypair.publicKey,
-            6,
-            mintAuth,
-            publicKey!
-          ),
-        ],
-        signers: [saleMintKeypair],
-      });
+      console.log('Creating initLaunch transaction with:');
+      console.log('saleMint:', saleMintKeypair.publicKey.toString());
+      console.log('signers:', [saleMintKeypair].map(kp => kp.publicKey.toString()));
+      
+      // Create the transaction manually to handle signers properly
+      const transaction = new Transaction();
+      
+      addLog(`Creating transaction for saleMint: ${saleMintKeypair.publicKey.toString()}`);
+      
+      // Add pre-instructions
+      transaction.add(
+        SystemProgram.createAccount({
+          fromPubkey: (testWallet?.publicKey || publicKey)!,
+          newAccountPubkey: saleMintKeypair.publicKey,
+          space: 82,
+          lamports: await connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        })
+      );
+      
+      transaction.add(
+        createInitializeMintInstruction(
+          saleMintKeypair.publicKey,
+          6,
+          mintAuth,
+          (testWallet?.publicKey || publicKey)!
+        )
+      );
+      
+      // Add the main instruction
+      const initLaunchIx = await program.methods
+        .initLaunch(
+          new BN(launchConfig.hardCapLamports),
+          new BN(launchConfig.minRaiseLamports),
+          new BN(launchConfig.perWalletCap),
+          new BN(launchConfig.tauLamports),
+          new BN(launchConfig.saleAllocation),
+          new BN(launchConfig.lpAllocation),
+          launchConfig.fundingDurationDays
+        )
+        .accountsStrict({
+          admin: (testWallet?.publicKey || publicKey)!,
+          projectCounter: PublicKey.findProgramAddressSync([Buffer.from("project_counter")], program.programId)[0],
+          launchState: launchPda,
+          saleMint: saleMintKeypair.publicKey,
+          escrow: escrowPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+      
+      transaction.add(initLaunchIx);
+      
+      addLog(`Transaction instructions count: ${transaction.instructions.length}`);
+      
+      // Get recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = (testWallet?.publicKey || publicKey)!;
+      
+      addLog(`Transaction prepared with blockhash: ${blockhash}`);
+      addLog(`Fee payer: ${(testWallet?.publicKey || publicKey)!.toString()}`);
+      addLog(`Transaction signers: ${transaction.signatures.map(sig => sig.publicKey.toString()).join(', ')}`);
+      
+      let signature: string;
+      
+      if (testWallet) {
+        // For TestWallet, sign manually
+        addLog(`Signing with TestWallet: ${testWallet.publicKey.toString()}`);
+        transaction.sign(testWallet, saleMintKeypair);
+        const signers = [testWallet, saleMintKeypair].filter(Boolean) as Keypair[];
+        addLog(`Sending transaction with signers: ${signers.map(s => s.publicKey.toString()).join(', ')}`);
+        signature = await connection.sendTransaction(transaction, signers);
+      } else {
+        // For browser wallet, use signTransaction
+        if (!signTransaction) {
+          throw new Error('No signTransaction function available');
+        }
+        
+        addLog(`Signing with browser wallet: ${publicKey?.toString()}`);
+        // Sign with browser wallet first
+        const signedTransaction = await signTransaction(transaction);
+        addLog(`Browser wallet signed transaction`);
+        addLog(`Signed transaction signatures: ${signedTransaction.signatures.map(sig => sig.publicKey.toString()).join(', ')}`);
+        
+        // Send the transaction with saleMintKeypair as additional signer
+        addLog(`Sending transaction with additional signer: ${saleMintKeypair.publicKey.toString()}`);
+        addLog(`Transaction feePayer: ${signedTransaction.feePayer?.toString()}`);
+        addLog(`Transaction recentBlockhash: ${signedTransaction.recentBlockhash}`);
+        addLog(`Transaction instructions count: ${signedTransaction.instructions.length}`);
+        
+        // Check if saleMintKeypair is already signed
+        const isSaleMintSigned = signedTransaction.signatures.some(sig => 
+          sig.publicKey.equals(saleMintKeypair.publicKey) && sig.signature !== null
+        );
+        addLog(`SaleMint already signed: ${isSaleMintSigned}`);
+        
+        try {
+          if (isSaleMintSigned) {
+            // If already signed, send without additional signers
+            addLog(`Sending transaction without additional signers (already signed)`);
+            signature = await connection.sendRawTransaction(signedTransaction.serialize());
+          } else {
+            // If not signed, send with additional signer
+            addLog(`Sending transaction with additional signer`);
+            signature = await connection.sendTransaction(signedTransaction, [saleMintKeypair]);
+          }
+          addLog(`Transaction sent, signature: ${signature}`);
+        } catch (sendError) {
+          addLog(`ERROR: Failed to send transaction - ${sendError}`);
+          addLog(`Error details: ${JSON.stringify(sendError)}`);
+          throw sendError;
+        }
+      }
       
       setLaunchState(launchPda);
       setSaleMint(saleMintKeypair);
       setEscrow(escrowPda);
       
+      if (!signature) {
+        throw new Error('Transaction signature is empty');
+      }
+      
       addLog(`SUCCESS: Launch initialized - Signature: ${signature}`);
       addLog(`Launch PDA: ${launchPda.toString()}`);
       addLog(`Sale Mint: ${saleMintKeypair.publicKey.toString()}`);
+      addLog(`Transaction sent successfully`);
+      
+      // Wait for transaction confirmation and account creation
+      addLog('Waiting for transaction confirmation...');
+      await connection.confirmTransaction(signature, 'confirmed');
+      
+      // Wait a bit more for account to be fully created
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Fetch initial launch data
       await fetchLaunchData();
@@ -238,14 +412,29 @@ function EngineDemo() {
       addLog('Launch data refreshed');
     } catch (error) {
       addLog(`ERROR: Failed to fetch launch data - ${error}`);
+      
+      // If account doesn't exist yet, wait and retry
+      if (error instanceof Error && error.message.includes('Account does not exist')) {
+        addLog('Account not found, waiting and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        try {
+          const retryData = await sdk.fetchLaunch(launchState);
+          setLaunchData(retryData);
+          addLog('Launch data refreshed after retry');
+        } catch (retryError) {
+          addLog(`ERROR: Retry failed - ${retryError}`);
+        }
+      }
     }
   }, [sdk, launchState]);
 
   const fetchUserData = useCallback(async () => {
-    if (!sdk || !launchState || !publicKey) return;
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!sdk || !launchState || !activePublicKey) return;
     
     try {
-      const data = await sdk.fetchUserContribution(launchState, publicKey);
+      const data = await sdk.fetchUserContribution(launchState, activePublicKey);
       setUserContributions(data);
       addLog('User contribution data refreshed');
     } catch (error: any) {
@@ -257,7 +446,7 @@ function EngineDemo() {
         addLog(`ERROR: Failed to fetch user data - ${error}`);
       }
     }
-  }, [sdk, launchState, publicKey]);
+  }, [sdk, launchState, publicKey, testWallet]);
 
   const fetchSelectionData = useCallback(async () => {
     if (!sdk || !launchState) return;
@@ -271,24 +460,7 @@ function EngineDemo() {
     }
   }, [sdk, launchState]);
 
-  const openFunding = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Opening funding...');
-      const { signature } = await sdk.openFunding({ launch: launchState });
-      addLog(`SUCCESS: Funding opened - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to open funding - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState, fetchLaunchData]);
+ // Removed function dependencies
 
   const initRoster = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -310,24 +482,6 @@ function EngineDemo() {
     }
   }, [sdk, launchState]);
 
-  const closeDeposits = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Closing deposits...');
-      const { signature } = await sdk.closeDeposits({ launch: launchState });
-      addLog(`SUCCESS: Deposits closed - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to close deposits - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState, fetchLaunchData]);
 
   const setSeed = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -337,14 +491,12 @@ function EngineDemo() {
 
     try {
       setIsLoading(true);
-      addLog('Setting VRF seed...');
-      const vrfSeed = Keypair.generate().publicKey;
+      addLog('Setting VRF seed using blockhash...');
       const { selectionPda, signature } = await sdk.setSeed({
         launch: launchState,
-        seed: vrfSeed.toBuffer(),
       });
       setSelection(selectionPda);
-      addLog(`SUCCESS: VRF seed set - Signature: ${signature}`);
+      addLog(`SUCCESS: VRF seed set using blockhash - Signature: ${signature}`);
       addLog(`Selection PDA: ${selectionPda.toString()}`);
       await fetchLaunchData();
     } catch (error) {
@@ -352,7 +504,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchLaunchData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const processBatch = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -374,7 +526,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchSelectionData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const finalizeSelection = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -394,7 +546,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchLaunchData, fetchSelectionData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const openClaims = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -413,7 +565,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchLaunchData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const deposit = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -439,7 +591,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchLaunchData, fetchUserData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const withdraw = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -464,7 +616,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchLaunchData, fetchUserData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const claimRefund = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -483,7 +635,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, fetchUserData]);
+  }, [sdk, launchState]); // Removed function dependencies
 
   const claimTokens = useCallback(async () => {
     if (!sdk || !launchState || !saleMint) {
@@ -507,52 +659,61 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, saleMint, fetchUserData]);
+  }, [sdk, launchState, saleMint]); // Removed function dependencies
 
   const fetchBalance = useCallback(async () => {
-    if (!publicKey) return;
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!activePublicKey) return;
     
     try {
-      const currentBalance = await connection.getBalance(publicKey);
+      const currentBalance = await connection.getBalance(activePublicKey);
       setBalance(currentBalance);
     } catch (error) {
       addLog(`ERROR: Failed to fetch balance - ${error}`);
     }
-  }, [publicKey, connection]);
+  }, [publicKey, connection, testWallet]);
 
   const requestFaucet = useCallback(async () => {
-    if (!publicKey) {
-      addLog('ERROR: Wallet not connected');
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!activePublicKey) {
+      addLog('ERROR: No wallet available (connect wallet or create test wallet)');
       return;
     }
 
     try {
       setIsLoading(true);
       addLog('Requesting 10 SOL from faucet...');
+      addLog(`Requesting for address: ${activePublicKey.toString()}`);
       
-      // Request airdrop from localnet faucet
+      // Request airdrop from faucet
       const signature = await connection.requestAirdrop(
-        publicKey,
+        activePublicKey,
         10 * 1e9 // 10 SOL in lamports
       );
       
+      addLog(`Airdrop signature: ${signature}`);
+      addLog('Waiting for confirmation...');
+      
       // Wait for confirmation
       await connection.confirmTransaction(signature);
+      
+      addLog('Transaction confirmed, updating balance...');
       
       // Update balance
       await fetchBalance();
       
       // Get fresh balance for logging
-      const freshBalance = await connection.getBalance(publicKey);
+      const freshBalance = await connection.getBalance(activePublicKey);
       
       addLog(`SUCCESS: Faucet request completed - Signature: ${signature}`);
       addLog(`New balance: ${(freshBalance / 1e9).toFixed(2)} SOL`);
     } catch (error) {
       addLog(`ERROR: Failed to request faucet - ${error}`);
+      console.error('Faucet error details:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, connection, fetchBalance, balance]);
+  }, [publicKey, connection, testWallet, fetchBalance]);
 
   const clearLogs = () => {
     setLogs([]);
@@ -778,7 +939,7 @@ function EngineDemo() {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, fetchLaunchData, fetchUserData]);
+  }, [sdk]); // Removed function dependencies
 
   // Search for project by ID
   const searchProjectById = useCallback(async () => {
@@ -825,14 +986,14 @@ function EngineDemo() {
         addLog(`ERROR: Failed to refresh data after state change - ${error}`);
       }
     }
-  }, [launchState, sdk, fetchLaunchData, fetchUserData]);
+  }, [launchState, sdk]); // Removed function dependencies to prevent infinite loops
 
-  // Auto-fetch balance when wallet connects
+  // Auto-fetch balance when wallet connects or test wallet changes
   useEffect(() => {
-    if (publicKey) {
+    if (publicKey || testWallet) {
       fetchBalance();
     }
-  }, [publicKey, fetchBalance]);
+  }, [publicKey, testWallet]); // Removed fetchBalance dependency to prevent infinite loops
 
   return (
     <ErrorBoundary>
@@ -852,7 +1013,7 @@ function EngineDemo() {
               <button 
                 onClick={requestFaucet} 
                 className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
-                disabled={!publicKey || isLoading}
+                disabled={(!publicKey && !testWallet) || isLoading}
               >
                 💧 Request 10 SOL
               </button>
@@ -942,6 +1103,21 @@ function EngineDemo() {
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpAllocation: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
               />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Funding Duration</label>
+              <select
+                value={launchConfig.fundingDurationDays}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationDays: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              >
+                <option value={0}>10 seconds (testing)</option>
+                <option value={1}>30 seconds (testing)</option>
+                <option value={2}>2 days</option>
+                <option value={3}>3 days</option>
+                <option value={4}>4 days</option>
+                <option value={5}>5 days</option>
+              </select>
             </div>
           </div>
         )}
@@ -1034,7 +1210,7 @@ function EngineDemo() {
                         Sale Mint: {project.saleMint.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
-                        Funding Open: {project.account.fundingOpen ? 'YES' : 'NO'}
+                        Funding Period End: {new Date(safeToNumber(project.account.fundingPeriodEnd) * 1000).toLocaleString()}
                       </div>
                       <div className="text-xs terminal-output">
                         Total Deposited: {(safeToNumber(project.account.totalDeposited) / 1e9).toFixed(2)} SOL
@@ -1185,15 +1361,15 @@ function EngineDemo() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="terminal-output">Funding Open:</span>
-                  <span className={launchData.fundingOpen ? 'terminal-success' : 'terminal-error'}>
-                    {launchData.fundingOpen ? 'YES' : 'NO'}
+                  <span className="terminal-output">Funding Period End:</span>
+                  <span className="terminal-success">
+                    {new Date(safeToNumber(launchData.fundingPeriodEnd) * 1000).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="terminal-output">Deposits Closed:</span>
-                  <span className={launchData.depositsClosed ? 'terminal-success' : 'terminal-error'}>
-                    {launchData.depositsClosed ? 'YES' : 'NO'}
+                  <span className="terminal-output">Funding Active:</span>
+                  <span className={Date.now() / 1000 < safeToNumber(launchData.fundingPeriodEnd) ? 'terminal-success' : 'terminal-error'}>
+                    {Date.now() / 1000 < safeToNumber(launchData.fundingPeriodEnd) ? 'YES' : 'NO'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -1234,7 +1410,7 @@ function EngineDemo() {
             <button 
               onClick={initializeSDK}
               className="terminal-button w-full text-left"
-              disabled={!publicKey || isLoading}
+              disabled={(!publicKey && !testWallet) || isLoading}
             >
               <span className="terminal-prompt">$</span> Initialize SDK
             </button>
@@ -1247,13 +1423,6 @@ function EngineDemo() {
               <span className="terminal-prompt">$</span> Init Launch
             </button>
             
-            <button 
-              onClick={openFunding}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
-            >
-              <span className="terminal-prompt">$</span> Open Funding
-            </button>
             
             <button 
               onClick={initRoster}
@@ -1263,13 +1432,6 @@ function EngineDemo() {
               <span className="terminal-prompt">$</span> Init Roster
             </button>
             
-            <button 
-              onClick={closeDeposits}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
-            >
-              <span className="terminal-prompt">$</span> Close Deposits
-            </button>
             
             <button 
               onClick={setSeed}

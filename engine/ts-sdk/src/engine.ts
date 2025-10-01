@@ -97,12 +97,6 @@ export default {
         }
 
         // -------------- Utility --------------
-        function ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
-            const buf = Buffer.from(seed);
-            if (buf.length !== 32) throw new Error("seed must be 32 bytes");
-            return buf;
-        }
-
         function getUserAta(mint: PublicKey, owner: PublicKey): PublicKey {
             return getAssociatedTokenAddressSync(mint, owner, true);
         }
@@ -141,6 +135,7 @@ export default {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
+            fundingDurationDays: number; // 0-5 (0 = 10 seconds for testing, 1-5 = days)
             // In tests you can pass preInstructions to create/init mint
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
@@ -154,16 +149,17 @@ export default {
                 tauLamports: args.tauLamports,
                 saleAllocation: args.saleAllocation,
                 lpAllocation: args.lpAllocation,
+                fundingDurationDay: args.fundingDurationDays
             });
 
             const tx = new Transaction();
-            
+
             if (args.preInstructions && args.preInstructions.length) {
                 tx.add(...args.preInstructions);
             }
-            
+
             tx.add(instruction);
-            
+
             const signers = args.signers || [];
 
             const signature = await provider.sendAndConfirm(tx, signers);
@@ -189,52 +185,25 @@ export default {
             return { rosterPda, signature };
         }
 
-        async function openFunding(args: {
-            launch: PublicKey;
-            signers?: Keypair[];
-        }): Promise<{ signature: string }> {
-            const rpc = program.methods
-                .openFunding()
-                .accountsStrict({ admin: payer, launchState: args.launch });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
 
-        async function closeDeposits(args: {
-            launch: PublicKey;
-            roster?: PublicKey; // if not provided — will be computed
-            signers?: Keypair[];
-        }): Promise<{ signature: string }> {
-            const roster = args.roster ?? getRosterPda(args.launch)[0];
-            const rpc = program.methods
-                .closeDeposits()
-                .accountsStrict({
-                    admin: payer,
-                    launchState: args.launch,
-                    roster,
-                    launch: args.launch,
-                });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
-            return { signature: await rpc.rpc() };
-        }
 
         async function setSeed(args: {
             launch: PublicKey;
-            seed: Uint8Array | number[] | Buffer; // 32 bytes
-            signers?: Keypair[];
+            payerKeypair?: Keypair; // if payer is not provider.wallet
         }): Promise<{ selectionPda: PublicKey; signature: string }> {
             const [selectionPda] = getSelectionPda(args.launch);
-            const seed32 = ensure32Bytes(args.seed);
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+
             const rpc = program.methods
-                // @ts-ignore – Anchor генерит u8[32]
-                .setSeed(seed32)
+                .setSeed()
                 .accountsStrict({
-                    admin: payer,
+                    payer: payerPubkey,
                     launchState: args.launch,
                     selectionState: selectionPda,
+                    slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
                     systemProgram: SystemProgram.programId,
                 });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
+            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
             return { selectionPda, signature: await rpc.rpc() };
         }
 
@@ -575,12 +544,9 @@ export default {
             // Utils
             getUserAta,
             buildCreateAtaIx,
-            ensure32Bytes,
 
             initLaunch,
             initRoster,
-            openFunding,
-            closeDeposits,
             setSeed,
             processBatch,
             finalizeSelection,

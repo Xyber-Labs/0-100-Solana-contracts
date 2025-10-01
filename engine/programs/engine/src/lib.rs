@@ -3,6 +3,8 @@ use anchor_lang::prelude::borsh::BorshSchema;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use solana_program::keccak;
+use solana_program::sysvar::clock::Clock;
+use solana_program::sysvar::{self, Sysvar};
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
@@ -33,8 +35,9 @@ pub struct RosterInitialized {
 }
 
 #[event]
-pub struct FundingOpened {
+pub struct FundingPeriodStarted {
     pub launch: Pubkey,
+    pub funding_period_end: i64,
 }
 
 #[event]
@@ -59,12 +62,6 @@ pub struct Withdrawn {
     pub total_tickets: u32,
 }
 
-#[event]
-pub struct DepositsClosed {
-    pub launch: Pubkey,
-    pub total_tickets: u32,
-    pub k_capacity: u32,
-}
 
 #[event]
 pub struct SeedSet {
@@ -122,8 +119,21 @@ pub mod engine {
         tau_lamports: u64,
         sale_allocation: u64, // number of sale tokens
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
+        funding_duration_days: u8, // funding period duration in days (max 5 days)
     ) -> Result<()> {
         require!(tau_lamports > 0, ErrorCode::InvalidTau);
+        require!(funding_duration_days <= 5, ErrorCode::InvalidFundingDuration);
+        
+        // For testing: allow very short periods (seconds instead of days)
+        let duration_seconds = if funding_duration_days == 0 {
+            // Special case: 0 means 10 seconds for testing
+            10
+        } else if funding_duration_days == 1 {
+            // Special case: 1 means 30 seconds for testing
+            30
+        } else {
+            funding_duration_days as i64 * 24 * 60 * 60
+        };
         
         // Get and increment project ID
         let counter = &mut ctx.accounts.project_counter;
@@ -140,8 +150,9 @@ pub mod engine {
         state.sale_allocation = sale_allocation;
         state.lp_allocation = lp_allocation;
 
-        state.funding_open = false;
-        state.deposits_closed = false;
+        // Set funding period end time (current time + duration)
+        let current_time = Clock::get()?.unix_timestamp;
+        state.funding_period_end = current_time + duration_seconds;
         state.total_deposited = 0;
         state.total_tickets = 0;
         state.k_capacity = 0;
@@ -159,7 +170,9 @@ pub mod engine {
 
         // Initialize escrow account
         let escrow = &mut ctx.accounts.escrow;
-        escrow.launch = ctx.accounts.launch_state.key();
+        let launch_key = state.key();
+        let funding_end = state.funding_period_end;
+        escrow.launch = launch_key;
         escrow.balance = 0;
 
         emit!(LaunchInitialized {
@@ -172,6 +185,11 @@ pub mod engine {
             tau_lamports,
             sale_allocation,
             lp_allocation,
+        });
+
+        emit!(FundingPeriodStarted {
+            launch: launch_key,
+            funding_period_end: funding_end,
         });
 
         Ok(())
@@ -194,53 +212,30 @@ pub mod engine {
         Ok(())
     }
 
-    /// Open funding window.
-    pub fn open_funding(ctx: Context<OnlyAdmin>) -> Result<()> {
+
+    /// Permissionless seed setter using recent blockhash.
+    pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(!st.deposits_closed, ErrorCode::AlreadyClosed);
-        st.funding_open = true;
-
-        emit!(FundingOpened {
-            launch: ctx.accounts.launch_state.key(),
-        });
-
-        Ok(())
-    }
-
-    /// Close deposits, build prefix, set N and K.
-    pub fn close_deposits(ctx: Context<CloseDeposits>) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(st.funding_open, ErrorCode::NotOpen);
-        st.funding_open = false;
-        st.deposits_closed = true;
-
-        // build prefix inside roster
-        let roster = &mut ctx.accounts.roster;
-        roster_build_prefix(roster)?;
-        roster.shard_base = 0; // single-shard MVP
-        st.total_tickets = roster.total_in_shard;
-
-        // compute K
-        st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
-
-        let launch_key = st.key();
-        emit!(DepositsClosed {
-            launch: launch_key,
-            total_tickets: st.total_tickets,
-            k_capacity: st.k_capacity,
-        });
-
-        Ok(())
-    }
-
-    /// MVP seed setter (PoC instead of VRF): admin provides a 32-byte seed.
-    pub fn set_seed(ctx: Context<OnlyAdminWithSelection>, seed: [u8; 32]) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        
         require!(st.vrf_seed.is_none(), ErrorCode::SeedAlreadySet);
+
+        // Get the most recent blockhash from the SlotHashes sysvar
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
+        
+        // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
+        // We take the most recent one.
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, ErrorCode::NoRecentBlockhashes);
+        
+        // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
+        let last_hash_pos = 8 + ((num_hashes - 1) * 40) + 8; // 8 for slot
+        let seed: [u8; 32] = data[last_hash_pos as usize..(last_hash_pos + 32) as usize].try_into().unwrap();
 
         // Initialize SelectionState
         let sel = &mut ctx.accounts.selection_state;
@@ -269,7 +264,12 @@ pub mod engine {
     pub fn finalize_selection(ctx: Context<FinalizeSelection>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let sel = &mut ctx.accounts.selection_state;
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        
         require!(sel.vrf_seed.len() == 32, ErrorCode::SeedMissing);
         require!(!sel.finalized, ErrorCode::AlreadyFinalized);
         require!(
@@ -313,6 +313,7 @@ pub mod engine {
         let st = &mut ctx.accounts.launch_state;
         require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
         require!(st.selection_finalized, ErrorCode::NotFinalized);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
         let k = st.k_capacity as u64;
         require!(k > 0, ErrorCode::InvalidK);
 
@@ -332,10 +333,24 @@ pub mod engine {
     pub fn process_batch(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let sel = &mut ctx.accounts.selection_state;
-        let roster = &ctx.accounts.roster;
-        require!(st.deposits_closed, ErrorCode::NotClosed);
+        let roster = &mut ctx.accounts.roster;
+        
+        // Check if funding period has ended
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        
         require!(sel.finalized == false, ErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+        
+        // Auto-calculate k_capacity and total_tickets if not done yet
+        if st.k_capacity == 0 {
+            st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+            roster_build_prefix(roster)?;
+            roster.shard_base = 0; // single-shard MVP
+            st.total_tickets = roster.total_in_shard;
+        }
+        
         let k = st.k_capacity as usize;
 
         let from_t = sel.processed; // Capture initial value for event
@@ -404,7 +419,10 @@ pub mod engine {
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.funding_open, ErrorCode::NotOpen);
+        
+        // Check if funding period is still active
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
         require!(
             amount > 0 && amount % st.tau_lamports == 0,
             ErrorCode::AmountNotMultipleTau
@@ -481,7 +499,10 @@ pub mod engine {
     /// Withdraw during funding window (reduces ticket_count and returns lamports).
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.funding_open, ErrorCode::NotOpen);
+        
+        // Check if funding period is still active
+        let current_time = Clock::get()?.unix_timestamp;
+        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
         let user = &mut ctx.accounts.user_contribution;
         require!(user.deposited >= amount, ErrorCode::InsufficientDeposit);
 
@@ -521,13 +542,34 @@ pub mod engine {
     /// Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ).
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.selection_finalized, ErrorCode::NotFinalized);
-        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let user = &mut ctx.accounts.user_contribution;
         require!(!user.claimed_refund, ErrorCode::AlreadyClaimedRefund);
 
-        // recompute y_i by scanning user's own tickets 0..ticket_count-1
+        // If funding is complete and min raise is not met, issue a full refund without selection
+        let current_time = Clock::get()?.unix_timestamp;
+        if current_time >= st.funding_period_end && st.total_deposited < st.min_raise_lamports {
+            let refund = user.deposited;
+            if refund > 0 {
+                **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
+                **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
+            }
+            user.claimed_refund = true;
+
+            emit!(RefundClaimed {
+                launch: st.key(),
+                user: ctx.accounts.user.key(),
+                refunded_lamports: refund,
+                y_approved: 0,
+            });
+
+            return Ok(());
+        }
+
+        // Otherwise, proceed as before: requires finalized selection and y calculation
+        require!(st.selection_finalized, ErrorCode::NotFinalized);
+        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+
         let mut y = 0u32;
         for j in 0..user.ticket_count {
             let s = ticket_score(&seed, &user.wallet, j);
@@ -577,6 +619,10 @@ pub mod engine {
         let per = st
             .tokens_per_ticket
             .ok_or(ErrorCode::TokensPerTicketMissing)?;
+
+        // Tokens are claimed only if the raise was successful
+        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        
         let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
 
@@ -638,6 +684,7 @@ pub mod engine {
 // -------------------------------
 
 #[account]
+#[derive(InitSpace)]
 pub struct LaunchState {
     // Project identification
     pub project_id: u64,
@@ -657,8 +704,7 @@ pub struct LaunchState {
     pub lp_allocation: u64,
 
     // Funding
-    pub funding_open: bool,
-    pub deposits_closed: bool,
+    pub funding_period_end: i64, // Unix timestamp when funding period ends
     pub total_deposited: u64,
     pub total_tickets: u32,
     pub k_capacity: u32,
@@ -694,6 +740,7 @@ impl LaunchState {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct UserContribution {
     pub launch: Pubkey,
     pub wallet: Pubkey,
@@ -704,20 +751,24 @@ pub struct UserContribution {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct Roster {
     pub launch: Pubkey,
 
     // dynamic until close; then frozen
+    #[max_len(100)]
     pub wallets: Vec<Pubkey>,
+    #[max_len(100)]
     pub counts: Vec<u32>,
 
     // built at close
+    #[max_len(100)]
     pub prefix: Vec<u32>, // prefix[u] = Σ counts[k], k<u
     pub total_in_shard: u32,
     pub shard_base: u32, // 0 in MVP
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, BorshSchema)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, BorshSchema, InitSpace)]
 pub struct HeapEntry {
     pub score: u128,
     pub wallet: Pubkey,
@@ -725,22 +776,26 @@ pub struct HeapEntry {
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct EscrowAccount {
     pub launch: Pubkey,
     pub balance: u64,
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct SelectionState {
     pub launch: Pubkey,
     pub vrf_seed: [u8; 32],
     pub processed: u32,
     pub finalized: bool,
     pub threshold: Option<u128>,
+    #[max_len(100)]
     pub heap: Vec<HeapEntry>, // size ≤ K
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct ProjectCounter {
     pub next_project_id: u64,
 }
@@ -758,7 +813,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init_if_needed,
         payer = admin,
-        space = 8 + 8, // discriminator + u64
+        space = 8 + ProjectCounter::INIT_SPACE,
         seeds = [b"project_counter"],
         bump
     )]
@@ -767,14 +822,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 +  // disc
-            8 + // project_id
-            32 + // admin
-            (8*6) + (4*2) + // lamports + ints
-            32 + // sale_mint
-            1 + 1 + 8 + 4 + 4 + // funding
-            1 + 32 + 4 + 1 + 1 + 16 + // selection (Option<[u8;32]> + u32 + bool + Option<u128>)
-            1 + 1 + 8, // claims (bool + Option<u64>)
+        space = 8 + LaunchState::INIT_SPACE,
         seeds = [b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
         bump
     )]
@@ -788,7 +836,7 @@ pub struct InitLaunch<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + 8,
+        space = 8 + EscrowAccount::INIT_SPACE,
         seeds = [b"escrow", launch_state.key().as_ref()],
         bump
     )]
@@ -808,7 +856,7 @@ pub struct InitRoster<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32 + (4 + 32 * 100) + (4 + 4 * 100) + (4 + 4 * 100) + 4 + 4,
+        space = 8 + Roster::INIT_SPACE,
         seeds = [b"roster", launch_state.key().as_ref()],
         bump
     )]
@@ -826,40 +874,33 @@ pub struct OnlyAdmin<'info> {
 }
 
 #[derive(Accounts)]
-pub struct OnlyAdminWithSelection<'info> {
+pub struct SetSeed<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub payer: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         init,
-        payer = admin,
-        space = 8 + 32 + 4 + 1 + 4 + 4 + (16+32+4)*100, // reduced for testing
+        payer = payer,
+        space = 8 + SelectionState::INIT_SPACE,
         seeds = [b"selection", launch_state.key().as_ref()],
         bump
     )]
     pub selection_state: Account<'info, SelectionState>,
+    /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
+    #[account(address = sysvar::slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct CloseDeposits<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, has_one = launch)]
-    pub roster: Account<'info, Roster>,
-    /// CHECK: This is the launch account referenced by the roster
-    #[account(address = launch_state.key())]
-    pub launch: UncheckedAccount<'info>,
-}
 
 #[derive(Accounts)]
 pub struct ProcessBatch<'info> {
     #[account(mut)]
     pub selection_state: Account<'info, SelectionState>,
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+    #[account(mut)]
     pub roster: Account<'info, Roster>,
 }
 
@@ -880,7 +921,7 @@ pub struct Deposit<'info> {
     #[account(
         init_if_needed,
         payer = user,
-        space = 8 + 32 + 32 + 8 + 4 + 1 + 1,
+        space = 8 + UserContribution::INIT_SPACE,
         seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()],
         bump
     )]
@@ -1067,14 +1108,16 @@ fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("Funding window is not open")]
-    NotOpen,
+    #[msg("Minimum raise not met")]
+    MinRaiseNotMet,
+    #[msg("Funding period has ended")]
+    FundingPeriodEnded,
+    #[msg("Funding period has not ended yet")]
+    FundingPeriodNotEnded,
+    #[msg("Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)")]
+    InvalidFundingDuration,
     #[msg("Claims are not open")]
     ClaimsNotOpen,
-    #[msg("Deposits already closed")]
-    AlreadyClosed,
-    #[msg("Deposits not closed")]
-    NotClosed,
     #[msg("Unauthorized")]
     Unauthorized,
     #[msg("Amount must be multiple of tau")]
@@ -1113,4 +1156,6 @@ pub enum ErrorCode {
     AlreadyClaimedRefund,
     #[msg("Already claimed tokens")]
     AlreadyClaimedTokens,
+    #[msg("No recent blockhashes found in SlotHashes sysvar")]
+    NoRecentBlockhashes,
 }
