@@ -26,6 +26,10 @@ pub mod engine {
     use crate::utils::selection::{ticket_at, ticket_score, tuple_lt, tuple_gt, tie_break_wins};
     use crate::utils::roster::{roster_add_or_incr, roster_decr, roster_build_prefix};
 
+    // -------------------------------
+    // Admin / Orchestrator
+    // -------------------------------
+
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
     pub fn init_launch(
         ctx: Context<InitLaunch>,
