@@ -162,8 +162,6 @@ describe("engine bankrun", () => {
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-
-
     await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
     const depositor = await createAndFundAccount(context, provider, 20);
@@ -229,8 +227,6 @@ describe("engine bankrun", () => {
       ],
       signers: [testSaleMint],
     });
-
-
 
     const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
@@ -323,7 +319,6 @@ describe("engine bankrun", () => {
     console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
 
     const testUser = users[0];
-    const userAccountBefore = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
     const initialBalance = await context.banksClient.getBalance(testUser.keypair.publicKey);
 
     const { signature: refundSig } = await sdk.claimRefund({
@@ -357,8 +352,6 @@ describe("engine bankrun", () => {
   });
 
   it("Project ID increments correctly", async () => {
-    const [projectCounterPda] = sdk.getProjectCounterPda();
-
     const project1Mint = anchor.web3.Keypair.generate();
     const project2Mint = anchor.web3.Keypair.generate();
     const project3Mint = anchor.web3.Keypair.generate();

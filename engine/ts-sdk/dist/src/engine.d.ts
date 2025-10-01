@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
-import { PublicKey, Keypair, TransactionInstruction } from "@solana/web3.js";
+import { PublicKey, Keypair, TransactionInstruction, Transaction } from "@solana/web3.js";
 import type { Engine as EngineIDL } from "../idl/engine";
 export declare const ENGINE_PROGRAM_ID: anchor.web3.PublicKey;
 declare const _default: {
@@ -133,6 +133,124 @@ declare const _default: {
             useTestMode?: boolean;
         }) => Promise<{
             signature: string;
+        }>;
+        initLaunchTx: (params: {
+            admin: PublicKey;
+            saleMint: Keypair;
+            hardCapLamports: BN;
+            minRaiseLamports: BN;
+            perWalletCap: BN;
+            tauLamports: BN;
+            saleAllocation: BN;
+            lpAllocation: BN;
+            provider: any;
+        }) => Promise<{
+            transaction: Transaction;
+            launchState: PublicKey;
+            escrow: PublicKey;
+            signers: Keypair[];
+        }>;
+        initLaunchIx: (params: {
+            admin: PublicKey;
+            saleMint: PublicKey;
+            hardCapLamports: BN;
+            minRaiseLamports: BN;
+            perWalletCap: BN;
+            tauLamports: BN;
+            saleAllocation: BN;
+            lpAllocation: BN;
+            fundingDurationDays: number;
+        }) => Promise<{
+            instruction: TransactionInstruction;
+            launchState: PublicKey;
+            escrow: PublicKey;
+            projectCounter: PublicKey;
+        }>;
+        openFundingTx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<Transaction>;
+        openFundingIx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<TransactionInstruction>;
+        initRosterTx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<{
+            transaction: Transaction;
+            rosterPda: PublicKey;
+        }>;
+        initRosterIx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<{
+            instruction: TransactionInstruction;
+            rosterPda: PublicKey;
+        }>;
+        closeDepositsTx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+            roster?: PublicKey;
+        }) => Promise<Transaction>;
+        closeDepositsIx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+            roster?: PublicKey;
+        }) => Promise<TransactionInstruction>;
+        setSeedTx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<{
+            transaction: Transaction;
+            selectionPda: PublicKey;
+        }>;
+        setSeedIx: (params: {
+            launch: PublicKey;
+            admin: PublicKey;
+        }) => Promise<{
+            instruction: TransactionInstruction;
+            selectionPda: PublicKey;
+        }>;
+        depositTx: (args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }) => Promise<{
+            transaction: Transaction;
+            userContribution: PublicKey;
+        }>;
+        depositIx: (args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }) => Promise<{
+            instruction: TransactionInstruction;
+            userContribution: PublicKey;
+        }>;
+        withdrawTx: (args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }) => Promise<{
+            transaction: Transaction;
+            userContribution: PublicKey;
+        }>;
+        withdrawIx: (args: {
+            launch: PublicKey;
+            amountLamports: BN;
+            userPubkey?: PublicKey;
+            roster?: PublicKey;
+            escrow?: PublicKey;
+        }) => Promise<{
+            instruction: TransactionInstruction;
+            userContribution: PublicKey;
         }>;
         fetchLaunch: (launch: PublicKey) => Promise<{
             projectId: anchor.BN;

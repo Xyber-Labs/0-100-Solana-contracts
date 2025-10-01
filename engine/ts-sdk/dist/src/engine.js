@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, } from "@solana/spl-token";
 // Import IDL as a dynamic import to avoid require
 let idl;
@@ -10,6 +10,7 @@ const loadIdl = async () => {
     }
     return idl;
 };
+import { TxBuilder } from "./txBuilder";
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 export default {
@@ -23,6 +24,7 @@ export default {
      */
     create(provider, program) {
         const payer = provider.publicKey;
+        const txBuilder = new TxBuilder(program);
         // -------------- PDA helpers --------------
         function getLaunchPda(saleMint) {
             return PublicKey.findProgramAddressSync([Buffer.from("launch"), saleMint.toBuffer()], program.programId);
@@ -66,27 +68,25 @@ export default {
          * because launch = PDA(["launch", saleMint]).
          */
         async function initLaunch(args) {
-            const [launchPda] = getLaunchPda(args.saleMint);
-            const [escrowPda] = getEscrowPda(launchPda);
-            const [projectCounterPda] = getProjectCounterPda();
-            const rpc = program.methods
-                .initLaunch(args.hardCapLamports, args.minRaiseLamports, args.perWalletCap, args.tauLamports, args.saleAllocation, args.lpAllocation, args.fundingDurationDays)
-                .accountsStrict({
+            const { instruction, launchState, escrow } = await txBuilder.initLaunchIx({
                 admin: payer,
-                projectCounter: projectCounterPda,
-                launchState: launchPda,
                 saleMint: args.saleMint,
-                escrow: escrowPda,
-                systemProgram: SystemProgram.programId,
+                hardCapLamports: args.hardCapLamports,
+                minRaiseLamports: args.minRaiseLamports,
+                perWalletCap: args.perWalletCap,
+                tauLamports: args.tauLamports,
+                saleAllocation: args.saleAllocation,
+                lpAllocation: args.lpAllocation,
+                fundingDurationDays: args.fundingDurationDays
             });
+            const tx = new Transaction();
             if (args.preInstructions && args.preInstructions.length) {
-                rpc.preInstructions(args.preInstructions);
+                tx.add(...args.preInstructions);
             }
-            if (args.signers && args.signers.length) {
-                rpc.signers(args.signers);
-            }
-            const signature = await rpc.rpc();
-            return { launchPda, escrowPda, signature };
+            tx.add(instruction);
+            const signers = args.signers || [];
+            const signature = await provider.sendAndConfirm(tx, signers);
+            return { launchPda: launchState, escrowPda: escrow, signature };
         }
         async function initRoster(args) {
             const [rosterPda] = getRosterPda(args.launch);
@@ -145,24 +145,17 @@ export default {
         }
         async function deposit(args) {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
-            const [userPda] = getUserContributionPda(args.launch, userPubkey);
-            const roster = args.roster ?? getRosterPda(args.launch)[0];
-            const escrow = args.escrow ?? getEscrowPda(args.launch)[0];
-            const rpc = program.methods
-                .deposit(args.amountLamports)
-                .accountsStrict({
-                user: userPubkey,
-                launchState: args.launch,
-                userContribution: userPda,
-                roster,
-                escrow,
+            const { instruction, userContribution } = await txBuilder.depositIx({
                 launch: args.launch,
-                systemProgram: SystemProgram.programId,
+                user: userPubkey,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
             });
-            if (args.userKeypair)
-                rpc.signers([args.userKeypair]);
-            const signature = await rpc.rpc();
-            return { userPda, signature };
+            const tx = new Transaction().add(instruction);
+            const signers = args.userKeypair ? [args.userKeypair] : [];
+            const signature = await provider.sendAndConfirm(tx, signers);
+            return { userPda: userContribution, signature };
         }
         async function withdraw(args) {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
@@ -183,6 +176,46 @@ export default {
             if (args.userKeypair)
                 rpc.signers([args.userKeypair]);
             return { signature: await rpc.rpc() };
+        }
+        async function withdrawTx(args) {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.withdrawTx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+        async function withdrawIx(args) {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.withdrawIx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+        async function depositTx(args) {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.depositTx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
+        }
+        async function depositIx(args) {
+            const user = args.userPubkey ?? payer;
+            return txBuilder.depositIx({
+                launch: args.launch,
+                user,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
         }
         async function claimRefund(args) {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
@@ -260,23 +293,19 @@ export default {
         //         FETCH helpers
         // =============================
         async function fetchLaunch(launch) {
-            return program.account.launchState.fetch(launch);
+            return txBuilder.fetchLaunch(launch);
         }
         async function fetchRoster(launch) {
-            const [pda] = getRosterPda(launch);
-            return program.account.roster.fetch(pda);
+            return txBuilder.fetchRoster(launch);
         }
         async function fetchSelection(launch) {
-            const [pda] = getSelectionPda(launch);
-            return program.account.selectionState.fetch(pda);
+            return txBuilder.fetchSelection(launch);
         }
         async function fetchUserContribution(launch, user) {
-            const [pda] = getUserContributionPda(launch, user);
-            return program.account.userContribution.fetch(pda);
+            return txBuilder.fetchUserContribution(launch, user);
         }
         async function fetchProjectCounter() {
-            const [pda] = getProjectCounterPda();
-            return program.account.projectCounter.fetch(pda);
+            return txBuilder.fetchProjectCounter();
         }
         async function fetchPoolState(launch) {
             const [pda] = getPoolPda(launch);
@@ -365,7 +394,6 @@ export default {
             // Utils
             getUserAta,
             buildCreateAtaIx,
-            // TX
             initLaunch,
             initRoster,
             setSeed,
@@ -377,7 +405,20 @@ export default {
             claimRefund,
             claimTokens,
             createPool,
-            // Fetch
+            initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
+            initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
+            openFundingTx: txBuilder.openFundingTx.bind(txBuilder),
+            openFundingIx: txBuilder.openFundingIx.bind(txBuilder),
+            initRosterTx: txBuilder.initRosterTx.bind(txBuilder),
+            initRosterIx: txBuilder.initRosterIx.bind(txBuilder),
+            closeDepositsTx: txBuilder.closeDepositsTx.bind(txBuilder),
+            closeDepositsIx: txBuilder.closeDepositsIx.bind(txBuilder),
+            setSeedTx: txBuilder.setSeedTx.bind(txBuilder),
+            setSeedIx: txBuilder.setSeedIx.bind(txBuilder),
+            depositTx,
+            depositIx,
+            withdrawTx,
+            withdrawIx,
             fetchLaunch,
             fetchRoster,
             fetchSelection,
