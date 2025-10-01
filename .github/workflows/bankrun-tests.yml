@@ -3,9 +3,11 @@ name: bankrun tests
 on:
   pull_request:
     branches: ["main"]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "engine/**"
       - ".github/workflows/**"
+  workflow_dispatch: {}
 
 permissions:
   contents: read
