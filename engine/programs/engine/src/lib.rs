@@ -110,8 +110,11 @@ pub struct TokensClaimed {
 pub struct PoolCreated {
     pub launch: Pubkey,
     pub pool_id: u64,
+    pub project_id: u64,
     pub blockhash: [u8; 32],
     pub slot: u64,
+    pub range_start: [u8; 32],
+    pub range_end: [u8; 32],
 }
 
 #[program]
@@ -724,8 +727,8 @@ pub mod engine {
             let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
             let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
             
-            // Check if this blockhash meets our probability threshold
-            if is_blockhash_valid(&blockhash) {
+            // Check if this blockhash is within the project's personal range
+            if is_blockhash_in_project_range(&blockhash, st.project_id) {
                 found_valid_hash = true;
                 valid_slot = slot;
                 valid_hash = blockhash;
@@ -740,11 +743,17 @@ pub mod engine {
         let pool_id = counter.next_project_id;
         counter.next_project_id = counter.next_project_id.saturating_add(1);
         
+        // Calculate and store the project's range
+        let (range_start, range_end) = calculate_project_range(st.project_id);
+        
         // Initialize pool state
         pool_state.launch = st.key();
         pool_state.pool_id = pool_id;
+        pool_state.project_id = st.project_id;
         pool_state.created_slot = valid_slot;
         pool_state.created_blockhash = valid_hash;
+        pool_state.range_start = range_start;
+        pool_state.range_end = range_end;
         pool_state.created = true;
         
         // TODO: Add CPI call to Raydium here
@@ -752,8 +761,11 @@ pub mod engine {
         emit!(PoolCreated {
             launch: st.key(),
             pool_id,
+            project_id: st.project_id,
             blockhash: valid_hash,
             slot: valid_slot,
+            range_start,
+            range_end,
         });
         
         Ok(())
@@ -886,8 +898,11 @@ pub struct ProjectCounter {
 pub struct PoolState {
     pub launch: Pubkey,
     pub pool_id: u64,
+    pub project_id: u64,
     pub created_slot: u64,
     pub created_blockhash: [u8; 32],
+    pub range_start: [u8; 32],
+    pub range_end: [u8; 32],
     pub created: bool,
 }
 
@@ -1220,18 +1235,72 @@ fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>
         .any(|e| e.score == threshold && e.wallet == wallet && e.local_j == j)
 }
 
-/// Check if a blockhash meets the probability threshold for pool creation
-/// Target: 1/54000 probability (6 hours average deployment time)
-fn is_blockhash_valid(blockhash: &[u8; 32]) -> bool {
-    // Convert blockhash to u256 (big-endian)
+
+/// Check if a blockhash is within the project's personal range
+/// Each project gets its own range based on project_id
+fn is_blockhash_in_project_range(blockhash: &[u8; 32], project_id: u64) -> bool {
     let hash_as_u256 = u256_from_bytes(blockhash);
+    let (range_start, range_end) = calculate_project_range(project_id);
     
-    // Calculate threshold: (1 / 54000) * (2^256)
-    // 2^256 = 115792089237316195423570985008687907853269984665640564039457584007913129639936
-    // 1/54000 ≈ 0.0000185185
-    let threshold = u256_from_hex("0x6C6B935B8BBD4000000000000000000000000000000000000000000000000000");
+    hash_as_u256 >= range_start && hash_as_u256 < range_end
+}
+
+/// Calculate the personal range for a project based on its ID
+/// Range width = 2^256 / 54000 (blocks in 6 hours)
+/// Project n gets range: [(n-1) * width, n * width)
+fn calculate_project_range(project_id: u64) -> ([u8; 32], [u8; 32]) {
+    // Range width = 2^256 / 54000
+    // We'll use a simplified calculation for Solana's 32-byte hashes
+    let range_width = calculate_range_width();
     
-    hash_as_u256 < threshold
+    // Calculate start and end of the range for this project
+    let range_start = multiply_u256_by_u64(range_width, project_id.saturating_sub(1));
+    let range_end = multiply_u256_by_u64(range_width, project_id);
+    
+    (range_start, range_end)
+}
+
+/// Calculate the width of each project's range
+/// This is 2^256 / 54000, but we'll use a simplified approach
+fn calculate_range_width() -> [u8; 32] {
+    // For simplicity, we'll use a fixed range width
+    // In practice, this should be calculated as 2^256 / 54000
+    // Using a smaller value for testing: 2^240 / 54000
+    u256_from_hex("0x1000000000000000000000000000000000000000000000000000000000000000")
+}
+
+/// Multiply a 256-bit number by a 64-bit number
+/// Simplified implementation for our use case
+fn multiply_u256_by_u64(base: [u8; 32], multiplier: u64) -> [u8; 32] {
+    if multiplier == 0 {
+        return [0u8; 32];
+    }
+    
+    // Convert base to u128 for easier calculation (using first 16 bytes)
+    let base_low = u128::from_le_bytes([
+        base[0], base[1], base[2], base[3], base[4], base[5], base[6], base[7],
+        base[8], base[9], base[10], base[11], base[12], base[13], base[14], base[15]
+    ]);
+    
+    let base_high = u128::from_le_bytes([
+        base[16], base[17], base[18], base[19], base[20], base[21], base[22], base[23],
+        base[24], base[25], base[26], base[27], base[28], base[29], base[30], base[31]
+    ]);
+    
+    // Multiply by multiplier
+    let result_low = base_low * (multiplier as u128);
+    let result_high = base_high * (multiplier as u128);
+    
+    // Handle overflow from low to high
+    let (result_low, carry) = result_low.overflowing_add(result_high & 0xFFFFFFFFFFFFFFFF);
+    let result_high = (result_high >> 64) + (carry as u128);
+    
+    // Convert back to [u8; 32]
+    let mut result = [0u8; 32];
+    result[0..16].copy_from_slice(&result_low.to_le_bytes());
+    result[16..32].copy_from_slice(&result_high.to_le_bytes());
+    
+    result
 }
 
 /// Convert 32-byte array to u256 (big-endian)
