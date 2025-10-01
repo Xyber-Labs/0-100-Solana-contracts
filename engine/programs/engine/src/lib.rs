@@ -7,108 +7,24 @@ use solana_program::sysvar::clock::Clock;
 use solana_program::sysvar::{self, Sysvar};
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
+mod utils;
+mod events;
+mod errors;
+
 declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 
-/// Domain separation for score hashing (fix this constant).
-const SCORE_DOMAIN: &[u8] = b"0-100/selection/v1";
 
 // -------------------------------
-// Events
+// Events (moved to events.rs)
 // -------------------------------
-
-#[event]
-pub struct LaunchInitialized {
-    pub project_id: u64,
-    pub admin: Pubkey,
-    pub sale_mint: Pubkey,
-    pub hard_cap_lamports: u64,
-    pub min_raise_lamports: u64,
-    pub per_wallet_cap: u64,
-    pub tau_lamports: u64,
-    pub sale_allocation: u64,
-    pub lp_allocation: u64,
-}
-
-#[event]
-pub struct RosterInitialized {
-    pub launch: Pubkey,
-}
-
-#[event]
-pub struct FundingPeriodStarted {
-    pub launch: Pubkey,
-    pub funding_period_end: i64,
-}
-
-#[event]
-pub struct DepositMade {
-    pub launch: Pubkey,
-    pub user: Pubkey,
-    pub amount: u64,
-    pub tickets_before: u32,
-    pub tickets_after: u32,
-    pub total_deposited: u64,
-    pub total_tickets: u32,
-}
-
-#[event]
-pub struct Withdrawn {
-    pub launch: Pubkey,
-    pub user: Pubkey,
-    pub amount: u64,
-    pub tickets_before: u32,
-    pub tickets_after: u32,
-    pub total_deposited: u64,
-    pub total_tickets: u32,
-}
-
-
-#[event]
-pub struct SeedSet {
-    pub launch: Pubkey,
-    pub seed_hash: [u8; 32],
-}
-
-#[event]
-pub struct BatchProcessed {
-    pub launch: Pubkey,
-    pub from_t: u32,
-    pub processed: u32,
-    pub heap_len: u32,
-}
-
-#[event]
-pub struct SelectionFinalized {
-    pub launch: Pubkey,
-    pub threshold: u128,
-    pub k_capacity: u32,
-}
-
-#[event]
-pub struct ClaimsOpened {
-    pub launch: Pubkey,
-    pub tokens_per_ticket: u64,
-}
-
-#[event]
-pub struct RefundClaimed {
-    pub launch: Pubkey,
-    pub user: Pubkey,
-    pub refunded_lamports: u64,
-    pub y_approved: u32,
-}
-
-#[event]
-pub struct TokensClaimed {
-    pub launch: Pubkey,
-    pub user: Pubkey,
-    pub amount: u64,
-    pub y_approved: u32,
-}
 
 #[program]
 pub mod engine {
     use super::*;
+    use crate::events::*;
+    use crate::errors::ErrorCode as EngineErrorCode;
+    use crate::utils::selection::{ticket_at, ticket_score, tuple_lt, tuple_gt, tie_break_wins};
+    use crate::utils::roster::{roster_add_or_incr, roster_decr, roster_build_prefix};
 
     // -------------------------------
     // Admin / Orchestrator
@@ -125,8 +41,8 @@ pub mod engine {
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
         funding_duration_days: u8, // funding period duration in days (max 5 days)
     ) -> Result<()> {
-        require!(tau_lamports > 0, ErrorCode::InvalidTau);
-        require!(funding_duration_days <= 5, ErrorCode::InvalidFundingDuration);
+        require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
+        require!(funding_duration_days <= 5, EngineErrorCode::InvalidFundingDuration);
         
         // For testing: allow very short periods (seconds instead of days)
         let duration_seconds = if funding_duration_days == 0 {
@@ -223,10 +139,10 @@ pub mod engine {
         
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         
-        require!(st.vrf_seed.is_none(), ErrorCode::SeedAlreadySet);
+        require!(st.vrf_seed.is_none(), EngineErrorCode::SeedAlreadySet);
 
         // Get the most recent blockhash from the SlotHashes sysvar
         let slot_hashes = &ctx.accounts.slot_hashes;
@@ -235,7 +151,7 @@ pub mod engine {
         // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
         // We take the most recent one.
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
-        require!(num_hashes > 0, ErrorCode::NoRecentBlockhashes);
+        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
         
         // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
         let last_hash_pos = 8 + ((num_hashes - 1) * 40) + 8; // 8 for slot
@@ -271,19 +187,19 @@ pub mod engine {
         
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         
-        require!(sel.vrf_seed.len() == 32, ErrorCode::SeedMissing);
-        require!(!sel.finalized, ErrorCode::AlreadyFinalized);
+        require!(sel.vrf_seed.len() == 32, EngineErrorCode::SeedMissing);
+        require!(!sel.finalized, EngineErrorCode::AlreadyFinalized);
         require!(
             sel.processed == st.total_tickets,
-            ErrorCode::NotFullyProcessed
+            EngineErrorCode::NotFullyProcessed
         );
 
         // threshold is the worst (max) score currently in heap
         let k = st.k_capacity as usize;
-        require!(sel.heap.len() == k, ErrorCode::HeapNotFull);
+        require!(sel.heap.len() == k, EngineErrorCode::HeapNotFull);
 
         let mut worst: Option<u128> = None;
         for h in sel.heap.iter() {
@@ -315,11 +231,11 @@ pub mod engine {
     /// Open token claims (post-LP in production). Compute tokens_per_ticket = sale_allocation / K.
     pub fn open_claims(ctx: Context<OnlyAdmin>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), ErrorCode::Unauthorized);
-        require!(st.selection_finalized, ErrorCode::NotFinalized);
-        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        require_keys_eq!(st.admin, ctx.accounts.admin.key(), EngineErrorCode::Unauthorized);
+        require!(st.selection_finalized, EngineErrorCode::NotFinalized);
+        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         let k = st.k_capacity as u64;
-        require!(k > 0, ErrorCode::InvalidK);
+        require!(k > 0, EngineErrorCode::InvalidK);
 
         let per = st.sale_allocation / k; // floor; small remainder stays unminted in MVP
         st.tokens_per_ticket = Some(per);
@@ -341,11 +257,11 @@ pub mod engine {
         
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, ErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
+        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         
-        require!(sel.finalized == false, ErrorCode::AlreadyFinalized);
-        let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+        require!(sel.finalized == false, EngineErrorCode::AlreadyFinalized);
+        let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
         
         // Auto-calculate k_capacity and total_tickets if not done yet
         if st.k_capacity == 0 {
@@ -426,17 +342,17 @@ pub mod engine {
         
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
+        require!(current_time < st.funding_period_end, EngineErrorCode::FundingPeriodEnded);
         require!(
             amount > 0 && amount % st.tau_lamports == 0,
-            ErrorCode::AmountNotMultipleTau
+            EngineErrorCode::AmountNotMultipleTau
         );
 
         // per-wallet cap check
         let current = ctx.accounts.user_contribution.deposited;
         require!(
             current + amount <= st.per_wallet_cap,
-            ErrorCode::PerWalletCapExceeded
+            EngineErrorCode::PerWalletCapExceeded
         );
 
         // transfer to escrow
@@ -506,9 +422,9 @@ pub mod engine {
         
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time < st.funding_period_end, ErrorCode::FundingPeriodEnded);
+        require!(current_time < st.funding_period_end, EngineErrorCode::FundingPeriodEnded);
         let user = &mut ctx.accounts.user_contribution;
-        require!(user.deposited >= amount, ErrorCode::InsufficientDeposit);
+        require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
 
         // return lamports from escrow to user
         **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
@@ -547,7 +463,7 @@ pub mod engine {
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
         let user = &mut ctx.accounts.user_contribution;
-        require!(!user.claimed_refund, ErrorCode::AlreadyClaimedRefund);
+        require!(!user.claimed_refund, EngineErrorCode::AlreadyClaimedRefund);
 
         // If funding is complete and min raise is not met, issue a full refund without selection
         let current_time = Clock::get()?.unix_timestamp;
@@ -570,9 +486,9 @@ pub mod engine {
         }
 
         // Otherwise, proceed as before: requires finalized selection and y calculation
-        require!(st.selection_finalized, ErrorCode::NotFinalized);
-        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
-        let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+        require!(st.selection_finalized, EngineErrorCode::NotFinalized);
+        let threshold = st.threshold_score.ok_or(EngineErrorCode::ThresholdMissing)?;
+        let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
         let mut y = 0u32;
         for j in 0..user.ticket_count {
@@ -619,19 +535,19 @@ pub mod engine {
     /// Claim tokens (post open_claims): mint tokens_per_ticket * y_i to user ATA.
     pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        require!(st.claims_open, ErrorCode::ClaimsNotOpen);
+        require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
         let per = st
             .tokens_per_ticket
-            .ok_or(ErrorCode::TokensPerTicketMissing)?;
+            .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
         // Tokens are claimed only if the raise was successful
-        require!(st.total_deposited >= st.min_raise_lamports, ErrorCode::MinRaiseNotMet);
+        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         
-        let threshold = st.threshold_score.ok_or(ErrorCode::ThresholdMissing)?;
-        let seed = st.vrf_seed.ok_or(ErrorCode::SeedMissing)?;
+        let threshold = st.threshold_score.ok_or(EngineErrorCode::ThresholdMissing)?;
+        let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
         let user = &mut ctx.accounts.user_contribution;
-        require!(!user.claimed_tokens, ErrorCode::AlreadyClaimedTokens);
+        require!(!user.claimed_tokens, EngineErrorCode::AlreadyClaimedTokens);
 
         // recompute y_i
         let mut y = 0u32;
@@ -680,6 +596,110 @@ pub mod engine {
         });
 
         Ok(())
+    }
+
+    /// Create pool with blockhash verification
+    /// Checks if any of the last 10 blockhashes meets the probability threshold
+    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool_internal(ctx, false) // false = validate blockhash
+    }
+
+    /// Internal function that handles pool creation logic
+    /// skip_validation: if true, skips blockhash validation (for testing)
+    pub fn create_pool_internal(ctx: Context<CreatePool>, skip_validation: bool) -> Result<()> {
+        let st = &mut ctx.accounts.launch_state;
+        let pool_state = &mut ctx.accounts.pool_state;
+        
+        // Check if selection is finalized and claims are open
+        require!(st.selection_finalized, EngineErrorCode::NotFinalized);
+        require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
+        require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
+        
+        // Get the SlotHashes sysvar
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
+        
+        // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
+        
+        let (valid_slot, valid_hash) = if skip_validation {
+            // Use the most recent blockhash (skip validation in test mode)
+            let hash_pos = 8 + ((num_hashes - 1) * 40);
+            let slot_pos = hash_pos;
+            let blockhash_pos = hash_pos + 8; // 8 bytes for slot
+            
+            let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
+            let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
+            
+            (slot, blockhash)
+        } else {
+            // Check last 10 blockhashes (or all available if less than 10)
+            let hashes_to_check = std::cmp::min(10, num_hashes);
+            let mut found_valid_hash = false;
+            let mut valid_slot = 0u64;
+            let mut valid_hash = [0u8; 32];
+            
+            for i in 0..hashes_to_check {
+                // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+                let hash_pos = 8 + ((num_hashes - 1 - i) * 40);
+                let slot_pos = hash_pos;
+                let blockhash_pos = hash_pos + 8; // 8 bytes for slot
+                
+                let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
+                let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
+                
+                // Check if this blockhash is within the project's personal range
+                if utils::is_blockhash_in_project_range(&blockhash, st.project_id) {
+                    found_valid_hash = true;
+                    valid_slot = slot;
+                    valid_hash = blockhash;
+                    break;
+                }
+            }
+            
+            require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
+            (valid_slot, valid_hash)
+        };
+        
+        // Get pool ID from project counter
+        let counter = &mut ctx.accounts.project_counter;
+        let pool_id = counter.next_project_id;
+        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        
+        // Calculate and store the project's range
+        let (range_start, range_end) = utils::calculate_project_range(st.project_id);
+        
+        // Initialize pool state
+        pool_state.launch = st.key();
+        pool_state.pool_id = pool_id;
+        pool_state.project_id = st.project_id;
+        pool_state.created_slot = valid_slot;
+        pool_state.created_blockhash = valid_hash;
+        pool_state.range_start = range_start;
+        pool_state.range_end = range_end;
+        pool_state.created = true;
+        
+        // TODO: Add CPI call to Raydium here
+        
+        emit!(PoolCreated {
+            launch: st.key(),
+            pool_id,
+            project_id: st.project_id,
+            blockhash: valid_hash,
+            slot: valid_slot,
+            range_start,
+            range_end,
+        });
+        
+        Ok(())
+    }
+
+    /// Test version of create_pool that bypasses blockhash validation
+    /// This is for testing purposes only and should not be used in production
+    #[cfg(feature = "test")]
+    pub fn create_pool_test(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool_internal(ctx, true) // true = skip validation
     }
 }
 
@@ -802,6 +822,19 @@ pub struct SelectionState {
 #[derive(InitSpace)]
 pub struct ProjectCounter {
     pub next_project_id: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct PoolState {
+    pub launch: Pubkey,
+    pub pool_id: u64,
+    pub project_id: u64,
+    pub created_slot: u64,
+    pub created_blockhash: [u8; 32],
+    pub range_start: [u8; 32],
+    pub range_end: [u8; 32],
+    pub created: bool,
 }
 
 // -------------------------------
@@ -933,7 +966,7 @@ pub struct Deposit<'info> {
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
     /// Escrow account (PDA off launch_state)
-    #[account(mut, address = escrow_address(launch_state.key()))]
+    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: This is the launch account referenced by the roster
@@ -953,7 +986,7 @@ pub struct Withdraw<'info> {
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
     /// Escrow account (PDA off launch_state)
-    #[account(mut, address = escrow_address(launch_state.key()))]
+    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: This is the launch account referenced by the roster
@@ -973,7 +1006,7 @@ pub struct ClaimRefund<'info> {
     #[account(mut)]
     pub selection_state: Account<'info, SelectionState>,
     /// CHECK:
-    #[account(mut, address = escrow_address(launch_state.key()))]
+    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
     pub escrow: Account<'info, EscrowAccount>,
 }
 
@@ -1000,166 +1033,40 @@ pub struct ClaimTokens<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+#[derive(Accounts)]
+pub struct CreatePool<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    
+    #[account(mut)]
+    pub launch_state: Account<'info, LaunchState>,
+    
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + PoolState::INIT_SPACE,
+        seeds = [b"pool", launch_state.key().as_ref()],
+        bump
+    )]
+    pub pool_state: Account<'info, PoolState>,
+    
+    #[account(mut)]
+    pub project_counter: Account<'info, ProjectCounter>,
+    
+    /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
+    #[account(address = sysvar::slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
 // -------------------------------
 // Utility / helpers
 // -------------------------------
 
-fn escrow_address(launch: Pubkey) -> Pubkey {
-    let (address, _) = Pubkey::find_program_address(
-        &[b"escrow", launch.as_ref()],
-        &crate::ID,
-    );
-    address
-}
 
-/// Append or incr user's count; realloc roster if needed (MVP simplistic).
-fn roster_add_or_incr(
-    roster: &mut Account<Roster>,
-    wallet: Pubkey,
-    delta: u32,
-    _payer: &Signer,
-    _system_program: &Program<System>,
-) -> Result<()> {
-    if let Some(pos) = roster.wallets.iter().position(|w| *w == wallet) {
-        roster.counts[pos] = roster.counts[pos].saturating_add(delta);
-        return Ok(());
-    }
-    // append new
-    roster.wallets.push(wallet);
-    roster.counts.push(delta);
-    Ok(())
-}
 
-fn roster_decr(roster: &mut Account<Roster>, wallet: Pubkey, lost: u32) -> Result<()> {
-    if lost == 0 {
-        return Ok(());
-    }
-    if let Some(pos) = roster.wallets.iter().position(|w| *w == wallet) {
-        roster.counts[pos] = roster.counts[pos].saturating_sub(lost);
-        Ok(())
-    } else {
-        err!(ErrorCode::UserNotFoundInRoster)
-    }
-}
-
-fn roster_build_prefix(roster: &mut Account<Roster>) -> Result<()> {
-    let mut run = 0u32;
-    roster.prefix.clear();
-    let counts = roster.counts.clone();
-    roster.prefix.reserve(counts.len());
-    for &c in counts.iter() {
-        roster.prefix.push(run);
-        run = run.saturating_add(c);
-    }
-    roster.total_in_shard = run;
-    Ok(())
-}
-
-/// Map global t to (wallet, local_j).
-fn ticket_at(t: u32, roster: &Account<Roster>) -> Result<(Pubkey, u32)> {
-    require!(t < roster.total_in_shard, ErrorCode::TOutOfRange);
-    // binary search for prefix[u] ≤ t < prefix[u] + count[u]
-    let idx = match roster.prefix.binary_search(&t) {
-        Ok(i) => i, // exact boundary = start of some user's block
-        Err(i) => {
-            // i = index of first prefix > t, so user = i - 1
-            i.saturating_sub(1)
-        }
-    };
-    let start = roster.prefix[idx];
-    let c = roster.counts[idx];
-    require!(t < start + c, ErrorCode::MappingError);
-    let wallet = roster.wallets[idx];
-    let local_j = t - start;
-    Ok((wallet, local_j))
-}
-
-/// Deterministic score from seed + (wallet, local_j).
-fn ticket_score(seed: &[u8; 32], wallet: &Pubkey, local_j: u32) -> u128 {
-    let parts: [&[u8]; 4] = [SCORE_DOMAIN, seed, wallet.as_ref(), &local_j.to_le_bytes()];
-    let h = keccak::hashv(&parts);
-    // take first 16 bytes as little-endian u128
-    let mut arr = [0u8; 16];
-    arr.copy_from_slice(&h.0[0..16]);
-    u128::from_le_bytes(arr)
-}
-
-fn tuple_lt(a: (Pubkey, u32), b: (Pubkey, u32)) -> bool {
-    if a.0 == b.0 {
-        a.1 < b.1
-    } else {
-        a.0.to_bytes() < b.0.to_bytes()
-    }
-}
-fn tuple_gt(a: (Pubkey, u32), b: (Pubkey, u32)) -> bool {
-    if a.0 == b.0 {
-        a.1 > b.1
-    } else {
-        a.0.to_bytes() > b.0.to_bytes()
-    }
-}
-
-/// Tie-break demo: in MVP we accept any with score < threshold.
-/// If == threshold, we check whether (wallet, j) exists in heap (edge winners).
-fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>) -> bool {
-    heap.iter()
-        .any(|e| e.score == threshold && e.wallet == wallet && e.local_j == j)
-}
 
 // -------------------------------
-// Errors
+// Errors (moved to errors.rs)
 // -------------------------------
-
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Minimum raise not met")]
-    MinRaiseNotMet,
-    #[msg("Funding period has ended")]
-    FundingPeriodEnded,
-    #[msg("Funding period has not ended yet")]
-    FundingPeriodNotEnded,
-    #[msg("Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)")]
-    InvalidFundingDuration,
-    #[msg("Claims are not open")]
-    ClaimsNotOpen,
-    #[msg("Unauthorized")]
-    Unauthorized,
-    #[msg("Amount must be multiple of tau")]
-    AmountNotMultipleTau,
-    #[msg("Per-wallet cap exceeded")]
-    PerWalletCapExceeded,
-    #[msg("Insufficient deposit")]
-    InsufficientDeposit,
-    #[msg("Seed already set")]
-    SeedAlreadySet,
-    #[msg("Seed missing")]
-    SeedMissing,
-    #[msg("Selection already finalized")]
-    AlreadyFinalized,
-    #[msg("Selection not finalized")]
-    NotFinalized,
-    #[msg("Threshold missing")]
-    ThresholdMissing,
-    #[msg("Tokens per ticket missing")]
-    TokensPerTicketMissing,
-    #[msg("Invalid tau")]
-    InvalidTau,
-    #[msg("Invalid K")]
-    InvalidK,
-    #[msg("Not fully processed")]
-    NotFullyProcessed,
-    #[msg("Heap not full")]
-    HeapNotFull,
-    #[msg("User not found in roster")]
-    UserNotFoundInRoster,
-    #[msg("t out of range")]
-    TOutOfRange,
-    #[msg("Mapping error")]
-    MappingError,
-    #[msg("Already claimed refund")]
-    AlreadyClaimedRefund,
-    #[msg("Already claimed tokens")]
-    AlreadyClaimedTokens,
-    #[msg("No recent blockhashes found in SlotHashes sysvar")]
-    NoRecentBlockhashes,
-}

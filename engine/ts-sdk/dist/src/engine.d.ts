@@ -22,6 +22,7 @@ declare const _default: {
         getUserContributionPda: (launch: PublicKey, user: PublicKey) => [PublicKey, number];
         getMintAuthPda: (launch: PublicKey) => [PublicKey, number];
         getProjectCounterPda: () => [PublicKey, number];
+        getPoolPda: (launch: PublicKey) => [PublicKey, number];
         deriveAllPdas: (saleMint: PublicKey) => {
             launch: anchor.web3.PublicKey;
             escrow: anchor.web3.PublicKey;
@@ -126,6 +127,13 @@ declare const _default: {
             signature: string;
             userAta: PublicKey;
         }>;
+        createPool: (args: {
+            launch: PublicKey;
+            payerKeypair?: Keypair;
+            useTestMode?: boolean;
+        }) => Promise<{
+            signature: string;
+        }>;
         fetchLaunch: (launch: PublicKey) => Promise<{
             projectId: anchor.BN;
             admin: anchor.web3.PublicKey;
@@ -177,6 +185,16 @@ declare const _default: {
         }>;
         fetchProjectCounter: () => Promise<{
             nextProjectId: anchor.BN;
+        }>;
+        fetchPoolState: (launch: PublicKey) => Promise<{
+            launch: anchor.web3.PublicKey;
+            poolId: anchor.BN;
+            projectId: anchor.BN;
+            createdSlot: anchor.BN;
+            createdBlockhash: number[];
+            rangeStart: number[];
+            rangeEnd: number[];
+            created: boolean;
         }>;
         fetchAllProjects: () => Promise<{
             projectId: number;
