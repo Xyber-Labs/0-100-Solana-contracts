@@ -96,6 +96,13 @@ export default {
             );
         }
 
+        function getPoolPda(launch: PublicKey): [PublicKey, number] {
+            return PublicKey.findProgramAddressSync(
+                [Buffer.from("pool"), launch.toBuffer()],
+                program.programId
+            );
+        }
+
         // -------------- Utility --------------
         function getUserAta(mint: PublicKey, owner: PublicKey): PublicKey {
             return getAssociatedTokenAddressSync(mint, owner, true);
@@ -395,6 +402,32 @@ export default {
          * 2) userAta (user's ATA for saleMint) must exist. If
          *    createAtaIfMissing = true, the SDK will add an ix for creation.
          */
+        async function createPool(args: {
+            launch: PublicKey;
+            payerKeypair?: Keypair;
+            useTestMode?: boolean;
+        }): Promise<{ signature: string }> {
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+            const [poolState] = getPoolPda(args.launch);
+            const [projectCounter] = getProjectCounterPda();
+
+            // SlotHashes sysvar
+            const SLOT_HASHES_SYSVAR = new PublicKey("SysvarS1otHashes111111111111111111111111111");
+
+            // For now, always use createPool since createPoolTest is only available with test feature
+            const rpc = program.methods.createPool()
+                .accountsStrict({
+                    payer: payerPubkey,
+                    launchState: args.launch,
+                    poolState,
+                    projectCounter,
+                    slotHashes: SLOT_HASHES_SYSVAR,
+                    systemProgram: SystemProgram.programId,
+                });
+            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
+            return { signature: await rpc.rpc() };
+        }
+
         async function claimTokens(args: {
             launch: PublicKey;
             saleMint: PublicKey;
@@ -457,6 +490,12 @@ export default {
             return txBuilder.fetchProjectCounter();
         }
 
+        async function fetchPoolState(launch: PublicKey) {
+            const [pda] = getPoolPda(launch);
+            return program.account.poolState.fetch(pda);
+        }
+
+        // Get all launch states (projects) from the blockchain
         async function fetchAllProjects() {
             try {
                 console.log('Fetching all launch states from blockchain...');
@@ -539,6 +578,7 @@ export default {
             getUserContributionPda,
             getMintAuthPda,
             getProjectCounterPda,
+            getPoolPda,
             deriveAllPdas,
 
             // Utils
@@ -555,6 +595,7 @@ export default {
             withdraw,
             claimRefund,
             claimTokens,
+            createPool,
 
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
@@ -576,6 +617,7 @@ export default {
             fetchSelection,
             fetchUserContribution,
             fetchProjectCounter,
+            fetchPoolState,
             fetchAllProjects,
             findProjectById,
             getProjectByLaunchPda,

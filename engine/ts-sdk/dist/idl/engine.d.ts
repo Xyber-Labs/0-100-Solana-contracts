@@ -171,6 +171,135 @@ export type Engine = {
             "args": [];
         },
         {
+            "name": "createPool";
+            "docs": [
+                "Create pool with blockhash verification",
+                "Checks if any of the last 10 blockhashes meets the probability threshold"
+            ];
+            "discriminator": [
+                233,
+                146,
+                209,
+                142,
+                207,
+                104,
+                64,
+                188
+            ];
+            "accounts": [
+                {
+                    "name": "payer";
+                    "writable": true;
+                    "signer": true;
+                },
+                {
+                    "name": "launchState";
+                    "writable": true;
+                },
+                {
+                    "name": "poolState";
+                    "writable": true;
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const";
+                                "value": [
+                                    112,
+                                    111,
+                                    111,
+                                    108
+                                ];
+                            },
+                            {
+                                "kind": "account";
+                                "path": "launchState";
+                            }
+                        ];
+                    };
+                },
+                {
+                    "name": "projectCounter";
+                    "writable": true;
+                },
+                {
+                    "name": "slotHashes";
+                    "address": "SysvarS1otHashes111111111111111111111111111";
+                },
+                {
+                    "name": "systemProgram";
+                    "address": "11111111111111111111111111111111";
+                }
+            ];
+            "args": [];
+        },
+        {
+            "name": "createPoolInternal";
+            "docs": [
+                "Internal function that handles pool creation logic",
+                "skip_validation: if true, skips blockhash validation (for testing)"
+            ];
+            "discriminator": [
+                69,
+                110,
+                78,
+                61,
+                47,
+                49,
+                49,
+                169
+            ];
+            "accounts": [
+                {
+                    "name": "payer";
+                    "writable": true;
+                    "signer": true;
+                },
+                {
+                    "name": "launchState";
+                    "writable": true;
+                },
+                {
+                    "name": "poolState";
+                    "writable": true;
+                    "pda": {
+                        "seeds": [
+                            {
+                                "kind": "const";
+                                "value": [
+                                    112,
+                                    111,
+                                    111,
+                                    108
+                                ];
+                            },
+                            {
+                                "kind": "account";
+                                "path": "launchState";
+                            }
+                        ];
+                    };
+                },
+                {
+                    "name": "projectCounter";
+                    "writable": true;
+                },
+                {
+                    "name": "slotHashes";
+                    "address": "SysvarS1otHashes111111111111111111111111111";
+                },
+                {
+                    "name": "systemProgram";
+                    "address": "11111111111111111111111111111111";
+                }
+            ];
+            "args": [
+                {
+                    "name": "skipValidation";
+                    "type": "bool";
+                }
+            ];
+        },
+        {
             "name": "deposit";
             "docs": [
                 "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -710,6 +839,19 @@ export type Engine = {
             ];
         },
         {
+            "name": "poolState";
+            "discriminator": [
+                247,
+                237,
+                227,
+                245,
+                215,
+                195,
+                222,
+                70
+            ];
+        },
+        {
             "name": "projectCounter";
             "discriminator": [
                 210,
@@ -826,6 +968,19 @@ export type Engine = {
                 166,
                 10,
                 63
+            ];
+        },
+        {
+            "name": "poolCreated";
+            "discriminator": [
+                202,
+                44,
+                41,
+                88,
+                104,
+                220,
+                157,
+                82
             ];
         },
         {
@@ -1032,6 +1187,16 @@ export type Engine = {
             "code": 6024;
             "name": "noRecentBlockhashes";
             "msg": "No recent blockhashes found in SlotHashes sysvar";
+        },
+        {
+            "code": 6025;
+            "name": "poolAlreadyCreated";
+            "msg": "Pool already created";
+        },
+        {
+            "code": 6026;
+            "name": "noValidBlockhash";
+            "msg": "No valid blockhash found in recent blocks";
         }
     ];
     "types": [
@@ -1298,6 +1463,112 @@ export type Engine = {
                         "type": {
                             "option": "u64";
                         };
+                    }
+                ];
+            };
+        },
+        {
+            "name": "poolCreated";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "poolId";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "projectId";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "blockhash";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    },
+                    {
+                        "name": "slot";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "rangeStart";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    },
+                    {
+                        "name": "rangeEnd";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    }
+                ];
+            };
+        },
+        {
+            "name": "poolState";
+            "type": {
+                "kind": "struct";
+                "fields": [
+                    {
+                        "name": "launch";
+                        "type": "pubkey";
+                    },
+                    {
+                        "name": "poolId";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "projectId";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "createdSlot";
+                        "type": "u64";
+                    },
+                    {
+                        "name": "createdBlockhash";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    },
+                    {
+                        "name": "rangeStart";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    },
+                    {
+                        "name": "rangeEnd";
+                        "type": {
+                            "array": [
+                                "u8",
+                                32
+                            ];
+                        };
+                    },
+                    {
+                        "name": "created";
+                        "type": "bool";
                     }
                 ];
             };
