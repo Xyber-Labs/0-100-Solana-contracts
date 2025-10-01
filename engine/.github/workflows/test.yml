@@ -47,4 +47,4 @@ jobs:
         run: anchor build
 
       - name: Run tests
-        run: yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/engine.ts
+        run: yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/bankrun.ts

@@ -80,7 +80,7 @@ All methods from the test suite are available as UI buttons:
 
 ## Testing
 
-The interface replicates the complete test flow from `tests/engine.ts`, allowing you to:
+The interface replicates the complete test flow from `tests/bankrun.ts`, allowing you to:
 - Test individual methods
 - Run the complete launch flow
 - Monitor state changes in real-time
