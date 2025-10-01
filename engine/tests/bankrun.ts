@@ -1,4 +1,4 @@
-import { Clock, startAnchor } from "solana-bankrun";
+import { startAnchor } from "solana-bankrun";
 import { BankrunProvider } from "anchor-bankrun";
 import * as anchor from "@coral-xyz/anchor";
 import { assert } from "chai";
@@ -10,6 +10,7 @@ import {
   TOKEN_PROGRAM_ID,
   unpackAccount,
 } from "@solana/spl-token";
+import { advanceTime, createAndFundAccount } from "./utils";
 
 describe("engine bankrun", () => {
   let context: any;
@@ -81,68 +82,38 @@ describe("engine bankrun", () => {
     assert.ok(state.saleMint.equals(saleMint.publicKey));
   });
 
-  // it("Opens funding", async () => {
-  //   const openFundingTx = await sdk.openFundingTx({
-  //     launch: launchState,
-  //     admin: admin.publicKey,
-  //   });
-  //
-  //   const openTx = await provider.sendAndConfirm(openFundingTx, [admin.payer]);
-  //   console.log("Open funding tx signature:", openTx);
-  //
-  //   const state = await sdk.fetchLaunch(launchState);
-  //   assert.isTrue(state.fundingOpen);
-  // });
-
-
-  // it("Closes funding", async () => {
-  //   const { transaction: initRosterTx, rosterPda } = await sdk.initRosterTx({
-  //     launch: launchState,
-  //     admin: admin.publicKey,
-  //   });
-  //
-  //   const rosterTx = await provider.sendAndConfirm(initRosterTx, [admin.payer]);
-  //   console.log("Init roster tx signature:", rosterTx);
-  //
-  //   const closeDepositsTx = await sdk.closeDepositsTx({
-  //     launch: launchState,
-  //     admin: admin.publicKey,
-  //     roster: rosterPda,
-  //   });
-  //
-  //   const closeTx = await provider.sendAndConfirm(closeDepositsTx, [admin.payer]);
-  //   console.log("Close deposits tx signature:", closeTx);
-  //
-  //   const state = await sdk.fetchLaunch(launchState);
-  //   assert.isFalse(state.fundingOpen);
-  //   assert.isTrue(state.depositsClosed);
-  // });
-
   it("Sets the VRF seed", async () => {
+    await sdk.initRoster({
+      launch: launchState,
+      signers: [admin.payer],
+    });
+
+    const depositor = await createAndFundAccount(context, provider, 20);
+    await sdk.deposit({
+      launch: launchState,
+      amountLamports: PER_WALLET_CAP,
+      userKeypair: depositor,
+    });
+
+    const depositor2 = await createAndFundAccount(context, provider, 20);
+    await sdk.deposit({
+      launch: launchState,
+      amountLamports: PER_WALLET_CAP,
+      userKeypair: depositor2,
+    });
+
+    await advanceTime(context, { slots: 10n, seconds: 10n });
+
     const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: launchState,
       admin: admin.publicKey,
     });
-
-    const currentClock = await context.banksClient.getClock();
-    context.setClock(
-      new Clock(
-        currentClock.slot + 10,
-        currentClock.epochStartTimestamp,
-        currentClock.epoch,
-        currentClock.leaderScheduleEpoch,
-        currentClock.unixTimestamp + 10n,
-      ),
-    );
 
     const seedTx = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
     console.log("Set VRF seed tx signature:", seedTx);
 
     const state = await sdk.fetchLaunch(launchState);
     assert.isNotNull(state.vrfSeed);
-
-    // const selectionState = await sdk.fetchSelection(launchState);
-    // assert.deepEqual(Array.from(selectionState.vrfSeed), Array.from(testSeed));
   });
 
 
@@ -170,15 +141,7 @@ describe("engine bankrun", () => {
       admin: admin.publicKey,
     })).transaction, [admin.payer]);
 
-    const depositor = anchor.web3.Keypair.generate();
-
-    const transferIx = anchor.web3.SystemProgram.transfer({
-      fromPubkey: context.payer.publicKey,
-      toPubkey: depositor.publicKey,
-      lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
-    });
-    const transferTx = new anchor.web3.Transaction().add(transferIx);
-    await provider.sendAndConfirm(transferTx, [context.payer]);
+    const depositor = await createAndFundAccount(context, provider, 20);
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
@@ -225,15 +188,7 @@ describe("engine bankrun", () => {
       admin: admin.publicKey,
     })).transaction, [admin.payer]);
 
-    const depositor = anchor.web3.Keypair.generate();
-
-    const transferIx = anchor.web3.SystemProgram.transfer({
-      fromPubkey: context.payer.publicKey,
-      toPubkey: depositor.publicKey,
-      lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
-    });
-    const transferTx = new anchor.web3.Transaction().add(transferIx);
-    await provider.sendAndConfirm(transferTx, [context.payer]);
+    const depositor = await createAndFundAccount(context, provider, 20);
 
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
@@ -510,15 +465,7 @@ describe("engine bankrun", () => {
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
     for (let i = 0; i < 15; i++) {
-      const user = anchor.web3.Keypair.generate();
-
-      const transferIx = anchor.web3.SystemProgram.transfer({
-        fromPubkey: context.payer.publicKey,
-        toPubkey: user.publicKey,
-        lamports: 20 * anchor.web3.LAMPORTS_PER_SOL,
-      });
-      const transferTx = new anchor.web3.Transaction().add(transferIx);
-      await provider.sendAndConfirm(transferTx, [context.payer]);
+      const user = await createAndFundAccount(context, provider, 20);
 
       const balance = await context.banksClient.getBalance(user.publicKey);
       console.log(`User ${i} balance: ${Number(balance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
@@ -539,9 +486,7 @@ describe("engine bankrun", () => {
     console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Total tickets: ${state.totalTickets}`);
 
-    // Warp time forward so funding period ends
-    const currentSlot = await context.banksClient.getSlot();
-    context.warpToSlot(currentSlot + 1000n);
+    await advanceTime(context, { slots: 1000n, seconds: 11n });
 
     const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: testLaunchState,

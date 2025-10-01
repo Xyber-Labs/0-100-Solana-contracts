@@ -252,29 +252,23 @@ export default {
         async function deposit(args: {
             launch: PublicKey;
             amountLamports: BN;
-            userKeypair?: Keypair; // if depositing is not provider.wallet
+            userKeypair?: Keypair;
             roster?: PublicKey;
             escrow?: PublicKey;
         }): Promise<{ userPda: PublicKey; signature: string }> {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
-            const [userPda] = getUserContributionPda(args.launch, userPubkey);
-            const roster = args.roster ?? getRosterPda(args.launch)[0];
-            const escrow = args.escrow ?? getEscrowPda(args.launch)[0];
+            const { instruction, userContribution } = await txBuilder.depositIx({
+                launch: args.launch,
+                user: userPubkey,
+                amount: args.amountLamports,
+                roster: args.roster,
+                escrow: args.escrow,
+            });
 
-            const rpc = program.methods
-                .deposit(args.amountLamports)
-                .accountsStrict({
-                    user: userPubkey,
-                    launchState: args.launch,
-                    userContribution: userPda,
-                    roster,
-                    escrow,
-                    launch: args.launch,
-                    systemProgram: SystemProgram.programId,
-                });
-            if (args.userKeypair) rpc.signers([args.userKeypair]);
-            const signature = await rpc.rpc();
-            return { userPda, signature };
+            const tx = new Transaction().add(instruction);
+            const signers = args.userKeypair ? [args.userKeypair] : [];
+            const signature = await provider.sendAndConfirm(tx, signers);
+            return { userPda: userContribution, signature };
         }
 
         async function withdraw(args: {
