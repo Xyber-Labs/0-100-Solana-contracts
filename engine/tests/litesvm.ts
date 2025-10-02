@@ -1,5 +1,4 @@
-import { startAnchor } from "solana-bankrun";
-import { BankrunProvider } from "anchor-bankrun";
+import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { assert } from "chai";
 import { Program } from "@coral-xyz/anchor";
@@ -12,9 +11,9 @@ import {
 } from "@solana/spl-token";
 import { advanceTime, createAndFundAccount } from "./utils";
 
-describe("engine bankrun", () => {
-  let context: any;
-  let provider: BankrunProvider;
+describe("engine litesvm", () => {
+  let client: any;
+  let provider: LiteSVMProvider;
   let program: Program<Engine>;
   let admin: anchor.Wallet;
   let sdk: any;
@@ -30,8 +29,8 @@ describe("engine bankrun", () => {
   const LP_ALLOCATION = new anchor.BN(500000);
 
   before(async () => {
-    context = await startAnchor("./", [], []);
-    provider = new BankrunProvider(context);
+    client = fromWorkspace("./");
+    provider = new LiteSVMProvider(client);
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
     admin = provider.wallet;
@@ -83,13 +82,13 @@ describe("engine bankrun", () => {
   it("Sets the VRF seed", async () => {
     await sdk.initRoster({ launch: launchState, signers: [admin.payer] });
 
-    const depositor = await createAndFundAccount(context, provider, 20);
+    const depositor = await createAndFundAccount(client, 20);
     await sdk.deposit({ launch: launchState, amountLamports: PER_WALLET_CAP, userKeypair: depositor });
 
-    const depositor2 = await createAndFundAccount(context, provider, 20);
+    const depositor2 = await createAndFundAccount(client, 20);
     await sdk.deposit({ launch: launchState, amountLamports: PER_WALLET_CAP, userKeypair: depositor2 });
 
-    await advanceTime(context, { slots: 10n, seconds: 10n });
+    await advanceTime(client, { slots: 10n, seconds: 10n });
 
     const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
       launch: launchState,
@@ -121,11 +120,8 @@ describe("engine bankrun", () => {
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
-
-
     await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
-
-    const depositor = await createAndFundAccount(context, provider, 20);
+    const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
     const { signature: depositTx } = await sdk.deposit({
@@ -164,12 +160,12 @@ describe("engine bankrun", () => {
 
     await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
 
-    const depositor = await createAndFundAccount(context, provider, 20);
+    const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
     await sdk.deposit({ launch: testLaunchState, amountLamports: depositAmount, userKeypair: depositor });
 
-    const initialBalance = await context.banksClient.getBalance(depositor.publicKey);
+    const initialBalance = client.getBalance(depositor.publicKey);
 
     const { transaction: withdrawTx } = await sdk.withdrawTx({
       launch: testLaunchState,
@@ -180,7 +176,7 @@ describe("engine bankrun", () => {
     const withdrawSig = await provider.sendAndConfirm(withdrawTx, [depositor]);
     console.log("Withdraw tx signature:", withdrawSig);
 
-    const finalBalance = await context.banksClient.getBalance(depositor.publicKey);
+    const finalBalance = client.getBalance(depositor.publicKey);
 
     assert.isAbove(Number(finalBalance), Number(initialBalance));
 
@@ -189,166 +185,6 @@ describe("engine bankrun", () => {
 
     const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
     assert.equal(userContrib.deposited.toNumber(), 0);
-  });
-
-  it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
-    const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
-    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
-
-    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL);
-    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
-    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
-
-    await sdk.initLaunch({
-      saleMint: testSaleMint.publicKey,
-      hardCapLamports: testHardCap,
-      minRaiseLamports: testMinRaise,
-      perWalletCap: testPerWalletCap,
-      tauLamports: testTau,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
-      fundingDurationDays: 0,
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: testSaleMint.publicKey,
-          space: 82,
-          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          testSaleMint.publicKey,
-          6,
-          mintAuth,
-          admin.publicKey
-        ),
-      ],
-      signers: [testSaleMint],
-    });
-
-    const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
-
-    const users = [];
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-
-    for (let i = 0; i < 15; i++) {
-      const user = await createAndFundAccount(context, provider, 20);
-
-      const balance = await context.banksClient.getBalance(user.publicKey);
-      console.log(`User ${i} balance: ${Number(balance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-      const { userPda } = await sdk.deposit({
-        launch: testLaunchState,
-        amountLamports: depositAmount,
-        userKeypair: user,
-      });
-
-      users.push({ keypair: user, contribution: userPda });
-    }
-
-    let state = await sdk.fetchLaunch(testLaunchState);
-    assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
-    console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-    console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-    console.log(`Total tickets: ${state.totalTickets}`);
-
-    await advanceTime(context, { slots: 1000n, seconds: 11n });
-
-    const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
-      launch: testLaunchState,
-      admin: admin.publicKey,
-    });
-    const seedSig = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
-    console.log("VRF seed set with signature:", seedSig);
-
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.ok(state.vrfSeed !== null);
-
-    const totalTicketsToProcess = state.totalTickets;
-    console.log(`Total tickets to process: ${totalTicketsToProcess}`);
-
-    const maxItemsPerBatch = 10;
-    let processed = 0;
-    let batchSlot = await context.banksClient.getSlot();
-
-    while (processed < totalTicketsToProcess) {
-      batchSlot += 1n;
-      context.warpToSlot(batchSlot);
-
-      const processBatchIx = await program.methods
-        .processBatch(maxItemsPerBatch)
-        .accounts({
-          selectionState: selectionPda,
-          launchState: testLaunchState,
-          roster: rosterPda,
-        })
-        .instruction();
-
-      const processBatchTx = new anchor.web3.Transaction().add(processBatchIx);
-      await provider.sendAndConfirm(processBatchTx, [admin.payer]);
-
-      const selectionAccount = await sdk.fetchSelection(testLaunchState);
-      processed = selectionAccount.processed;
-      console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
-    }
-
-    const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
-    state = await sdk.fetchLaunch(testLaunchState);
-    console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
-    console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
-    assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
-    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
-    assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
-
-    const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });
-    console.log("Selection finalized with signature:", finalizeSig);
-
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(state.selectionFinalized);
-    assert.ok(state.thresholdScore !== null);
-    console.log(`Threshold score: ${state.thresholdScore}`);
-
-    const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
-    console.log("Claims opened with signature:", claimsSig);
-
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(state.claimsOpen);
-    assert.ok(state.tokensPerTicket !== null);
-    console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
-
-    const testUser = users[0];
-    const initialBalance = await context.banksClient.getBalance(testUser.keypair.publicKey);
-
-    const { signature: refundSig } = await sdk.claimRefund({
-      launch: testLaunchState,
-      userKeypair: testUser.keypair,
-    });
-    console.log("Refund claimed with signature:", refundSig);
-
-    const finalBalance = await context.banksClient.getBalance(testUser.keypair.publicKey);
-    const userAccountAfter = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
-
-    assert.isTrue(userAccountAfter.claimedRefund);
-    console.log(`User refund claimed. Balance change: ${(Number(finalBalance) - Number(initialBalance)) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    const { userAta, signature: tokenSig } = await sdk.claimTokens({
-      launch: testLaunchState,
-      saleMint: testSaleMint.publicKey,
-      userKeypair: testUser.keypair,
-      createAtaIfMissing: true,
-    });
-    console.log("Tokens claimed with signature:", tokenSig);
-
-    const tokenAccountInfo = await context.banksClient.getAccount(userAta);
-    const tokenAccount = unpackAccount(userAta, tokenAccountInfo);
-    const userAccountFinal = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
-
-    assert.isTrue(userAccountFinal.claimedTokens);
-    console.log(`User tokens claimed. Token balance: ${Number(tokenAccount.amount) / 1_000_000}`);
-
-    console.log("Complete flow test passed! All functions tested successfully.");
   });
 
   it("Project ID increments correctly", async () => {
@@ -520,6 +356,168 @@ describe("engine bankrun", () => {
         throw error;
       }
     }
+  });
+
+
+  it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
+    const testSaleMint = anchor.web3.Keypair.generate();
+    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
+    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
+
+    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL);
+    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
+    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+
+    await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports: testHardCap,
+      minRaiseLamports: testMinRaise,
+      perWalletCap: testPerWalletCap,
+      tauLamports: testTau,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
+      fundingDurationDays: 0,
+      preInstructions: [
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: testSaleMint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          testSaleMint.publicKey,
+          6,
+          mintAuth,
+          admin.publicKey
+        ),
+      ],
+      signers: [testSaleMint],
+    });
+
+    const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
+
+    const users = [];
+    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+
+    for (let i = 0; i < 15; i++) {
+      const user = await createAndFundAccount(client, 20);
+
+      const balance = client.getBalance(user.publicKey);
+      console.log(`User ${i} balance: ${Number(balance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+      const { userPda } = await sdk.deposit({
+        launch: testLaunchState,
+        amountLamports: depositAmount,
+        userKeypair: user,
+      });
+
+      users.push({ keypair: user, contribution: userPda });
+    }
+
+    let state = await sdk.fetchLaunch(testLaunchState);
+    assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
+    console.log(`Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log(`Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log(`Total tickets: ${state.totalTickets}`);
+
+    await advanceTime(client, { slots: 1000n, seconds: 11n });
+
+    const { transaction: setSeedTx, selectionPda } = await sdk.setSeedTx({
+      launch: testLaunchState,
+      admin: admin.publicKey,
+    });
+    const seedSig = await provider.sendAndConfirm(setSeedTx, [admin.payer]);
+    console.log("VRF seed set with signature:", seedSig);
+
+    state = await sdk.fetchLaunch(testLaunchState);
+    assert.ok(state.vrfSeed !== null);
+
+    const totalTicketsToProcess = state.totalTickets;
+    console.log(`Total tickets to process: ${totalTicketsToProcess}`);
+
+    const maxItemsPerBatch = 10;
+    let processed = 0;
+    let batchSlot = client.getClock().slot;
+
+    while (processed < totalTicketsToProcess) {
+      batchSlot += 1n;
+      client.warpToSlot(batchSlot);
+      client.expireBlockhash();
+
+      const processBatchIx = await program.methods
+        .processBatch(maxItemsPerBatch)
+        .accounts({
+          selectionState: selectionPda,
+          launchState: testLaunchState,
+          roster: rosterPda,
+        })
+        .instruction();
+
+      const processBatchTx = new anchor.web3.Transaction().add(processBatchIx);
+      await provider.sendAndConfirm(processBatchTx, [admin.payer]);
+
+      const selectionAccount = await sdk.fetchSelection(testLaunchState);
+      processed = selectionAccount.processed;
+      console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
+    }
+
+    const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
+    state = await sdk.fetchLaunch(testLaunchState);
+    console.log(`Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`);
+    console.log(`Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`);
+    assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
+    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
+    assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
+
+    const { signature: finalizeSig } = await sdk.finalizeSelection({ launch: testLaunchState });
+    console.log("Selection finalized with signature:", finalizeSig);
+
+    state = await sdk.fetchLaunch(testLaunchState);
+    assert.isTrue(state.selectionFinalized);
+    assert.ok(state.thresholdScore !== null);
+    console.log(`Threshold score: ${state.thresholdScore}`);
+
+    const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
+    console.log("Claims opened with signature:", claimsSig);
+
+    state = await sdk.fetchLaunch(testLaunchState);
+    assert.isTrue(state.claimsOpen);
+    assert.ok(state.tokensPerTicket !== null);
+    console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
+
+    const testUser = users[0];
+    const initialBalance = client.getBalance(testUser.keypair.publicKey);
+
+    const { signature: refundSig } = await sdk.claimRefund({
+      launch: testLaunchState,
+      userKeypair: testUser.keypair,
+    });
+    console.log("Refund claimed with signature:", refundSig);
+
+    const finalBalance = client.getBalance(testUser.keypair.publicKey);
+    const userAccountAfter = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
+
+    assert.isTrue(userAccountAfter.claimedRefund);
+    console.log(`User refund claimed. Balance change: ${(Number(finalBalance) - Number(initialBalance)) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+    const { userAta, signature: tokenSig } = await sdk.claimTokens({
+      launch: testLaunchState,
+      saleMint: testSaleMint.publicKey,
+      userKeypair: testUser.keypair,
+      createAtaIfMissing: true,
+    });
+    console.log("Tokens claimed with signature:", tokenSig);
+
+    const tokenAccountInfo = client.getAccount(userAta);
+    const tokenAccount = unpackAccount(userAta, tokenAccountInfo);
+    const userAccountFinal = await sdk.fetchUserContribution(testLaunchState, testUser.keypair.publicKey);
+
+    assert.isTrue(userAccountFinal.claimedTokens);
+    console.log(`User tokens claimed. Token balance: ${Number(tokenAccount.amount) / 1_000_000}`);
+
+    console.log("Complete flow test passed! All functions tested successfully.");
   });
 
 });

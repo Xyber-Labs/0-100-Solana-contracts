@@ -1,4 +1,4 @@
-name: bankrun tests
+name: tests
 
 on:
   pull_request:
@@ -67,5 +67,5 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Run bankrun tests
-        run: anchor run bankrun
+      - name: Run tests
+        run: anchor run litesvm
