@@ -18,8 +18,5 @@ url = "https://api.apr.dev"
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
-[wallets]
-rich_wallet = "./test-ledger/rich_wallet.json"
-
 [scripts]
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"

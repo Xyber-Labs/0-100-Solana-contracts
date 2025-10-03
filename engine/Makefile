@@ -80,7 +80,7 @@ build-deploy: build deploy
 .PHONY: validator
 validator:
 	@echo "Starting local validator..."
-	solana-test-validator --reset --mint 27b2ufL2GWCYF4Wb5nyEgxLhhTSvci7fK8EtkUTUhQR1 --rpc-pubsub-enable-block-subscription
+	solana-test-validator --reset
 
 .PHONY: validator-stop
 validator-stop:
@@ -90,7 +90,7 @@ validator-stop:
 .PHONY: validator-bg
 validator-bg:
 	@echo "Starting local validator in background..."
-	solana-test-validator --reset --mint 27b2ufL2GWCYF4Wb5nyEgxLhhTSvci7fK8EtkUTUhQR1 --rpc-pubsub-enable-block-subscription &
+	solana-test-validator --reset &
 
 # Setup commands
 .PHONY: setup
