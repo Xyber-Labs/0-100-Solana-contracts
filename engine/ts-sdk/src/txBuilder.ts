@@ -55,7 +55,7 @@ export class TxBuilder {
         params.lpAllocation,
         params.fundingDurationDays
       )
-      .accounts({
+      .accountsStrict({
         admin: params.admin,
         launchState: launchState,
         saleMint: params.saleMint,
@@ -113,6 +113,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
+      fundingDurationDays: 0,
     });
 
     const transaction = new Transaction()
@@ -137,7 +138,7 @@ export class TxBuilder {
 
     const instruction = await this.program.methods
       .initRoster()
-      .accounts({
+      .accountsStrict({
         admin: params.admin,
         launchState: params.launch,
         roster: rosterPda,
@@ -199,7 +200,7 @@ export class TxBuilder {
 
     const instruction = await this.program.methods
       .deposit(params.amount)
-      .accounts({
+      .accountsStrict({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
@@ -238,7 +239,7 @@ export class TxBuilder {
 
     const instruction = await this.program.methods
       .withdraw(params.amount)
-      .accounts({
+      .accountsStrict({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
