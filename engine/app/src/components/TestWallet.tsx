@@ -121,7 +121,12 @@ const TestWallet: React.FC<TestWalletProps> = ({ onWalletChange, currentWallet }
       console.log('Airdrop signature:', signature);
       
       // Wait for confirmation with longer timeout
-      await connection.confirmTransaction(signature, 'confirmed');
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight
+      });
       
       // Wait a bit more for balance to update
       setTimeout(async () => {

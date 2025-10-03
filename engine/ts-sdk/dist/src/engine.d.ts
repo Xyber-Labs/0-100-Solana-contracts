@@ -166,14 +166,6 @@ declare const _default: {
             escrow: PublicKey;
             projectCounter: PublicKey;
         }>;
-        openFundingTx: (params: {
-            launch: PublicKey;
-            admin: PublicKey;
-        }) => Promise<Transaction>;
-        openFundingIx: (params: {
-            launch: PublicKey;
-            admin: PublicKey;
-        }) => Promise<TransactionInstruction>;
         initRosterTx: (params: {
             launch: PublicKey;
             admin: PublicKey;
@@ -188,16 +180,6 @@ declare const _default: {
             instruction: TransactionInstruction;
             rosterPda: PublicKey;
         }>;
-        closeDepositsTx: (params: {
-            launch: PublicKey;
-            admin: PublicKey;
-            roster?: PublicKey;
-        }) => Promise<Transaction>;
-        closeDepositsIx: (params: {
-            launch: PublicKey;
-            admin: PublicKey;
-            roster?: PublicKey;
-        }) => Promise<TransactionInstruction>;
         setSeedTx: (params: {
             launch: PublicKey;
             admin: PublicKey;

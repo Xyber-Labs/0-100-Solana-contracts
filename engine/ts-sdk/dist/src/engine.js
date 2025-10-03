@@ -85,6 +85,9 @@ export default {
             }
             tx.add(instruction);
             const signers = args.signers || [];
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
             const signature = await provider.sendAndConfirm(tx, signers);
             return { launchPda: launchState, escrowPda: escrow, signature };
         }
@@ -154,6 +157,9 @@ export default {
             });
             const tx = new Transaction().add(instruction);
             const signers = args.userKeypair ? [args.userKeypair] : [];
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
             const signature = await provider.sendAndConfirm(tx, signers);
             return { userPda: userContribution, signature };
         }
@@ -407,12 +413,8 @@ export default {
             createPool,
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
-            openFundingTx: txBuilder.openFundingTx.bind(txBuilder),
-            openFundingIx: txBuilder.openFundingIx.bind(txBuilder),
             initRosterTx: txBuilder.initRosterTx.bind(txBuilder),
             initRosterIx: txBuilder.initRosterIx.bind(txBuilder),
-            closeDepositsTx: txBuilder.closeDepositsTx.bind(txBuilder),
-            closeDepositsIx: txBuilder.closeDepositsIx.bind(txBuilder),
             setSeedTx: txBuilder.setSeedTx.bind(txBuilder),
             setSeedIx: txBuilder.setSeedIx.bind(txBuilder),
             depositTx,

@@ -169,6 +169,9 @@ export default {
 
             const signers = args.signers || [];
 
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
             const signature = await provider.sendAndConfirm(tx, signers);
             return { launchPda: launchState, escrowPda: escrow, signature };
         }
@@ -267,6 +270,9 @@ export default {
 
             const tx = new Transaction().add(instruction);
             const signers = args.userKeypair ? [args.userKeypair] : [];
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
             const signature = await provider.sendAndConfirm(tx, signers);
             return { userPda: userContribution, signature };
         }

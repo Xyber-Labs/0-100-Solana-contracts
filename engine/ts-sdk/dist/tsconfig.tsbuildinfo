@@ -1,1 +1,1 @@
-{"root":["../src/engine.ts","../src/txBuilder.ts","../idl/engine.ts","../types.d.ts"],"errors":true,"version":"5.9.2"}
+{"root":["../src/engine.ts","../src/txbuilder.ts","../idl/engine.ts","../types.d.ts"],"version":"5.9.2"}
