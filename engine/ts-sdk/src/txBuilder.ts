@@ -113,7 +113,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationDays: 0,
+      fundingDurationDays: 0
     });
 
     const transaction = new Transaction()
