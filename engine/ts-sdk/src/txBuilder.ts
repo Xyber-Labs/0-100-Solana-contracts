@@ -15,10 +15,10 @@ export class TxBuilder {
     const seedBuffers = seeds.map(seed => {
       if (typeof seed === 'string') {
         return Buffer.from(seed);
-      } else if (seed instanceof PublicKey) {
+      } else if (typeof seed === 'object' && 'toBuffer' in seed) {
         return seed.toBuffer();
       } else {
-        return seed;
+        return seed as Buffer;
       }
     });
     
