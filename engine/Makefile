@@ -16,6 +16,9 @@ help:
 	@echo "  validator     - Start local validator"
 	@echo "  validator-stop - Stop local validator"
 	@echo "  setup         - Full setup (build + deploy + test)"
+	@echo "  test-local    - Run the full flow test on the local validator"
+	@echo "  test-local-quick - Run the full flow test on an already running validator"
+	@echo "  test-litesvm  - Run tests using litesvm simulator"
 	@echo ""
 	@echo "Remote development:"
 	@echo "  config-remote - Set config to remote server (10.186.0.84)"
@@ -45,11 +48,31 @@ test-verbose: validator-bg build-all deploy
 	@echo "Running tests with verbose output..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --reporter spec
 
+.PHONY: test-local
+test-local: validator-bg build-all-test deploy
+	@echo "Running full flow script on local validator..."
+	yarn run script:local-flow
+
+.PHONY: test-local-quick
+test-local-quick: build-all-test deploy
+	@echo "Running full flow script on existing local validator..."
+	yarn run script:local-flow
+
+.PHONY: test-litesvm
+test-litesvm: build-all
+	@echo "Running litesvm tests..."
+	yarn run test:litesvm
+
 # Build and deploy commands
 .PHONY: build
 build:
 	@echo "Building program..."
 	anchor build
+
+.PHONY: build-test
+build-test:
+	@echo "Building program with --features test..."
+	anchor build -- --features test
 
 .PHONY: sync-idl
 sync-idl:
@@ -67,6 +90,10 @@ build-sdk:
 .PHONY: build-all
 build-all: build sync-idl build-sdk
 	@echo "Full build completed (program + IDL sync + SDK)!"
+
+.PHONY: build-all-test
+build-all-test: build-test sync-idl build-sdk
+	@echo "Full test build completed (program + IDL sync + SDK)!"
 
 .PHONY: deploy
 deploy:

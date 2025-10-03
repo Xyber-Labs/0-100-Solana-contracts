@@ -428,6 +428,27 @@ export default {
             return { signature: await rpc.rpc() };
         }
 
+        async function createPoolTest(args: {
+            launch: PublicKey;
+            payerKeypair?: Keypair;
+        }): Promise<{ signature: string }> {
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+            const [poolState] = getPoolPda(args.launch);
+            const [projectCounter] = getProjectCounterPda();
+        
+            const rpc = program.methods.createPoolTest()
+                .accountsStrict({
+                    payer: payerPubkey,
+                    launchState: args.launch,
+                    poolState,
+                    projectCounter,
+                    slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
+                    systemProgram: SystemProgram.programId,
+                });
+            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
+            return { signature: await rpc.rpc() };
+        }
+
         async function claimTokens(args: {
             launch: PublicKey;
             saleMint: PublicKey;
@@ -596,6 +617,7 @@ export default {
             claimRefund,
             claimTokens,
             createPool,
+            createPoolTest,
 
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
