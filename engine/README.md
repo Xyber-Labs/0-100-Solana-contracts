@@ -190,7 +190,7 @@ solana program show HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb
 ## Files
 
 - `programs/engine/src/lib.rs` - Main program implementation
-- `tests/engine.ts` - Comprehensive test suite
+- `tests/bankrun.ts` - Comprehensive test suite
 - `Makefile` - Build and test automation
 - `run-tests.sh` - Test runner script
 - `TESTING.md` - Detailed testing guide
