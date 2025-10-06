@@ -114,7 +114,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   
   // Default launch configuration (matching tests)
   const defaultConfig: LaunchConfig = {
-    hardCapLamports: 100 * 1e9, // 100 SOL
+    hardCapLamports: 20 * 1e9, // 20 SOL
     minRaiseLamports: 10 * 1e9, // 10 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
@@ -263,7 +263,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           new BN(launchConfig.tauLamports),
           new BN(launchConfig.saleAllocation),
           new BN(launchConfig.lpAllocation),
-          launchConfig.fundingDurationDays
+          launchConfig.fundingDurationDays,
+          new BN(launchConfig.numBlocks)
         )
         .accountsStrict({
           admin: (testWallet?.publicKey || publicKey)!,
