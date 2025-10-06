@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
 import EngineSDK from 'zero-hundred-engine-sdk';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { runFullFlow } from './utils/flowRunner';
 
 // Launch configuration interface
 interface LaunchConfig {
@@ -14,6 +15,7 @@ interface LaunchConfig {
   saleAllocation: number;
   lpAllocation: number;
   fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
+  numBlocks: number;
 }
 
 // Error boundary component
@@ -72,6 +74,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [roster, setRoster] = useState<PublicKey | null>(null);
   const [selection, setSelection] = useState<PublicKey | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const [launchData, setLaunchData] = useState<any>(null);
   const [userContributions, setUserContributions] = useState<any>(null);
   const [selectionData, setSelectionData] = useState<any>(null);
@@ -85,6 +89,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [projectSearchId, setProjectSearchId] = useState<string>('');
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isProjectManagerCollapsed, setIsProjectManagerCollapsed] = useState(true);
+
+  // --- New state for the full flow runner ---
+  const [isFlowRunning, setIsFlowRunning] = useState(false);
 
   // Helper function to safely get numeric values from BN, string, or number
   const safeToNumber = (value: any): number => {
@@ -113,7 +120,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     tauLamports: 1 * 1e9, // 1 SOL
     saleAllocation: 1000000,
     lpAllocation: 500000,
-    fundingDurationDays: 5, // 5 days for production
+    fundingDurationDays: 0, // 10 seconds for quick testing
+    numBlocks: 150, // ~1 minute window
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -134,52 +142,18 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         publicKey: testWallet.publicKey,
         signTransaction: async <T extends Transaction | VersionedTransaction>(transaction: T): Promise<T> => {
           if (transaction instanceof Transaction) {
-            // Sign with test wallet
-            transaction.sign(testWallet);
-            console.log('TestWallet signed transaction with:', testWallet.publicKey.toString());
-            console.log('Transaction signers before additional signing:', transaction.signatures.map(sig => sig.publicKey.toString()));
-            
-            // Check if there are any unsigned signers that need to be signed
-            const unsignedSigners = transaction.signatures.filter(sig => sig.signature === null);
-            console.log('Unsigned signers:', unsignedSigners.map(sig => sig.publicKey.toString()));
-            
-            // If there are unsigned signers, we need to handle them
-            // This is a workaround for the case where rpc.signers() doesn't work with custom wallet
-            if (unsignedSigners.length > 0) {
-              console.log('Warning: Some signers are not signed. This may cause signature verification to fail.');
-              
-              // Try to sign with any additional signers that might be available
-              // This is a workaround for the rpc.signers() issue
-              for (const unsignedSig of unsignedSigners) {
-                console.log('Attempting to sign with additional signer:', unsignedSig.publicKey.toString());
-                // Note: We can't sign with arbitrary keypairs here as we don't have access to them
-                // This is a limitation of the current approach
-              }
-            }
+            // Use partialSign to add signature without removing existing ones
+            transaction.partialSign(testWallet);
+            console.log('TestWallet partially signed transaction with:', testWallet.publicKey.toString());
           }
           return transaction;
         },
         signAllTransactions: async <T extends Transaction | VersionedTransaction>(transactions: T[]): Promise<T[]> => {
           transactions.forEach(tx => {
             if (tx instanceof Transaction) {
-              // Sign with test wallet
-              tx.sign(testWallet);
-              console.log('TestWallet signed transaction with:', testWallet.publicKey.toString());
-              console.log('Transaction signers before additional signing:', tx.signatures.map(sig => sig.publicKey.toString()));
-              
-              // Check if there are any unsigned signers that need to be signed
-              const unsignedSigners = tx.signatures.filter(sig => sig.signature === null);
-              console.log('Unsigned signers:', unsignedSigners.map(sig => sig.publicKey.toString()));
-              
-              if (unsignedSigners.length > 0) {
-                console.log('Warning: Some signers are not signed. This may cause signature verification to fail.');
-                
-                // Try to sign with any additional signers that might be available
-                for (const unsignedSig of unsignedSigners) {
-                  console.log('Attempting to sign with additional signer:', unsignedSig.publicKey.toString());
-                  // Note: We can't sign with arbitrary keypairs here as we don't have access to them
-                }
-              }
+              // Use partialSign to add signature without removing existing ones
+              tx.partialSign(testWallet);
+              console.log('TestWallet partially signed transaction with:', testWallet.publicKey.toString());
             }
           });
           return transactions;
@@ -986,6 +960,38 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [publicKey, testWallet]); // Removed fetchBalance dependency to prevent infinite loops
 
+  useEffect(() => {
+    if (autoScroll && logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs, autoScroll]);
+
+  const handleRunFullFlow = useCallback(async () => {
+    if (!sdk || !program) {
+      addLog('ERROR: SDK not initialized. Please connect wallet and initialize SDK.');
+      return;
+    }
+
+    setIsFlowRunning(true);
+    addLog('--- RUNNING FULL TEST FLOW ---');
+    
+    // Use a short funding duration for the full flow test
+    const testConfig = {
+      ...launchConfig,
+      fundingDurationDays: 0, // This means 10 seconds in the contract
+    };
+
+    const result = await runFullFlow(sdk, program, sdk.program.provider, testConfig, addLog);
+
+    if (result.success) {
+      addLog('--- ✅ FULL TEST FLOW COMPLETED SUCCESSFULLY ---');
+    } else {
+      addLog(`--- ❌ FULL TEST FLOW FAILED: ${result.message} ---`);
+    }
+
+    setIsFlowRunning(false);
+  }, [sdk, program, launchConfig, addLog]);
+
   return (
     <ErrorBoundary>
       <div className="space-y-4">
@@ -1036,7 +1042,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         </div>
         
         {showLaunchForm && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-black bg-opacity-30 rounded border">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-black bg-opacity-30 rounded border">
             <div>
               <label className="block text-xs terminal-output mb-1">Hard Cap (SOL)</label>
               <input
@@ -1109,6 +1115,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <option value={4}>4 days</option>
                 <option value={5}>5 days</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Num Blocks (Window)</label>
+              <input
+                type="number"
+                value={launchConfig.numBlocks}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, numBlocks: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
             </div>
           </div>
         )}
@@ -1401,7 +1416,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={initializeSDK}
               className="terminal-button w-full text-left"
-              disabled={(!publicKey && !testWallet) || isLoading}
+              disabled={(!publicKey && !testWallet) || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Initialize SDK
             </button>
@@ -1409,16 +1424,17 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={initLaunch}
               className="terminal-button w-full text-left"
-              disabled={!sdk || isLoading}
+              disabled={!sdk || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Init Launch
             </button>
             
+            <div className="my-2 border-t border-gray-600"></div>
             
             <button 
               onClick={initRoster}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Init Roster
             </button>
@@ -1427,7 +1443,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={setSeed}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Set VRF Seed
             </button>
@@ -1435,7 +1451,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={processBatch}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Process Batch
             </button>
@@ -1443,7 +1459,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={finalizeSelection}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Finalize Selection
             </button>
@@ -1451,9 +1467,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={openClaims}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Open Claims
+            </button>
+
+            <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
+
+            <button 
+              onClick={handleRunFullFlow}
+              className="terminal-button w-full text-left bg-green-700 hover:bg-green-600 disabled:bg-gray-600"
+              disabled={!sdk || isLoading || isFlowRunning}
+            >
+              <span className="terminal-prompt">$</span> ▶️ Run Full E2E Flow
             </button>
           </div>
         </div>
@@ -1469,7 +1495,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={deposit}
               className="terminal-button w-full text-left"
-              disabled={!launchState || !roster || isLoading}
+              disabled={!launchState || !roster || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Deposit (2 SOL)
             </button>
@@ -1477,7 +1503,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={withdraw}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Withdraw (2 SOL)
             </button>
@@ -1485,7 +1511,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={claimRefund}
               className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading}
+              disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Claim Refund
             </button>
@@ -1493,7 +1519,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={claimTokens}
               className="terminal-button w-full text-left"
-              disabled={!launchState || !saleMint || isLoading}
+              disabled={!launchState || !saleMint || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Claim Tokens
             </button>
@@ -1573,12 +1599,23 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <span className="terminal-glow">logs@engine:~$</span>
             <span className="terminal-command ml-2">tail -f</span>
           </div>
-          <button onClick={clearLogs} className="terminal-button text-xs">
-            Clear Logs
-          </button>
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center space-x-2 text-xs">
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                className="terminal-input"
+              />
+              <span className="terminal-output">Auto-scroll</span>
+            </label>
+            <button onClick={clearLogs} className="terminal-button text-xs">
+              Clear Logs
+            </button>
+          </div>
         </div>
         
-        <div className="terminal-scroll bg-black bg-opacity-50 p-3 rounded border max-h-64">
+        <div ref={logContainerRef} className="terminal-scroll bg-black bg-opacity-50 p-3 rounded border max-h-64">
           {logs.length === 0 ? (
             <div className="terminal-output text-xs">
               <div>No logs yet. Initialize the SDK to start...</div>

@@ -64,6 +64,28 @@ async function runLocalFlow() {
         signers: [admin.payer, testSaleMint],
       });
       console.log(`   -> Launch initialized. PDA: ${testLaunchState.toBase58()}`);
+      
+      // Helper function to serialize the state object for readability
+      const serializeState = (state) => {
+        const replacer = (key, value) => {
+          // Check if the value is a BN instance and convert to a decimal string
+          if (value && value._bn && typeof value.toString === 'function') {
+            // Check if it's a PublicKey to avoid converting it to a number
+            if (typeof value.toBase58 === 'function') {
+              return value.toBase58();
+            }
+            return value.toString(10); // Explicitly use base 10
+          }
+          return value;
+        };
+        return JSON.stringify(state, replacer, 2);
+      };
+
+      // Fetch and log the full state for the backend developer
+      const launchStateData = await sdk.fetchLaunch(testLaunchState);
+      console.log("   -> Full Launch State Details (Serialized):");
+      console.log(serializeState(launchStateData));
+      
       results.push({ success: true, message: step });
     } catch (e) {
       results.push({ success: false, message: "[1/8] Initialize Launch", error: e.message });
