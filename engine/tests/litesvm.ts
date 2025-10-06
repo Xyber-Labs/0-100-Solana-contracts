@@ -10,6 +10,7 @@ import {
   unpackAccount,
 } from "@solana/spl-token";
 import { advanceTime, createAndFundAccount } from "./utils";
+import { Keypair } from "@solana/web3.js";
 
 describe("engine litesvm", () => {
   let client: any;
@@ -17,6 +18,7 @@ describe("engine litesvm", () => {
   let program: Program<Engine>;
   let admin: anchor.Wallet;
   let sdk: any;
+  let adminKeypair: Keypair;
 
   let saleMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
@@ -34,7 +36,8 @@ describe("engine litesvm", () => {
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
     admin = provider.wallet;
-    sdk = EngineSDK.create(provider, program);
+    adminKeypair = (provider.wallet as any).payer;
+    sdk = EngineSDK.create(provider, program, adminKeypair);
   });
 
   it("Initializes the launch state correctly", async () => {
@@ -80,7 +83,7 @@ describe("engine litesvm", () => {
   });
 
   it("Sets the VRF seed", async () => {
-    await sdk.initRoster({ launch: launchState, signers: [admin.payer] });
+    await sdk.initRoster({ launch: launchState, admin: adminKeypair });
 
     const depositor = await createAndFundAccount(client, 20);
     await sdk.deposit({ launch: launchState, amountLamports: PER_WALLET_CAP, userKeypair: depositor });
@@ -120,7 +123,7 @@ describe("engine litesvm", () => {
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
-    await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
+    await sdk.initRoster({ launch: testLaunchState, admin: adminKeypair });
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
@@ -158,7 +161,7 @@ describe("engine litesvm", () => {
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
 
-    await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
+    await sdk.initRoster({ launch: testLaunchState, admin: adminKeypair });
 
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
@@ -378,6 +381,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationDays: 0,
+      admin: adminKeypair,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -396,7 +400,7 @@ describe("engine litesvm", () => {
       signers: [testSaleMint],
     });
 
-    const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, signers: [admin.payer] });
+    const { rosterPda } = await sdk.initRoster({ launch: testLaunchState, admin: adminKeypair });
 
     const users = [];
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
@@ -479,7 +483,7 @@ describe("engine litesvm", () => {
     assert.ok(state.thresholdScore !== null);
     console.log(`Threshold score: ${state.thresholdScore}`);
 
-    const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState });
+    const { signature: claimsSig } = await sdk.openClaims({ launch: testLaunchState, admin: adminKeypair });
     console.log("Claims opened with signature:", claimsSig);
 
     state = await sdk.fetchLaunch(testLaunchState);

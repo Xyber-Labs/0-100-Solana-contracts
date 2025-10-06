@@ -39,6 +39,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -112,6 +117,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -159,6 +169,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -234,6 +249,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -308,6 +328,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -386,6 +411,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -504,6 +534,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -544,6 +579,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -589,6 +629,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -649,6 +694,10 @@
         {
           "name": "funding_duration_days",
           "type": "u8"
+        },
+        {
+          "name": "num_blocks",
+          "type": "u64"
         }
       ]
     },
@@ -685,6 +734,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -816,6 +870,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -858,6 +917,39 @@
       "args": []
     },
     {
+      "name": "update_num_blocks",
+      "docs": [
+        "Update num_blocks (admin only)"
+      ],
+      "discriminator": [
+        173,
+        0,
+        81,
+        229,
+        104,
+        1,
+        123,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "num_blocks",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Withdraw during funding window (reduces ticket_count and returns lamports)."
@@ -890,6 +982,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -1106,6 +1203,19 @@
         166,
         10,
         63
+      ]
+    },
+    {
+      "name": "NumBlocksUpdated",
+      "discriminator": [
+        169,
+        68,
+        39,
+        54,
+        104,
+        241,
+        228,
+        223
       ]
     },
     {
@@ -1335,6 +1445,11 @@
       "code": 6026,
       "name": "NoValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidNumBlocks",
+      "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     }
   ],
   "types": [
@@ -1506,6 +1621,10 @@
           {
             "name": "lp_allocation",
             "type": "u64"
+          },
+          {
+            "name": "num_blocks",
+            "type": "u64"
           }
         ]
       }
@@ -1537,6 +1656,10 @@
           },
           {
             "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "num_blocks",
             "type": "u64"
           },
           {
@@ -1601,6 +1724,22 @@
             "type": {
               "option": "u64"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "NumBlocksUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_num_blocks",
+            "type": "u64"
           }
         ]
       }
@@ -1980,7 +2119,7 @@
     {
       "name": "SEED_ROOT",
       "type": "bytes",
-      "value": "[48, 45, 49, 48, 48, 45, 49]"
+      "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 }

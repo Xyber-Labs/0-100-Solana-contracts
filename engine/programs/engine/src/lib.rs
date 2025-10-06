@@ -17,6 +17,14 @@ declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
 // -------------------------------
+// Constants
+// -------------------------------
+const MIN_N: u64 = 100;
+const MAX_N: u64 = 500_000;
+const DEFAULT_N: u64 = 81_000;
+
+
+// -------------------------------
 // Events (moved to events.rs)
 // -------------------------------
 
@@ -42,9 +50,13 @@ pub mod engine {
         sale_allocation: u64, // number of sale tokens
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
         funding_duration_days: u8, // funding period duration in days (max 5 days)
+        num_blocks: u64, // N value for hash range calculation
     ) -> Result<()> {
         require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
         require!(funding_duration_days <= 5, EngineErrorCode::InvalidFundingDuration);
+
+        let n = if num_blocks == 0 { DEFAULT_N } else { num_blocks };
+        require!(n >= MIN_N && n <= MAX_N, EngineErrorCode::InvalidNumBlocks);
         
         // For testing: allow very short periods (seconds instead of days)
         let duration_seconds = if funding_duration_days == 0 {
@@ -71,6 +83,7 @@ pub mod engine {
         state.tau_lamports = tau_lamports;
         state.sale_allocation = sale_allocation;
         state.lp_allocation = lp_allocation;
+        state.num_blocks = n;
 
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
@@ -107,6 +120,7 @@ pub mod engine {
             tau_lamports,
             sale_allocation,
             lp_allocation,
+            num_blocks: state.num_blocks,
         });
 
         emit!(FundingPeriodStarted {
@@ -652,7 +666,7 @@ pub mod engine {
                 let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
 
                 // Check if this blockhash is within the project's personal range
-                if utils::is_blockhash_in_project_range(&blockhash, st.project_id) {
+                if utils::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
                     found_valid_hash = true;
                     valid_slot = slot;
                     valid_hash = blockhash;
@@ -670,7 +684,9 @@ pub mod engine {
         counter.next_project_id = counter.next_project_id.saturating_add(1);
 
         // Calculate and store the project's range
-        let (range_start, range_end) = utils::calculate_project_range(st.project_id);
+        let (range_start, range_end) = utils::calculate_project_range(st.project_id, st.num_blocks);
+        let range_start_bytes = range_start.to_big_endian();
+        let range_end_bytes = range_end.to_big_endian();
 
         // Initialize pool state
         pool_state.launch = st.key();
@@ -678,8 +694,8 @@ pub mod engine {
         pool_state.project_id = st.project_id;
         pool_state.created_slot = valid_slot;
         pool_state.created_blockhash = valid_hash;
-        pool_state.range_start = range_start;
-        pool_state.range_end = range_end;
+        pool_state.range_start = range_start_bytes;
+        pool_state.range_end = range_end_bytes;
         pool_state.created = true;
 
         // TODO: Add CPI call to Raydium here
@@ -690,8 +706,8 @@ pub mod engine {
             project_id: st.project_id,
             blockhash: valid_hash,
             slot: valid_slot,
-            range_start,
-            range_end,
+            range_start: range_start_bytes,
+            range_end: range_end_bytes,
         });
 
         Ok(())
@@ -702,6 +718,27 @@ pub mod engine {
     #[cfg(feature = "test")]
     pub fn create_pool_test(ctx: Context<CreatePool>) -> Result<()> {
         create_pool_internal(ctx, true) // true = skip validation
+    }
+
+    /// Test version of create_pool that accepts a custom SlotHashes account
+    /// This is for testing purposes only and should not be used in production
+    #[cfg(feature = "test")]
+    pub fn create_pool_with_custom_hashes(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool_internal(ctx, false) // false = validate blockhash, but with the provided account
+    }
+
+    /// Update num_blocks (admin only)
+    pub fn update_num_blocks(ctx: Context<OnlyAdmin>, num_blocks: u64) -> Result<()> {
+        require!(num_blocks >= MIN_N && num_blocks <= MAX_N, EngineErrorCode::InvalidNumBlocks);
+        let st = &mut ctx.accounts.launch_state;
+        st.num_blocks = num_blocks;
+
+        emit!(NumBlocksUpdated {
+            launch: st.key(),
+            new_num_blocks: num_blocks,
+        });
+
+        Ok(())
     }
 }
 
@@ -723,6 +760,7 @@ pub struct LaunchState {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
+    pub num_blocks: u64, // N value for hash range calculation
 
     // Sale/LP (MVP)
     pub sale_mint: Pubkey,

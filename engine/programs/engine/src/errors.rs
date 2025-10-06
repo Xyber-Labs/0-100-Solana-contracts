@@ -56,4 +56,6 @@ pub enum ErrorCode {
     PoolAlreadyCreated,
     #[msg("No valid blockhash found in recent blocks")]
     NoValidBlockhash,
+    #[msg("Invalid N value for hash range calculation (must be between MIN_N and MAX_N)")]
+    InvalidNumBlocks,
 }

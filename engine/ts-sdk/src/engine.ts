@@ -38,10 +38,11 @@ export default {
      * Creates an SDK on top of an already configured anchor.Program.
      * @param provider Anchor provider (payer = admin/user)
      * @param program Program<EngineIDL> on ENGINE_PROGRAM_ID
+     * @param admin Optional admin keypair (defaults to provider wallet)
      */
-    create(provider: anchor.Provider, program: Program<EngineIDL>) {
-        const payer = provider.publicKey!;
-        const txBuilder = new TxBuilder(program);
+    create(provider: anchor.Provider, program: Program<EngineIDL>, admin?: Keypair) {
+        const payer = admin?.publicKey ?? provider.publicKey!;
+        const txBuilder = new TxBuilder(program, admin);
 
         // -------------- PDA helpers --------------
         function getLaunchPda(saleMint: PublicKey): [PublicKey, number] {
@@ -119,12 +120,15 @@ export default {
             saleAllocation: BN;
             lpAllocation: BN;
             fundingDurationDays: number; // 0-5 (0 = 10 seconds for testing, 1-5 = days)
+            numBlocks?: number;
             // In tests you can pass preInstructions to create/init mint
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
+            admin?: Keypair;
         }): Promise<{ launchPda: PublicKey; escrowPda: PublicKey; signature: string }> {
+            const adminPayer = args.admin?.publicKey ?? payer;
             const { instruction, launchState, escrow } = await txBuilder.initLaunchIx({
-                admin: payer,
+                admin: adminPayer,
                 saleMint: args.saleMint,
                 hardCapLamports: args.hardCapLamports,
                 minRaiseLamports: args.minRaiseLamports,
@@ -132,7 +136,8 @@ export default {
                 tauLamports: args.tauLamports,
                 saleAllocation: args.saleAllocation,
                 lpAllocation: args.lpAllocation,
-                fundingDurationDays: args.fundingDurationDays
+                fundingDurationDays: args.fundingDurationDays,
+                numBlocks: args.numBlocks ?? 0,
             });
 
             const tx = new Transaction();
@@ -144,6 +149,10 @@ export default {
             tx.add(instruction);
 
             const signers = args.signers || [];
+            if (args.admin) {
+                signers.push(args.admin);
+            }
+
 
             if (!provider.sendAndConfirm) {
                 throw new Error("Provider does not support sendAndConfirm");
@@ -155,13 +164,15 @@ export default {
         async function initRoster(args: {
             launch: PublicKey;
             signers?: Keypair[];
+            admin?: Keypair;
         }): Promise<{ rosterPda: PublicKey; signature: string }> {
+            const adminPayer = args.admin?.publicKey ?? payer;
             const [rosterPda] = getRosterPda(args.launch);
 
             const rpc = program.methods
                 .initRoster()
                 .accountsStrict({
-                    admin: payer,
+                    admin: adminPayer,
                     launchState: args.launch,
                     roster: rosterPda,
                     systemProgram: SystemProgram.programId,
@@ -220,11 +231,17 @@ export default {
             return { signature };
         }
 
-        async function openClaims(args: { launch: PublicKey }): Promise<{ signature: string }> {
-            const signature = await program.methods
+        async function openClaims(args: { launch: PublicKey, admin?: Keypair }): Promise<{ signature: string }> {
+            const adminPayer = args.admin?.publicKey ?? payer;
+            const rpc = program.methods
                 .openClaims()
-                .accountsStrict({ admin: payer, launchState: args.launch })
-                .rpc();
+                .accountsStrict({ admin: adminPayer, launchState: args.launch });
+            
+            const signers = [];
+            if (args.admin) {
+                signers.push(args.admin);
+            }
+            const signature = await rpc.signers(signers).rpc();
             return { signature };
         }
 

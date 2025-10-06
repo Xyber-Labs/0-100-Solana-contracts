@@ -1,3 +1,5 @@
+use primitive_types::U256;
+
 /// Utility functions for blockhash range calculations and validation
 
 pub mod pool;
@@ -6,92 +8,107 @@ pub mod roster;
 
 /// Check if a blockhash is within the project's personal range
 /// Each project gets its own range based on project_id
-#[cfg_attr(feature = "test", allow(unused_variables, unreachable_code))]
-pub fn is_blockhash_in_project_range(blockhash: &[u8; 32], project_id: u64) -> bool {
+pub fn is_blockhash_in_project_range(
+    blockhash: &[u8; 32],
+    project_id: u64,
+    num_blocks: u64,
+) -> bool {
     // In test mode, always return true for easier testing
     #[cfg(feature = "test")]
     {
         return true;
     }
-    
-    let hash_as_u256 = u256_from_bytes(blockhash);
-    let (range_start, range_end) = calculate_project_range(project_id);
-    
+
+    let hash_as_u256 = U256::from_big_endian(blockhash);
+    let (range_start, range_end) = calculate_project_range(project_id, num_blocks);
+
     hash_as_u256 >= range_start && hash_as_u256 < range_end
 }
 
 /// Calculate the personal range for a project based on its ID
-/// Range width = 2^256 / 54000 (blocks in 6 hours)
+/// Range width = 2^256 / N
 /// Project n gets range: [(n-1) * width, n * width)
-pub fn calculate_project_range(project_id: u64) -> ([u8; 32], [u8; 32]) {
-    // Range width = 2^256 / 54000
-    // We'll use a simplified calculation for Solana's 32-byte hashes
-    let range_width = calculate_range_width();
-    
+pub fn calculate_project_range(project_id: u64, num_blocks: u64) -> (U256, U256) {
+    // Range width = 2^256 / N
+    let range_width = calculate_range_width(num_blocks);
+
     // Calculate start and end of the range for this project
-    let range_start = multiply_u256_by_u64(range_width, project_id.saturating_sub(1));
-    let range_end = multiply_u256_by_u64(range_width, project_id);
-    
+    let range_start = range_width.saturating_mul(U256::from(project_id.saturating_sub(1)));
+    let range_end = range_width.saturating_mul(U256::from(project_id));
+
     (range_start, range_end)
 }
 
 /// Calculate the width of each project's range
-/// This is 2^256 / 54000, but we'll use a simplified approach
-pub fn calculate_range_width() -> [u8; 32] {
-    // For simplicity, we'll use a fixed range width
-    // In practice, this should be calculated as 2^256 / 54000
-    // Using a smaller value for testing: 2^240 / 54000
-    u256_from_hex("0x1000000000000000000000000000000000000000000000000000000000000000")
-}
+/// This is ~2^256 / N
+pub fn calculate_range_width(num_blocks: u64) -> U256 {
+    // Full 2^256 range
+    let full_range = U256::max_value();
 
-/// Multiply a 256-bit number by a 64-bit number
-/// Simplified implementation for our use case
-pub fn multiply_u256_by_u64(base: [u8; 32], multiplier: u64) -> [u8; 32] {
-    if multiplier == 0 {
-        return [0u8; 32];
+    // Number of Solana blocks (N)
+    let n = U256::from(num_blocks);
+
+    if n.is_zero() {
+        return U256::zero();
     }
-    
-    // Convert base to u128 for easier calculation (using first 16 bytes)
-    let base_low = u128::from_le_bytes([
-        base[0], base[1], base[2], base[3], base[4], base[5], base[6], base[7],
-        base[8], base[9], base[10], base[11], base[12], base[13], base[14], base[15]
-    ]);
-    
-    let base_high = u128::from_le_bytes([
-        base[16], base[17], base[18], base[19], base[20], base[21], base[22], base[23],
-        base[24], base[25], base[26], base[27], base[28], base[29], base[30], base[31]
-    ]);
-    
-    // Multiply by multiplier
-    let result_low = base_low * (multiplier as u128);
-    let result_high = base_high * (multiplier as u128);
-    
-    // Handle overflow from low to high
-    let (result_low, carry) = result_low.overflowing_add(result_high & 0xFFFFFFFFFFFFFFFF);
-    let result_high = (result_high >> 64) + (carry as u128);
-    
-    // Convert back to [u8; 32]
-    let mut result = [0u8; 32];
-    result[0..16].copy_from_slice(&result_low.to_le_bytes());
-    result[16..32].copy_from_slice(&result_high.to_le_bytes());
-    
-    result
+
+    full_range / n
 }
 
-/// Convert 32-byte array to u256 (big-endian)
-pub fn u256_from_bytes(bytes: &[u8; 32]) -> [u8; 32] {
-    *bytes
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Create u256 from hex string
-pub fn u256_from_hex(hex: &str) -> [u8; 32] {
-    let hex = hex.strip_prefix("0x").unwrap_or(hex);
-    let mut result = [0u8; 32];
-    for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-        if i < 32 {
-            let byte_str = std::str::from_utf8(chunk).unwrap();
-            result[i] = u8::from_str_radix(byte_str, 16).unwrap_or(0);
+    #[test]
+    fn test_calculate_range_width_precision() {
+        let n = 81000;
+        let width = calculate_range_width(n);
+        
+        let full_range = U256::max_value();
+        let calculated_total = width * U256::from(n);
+        let difference = full_range - calculated_total;
+
+        // The difference should be small, less than N, due to floor division.
+        // This confirms that the lost precision is minimal.
+        assert!(difference < U256::from(n));
+    }
+
+    #[test]
+    fn test_calculate_project_range() {
+        let project_id = 10;
+        let num_blocks = 150;
+        let width = calculate_range_width(num_blocks);
+
+        let (start, end) = calculate_project_range(project_id, num_blocks);
+        
+        // n = 10, so range is [9 * width, 10 * width)
+        let expected_start = width * U256::from(9);
+        let expected_end = width * U256::from(10);
+
+        assert_eq!(start, expected_start);
+        assert_eq!(end, expected_end);
+    }
+
+    #[test]
+    fn test_is_blockhash_in_project_range() {
+        let project_id = 20;
+        let num_blocks = 81000;
+        
+        let (start, end) = calculate_project_range(project_id, num_blocks);
+        
+        let hash_inside = start.to_big_endian(); // Exactly at the start
+
+        let hash_outside = end.to_big_endian(); // Exactly at the end (exclusive)
+
+        let mut hash_before = [0u8; 32];
+        if start > U256::zero() {
+            hash_before = (start - U256::one()).to_big_endian();
+        }
+
+        assert!(is_blockhash_in_project_range(&hash_inside, project_id, num_blocks));
+        assert!(!is_blockhash_in_project_range(&hash_outside, project_id, num_blocks));
+        if start > U256::zero() {
+            assert!(!is_blockhash_in_project_range(&hash_before, project_id, num_blocks));
         }
     }
-    result
 }

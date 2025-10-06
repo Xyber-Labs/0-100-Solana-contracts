@@ -45,6 +45,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -106,6 +123,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -138,6 +172,23 @@ export type Engine = {
           ],
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -204,6 +255,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   112,
                   111,
                   111,
@@ -263,6 +331,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -329,6 +414,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -438,6 +540,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   112,
                   114,
                   111,
@@ -463,6 +582,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -496,6 +632,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -547,6 +700,10 @@ export type Engine = {
         {
           "name": "fundingDurationDays",
           "type": "u8"
+        },
+        {
+          "name": "numBlocks",
+          "type": "u64"
         }
       ]
     },
@@ -580,6 +737,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -702,6 +876,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   115,
                   101,
                   108,
@@ -730,6 +921,39 @@ export type Engine = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "updateNumBlocks",
+      "docs": [
+        "Update num_blocks (admin only)"
+      ],
+      "discriminator": [
+        173,
+        0,
+        81,
+        229,
+        104,
+        1,
+        123,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "numBlocks",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "withdraw",
@@ -761,6 +985,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -968,6 +1209,19 @@ export type Engine = {
         166,
         10,
         63
+      ]
+    },
+    {
+      "name": "numBlocksUpdated",
+      "discriminator": [
+        169,
+        68,
+        39,
+        54,
+        104,
+        241,
+        228,
+        223
       ]
     },
     {
@@ -1197,6 +1451,11 @@ export type Engine = {
       "code": 6026,
       "name": "noValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
+    },
+    {
+      "code": 6027,
+      "name": "invalidNumBlocks",
+      "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     }
   ],
   "types": [
@@ -1368,6 +1627,10 @@ export type Engine = {
           {
             "name": "lpAllocation",
             "type": "u64"
+          },
+          {
+            "name": "numBlocks",
+            "type": "u64"
           }
         ]
       }
@@ -1399,6 +1662,10 @@ export type Engine = {
           },
           {
             "name": "tauLamports",
+            "type": "u64"
+          },
+          {
+            "name": "numBlocks",
             "type": "u64"
           },
           {
@@ -1463,6 +1730,22 @@ export type Engine = {
             "type": {
               "option": "u64"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "numBlocksUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "newNumBlocks",
+            "type": "u64"
           }
         ]
       }
@@ -1836,6 +2119,13 @@ export type Engine = {
           }
         ]
       }
+    }
+  ],
+  "constants": [
+    {
+      "name": "seedRoot",
+      "type": "bytes",
+      "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 };

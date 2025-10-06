@@ -9,7 +9,7 @@ export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
 
-  constructor(program: Program<EngineIDL>) {
+  constructor(program: Program<EngineIDL>, admin?: Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
@@ -38,6 +38,7 @@ export class TxBuilder {
     saleAllocation: BN;
     lpAllocation: BN;
     fundingDurationDays: number;
+    numBlocks: number;
   }): Promise<{
     instruction: TransactionInstruction;
     launchState: PublicKey;
@@ -56,7 +57,8 @@ export class TxBuilder {
         params.tauLamports,
         params.saleAllocation,
         params.lpAllocation,
-        params.fundingDurationDays
+        params.fundingDurationDays,
+        new BN(params.numBlocks)
       )
       .accountsStrict({
         admin: params.admin,
@@ -116,7 +118,8 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationDays: 0
+      fundingDurationDays: 0,
+      numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
     });
 
     const transaction = new Transaction()
