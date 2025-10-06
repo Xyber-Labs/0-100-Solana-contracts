@@ -33,8 +33,9 @@ pub fn calculate_project_range(project_id: u64, num_blocks: u64) -> (U256, U256)
     let range_width = calculate_range_width(num_blocks);
 
     // Calculate start and end of the range for this project
-    let range_start = range_width.saturating_mul(U256::from(project_id.saturating_sub(1)));
-    let range_end = range_width.saturating_mul(U256::from(project_id));
+    let project_id_u256 = U256::from(project_id);
+    let range_start = range_width.saturating_mul(project_id_u256.saturating_sub(U256::one()));
+    let range_end = range_start.saturating_add(range_width);
 
     (range_start, range_end)
 }
@@ -52,7 +53,9 @@ pub fn calculate_range_width(num_blocks: u64) -> U256 {
         return U256::zero();
     }
 
-    full_range / n
+    // Use right shift for division to avoid stack overflow
+    let shift = n.bits() - 1;
+    full_range >> shift
 }
 
 #[cfg(test)]

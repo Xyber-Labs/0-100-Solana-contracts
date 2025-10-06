@@ -67,7 +67,7 @@ npm run dev
 
 The app is configured to use:
 - **Network**: Solana Devnet
-- **Program ID**: `HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb`
+- **Program ID**: `DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7`
 - **Default Values**:
   - Hard Cap: 100 SOL
   - Min Raise: 10 SOL

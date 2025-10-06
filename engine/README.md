@@ -153,6 +153,48 @@ make test
 make clean
 ```
 
+## Remote Development
+
+To deploy and test the program on a remote Solana node, you can use the provided `Makefile` targets. The remote node URL is configured to `http://10.186.0.84:8899`.
+
+### Switching Environments
+
+A helper script `switch-env.sh` is available to quickly switch your CLI configuration between `local` and `remote` environments.
+
+**Switch to remote:**
+```bash
+./switch-env.sh remote
+```
+
+**Switch to local:**
+```bash
+./switch-env.sh local
+```
+
+**Check status:**
+```bash
+./switch-env.sh status
+```
+
+### Makefile Remote Targets
+
+- **`make config-remote`**: Sets the Solana CLI configuration to use the remote node.
+- **`make deploy-remote`**: Deploys the program to the remote node.
+- **`make test-remote`**: Runs the test suite against the remote node.
+- **`make setup-remote`**: A convenient command that builds the program, deploys it to the remote node, and runs tests.
+
+**Example workflow for remote deployment:**
+```bash
+# 1. Build, deploy, and test on the remote node
+make setup-remote
+
+# 2. Or run commands individually
+make config-remote
+make build
+make deploy-remote
+make test-remote
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -184,7 +226,7 @@ solana config get
 curl http://127.0.0.1:8899
 
 # Check if program is deployed
-solana program show HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb
+solana program show DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 ```
 
 ## Files

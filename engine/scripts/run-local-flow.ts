@@ -15,7 +15,7 @@ async function runLocalFlow() {
   const admin = provider.wallet;
   const sdk = EngineSDK.create(provider, program);
 
-  console.log("--- Starting Full Flow on Local Node ---");
+  console.log(`--- Starting Full Flow on ${provider.connection.rpcEndpoint} ---`);
   console.log(`Admin wallet: ${admin.publicKey.toBase58()}`);
 
   const results: { success: boolean; message: string; error?: string }[] = [];
@@ -53,6 +53,7 @@ async function runLocalFlow() {
         hardCapLamports: testHardCap, minRaiseLamports: testMinRaise, perWalletCap: testPerWalletCap,
         tauLamports: testTau, saleAllocation: new anchor.BN(1000000), lpAllocation: new anchor.BN(500000),
         fundingDurationDays: 1,
+        numBlocks: 150, // ~1 minute window
         preInstructions: [
           anchor.web3.SystemProgram.createAccount({
             fromPubkey: admin.publicKey, newAccountPubkey: testSaleMint.publicKey, space: 82,

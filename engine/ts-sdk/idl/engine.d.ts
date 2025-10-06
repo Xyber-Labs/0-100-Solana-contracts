@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/engine.json`.
  */
 export type Engine = {
-    "address": "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb";
+    "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7";
     "metadata": {
         "name": "engine";
         "version": "0.1.0";

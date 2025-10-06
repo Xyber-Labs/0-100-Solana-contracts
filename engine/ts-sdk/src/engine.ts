@@ -26,7 +26,7 @@ import { TxBuilder } from "./txBuilder";
 
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey(
-    "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
+    "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 );
 
 export default {

@@ -11,7 +11,7 @@ mod utils;
 mod events;
 mod errors;
 
-declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
+declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";

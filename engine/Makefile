@@ -22,8 +22,10 @@ help:
 	@echo ""
 	@echo "Remote development:"
 	@echo "  config-remote - Set config to remote server (10.186.0.84)"
+	@echo "  airdrop-remote - Request 5 SOL from the remote faucet"
 	@echo "  deploy-remote - Deploy to remote server"
 	@echo "  test-remote   - Run tests on remote server"
+	@echo "  test-remote-flow - Run the full flow script on the remote server"
 	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
@@ -167,7 +169,7 @@ dev: config-local validator-bg
 .PHONY: check
 check:
 	@echo "Checking program status..."
-	solana program show HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb
+	solana program show DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
 # Individual test commands
 .PHONY: test-basic
@@ -186,18 +188,28 @@ debug:
 	solana config get
 
 # Remote development commands
+.PHONY: airdrop-remote
+airdrop-remote: config-remote
+	@echo "Requesting 5 SOL airdrop from remote server..."
+	solana airdrop 5 --url $(REMOTE_SOLANA_URL)
+
 .PHONY: deploy-remote
-deploy-remote: config-remote
+deploy-remote:
 	@echo "Deploying to remote server..."
-	anchor deploy
+	anchor deploy --program-name engine --provider.cluster $(REMOTE_SOLANA_URL) --program-keypair ./deploy-keypair.json
 
 .PHONY: test-remote
 test-remote: config-remote
 	@echo "Running tests on remote server..."
 	ANCHOR_PROVIDER_URL=$(REMOTE_SOLANA_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
+.PHONY: test-remote-flow
+test-remote-flow:
+	@echo "Running full flow script on remote server..."
+	ANCHOR_PROVIDER_URL=$(REMOTE_SOLANA_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node scripts/run-local-flow.ts
+
 .PHONY: build-deploy-remote
-build-deploy-remote: config-remote build deploy-remote
+build-deploy-remote: build deploy-remote
 
 .PHONY: setup-remote
 setup-remote: build-deploy-remote test-remote

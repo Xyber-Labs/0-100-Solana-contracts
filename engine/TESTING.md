@@ -117,7 +117,7 @@ solana config get
 curl http://127.0.0.1:8899
 
 # Check if program is deployed
-solana program show HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb
+solana program show DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
 # Check validator logs
 ps aux | grep solana-test-validator

@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
+engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 
 # [programs.remote]
 # engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
@@ -20,3 +20,5 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
+create-program-id = "solana-keygen new --no-passphrase --outfile ./deploy-keypair.json"
+get-program-id = "solana-keygen pubkey ./deploy-keypair.json"
