@@ -6,23 +6,11 @@ pub mod roster;
 
 /// Check if a blockhash is within the project's personal range
 /// Each project gets its own range based on project_id
+#[cfg_attr(feature = "test", allow(unused_variables, unreachable_code))]
 pub fn is_blockhash_in_project_range(blockhash: &[u8; 32], project_id: u64) -> bool {
     // In test mode, always return true for easier testing
     #[cfg(feature = "test")]
     {
-        return true;
-    }
-    
-    let hash_as_u256 = u256_from_bytes(blockhash);
-    let (range_start, range_end) = calculate_project_range(project_id);
-    
-    hash_as_u256 >= range_start && hash_as_u256 < range_end
-}
-
-/// Check if a blockhash is within the project's personal range (test version)
-/// For testing purposes, this version allows manual override
-pub fn is_blockhash_in_project_range_test(blockhash: &[u8; 32], project_id: u64, force_valid: bool) -> bool {
-    if force_valid {
         return true;
     }
     
@@ -106,26 +94,4 @@ pub fn u256_from_hex(hex: &str) -> [u8; 32] {
         }
     }
     result
-}
-
-/// Generate a test blockhash that will always be valid for a given project
-/// This is for testing purposes only
-#[cfg(feature = "test")]
-pub fn generate_test_blockhash(project_id: u64) -> [u8; 32] {
-    let (range_start, _range_end) = calculate_project_range(project_id);
-    
-    // Return a blockhash that's exactly at the start of the range
-    // This ensures it will always be valid
-    range_start
-}
-
-/// Check if we're in test mode
-#[cfg(feature = "test")]
-pub fn is_test_mode() -> bool {
-    true
-}
-
-#[cfg(not(feature = "test"))]
-pub fn is_test_mode() -> bool {
-    false
 }
