@@ -3,16 +3,19 @@ import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram 
 import { Engine as EngineIDL } from "../idl/engine";
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
+import { getConstant } from "./utils";
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
+  private seedRoot: Buffer;
 
   constructor(program: Program<EngineIDL>) {
     this.program = program;
+    this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
 
   getPda(seeds: (string | Buffer | PublicKey)[]): [PublicKey, number] {
-    const seedBuffers = seeds.map(seed => {
+    const seedBuffers = [this.seedRoot, ...seeds.map(seed => {
       if (typeof seed === 'string') {
         return Buffer.from(seed);
       } else if (typeof seed === 'object' && 'toBuffer' in seed) {
@@ -20,8 +23,8 @@ export class TxBuilder {
       } else {
         return seed as Buffer;
       }
-    });
-    
+    })];
+
     return PublicKey.findProgramAddressSync(seedBuffers, this.program.programId);
   }
 
