@@ -976,13 +976,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
     
-    // Use a short funding duration for the full flow test
-    const testConfig = {
-      ...launchConfig,
-      fundingDurationDays: 0, // This means 10 seconds in the contract
-    };
-
-    const result = await runFullFlow(sdk, program, sdk.program.provider, testConfig, addLog);
+    const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog);
 
     if (result.success) {
       addLog('--- ✅ FULL TEST FLOW COMPLETED SUCCESSFULLY ---');

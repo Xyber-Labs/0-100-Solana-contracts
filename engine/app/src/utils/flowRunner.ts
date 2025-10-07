@@ -1,8 +1,12 @@
 import { BN, Program } from '@coral-xyz/anchor';
-import { Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  ComputeBudgetProgram,
+} from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from '@solana/spl-token';
-import EngineSDK from 'zero-hundred-engine-sdk';
-
 interface LaunchConfig {
   hardCapLamports: number;
   minRaiseLamports: number;
@@ -60,6 +64,12 @@ export async function runFullFlow(
     const [projectCounter] = sdk.getProjectCounterPda();
 
     const tx = new Transaction();
+
+    const cuInstruction = ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+    tx.add(cuInstruction);
+
 
     // Add pre-instructions
     tx.add(

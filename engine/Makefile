@@ -102,8 +102,16 @@ deploy:
 	@echo "Deploying program..."
 	anchor deploy
 
+.PHONY: deploy-local
+deploy-local: config-local
+	@echo "Deploying program to local validator..."
+	anchor deploy --program-name engine --provider.cluster $(SOLANA_URL) --program-keypair ./deploy-keypair.json
+
 .PHONY: build-deploy
 build-deploy: build deploy
+
+.PHONY: build-deploy-local
+build-deploy-local: build deploy-local sync-idl build-sdk
 
 # Validator management
 .PHONY: validator
