@@ -670,8 +670,10 @@ pub mod engine {
 
         // Calculate and store the project's range
         let (range_start, range_end) = utils::calculate_project_range(st.project_id, st.num_blocks);
-        let range_start_bytes = range_start.to_big_endian();
-        let range_end_bytes = range_end.to_big_endian();
+        let mut range_start_bytes = [0u8; 32];
+        range_start.to_big_endian(&mut range_start_bytes);
+        let mut range_end_bytes = [0u8; 32];
+        range_end.to_big_endian(&mut range_end_bytes);
 
         // Initialize pool state
         pool_state.launch = st.key();

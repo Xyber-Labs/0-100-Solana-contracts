@@ -1,4 +1,8 @@
-use primitive_types::U256;
+use uint::construct_uint;
+
+construct_uint! {
+    pub struct U256(4);
+}
 
 /// Utility functions for blockhash range calculations and validation
 
@@ -44,7 +48,7 @@ pub fn calculate_project_range(project_id: u64, num_blocks: u64) -> (U256, U256)
 /// This is ~2^256 / N
 pub fn calculate_range_width(num_blocks: u64) -> U256 {
     // Full 2^256 range
-    let full_range = U256::max_value();
+    let full_range = U256::MAX;
 
     // Number of Solana blocks (N)
     let n = U256::from(num_blocks);
@@ -53,9 +57,8 @@ pub fn calculate_range_width(num_blocks: u64) -> U256 {
         return U256::zero();
     }
 
-    // Use right shift for division to avoid stack overflow
-    let shift = n.bits() - 1;
-    full_range >> shift
+    // Use simple division, as `uint` is optimized for this
+    full_range / n
 }
 
 #[cfg(test)]
@@ -67,7 +70,7 @@ mod tests {
         let n = 81000;
         let width = calculate_range_width(n);
         
-        let full_range = U256::max_value();
+        let full_range = U256::MAX;
         let calculated_total = width * U256::from(n);
         let difference = full_range - calculated_total;
 
@@ -99,19 +102,21 @@ mod tests {
         
         let (start, end) = calculate_project_range(project_id, num_blocks);
         
-        let hash_inside = start.to_big_endian(); // Exactly at the start
+        let mut hash_inside_bytes = [0u8; 32];
+        start.to_big_endian(&mut hash_inside_bytes);
 
-        let hash_outside = end.to_big_endian(); // Exactly at the end (exclusive)
+        let mut hash_outside_bytes = [0u8; 32];
+        end.to_big_endian(&mut hash_outside_bytes);
 
-        let mut hash_before = [0u8; 32];
+        let mut hash_before_bytes = [0u8; 32];
         if start > U256::zero() {
-            hash_before = (start - U256::one()).to_big_endian();
+            (start - U256::one()).to_big_endian(&mut hash_before_bytes);
         }
 
-        assert!(is_blockhash_in_project_range(&hash_inside, project_id, num_blocks));
-        assert!(!is_blockhash_in_project_range(&hash_outside, project_id, num_blocks));
+        assert!(is_blockhash_in_project_range(&hash_inside_bytes, project_id, num_blocks));
+        assert!(!is_blockhash_in_project_range(&hash_outside_bytes, project_id, num_blocks));
         if start > U256::zero() {
-            assert!(!is_blockhash_in_project_range(&hash_before, project_id, num_blocks));
+            assert!(!is_blockhash_in_project_range(&hash_before_bytes, project_id, num_blocks));
         }
     }
 }
