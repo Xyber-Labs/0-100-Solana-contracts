@@ -14,7 +14,7 @@ mod errors;
 declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
 
 #[constant]
-pub const SEED_ROOT: &[u8] = include_bytes!("../../.././SEED_ROOT");
+pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
 // -------------------------------
 // Events (moved to events.rs)
