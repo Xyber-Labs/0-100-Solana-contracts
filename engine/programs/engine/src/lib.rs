@@ -58,7 +58,8 @@ pub mod engine {
         // Get and increment project ID
         let counter = &mut ctx.accounts.project_counter;
         let project_id = counter.next_project_id;
-        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        counter.next_project_id = counter.next_project_id.checked_add(1)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
@@ -73,7 +74,8 @@ pub mod engine {
 
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
-        state.funding_period_end = current_time + funding_duration_seconds;
+        state.funding_period_end = current_time.checked_add(funding_duration_seconds)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         state.total_deposited = 0;
         state.total_tickets = 0;
         state.k_capacity = 0;
@@ -154,10 +156,22 @@ pub mod engine {
         // We take the most recent one.
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
+        
+        let num_hashes_u64 = num_hashes as u64;
+        let one = 1 as u64;
+        let forty = 40 as u64;
+
+        let num_hashes_minus_1 = num_hashes_u64.checked_sub(one).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let offset = num_hashes_minus_1.checked_mul(forty).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
-        let last_hash_pos = 8 + ((num_hashes - 1) * 40) + 8; // 8 for slot
-        let seed: [u8; 32] = data[last_hash_pos as usize..(last_hash_pos + 32) as usize].try_into().unwrap();
+        let last_hash_pos = 8u64.checked_add(offset).ok_or(EngineErrorCode::ArithmeticOverflow)?
+            .checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 for slot
+
+        let start = last_hash_pos as usize;
+        let end = last_hash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)? as usize;
+
+        let seed: [u8; 32] = data[start..end].try_into().unwrap();
 
         // Initialize SelectionState
         let sel = &mut ctx.accounts.selection_state;
@@ -197,7 +211,8 @@ pub mod engine {
         
         // Auto-calculate k_capacity and total_tickets if not done yet
         if st.k_capacity == 0 {
-            st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+            st.k_capacity = (st.hard_cap_lamports.checked_div(st.tau_lamports)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
             roster_build_prefix(roster)?;
             roster.shard_base = 0; // single-shard MVP
             st.total_tickets = roster.total_in_shard;
@@ -250,13 +265,14 @@ pub mod engine {
                     };
                 }
             }
-            sel.processed += 1;
-            steps += 1;
+            sel.processed = sel.processed.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            steps = steps.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
 
         // If we haven’t set capacity yet, set it once at the start (your code already does this).
         if st.k_capacity == 0 {
-            st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+            st.k_capacity = (st.hard_cap_lamports.checked_div(st.tau_lamports)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
             roster_build_prefix(roster)?;
             roster.shard_base = 0;
             st.total_tickets = roster.total_in_shard;
@@ -268,7 +284,8 @@ pub mod engine {
             // Everyone wins
             st.selection_finalized = true;
             st.threshold_score = Some(u128::MAX);
-            st.tokens_per_ticket = Some(st.sale_allocation / (st.total_tickets as u64));
+            st.tokens_per_ticket = Some(st.sale_allocation.checked_div(st.total_tickets as u64)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?);
             st.claims_open = true;
             // Mark selection_state finalized for consistency
             sel.finalized = true;
@@ -296,7 +313,8 @@ pub mod engine {
             st.selection_finalized = true;
             st.threshold_score = Some(thr);
             // tokens per ticket uses K (capacity), not number of winners (ties handled in y_i)
-            st.tokens_per_ticket = Some(st.sale_allocation / (st.k_capacity as u64));
+            st.tokens_per_ticket = Some(st.sale_allocation.checked_div(st.k_capacity as u64)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?);
             st.claims_open = true;
 
             emit!(SelectionFinalized {
@@ -335,7 +353,7 @@ pub mod engine {
         // per-wallet cap check
         let current = ctx.accounts.user_contribution.deposited;
         require!(
-            current + amount <= st.per_wallet_cap,
+            current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)? <= st.per_wallet_cap,
             EngineErrorCode::PerWalletCapExceeded
         );
 
@@ -355,7 +373,8 @@ pub mod engine {
         )?;
 
         // Update escrow balance
-        ctx.accounts.escrow.balance += amount;
+        ctx.accounts.escrow.balance = ctx.accounts.escrow.balance.checked_add(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // update user
         let user = &mut ctx.accounts.user_contribution;
@@ -369,9 +388,10 @@ pub mod engine {
         }
         
         let old_tickets = user.ticket_count;
-        user.deposited = current + amount;
-        let new_tickets = (user.deposited / st.tau_lamports) as u32;
-        let delta = new_tickets - old_tickets;
+        user.deposited = current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let new_tickets = (user.deposited.checked_div(st.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
+        let delta = new_tickets.checked_sub(old_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         user.ticket_count = new_tickets;
 
         // roster update (append or incr)
@@ -384,8 +404,8 @@ pub mod engine {
             &ctx.accounts.system_program,
         )?;
 
-        st.total_deposited = st.total_deposited.saturating_add(amount);
-        st.total_tickets = st.total_tickets.saturating_add(delta);
+        st.total_deposited = st.total_deposited.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_tickets = st.total_tickets.checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         emit!(DepositMade {
             launch: st.key(),
@@ -415,20 +435,22 @@ pub mod engine {
         **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += amount;
 
         // Update escrow balance
-        ctx.accounts.escrow.balance -= amount;
+        ctx.accounts.escrow.balance = ctx.accounts.escrow.balance.checked_sub(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // recompute tickets
         let old_tickets = user.ticket_count;
-        user.deposited -= amount;
-        let new_tickets = (user.deposited / st.tau_lamports) as u32;
-        let lost = old_tickets.saturating_sub(new_tickets);
+        user.deposited = user.deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let new_tickets = (user.deposited.checked_div(st.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
+        let lost = old_tickets.checked_sub(new_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         user.ticket_count = new_tickets;
 
         // roster decrement
         let roster = &mut ctx.accounts.roster;
         roster_decr(roster, user.wallet, lost)?;
-        st.total_tickets = st.total_tickets.saturating_sub(lost);
-        st.total_deposited = st.total_deposited.saturating_sub(amount);
+        st.total_tickets = st.total_tickets.checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_deposited = st.total_deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         emit!(Withdrawn {
             launch: st.key(),
@@ -486,12 +508,13 @@ pub mod engine {
                         &ctx.accounts.selection_state.heap,
                     ))
             {
-                y += 1;
+                y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
             }
         }
 
-        let approved_lamports = (y as u64) * st.tau_lamports;
-        let refund = user.deposited.saturating_sub(approved_lamports);
+        let approved_lamports = (y as u64).checked_mul(st.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let refund = user.deposited.checked_sub(approved_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if refund > 0 {
             **ctx
                 .accounts
@@ -546,14 +569,15 @@ pub mod engine {
                         &ctx.accounts.selection_state.heap,
                     ))
             {
-                y += 1;
+                y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
             }
         }
         if y == 0 {
             user.claimed_tokens = true;
             return Ok(());
         }
-        let amount = per.saturating_mul(y as u64);
+        let amount = per.checked_mul(y as u64)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
         let seeds: &[&[u8]] = &[SEED_ROOT, b"mint_auth", &st.key().to_bytes(), &[st.mint_auth_bump()]];
@@ -608,12 +632,13 @@ pub mod engine {
 
         for i in 0..hashes_to_check {
             // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
-            let hash_pos = 8 + (i * 40);
+            let hash_pos = 8u64.checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
             let slot_pos = hash_pos;
-            let blockhash_pos = hash_pos + 8; // 8 bytes for slot
+            let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
 
-            let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos + 8) as usize].try_into().unwrap());
-            let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos + 32) as usize].try_into().unwrap();
+            let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize].try_into().unwrap());
+            let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize].try_into().unwrap();
 
             // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
@@ -633,7 +658,8 @@ pub mod engine {
         // Get pool ID from project counter
         let counter = &mut ctx.accounts.project_counter;
         let pool_id = counter.next_project_id;
-        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        counter.next_project_id = counter.next_project_id.checked_add(1)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // Calculate and store the project's range
         let (range_start, range_end) = utils::calculate_project_range(st.project_id, st.num_blocks);

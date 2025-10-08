@@ -58,4 +58,6 @@ pub enum ErrorCode {
     NoValidBlockhash,
     #[msg("Invalid N value for hash range calculation (must be between MIN_N and MAX_N)")]
     InvalidNumBlocks,
+    #[msg("An arithmetic operation overflowed")]
+    ArithmeticOverflow,
 }
