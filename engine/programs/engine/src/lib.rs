@@ -633,15 +633,14 @@ pub mod engine {
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
-        // Check last 128 blockhashes (or all available if less than 128)
-        let hashes_to_check = std::cmp::min(32, num_hashes);
+        let hashes_to_check = std::cmp::min(64, num_hashes);
         let mut found_valid_hash = false;
         let mut valid_slot = 0u64;
         let mut valid_hash = [0u8; 32];
 
         for i in 0..hashes_to_check {
             // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
-            let hash_pos = 8 + ((num_hashes - 1 - i) * 40);
+            let hash_pos = 8 + (i * 40);
             let slot_pos = hash_pos;
             let blockhash_pos = hash_pos + 8; // 8 bytes for slot
 
