@@ -94,7 +94,7 @@ export async function runFullFlow(
         new BN(config.tauLamports),
         new BN(config.saleAllocation),
         new BN(config.lpAllocation),
-        new BN(30), // Use 30 seconds for testing
+        new BN(5), // Use 30 seconds for testing
         new BN(config.numBlocks)
       )
       .accountsStrict({
