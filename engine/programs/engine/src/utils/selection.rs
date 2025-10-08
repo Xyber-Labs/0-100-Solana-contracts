@@ -53,7 +53,7 @@ pub fn tuple_gt(a: (Pubkey, u32), b: (Pubkey, u32)) -> bool {
 
 /// Tie-break demo: in MVP we accept any with score < threshold.
 /// If == threshold, we check whether (wallet, j) exists in heap (edge winners).
-pub fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>) -> bool {
+pub fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &[HeapEntry]) -> bool {
     heap.iter()
         .any(|e| e.score == threshold && e.wallet == wallet && e.local_j == j)
 }

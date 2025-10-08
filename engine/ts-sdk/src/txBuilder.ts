@@ -1,7 +1,7 @@
 import { Program, BN } from "@coral-xyz/anchor";
 import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Engine as EngineIDL } from "../idl/engine";
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
 
 export class TxBuilder {
@@ -34,7 +34,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
-    fundingDurationDays: number;
+    fundingDurationSec: BN;
   }): Promise<{
     instruction: TransactionInstruction;
     launchState: PublicKey;
@@ -53,7 +53,7 @@ export class TxBuilder {
         params.tauLamports,
         params.saleAllocation,
         params.lpAllocation,
-        params.fundingDurationDays
+        params.fundingDurationSec
       )
       .accountsStrict({
         admin: params.admin,
@@ -82,6 +82,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
+    fundingDurationSec: BN;
     provider: any;
   }): Promise<{
     transaction: Transaction;
@@ -89,6 +90,9 @@ export class TxBuilder {
     escrow: PublicKey;
     signers: Keypair[];
   }> {
+    const [launchState] = this.getPda(["launch", params.saleMint.publicKey]);
+    const [mintAuth] = this.getPda(["mint_authority", launchState]);
+
     const createMintAccountIx = SystemProgram.createAccount({
       fromPubkey: params.admin,
       newAccountPubkey: params.saleMint.publicKey,
@@ -100,11 +104,11 @@ export class TxBuilder {
     const initializeMintIx = createInitializeMintInstruction(
       params.saleMint.publicKey,
       6,
-      params.admin,
+      mintAuth,
       params.admin
     );
 
-    const { instruction: initLaunchIx, launchState, escrow } = await this.initLaunchIx({
+    const { instruction: initLaunchIx, launchState: launchPda, escrow } = await this.initLaunchIx({
       admin: params.admin,
       saleMint: params.saleMint.publicKey,
       hardCapLamports: params.hardCapLamports,
@@ -113,7 +117,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationDays: 0
+      fundingDurationSec: params.fundingDurationSec
     });
 
     const transaction = new Transaction()
@@ -293,5 +297,46 @@ export class TxBuilder {
   async fetchProjectCounter() {
     const [pda] = this.getPda(["project_counter"]);
     return this.program.account.projectCounter.fetch(pda);
+  }
+
+  async createClmmPoolTx(params: {
+    payer: PublicKey;
+    launch: PublicKey;
+    tokenMint: Keypair;
+    provider: any;
+  }): Promise<{
+    transaction: Transaction;
+    signers: Keypair[];
+    tokenMint: PublicKey;
+    poolTokenAta: PublicKey;
+  }> {
+    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
+    const poolTokenAta = getAssociatedTokenAddressSync(
+      params.tokenMint.publicKey,
+      params.payer
+    );
+
+    const createClmmPoolIx = await this.program.methods
+      .createClmmPool()
+      .accountsStrict({
+        payer: params.payer,
+        launchState: params.launch,
+        tokenMint: params.tokenMint.publicKey,
+        mintAuthority: mintAuth,
+        poolTokenAta: poolTokenAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .instruction();
+
+    const transaction = new Transaction().add(createClmmPoolIx);
+
+    return {
+      transaction,
+      signers: [params.tokenMint],
+      tokenMint: params.tokenMint.publicKey,
+      poolTokenAta,
+    };
   }
 }

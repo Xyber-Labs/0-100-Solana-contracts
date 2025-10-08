@@ -16,7 +16,7 @@ concurrency:
 
 env:
   NODE_VERSION: "20"
-  RUST_TOOLCHAIN: "stable"
+  RUST_TOOLCHAIN: "nightly"
   SOLANA_VERSION: "2.1.0"
   ANCHOR_CLI_VERSION: "0.31.1"
 
@@ -43,6 +43,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+
+      - name: Run clippy
+        run: cargo clippy -D warnings
 
       - name: Install Solana and anchor
         shell: bash

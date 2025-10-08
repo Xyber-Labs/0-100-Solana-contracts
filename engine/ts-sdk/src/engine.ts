@@ -142,7 +142,7 @@ export default {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
-            fundingDurationDays: number; // 0-5 (0 = 10 seconds for testing, 1-5 = days)
+            fundingDurationSec: BN;
             // In tests you can pass preInstructions to create/init mint
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
@@ -156,7 +156,7 @@ export default {
                 tauLamports: args.tauLamports,
                 saleAllocation: args.saleAllocation,
                 lpAllocation: args.lpAllocation,
-                fundingDurationDays: args.fundingDurationDays
+                fundingDurationSec: args.fundingDurationSec
             });
 
             const tx = new Transaction();
@@ -428,6 +428,34 @@ export default {
             return { signature: await rpc.rpc() };
         }
 
+        async function createClmmPool(args: {
+            launch: PublicKey;
+            tokenMint?: Keypair;
+        }): Promise<{
+            signature: string;
+            tokenMint: PublicKey;
+            poolTokenAta: PublicKey;
+        }> {
+            const tokenMint = args.tokenMint ?? Keypair.generate();
+
+            const result = await txBuilder.createClmmPoolTx({
+                payer,
+                launch: args.launch,
+                tokenMint,
+                provider,
+            });
+
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
+            const signature = await provider.sendAndConfirm(result.transaction, result.signers);
+            return {
+                signature,
+                tokenMint: result.tokenMint,
+                poolTokenAta: result.poolTokenAta,
+            };
+        }
+
         async function claimTokens(args: {
             launch: PublicKey;
             saleMint: PublicKey;
@@ -596,6 +624,7 @@ export default {
             claimRefund,
             claimTokens,
             createPool,
+            createClmmPool,
 
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
             initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
@@ -607,6 +636,7 @@ export default {
             depositIx,
             withdrawTx,
             withdrawIx,
+            createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
 
             fetchLaunch,
             fetchRoster,

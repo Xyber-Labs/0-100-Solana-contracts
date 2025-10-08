@@ -9,6 +9,8 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/spl-token": "^0.4.14",
+    "bs58": "^6.0.0",
+    "commander": "^14.0.1",
     "zero-hundred-engine-sdk": "file:./ts-sdk"
   },
   "devDependencies": {

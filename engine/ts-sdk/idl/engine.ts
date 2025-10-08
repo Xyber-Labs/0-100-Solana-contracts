@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/engine.json`.
  */
 export type Engine = {
-  "address": "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb",
+  "address": "5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH",
   "metadata": {
     "name": "engine",
     "version": "0.1.0",
@@ -166,6 +166,77 @@ export type Engine = {
         {
           "name": "tokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "createClmmPool",
+      "discriminator": [
+        181,
+        223,
+        6,
+        178,
+        60,
+        61,
+        34,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "mintAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenMint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "poolTokenAta",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -545,8 +616,8 @@ export type Engine = {
           "type": "u64"
         },
         {
-          "name": "fundingDurationDays",
-          "type": "u8"
+          "name": "fundingDurationSec",
+          "type": "i64"
         }
       ]
     },
@@ -1197,6 +1268,11 @@ export type Engine = {
       "code": 6026,
       "name": "noValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
+    },
+    {
+      "code": 6027,
+      "name": "mintAlreadyExists",
+      "msg": "Mint already exists"
     }
   ],
   "types": [
@@ -1403,7 +1479,9 @@ export type Engine = {
           },
           {
             "name": "saleMint",
-            "type": "pubkey"
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "saleAllocation",

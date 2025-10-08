@@ -6,7 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
+engine = "5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH"
+
+[programs.devnet]
+engine = "5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH"
 
 # [programs.remote]
 # engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
@@ -20,3 +23,8 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
+farm-sol = "ts-node scripts/farm-sol.ts"
+sync-id = "node scripts/sync-program-id.js"
+init-launch = "ts-node scripts/init-launch.ts"
+init-launch-litesvm = "ts-node scripts/init-launch-litesvm.ts"
+create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"

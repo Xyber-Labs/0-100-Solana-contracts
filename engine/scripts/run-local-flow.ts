@@ -52,7 +52,7 @@ async function runLocalFlow() {
         saleMint: testSaleMint.publicKey,
         hardCapLamports: testHardCap, minRaiseLamports: testMinRaise, perWalletCap: testPerWalletCap,
         tauLamports: testTau, saleAllocation: new anchor.BN(1000000), lpAllocation: new anchor.BN(500000),
-        fundingDurationDays: 1,
+        fundingDurationSec: new anchor.BN(30),
         preInstructions: [
           anchor.web3.SystemProgram.createAccount({
             fromPubkey: admin.publicKey, newAccountPubkey: testSaleMint.publicKey, space: 82,

@@ -13,7 +13,7 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
-  fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
+  fundingDurationSec: number;
 }
 
 // Error boundary component
@@ -113,7 +113,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     tauLamports: 1 * 1e9, // 1 SOL
     saleAllocation: 1000000,
     lpAllocation: 500000,
-    fundingDurationDays: 5, // 5 days for production
+    fundingDurationSec: 5 * 24 * 60 * 60, // 5 days for production
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -298,7 +298,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           new BN(launchConfig.tauLamports),
           new BN(launchConfig.saleAllocation),
           new BN(launchConfig.lpAllocation),
-          launchConfig.fundingDurationDays
+          new BN(launchConfig.fundingDurationSec)
         )
         .accountsStrict({
           admin: (testWallet?.publicKey || publicKey)!,
@@ -1107,16 +1107,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <div>
               <label className="block text-xs terminal-output mb-1">Funding Duration</label>
               <select
-                value={launchConfig.fundingDurationDays}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationDays: parseInt(e.target.value) }))}
+                value={launchConfig.fundingDurationSec}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationSec: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
               >
-                <option value={0}>10 seconds (testing)</option>
-                <option value={1}>30 seconds (testing)</option>
-                <option value={2}>2 days</option>
-                <option value={3}>3 days</option>
-                <option value={4}>4 days</option>
-                <option value={5}>5 days</option>
+                <option value={10}>10 seconds (testing)</option>
+                <option value={30}>30 seconds (testing)</option>
+                <option value={2 * 24 * 60 * 60}>2 days</option>
+                <option value={3 * 24 * 60 * 60}>3 days</option>
+                <option value={4 * 24 * 60 * 60}>4 days</option>
+                <option value={5 * 24 * 60 * 60}>5 days</option>
               </select>
             </div>
           </div>

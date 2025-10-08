@@ -56,4 +56,6 @@ pub enum ErrorCode {
     PoolAlreadyCreated,
     #[msg("No valid blockhash found in recent blocks")]
     NoValidBlockhash,
+    #[msg("Mint already exists")]
+    MintAlreadyExists,
 }

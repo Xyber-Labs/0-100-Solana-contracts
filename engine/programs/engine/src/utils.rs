@@ -1,4 +1,5 @@
-/// Utility functions for blockhash range calculations and validation
+//! Utility functions for blockhash range calculations and validation
+//!
 
 pub mod pool;
 pub mod selection;

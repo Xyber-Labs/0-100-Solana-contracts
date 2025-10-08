@@ -10,9 +10,11 @@ use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 mod utils;
 mod events;
 mod errors;
+mod instructions;
 
-declare_id!("HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb");
+use crate::instructions::*;
 
+engine_macros::declare_id_from_keypair!("keys/engine.json");
 
 // -------------------------------
 // Events (moved to events.rs)
@@ -23,8 +25,9 @@ pub mod engine {
     use super::*;
     use crate::events::*;
     use crate::errors::ErrorCode as EngineErrorCode;
-    use crate::utils::selection::{ticket_at, ticket_score, tuple_lt, tuple_gt, tie_break_wins};
-    use crate::utils::roster::{roster_add_or_incr, roster_decr, roster_build_prefix};
+    use crate::utils::selection::{ticket_at, ticket_score, tie_break_wins, tuple_gt, tuple_lt};
+    use crate::utils::roster::{roster_add_or_incr, roster_build_prefix, roster_decr};
+
 
     // -------------------------------
     // Admin / Orchestrator
@@ -37,28 +40,16 @@ pub mod engine {
         min_raise_lamports: u64,
         per_wallet_cap: u64,
         tau_lamports: u64,
-        sale_allocation: u64, // number of sale tokens
-        lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
-        funding_duration_days: u8, // funding period duration in days (max 5 days)
+        sale_allocation: u64,
+        lp_allocation: u64,
+        funding_duration_sec: i64,
     ) -> Result<()> {
         require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
-        require!(funding_duration_days <= 5, EngineErrorCode::InvalidFundingDuration);
-        
-        // For testing: allow very short periods (seconds instead of days)
-        let duration_seconds = if funding_duration_days == 0 {
-            // Special case: 0 means 10 seconds for testing
-            10
-        } else if funding_duration_days == 1 {
-            // Special case: 1 means 30 seconds for testing
-            30
-        } else {
-            funding_duration_days as i64 * 24 * 60 * 60
-        };
-        
-        // Get and increment project ID
-        let counter = &mut ctx.accounts.project_counter;
-        let project_id = counter.next_project_id;
-        counter.next_project_id = counter.next_project_id.saturating_add(1);
+        require!(funding_duration_sec > 0, EngineErrorCode::InvalidFundingDuration);
+
+        let project_counter = &mut ctx.accounts.project_counter;
+        let project_id = project_counter.next_project_id;
+        project_counter.next_project_id = project_counter.next_project_id.saturating_add(1);
         
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
@@ -70,9 +61,8 @@ pub mod engine {
         state.sale_allocation = sale_allocation;
         state.lp_allocation = lp_allocation;
 
-        // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
-        state.funding_period_end = current_time + duration_seconds;
+        state.funding_period_end = current_time + funding_duration_sec;
         state.total_deposited = 0;
         state.total_tickets = 0;
         state.k_capacity = 0;
@@ -86,7 +76,7 @@ pub mod engine {
         state.tokens_per_ticket = None;
 
         // save sale mint
-        state.sale_mint = ctx.accounts.sale_mint.key();
+        state.sale_mint = Some(ctx.accounts.sale_mint.key());
 
         // Initialize escrow account
         let escrow = &mut ctx.accounts.escrow;
@@ -260,7 +250,7 @@ pub mod engine {
         require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
         require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
         
-        require!(sel.finalized == false, EngineErrorCode::AlreadyFinalized);
+        require!(!sel.finalized, EngineErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
         
         // Auto-calculate k_capacity and total_tickets if not done yet
@@ -573,7 +563,7 @@ pub mod engine {
 
         // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
         let seeds: &[&[u8]] = &[b"mint_auth", &st.key().to_bytes(), &[st.mint_auth_bump()]];
-        let signer_seeds = &[&seeds[..]];
+        let signer_seeds = &[seeds];
         let cpi_accounts = MintTo {
             mint: ctx.accounts.sale_mint.to_account_info(),
             to: ctx.accounts.user_ata.to_account_info(),
@@ -701,6 +691,10 @@ pub mod engine {
     pub fn create_pool_test(ctx: Context<CreatePool>) -> Result<()> {
         create_pool_internal(ctx, true) // true = skip validation
     }
+
+    pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
+        create_clmm_pool::create_clmm_pool(ctx)
+    }
 }
 
 // -------------------------------
@@ -722,8 +716,7 @@ pub struct LaunchState {
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
 
-    // Sale/LP (MVP)
-    pub sale_mint: Pubkey,
+    pub sale_mint: Option<Pubkey>,
     pub sale_allocation: u64,
     pub lp_allocation: u64,
 
@@ -752,7 +745,7 @@ impl LaunchState {
         // Get the canonical bump for the mint authority PDA
         // We need to derive the launch state key first
         let launch_key = Pubkey::find_program_address(
-            &[b"launch", self.sale_mint.as_ref()],
+            &[b"launch", self.sale_mint.unwrap().as_ref()],
             &crate::ID,
         ).0;
         let (_, bump) = Pubkey::find_program_address(
@@ -1059,14 +1052,3 @@ pub struct CreatePool<'info> {
 
     pub system_program: Program<'info, System>,
 }
-
-// -------------------------------
-// Utility / helpers
-// -------------------------------
-
-
-
-
-// -------------------------------
-// Errors (moved to errors.rs)
-// -------------------------------
