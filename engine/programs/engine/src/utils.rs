@@ -17,12 +17,6 @@ pub fn is_blockhash_in_project_range(
     project_id: u64,
     num_blocks: u64,
 ) -> bool {
-    // In test mode, always return true for easier testing
-    #[cfg(feature = "test")]
-    {
-        return true;
-    }
-
     let hash_as_u256 = U256::from_big_endian(blockhash);
     let (range_start, range_end) = calculate_project_range(project_id, num_blocks);
 
@@ -64,6 +58,7 @@ pub fn calculate_range_width(num_blocks: u64) -> U256 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::U256;
 
     #[test]
     fn test_calculate_range_width_precision() {

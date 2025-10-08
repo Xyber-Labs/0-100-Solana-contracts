@@ -56,7 +56,7 @@ test-local: validator-bg build-all-test deploy
 	yarn run script:local-flow
 
 .PHONY: test-local-quick
-test-local-quick: build-all-test deploy
+test-local-quick: build-all deploy
 	@echo "Running full flow script on existing local validator..."
 	yarn run script:local-flow
 
@@ -71,11 +71,6 @@ build:
 	@echo "Building program..."
 	anchor build
 
-.PHONY: build-test
-build-test:
-	@echo "Building program with --features test..."
-	anchor build -- --features test
-
 .PHONY: sync-idl
 sync-idl:
 	@echo "Syncing IDL files to SDK..."
@@ -86,16 +81,12 @@ sync-idl:
 .PHONY: build-sdk
 build-sdk:
 	@echo "Building SDK..."
-	cd ts-sdk && yarn build
+	cd ts-sdk && rm -rf dist && yarn build
 	@echo "SDK built successfully!"
 
 .PHONY: build-all
 build-all: build sync-idl build-sdk
 	@echo "Full build completed (program + IDL sync + SDK)!"
-
-.PHONY: build-all-test
-build-all-test: build-test sync-idl build-sdk
-	@echo "Full test build completed (program + IDL sync + SDK)!"
 
 .PHONY: deploy
 deploy:
@@ -228,6 +219,12 @@ setup-remote: build-deploy-remote test-remote
 install:
 	@echo "Installing dependencies..."
 	yarn install
+
+create-program-id:
+	solana-keygen new --no-passphrase --outfile ./deploy-keypair.json
+
+get-program-id:
+	solana-keygen pubkey ./deploy-keypair.json
 
 # Default target
 .DEFAULT_GOAL := help

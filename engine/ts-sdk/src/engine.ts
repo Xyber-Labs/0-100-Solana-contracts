@@ -26,7 +26,7 @@ import { TxBuilder } from "./txBuilder";
 
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey(
-    "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+    "7vDLVejZMyNSNHLt3TeboFecWFqwaSrwrUzGHddQghnR"
 );
 
 export default {
@@ -119,16 +119,16 @@ export default {
             tauLamports: BN;
             saleAllocation: BN;
             lpAllocation: BN;
-            fundingDurationDays: number; // 0-5 (0 = 10 seconds for testing, 1-5 = days)
+            fundingDurationSeconds: BN;
             numBlocks?: number;
             // In tests you can pass preInstructions to create/init mint
             preInstructions?: TransactionInstruction[];
             signers?: Keypair[]; // if payer != provider.wallet
-            admin?: Keypair;
+            creator?: Keypair;
         }): Promise<{ launchPda: PublicKey; escrowPda: PublicKey; signature: string }> {
-            const adminPayer = args.admin?.publicKey ?? payer;
+            const creatorPayer = args.creator?.publicKey ?? payer;
             const { instruction, launchState, escrow } = await txBuilder.initLaunchIx({
-                admin: adminPayer,
+                creator: creatorPayer,
                 saleMint: args.saleMint,
                 hardCapLamports: args.hardCapLamports,
                 minRaiseLamports: args.minRaiseLamports,
@@ -136,7 +136,7 @@ export default {
                 tauLamports: args.tauLamports,
                 saleAllocation: args.saleAllocation,
                 lpAllocation: args.lpAllocation,
-                fundingDurationDays: args.fundingDurationDays,
+                fundingDurationSeconds: args.fundingDurationSeconds,
                 numBlocks: args.numBlocks ?? 0,
             });
 
@@ -149,8 +149,8 @@ export default {
             tx.add(instruction);
 
             const signers = args.signers || [];
-            if (args.admin) {
-                signers.push(args.admin);
+            if (args.creator) {
+                signers.push(args.creator);
             }
 
 
@@ -164,20 +164,20 @@ export default {
         async function initRoster(args: {
             launch: PublicKey;
             signers?: Keypair[];
-            admin?: Keypair;
+            payerKeypair?: Keypair;
         }): Promise<{ rosterPda: PublicKey; signature: string }> {
-            const adminPayer = args.admin?.publicKey ?? payer;
+            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
             const [rosterPda] = getRosterPda(args.launch);
 
             const rpc = program.methods
                 .initRoster()
                 .accountsStrict({
-                    admin: adminPayer,
+                    payer: payerPubkey,
                     launchState: args.launch,
                     roster: rosterPda,
                     systemProgram: SystemProgram.programId,
                 });
-            if (args.signers && args.signers.length) rpc.signers(args.signers);
+            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
             const signature = await rpc.rpc();
             return { rosterPda, signature };
         }
@@ -216,32 +216,6 @@ export default {
                 .processBatch(args.maxItems)
                 .accountsStrict({ selectionState: selection, launchState: args.launch, roster })
                 .rpc();
-            return { signature };
-        }
-
-        async function finalizeSelection(args: {
-            launch: PublicKey;
-            selection?: PublicKey;
-        }): Promise<{ signature: string }> {
-            const selection = args.selection ?? getSelectionPda(args.launch)[0];
-            const signature = await program.methods
-                .finalizeSelection()
-                .accountsStrict({ selectionState: selection, launchState: args.launch })
-                .rpc();
-            return { signature };
-        }
-
-        async function openClaims(args: { launch: PublicKey, admin?: Keypair }): Promise<{ signature: string }> {
-            const adminPayer = args.admin?.publicKey ?? payer;
-            const rpc = program.methods
-                .openClaims()
-                .accountsStrict({ admin: adminPayer, launchState: args.launch });
-            
-            const signers = [];
-            if (args.admin) {
-                signers.push(args.admin);
-            }
-            const signature = await rpc.signers(signers).rpc();
             return { signature };
         }
 
@@ -372,21 +346,32 @@ export default {
             escrow?: PublicKey;
         }): Promise<{ signature: string }> {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
-            const [userPda] = getUserContributionPda(args.launch, userPubkey);
-            const selection = args.selection ?? getSelectionPda(args.launch)[0];
-            const escrow = args.escrow ?? getEscrowPda(args.launch)[0];
+            const { transaction } = await txBuilder.claimRefundTx({
+                launch: args.launch,
+                user: userPubkey,
+                selection: args.selection,
+                escrow: args.escrow,
+            });
+            const signers = args.userKeypair ? [args.userKeypair] : [];
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
+            }
+            const signature = await provider.sendAndConfirm(transaction, signers);
+            return { signature };
+        }
 
-            const rpc = program.methods
-                .claimRefund()
-                .accountsStrict({
-                    user: userPubkey,
-                    launchState: args.launch,
-                    userContribution: userPda,
-                    selectionState: selection,
-                    escrow,
-                });
-            if (args.userKeypair) rpc.signers([args.userKeypair]);
-            return { signature: await rpc.rpc() };
+        async function claimRefundTx(args: {
+          launch: PublicKey;
+          userPubkey: PublicKey;
+          selection?: PublicKey;
+          escrow?: PublicKey;
+        }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+          return txBuilder.claimRefundTx({
+            launch: args.launch,
+            user: args.userPubkey,
+            selection: args.selection,
+            escrow: args.escrow,
+          });
         }
 
         /**
@@ -430,33 +415,41 @@ export default {
             createAtaIfMissing?: boolean;
         }): Promise<{ signature: string; userAta: PublicKey }> {
             const userPubkey = args.userKeypair?.publicKey ?? payer;
-            const [userPda] = getUserContributionPda(args.launch, userPubkey);
-            const selection = args.selection ?? getSelectionPda(args.launch)[0];
-            const [mintAuth] = getMintAuthPda(args.launch);
-            const userAta = args.userAta ?? getUserAta(args.saleMint, userPubkey);
+            const { transaction, userAta } = await txBuilder.claimTokensTx({
+                launch: args.launch,
+                saleMint: args.saleMint,
+                user: userPubkey,
+                selection: args.selection,
+                userAta: args.userAta,
+                createAtaIfMissing: args.createAtaIfMissing,
+                payer: payer,
+            });
 
-            const call = program.methods
-                .claimTokens()
-                .accountsStrict({
-                    user: userPubkey,
-                    launchState: args.launch,
-                    userContribution: userPda,
-                    selectionState: selection,
-                    saleMint: args.saleMint,
-                    mintAuth,
-                    userAta,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                });
-
-            // (optional) create ATA in a transaction before calling the method
-            if (args.createAtaIfMissing) {
-                const { ix } = buildCreateAtaIx({ payer, owner: userPubkey, mint: args.saleMint });
-                call.preInstructions([ix]);
+            const signers = args.userKeypair ? [args.userKeypair] : [];
+            if (!provider.sendAndConfirm) {
+                throw new Error("Provider does not support sendAndConfirm");
             }
-
-            if (args.userKeypair) call.signers([args.userKeypair]);
-            const signature = await call.rpc();
+            const signature = await provider.sendAndConfirm(transaction, signers);
             return { signature, userAta };
+        }
+
+        async function claimTokensTx(args: {
+          launch: PublicKey;
+          saleMint: PublicKey;
+          userPubkey: PublicKey;
+          selection?: PublicKey;
+          userAta?: PublicKey;
+          createAtaIfMissing?: boolean;
+        }): Promise<{ transaction: Transaction; userAta: PublicKey }> {
+          return txBuilder.claimTokensTx({
+            launch: args.launch,
+            saleMint: args.saleMint,
+            user: args.userPubkey,
+            selection: args.selection,
+            userAta: args.userAta,
+            createAtaIfMissing: args.createAtaIfMissing,
+            payer: payer,
+          });
         }
 
         // =============================
@@ -582,12 +575,12 @@ export default {
             initRoster,
             setSeed,
             processBatch,
-            finalizeSelection,
-            openClaims,
             deposit,
             withdraw,
             claimRefund,
             claimTokens,
+            claimRefundTx,
+            claimTokensTx,
             createPool,
 
             initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),

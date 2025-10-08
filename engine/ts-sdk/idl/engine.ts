@@ -481,34 +481,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "finalizeSelection",
-      "docs": [
-        "Finalize selection: set threshold = K-th best score.",
-        "(We DO NOT aggregate per-user here; claims recompute y_i locally.)"
-      ],
-      "discriminator": [
-        3,
-        226,
-        213,
-        146,
-        195,
-        126,
-        174,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "selectionState",
-          "writable": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "initLaunch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -525,7 +497,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "creator",
           "writable": true,
           "signer": true
         },
@@ -698,8 +670,8 @@ export type Engine = {
           "type": "u64"
         },
         {
-          "name": "fundingDurationDays",
-          "type": "u8"
+          "name": "fundingDurationSeconds",
+          "type": "i64"
         },
         {
           "name": "numBlocks",
@@ -724,7 +696,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "payer",
           "writable": true,
           "signer": true
         },
@@ -775,34 +747,6 @@ export type Engine = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "openClaims",
-      "docs": [
-        "Open token claims (post-LP in production). Compute tokens_per_ticket = sale_allocation / K."
-      ],
-      "discriminator": [
-        111,
-        108,
-        90,
-        115,
-        178,
-        90,
-        24,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
         }
       ],
       "args": []
@@ -921,39 +865,6 @@ export type Engine = {
         }
       ],
       "args": []
-    },
-    {
-      "name": "updateNumBlocks",
-      "docs": [
-        "Update num_blocks (admin only)"
-      ],
-      "discriminator": [
-        173,
-        0,
-        81,
-        229,
-        104,
-        1,
-        123,
-        78
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "numBlocks",
-          "type": "u64"
-        }
-      ]
     },
     {
       "name": "withdraw",
@@ -1157,19 +1068,6 @@ export type Engine = {
         11,
         127,
         180
-      ]
-    },
-    {
-      "name": "claimsOpened",
-      "discriminator": [
-        126,
-        92,
-        24,
-        148,
-        242,
-        66,
-        8,
-        28
       ]
     },
     {
@@ -1484,22 +1382,6 @@ export type Engine = {
       }
     },
     {
-      "name": "claimsOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "tokensPerTicket",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "depositMade",
       "type": {
         "kind": "struct",
@@ -1597,7 +1479,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {
@@ -1645,7 +1527,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {

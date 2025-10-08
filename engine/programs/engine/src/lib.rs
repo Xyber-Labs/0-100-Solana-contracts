@@ -36,10 +36,6 @@ pub mod engine {
     use crate::utils::selection::{ticket_at, ticket_score, tuple_lt, tuple_gt, tie_break_wins};
     use crate::utils::roster::{roster_add_or_incr, roster_decr, roster_build_prefix};
 
-    // -------------------------------
-    // Admin / Orchestrator
-    // -------------------------------
-
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
     pub fn init_launch(
         ctx: Context<InitLaunch>,
@@ -49,25 +45,15 @@ pub mod engine {
         tau_lamports: u64,
         sale_allocation: u64, // number of sale tokens
         lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
-        funding_duration_days: u8, // funding period duration in days (max 5 days)
+        funding_duration_seconds: i64,
         num_blocks: u64, // N value for hash range calculation
     ) -> Result<()> {
         require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
-        require!(funding_duration_days <= 5, EngineErrorCode::InvalidFundingDuration);
+        // Max duration: 7 days
+        require!(funding_duration_seconds > 0 && funding_duration_seconds <= 60 * 60 * 24 * 7, EngineErrorCode::InvalidFundingDuration);
 
         let n = if num_blocks == 0 { DEFAULT_N } else { num_blocks };
         require!(n >= MIN_N && n <= MAX_N, EngineErrorCode::InvalidNumBlocks);
-        
-        // For testing: allow very short periods (seconds instead of days)
-        let duration_seconds = if funding_duration_days == 0 {
-            // Special case: 0 means 10 seconds for testing
-            10
-        } else if funding_duration_days == 1 {
-            // Special case: 1 means 30 seconds for testing
-            30
-        } else {
-            funding_duration_days as i64 * 24 * 60 * 60
-        };
         
         // Get and increment project ID
         let counter = &mut ctx.accounts.project_counter;
@@ -76,7 +62,7 @@ pub mod engine {
         
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
-        state.admin = ctx.accounts.admin.key();
+        state.creator = ctx.accounts.creator.key();
         state.hard_cap_lamports = hard_cap_lamports;
         state.min_raise_lamports = min_raise_lamports;
         state.per_wallet_cap = per_wallet_cap;
@@ -87,7 +73,7 @@ pub mod engine {
 
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
-        state.funding_period_end = current_time + duration_seconds;
+        state.funding_period_end = current_time + funding_duration_seconds;
         state.total_deposited = 0;
         state.total_tickets = 0;
         state.k_capacity = 0;
@@ -112,7 +98,7 @@ pub mod engine {
 
         emit!(LaunchInitialized {
             project_id,
-            admin: ctx.accounts.admin.key(),
+            creator: ctx.accounts.creator.key(),
             sale_mint: ctx.accounts.sale_mint.key(),
             hard_cap_lamports,
             min_raise_lamports,
@@ -195,76 +181,6 @@ pub mod engine {
         Ok(())
     }
 
-    /// Finalize selection: set threshold = K-th best score.
-    /// (We DO NOT aggregate per-user here; claims recompute y_i locally.)
-    pub fn finalize_selection(ctx: Context<FinalizeSelection>) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        let sel = &mut ctx.accounts.selection_state;
-        
-        // Check if funding period has ended
-        let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-        
-        require!(sel.vrf_seed.len() == 32, EngineErrorCode::SeedMissing);
-        require!(!sel.finalized, EngineErrorCode::AlreadyFinalized);
-        require!(
-            sel.processed == st.total_tickets,
-            EngineErrorCode::NotFullyProcessed
-        );
-
-        // threshold is the worst (max) score currently in heap
-        let k = st.k_capacity as usize;
-        require!(sel.heap.len() == k, EngineErrorCode::HeapNotFull);
-
-        let mut worst: Option<u128> = None;
-        for h in sel.heap.iter() {
-            if let Some(w) = worst {
-                if h.score > w {
-                    worst = Some(h.score);
-                }
-            } else {
-                worst = Some(h.score);
-            }
-        }
-        let thr = worst.unwrap();
-        sel.finalized = true;
-        sel.threshold = Some(thr);
-
-        st.selection_finalized = true;
-        st.threshold_score = Some(thr);
-
-        let launch_key = st.key();
-        emit!(SelectionFinalized {
-            launch: launch_key,
-            threshold: thr,
-            k_capacity: st.k_capacity,
-        });
-
-        Ok(())
-    }
-
-    /// Open token claims (post-LP in production). Compute tokens_per_ticket = sale_allocation / K.
-    pub fn open_claims(ctx: Context<OnlyAdmin>) -> Result<()> {
-        let st = &mut ctx.accounts.launch_state;
-        require_keys_eq!(st.admin, ctx.accounts.admin.key(), EngineErrorCode::Unauthorized);
-        require!(st.selection_finalized, EngineErrorCode::NotFinalized);
-        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-        let k = st.k_capacity as u64;
-        require!(k > 0, EngineErrorCode::InvalidK);
-
-        let per = st.sale_allocation / k; // floor; small remainder stays unminted in MVP
-        st.tokens_per_ticket = Some(per);
-        st.claims_open = true;
-
-        emit!(ClaimsOpened {
-            launch: ctx.accounts.launch_state.key(),
-            tokens_per_ticket: per,
-        });
-
-        Ok(())
-    }
-
     /// Permissionless crank: process up to max_items tickets (t = processed ..).
     pub fn process_batch(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
@@ -336,6 +252,58 @@ pub mod engine {
             }
             sel.processed += 1;
             steps += 1;
+        }
+
+        // If we haven’t set capacity yet, set it once at the start (your code already does this).
+        if st.k_capacity == 0 {
+            st.k_capacity = (st.hard_cap_lamports / st.tau_lamports) as u32;
+            roster_build_prefix(roster)?;
+            roster.shard_base = 0;
+            st.total_tickets = roster.total_in_shard;
+        }
+
+        // If no overflow, short-circuit and open claims immediately without heap work
+        let k = st.k_capacity as usize;
+        if st.total_tickets as usize <= k {
+            // Everyone wins
+            st.selection_finalized = true;
+            st.threshold_score = Some(u128::MAX);
+            st.tokens_per_ticket = Some(st.sale_allocation / (st.total_tickets as u64));
+            st.claims_open = true;
+            // Mark selection_state finalized for consistency
+            sel.finalized = true;
+            sel.threshold = st.threshold_score;
+            emit!(SelectionFinalized {
+                launch: st.key(),
+                threshold: st.threshold_score.unwrap(),
+                k_capacity: st.k_capacity,
+            });
+            return Ok(());
+        }
+
+        // Overflow path (existing heap maintenance already done above).
+        // If we’ve processed all tickets, finalize + open claims here.
+        if sel.processed == st.total_tickets && !sel.finalized {
+            require!(sel.heap.len() == k, EngineErrorCode::HeapNotFull);
+            let mut worst: Option<u128> = None;
+            for h in sel.heap.iter() {
+                worst = Some(worst.map_or(h.score, |w| w.max(h.score)));
+            }
+            let thr = worst.unwrap();
+            sel.finalized = true;
+            sel.threshold = Some(thr);
+
+            st.selection_finalized = true;
+            st.threshold_score = Some(thr);
+            // tokens per ticket uses K (capacity), not number of winners (ties handled in y_i)
+            st.tokens_per_ticket = Some(st.sale_allocation / (st.k_capacity as u64));
+            st.claims_open = true;
+
+            emit!(SelectionFinalized {
+                launch: st.key(),
+                threshold: thr,
+                k_capacity: st.k_capacity,
+            });
         }
 
         emit!(BatchProcessed {
@@ -698,20 +666,6 @@ pub mod engine {
 
         Ok(())
     }
-
-    /// Update num_blocks (admin only)
-    pub fn update_num_blocks(ctx: Context<OnlyAdmin>, num_blocks: u64) -> Result<()> {
-        require!(num_blocks >= MIN_N && num_blocks <= MAX_N, EngineErrorCode::InvalidNumBlocks);
-        let st = &mut ctx.accounts.launch_state;
-        st.num_blocks = num_blocks;
-
-        emit!(NumBlocksUpdated {
-            launch: st.key(),
-            new_num_blocks: num_blocks,
-        });
-
-        Ok(())
-    }
 }
 
 // -------------------------------
@@ -724,8 +678,8 @@ pub struct LaunchState {
     // Project identification
     pub project_id: u64,
 
-    // admin
-    pub admin: Pubkey,
+    // creator
+    pub creator: Pubkey,
 
     // Config
     pub hard_cap_lamports: u64,
@@ -757,8 +711,8 @@ pub struct LaunchState {
 }
 
 impl LaunchState {
-    pub fn mint_auth_seeds(&self) -> [&[u8]; 2] {
-        [b"mint_auth", self.admin.as_ref()]
+    pub fn mint_auth_seeds<'a>(&'a self, launch_key: &'a Pubkey) -> [&'a [u8]; 2] {
+        [b"mint_auth", launch_key.as_ref()]
     }
     pub fn mint_auth_bump(&self) -> u8 {
         // Get the canonical bump for the mint authority PDA
@@ -856,12 +810,12 @@ pub struct PoolState {
 #[derive(Accounts)]
 pub struct InitLaunch<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub creator: Signer<'info>,
 
     /// Global project counter
     #[account(
         init_if_needed,
-        payer = admin,
+        payer = creator,
         space = 8 + ProjectCounter::INIT_SPACE,
         seeds = [SEED_ROOT, b"project_counter"],
         bump
@@ -870,7 +824,7 @@ pub struct InitLaunch<'info> {
 
     #[account(
         init,
-        payer = admin,
+        payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
         seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
         bump
@@ -884,7 +838,7 @@ pub struct InitLaunch<'info> {
     /// Escrow account (PDA off launch_state)
     #[account(
         init,
-        payer = admin,
+        payer = creator,
         space = 8 + EscrowAccount::INIT_SPACE,
         seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()],
         bump
@@ -897,14 +851,14 @@ pub struct InitLaunch<'info> {
 #[derive(Accounts)]
 pub struct InitRoster<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
+    pub payer: Signer<'info>,
     
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     
     #[account(
         init,
-        payer = admin,
+        payer = payer,
         space = 8 + Roster::INIT_SPACE,
         seeds = [SEED_ROOT, b"roster", launch_state.key().as_ref()],
         bump
@@ -912,14 +866,6 @@ pub struct InitRoster<'info> {
     pub roster: Account<'info, Roster>,
     
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct OnlyAdmin<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
 }
 
 #[derive(Accounts)]
@@ -951,14 +897,6 @@ pub struct ProcessBatch<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut)]
     pub roster: Account<'info, Roster>,
-}
-
-#[derive(Accounts)]
-pub struct FinalizeSelection<'info> {
-    #[account(mut)]
-    pub selection_state: Account<'info, SelectionState>,
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
 }
 
 #[derive(Accounts)]

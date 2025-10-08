@@ -475,34 +475,6 @@
       ]
     },
     {
-      "name": "finalize_selection",
-      "docs": [
-        "Finalize selection: set threshold = K-th best score.",
-        "(We DO NOT aggregate per-user here; claims recompute y_i locally.)"
-      ],
-      "discriminator": [
-        3,
-        226,
-        213,
-        146,
-        195,
-        126,
-        174,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "selection_state",
-          "writable": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "init_launch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -519,7 +491,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "creator",
           "writable": true,
           "signer": true
         },
@@ -692,8 +664,8 @@
           "type": "u64"
         },
         {
-          "name": "funding_duration_days",
-          "type": "u8"
+          "name": "funding_duration_seconds",
+          "type": "i64"
         },
         {
           "name": "num_blocks",
@@ -718,7 +690,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "payer",
           "writable": true,
           "signer": true
         },
@@ -769,34 +741,6 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "open_claims",
-      "docs": [
-        "Open token claims (post-LP in production). Compute tokens_per_ticket = sale_allocation / K."
-      ],
-      "discriminator": [
-        111,
-        108,
-        90,
-        115,
-        178,
-        90,
-        24,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
         }
       ],
       "args": []
@@ -915,39 +859,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "update_num_blocks",
-      "docs": [
-        "Update num_blocks (admin only)"
-      ],
-      "discriminator": [
-        173,
-        0,
-        81,
-        229,
-        104,
-        1,
-        123,
-        78
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "num_blocks",
-          "type": "u64"
-        }
-      ]
     },
     {
       "name": "withdraw",
@@ -1151,19 +1062,6 @@
         11,
         127,
         180
-      ]
-    },
-    {
-      "name": "ClaimsOpened",
-      "discriminator": [
-        126,
-        92,
-        24,
-        148,
-        242,
-        66,
-        8,
-        28
       ]
     },
     {
@@ -1478,22 +1376,6 @@
       }
     },
     {
-      "name": "ClaimsOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "tokens_per_ticket",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "DepositMade",
       "type": {
         "kind": "struct",
@@ -1591,7 +1473,7 @@
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {
@@ -1639,7 +1521,7 @@
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {

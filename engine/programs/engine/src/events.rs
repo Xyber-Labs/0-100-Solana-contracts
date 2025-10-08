@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 #[event]
 pub struct LaunchInitialized {
     pub project_id: u64,
-    pub admin: Pubkey,
+    pub creator: Pubkey,
     pub sale_mint: Pubkey,
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
@@ -66,12 +66,6 @@ pub struct SelectionFinalized {
     pub launch: Pubkey,
     pub threshold: u128,
     pub k_capacity: u32,
-}
-
-#[event]
-pub struct ClaimsOpened {
-    pub launch: Pubkey,
-    pub tokens_per_ticket: u64,
 }
 
 #[event]
