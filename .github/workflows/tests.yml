@@ -22,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: node:20-bullseye
-
     steps:
       - uses: actions/checkout@v4
 
@@ -31,18 +30,39 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            engine/target
-          key: cargo-${{ runner.os }}-stable-${{ hashFiles('engine/Cargo.lock') }}
-
       - name: Restore Solana CLI cache
         id: solana-cache
         uses: actions/cache@v4
         with:
           path: ~/.local/share/solana/install
-          key: solana
+          key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
+
+      - name: Install Solana
+        if: steps.solana-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash -s - v${SOLANA_VERSION}
+
+      - name: Add Solana to PATH
+        shell: bash
+        run: |
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          solana --version
+
+      - name: Enable Yarn (no caching)
+        run: |
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn --version
+        working-directory: engine
+
+      - name: Install deps (fresh)
+        run: yarn install --frozen-lockfile
+        working-directory: engine
+
+      - name: Run tests
+        env:
+          TS_NODE_CACHE: "false"
+        run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/bankrun.ts
+        working-directory: engine
