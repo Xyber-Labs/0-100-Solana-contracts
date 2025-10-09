@@ -1,11 +1,10 @@
-use anchor_lang::{prelude::*, solana_program};
-
-use crate::{
-    errors::ErrorCode as EngineErrorCode,
-    events::DepositMade,
-    utils::roster::roster_add_or_incr,
-    EscrowAccount, LaunchState, Roster, UserContribution, SEED_ROOT,
-};
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program;
+use solana_program::sysvar::clock::Clock;
+use crate::errors::ErrorCode as EngineErrorCode;
+use crate::events::DepositMade;
+use crate::utils::roster::roster_add_or_incr;
+use crate::{EscrowAccount, LaunchState, Roster, UserContribution, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
