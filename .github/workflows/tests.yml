@@ -15,40 +15,37 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  NODE_VERSION: "22"
   SOLANA_VERSION: "2.1.0"
+  ANCHOR_VERSION: "0.31.1"
+
+defaults:
+  run:
+    working-directory: engine
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    container:
-      image: node:22-bookworm
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-
-      - name: Restore cargo cache
-        id: cargo-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            /github/home/.cargo/registry
-            /github/home/.cargo/git
-            engine/target
-          key: cargo-${{ runner.os }}-stable-${{ hashFiles('engine/Cargo.lock') }}
 
       - name: Restore Solana CLI cache
         id: solana-restore
         uses: actions/cache/restore@v4
         with:
-          path: /github/home/.local/share/solana/install
+          path: /home/runner/.local/share/solana/install
           key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
 
-      - name: Install Solana (if cache miss)
+      - name: Install Solana
         if: steps.solana-restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
@@ -58,39 +55,34 @@ jobs:
       - name: Add Solana to PATH
         shell: bash
         run: |
-          echo "/github/home/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          echo "/home/runner/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
           solana --version
 
-      - name: Enable Yarn (no JS caches)
+      - name: Install AVM and Anchor
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install ${ANCHOR_VERSION}
+          avm use ${ANCHOR_VERSION}
+          anchor --version
+
+      - name: Enable Yarn
         run: |
           corepack enable
           corepack prepare yarn@1.22.22 --activate
-          yarn --version
-        working-directory: engine
 
-      - name: Install deps (fresh each run)
+      - name: Install deps
         run: yarn install --frozen-lockfile
-        working-directory: engine
 
-      - name: Run tests (no ts-node cache)
+      - name: Run tests
         env:
           TS_NODE_CACHE: "false"
         run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/bankrun.ts
-        working-directory: engine
 
       - name: Save Solana CLI cache
         if: steps.solana-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: /github/home/.local/share/solana/install
+          path: /home/runner/.local/share/solana/install
           key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
-
-      - name: Save cargo cache
-        if: steps.cargo-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /github/home/.cargo/registry
-            /github/home/.cargo/git
-            engine/target
-          key: cargo-${{ runner.os }}-stable-${{ hashFiles('engine/Cargo.lock') }}
