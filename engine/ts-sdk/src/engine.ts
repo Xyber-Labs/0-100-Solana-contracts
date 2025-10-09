@@ -163,21 +163,17 @@ export default {
 
         async function initRoster(args: {
             launch: PublicKey;
-            signers?: Keypair[];
-            payerKeypair?: Keypair;
         }): Promise<{ rosterPda: PublicKey; signature: string }> {
-            const payerPubkey = args.payerKeypair?.publicKey ?? payer;
             const [rosterPda] = getRosterPda(args.launch);
 
             const rpc = program.methods
                 .initRoster()
                 .accountsStrict({
-                    payer: payerPubkey,
+                    payer: payer,
                     launchState: args.launch,
                     roster: rosterPda,
                     systemProgram: SystemProgram.programId,
                 });
-            if (args.payerKeypair) rpc.signers([args.payerKeypair]);
             const signature = await rpc.rpc();
             return { rosterPda, signature };
         }
