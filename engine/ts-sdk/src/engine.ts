@@ -45,62 +45,38 @@ export default {
 
         // -------------- PDA helpers --------------
         function getLaunchPda(saleMint: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("launch"), saleMint.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["launch", saleMint]);
         }
 
         function getEscrowPda(launch: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("escrow"), launch.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["escrow", launch]);
         }
 
         function getRosterPda(launch: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("roster"), launch.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["roster", launch]);
         }
 
         function getSelectionPda(launch: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("selection"), launch.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["selection", launch]);
         }
 
         function getUserContributionPda(
             launch: PublicKey,
             user: PublicKey
         ): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("user"), launch.toBuffer(), user.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["user", launch, user]);
         }
 
         function getMintAuthPda(launch: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("mint_auth"), launch.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["mint_auth", launch]);
         }
 
         function getProjectCounterPda(): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("project_counter")],
-                program.programId
-            );
+            return txBuilder.getPda(["project_counter"]);
         }
 
         function getPoolPda(launch: PublicKey): [PublicKey, number] {
-            return PublicKey.findProgramAddressSync(
-                [Buffer.from("pool"), launch.toBuffer()],
-                program.programId
-            );
+            return txBuilder.getPda(["pool", launch]);
         }
 
         // -------------- Utility --------------
