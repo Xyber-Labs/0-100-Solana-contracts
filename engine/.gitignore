@@ -6,3 +6,5 @@ node_modules
 test-ledger
 .yarn
 ts-sdk/dist
+deploy-keypair.json
+.venv

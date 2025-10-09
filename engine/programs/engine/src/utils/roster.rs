@@ -11,7 +11,8 @@ pub fn roster_add_or_incr(
     _system_program: &Program<System>,
 ) -> Result<()> {
     if let Some(pos) = roster.wallets.iter().position(|w| *w == wallet) {
-        roster.counts[pos] = roster.counts[pos].saturating_add(delta);
+        roster.counts[pos] = roster.counts[pos].checked_add(delta)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
         return Ok(());
     }
     // append new
@@ -25,7 +26,8 @@ pub fn roster_decr(roster: &mut Account<Roster>, wallet: Pubkey, lost: u32) -> R
         return Ok(());
     }
     if let Some(pos) = roster.wallets.iter().position(|w| *w == wallet) {
-        roster.counts[pos] = roster.counts[pos].saturating_sub(lost);
+        roster.counts[pos] = roster.counts[pos].checked_sub(lost)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
         Ok(())
     } else {
         err!(ErrorCode::UserNotFoundInRoster)
@@ -39,7 +41,8 @@ pub fn roster_build_prefix(roster: &mut Account<Roster>) -> Result<()> {
     roster.prefix.reserve(counts.len());
     for &c in counts.iter() {
         roster.prefix.push(run);
-        run = run.saturating_add(c);
+        run = run.checked_add(c)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
     }
     roster.total_in_shard = run;
     Ok(())

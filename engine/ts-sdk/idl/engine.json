@@ -1,5 +1,5 @@
 {
-  "address": "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb",
+  "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7",
   "metadata": {
     "name": "engine",
     "version": "0.1.0",
@@ -39,6 +39,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -112,6 +117,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -159,6 +169,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -234,6 +249,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -275,85 +295,6 @@
       "args": []
     },
     {
-      "name": "create_pool_internal",
-      "docs": [
-        "Internal function that handles pool creation logic",
-        "skip_validation: if true, skips blockhash validation (for testing)"
-      ],
-      "discriminator": [
-        69,
-        110,
-        78,
-        61,
-        47,
-        49,
-        49,
-        169
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "pool_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "project_counter",
-          "writable": true
-        },
-        {
-          "name": "slot_hashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "skip_validation",
-          "type": "bool"
-        }
-      ]
-    },
-    {
       "name": "deposit",
       "docs": [
         "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -386,6 +327,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -445,34 +391,6 @@
       ]
     },
     {
-      "name": "finalize_selection",
-      "docs": [
-        "Finalize selection: set threshold = K-th best score.",
-        "(We DO NOT aggregate per-user here; claims recompute y_i locally.)"
-      ],
-      "discriminator": [
-        3,
-        226,
-        213,
-        146,
-        195,
-        126,
-        174,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "selection_state",
-          "writable": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "init_launch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -489,7 +407,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "creator",
           "writable": true,
           "signer": true
         },
@@ -504,6 +422,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -544,6 +467,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -589,6 +517,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -647,8 +580,12 @@
           "type": "u64"
         },
         {
-          "name": "funding_duration_days",
-          "type": "u8"
+          "name": "funding_duration_seconds",
+          "type": "i64"
+        },
+        {
+          "name": "num_blocks",
+          "type": "u64"
         }
       ]
     },
@@ -669,7 +606,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "payer",
           "writable": true,
           "signer": true
         },
@@ -685,6 +622,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -715,34 +657,6 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "open_claims",
-      "docs": [
-        "Open token claims (post-LP in production). Compute tokens_per_ticket = sale_allocation / K."
-      ],
-      "discriminator": [
-        111,
-        108,
-        90,
-        115,
-        178,
-        90,
-        24,
-        228
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
         }
       ],
       "args": []
@@ -816,6 +730,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -890,6 +809,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -1057,19 +981,6 @@
       ]
     },
     {
-      "name": "ClaimsOpened",
-      "discriminator": [
-        126,
-        92,
-        24,
-        148,
-        242,
-        66,
-        8,
-        28
-      ]
-    },
-    {
       "name": "DepositMade",
       "discriminator": [
         210,
@@ -1106,6 +1017,19 @@
         166,
         10,
         63
+      ]
+    },
+    {
+      "name": "NumBlocksUpdated",
+      "discriminator": [
+        169,
+        68,
+        39,
+        54,
+        104,
+        241,
+        228,
+        223
       ]
     },
     {
@@ -1335,6 +1259,16 @@
       "code": 6026,
       "name": "NoValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidNumBlocks",
+      "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
+    },
+    {
+      "code": 6028,
+      "name": "ArithmeticOverflow",
+      "msg": "An arithmetic operation overflowed"
     }
   ],
   "types": [
@@ -1358,22 +1292,6 @@
           {
             "name": "heap_len",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimsOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "tokens_per_ticket",
-            "type": "u64"
           }
         ]
       }
@@ -1476,7 +1394,7 @@
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {
@@ -1506,6 +1424,10 @@
           {
             "name": "lp_allocation",
             "type": "u64"
+          },
+          {
+            "name": "num_blocks",
+            "type": "u64"
           }
         ]
       }
@@ -1520,7 +1442,7 @@
             "type": "u64"
           },
           {
-            "name": "admin",
+            "name": "creator",
             "type": "pubkey"
           },
           {
@@ -1537,6 +1459,10 @@
           },
           {
             "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "num_blocks",
             "type": "u64"
           },
           {
@@ -1601,6 +1527,22 @@
             "type": {
               "option": "u64"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "NumBlocksUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_num_blocks",
+            "type": "u64"
           }
         ]
       }
@@ -1717,7 +1659,11 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "next_project_id",
+            "name": "last_project_id",
+            "type": "u64"
+          },
+          {
+            "name": "last_pool_id",
             "type": "u64"
           }
         ]
@@ -1980,7 +1926,7 @@
     {
       "name": "SEED_ROOT",
       "type": "bytes",
-      "value": "[48, 45, 49, 48, 48, 45, 49]"
+      "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 }
