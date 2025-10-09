@@ -14,6 +14,155 @@ export type Engine = {
   },
   "instructions": [
     {
+      "name": "addClmmLiquidity",
+      "discriminator": [
+        95,
+        43,
+        52,
+        162,
+        180,
+        14,
+        143,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "clmmProgram",
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "poolState",
+          "writable": true
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "quoteVault",
+          "writable": true
+        },
+        {
+          "name": "baseVault",
+          "writable": true
+        },
+        {
+          "name": "baseTokenAta",
+          "writable": true
+        },
+        {
+          "name": "positionNftMint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "positionNftAccount",
+          "writable": true
+        },
+        {
+          "name": "metadataAccount",
+          "writable": true
+        },
+        {
+          "name": "personalPosition",
+          "writable": true
+        },
+        {
+          "name": "protocolPosition",
+          "writable": true
+        },
+        {
+          "name": "tickArrayLower",
+          "writable": true
+        },
+        {
+          "name": "tickArrayUpper",
+          "writable": true
+        },
+        {
+          "name": "quoteTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "metadataProgram"
+        },
+        {
+          "name": "token2022Program"
+        },
+        {
+          "name": "quoteTokenProgram"
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimRefund",
       "docs": [
         "Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ)."
@@ -42,6 +191,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -106,6 +272,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -138,6 +321,23 @@ export type Engine = {
           ],
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -184,6 +384,10 @@ export type Engine = {
       ],
       "accounts": [
         {
+          "name": "clmmProgram",
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+        },
+        {
           "name": "payer",
           "writable": true,
           "signer": true
@@ -193,9 +397,66 @@ export type Engine = {
           "writable": true
         },
         {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "mintAuthority",
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -218,16 +479,45 @@ export type Engine = {
           }
         },
         {
-          "name": "tokenMint",
+          "name": "ammConfig"
+        },
+        {
+          "name": "poolState",
+          "writable": true
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "baseMint",
           "writable": true,
           "signer": true
         },
         {
-          "name": "poolTokenAta",
+          "name": "quoteVault",
           "writable": true
         },
         {
-          "name": "tokenProgram",
+          "name": "baseVault",
+          "writable": true
+        },
+        {
+          "name": "observationState",
+          "writable": true
+        },
+        {
+          "name": "tickArrayBitmap",
+          "writable": true
+        },
+        {
+          "name": "baseTokenAta",
+          "writable": true
+        },
+        {
+          "name": "quoteTokenProgram"
+        },
+        {
+          "name": "baseTokenProgram",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
@@ -237,6 +527,10 @@ export type Engine = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -272,6 +566,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -334,6 +645,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -400,6 +728,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -509,6 +854,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   112,
                   114,
                   111,
@@ -534,6 +896,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -567,6 +946,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -651,6 +1047,23 @@ export type Engine = {
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -773,6 +1186,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   115,
                   101,
                   108,
@@ -835,6 +1265,23 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -883,6 +1330,19 @@ export type Engine = {
     }
   ],
   "accounts": [
+    {
+      "name": "ammConfig",
+      "discriminator": [
+        218,
+        244,
+        33,
+        104,
+        203,
+        203,
+        43,
+        111
+      ]
+    },
     {
       "name": "escrowAccount",
       "discriminator": [
@@ -1277,6 +1737,80 @@ export type Engine = {
   ],
   "types": [
     {
+      "name": "ammConfig",
+      "docs": [
+        "Holds the current owner of the factory"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump to identify PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "index",
+            "type": "u16"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Address of the protocol owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocolFeeRate",
+            "docs": [
+              "The protocol fee"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "tradeFeeRate",
+            "docs": [
+              "The trade fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "tickSpacing",
+            "docs": [
+              "The tick spacing"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "fundFeeRate",
+            "docs": [
+              "The fund fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "paddingU32",
+            "type": "u32"
+          },
+          {
+            "name": "fundOwner",
+            "type": "pubkey"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "batchProcessed",
       "type": {
         "kind": "struct",
@@ -1490,6 +2024,12 @@ export type Engine = {
           {
             "name": "lpAllocation",
             "type": "u64"
+          },
+          {
+            "name": "clmmBaseMint",
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "fundingPeriodEnd",
@@ -1914,6 +2454,13 @@ export type Engine = {
           }
         ]
       }
+    }
+  ],
+  "constants": [
+    {
+      "name": "seedRoot",
+      "type": "bytes",
+      "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 };

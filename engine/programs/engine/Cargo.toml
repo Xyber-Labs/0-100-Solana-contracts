@@ -16,13 +16,14 @@ cpi = ["no-entrypoint"]
 default = []
 anchor-debug = []
 test = []
-devnet = []
+devnet = ["raydium-amm-v3/devnet"]
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = "0.31.1"
 engine-macros = { path = "../../engine-macros" }
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = ["no-entrypoint", "cpi"] }
 
 [dev-dependencies]
 

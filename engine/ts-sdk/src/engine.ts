@@ -406,29 +406,36 @@ export default {
 
         async function createClmmPool(args: {
             launch: PublicKey;
-            tokenMint?: Keypair;
+            quoteMint: PublicKey;
+            baseMint?: Keypair;
+            ammConfig: PublicKey;
+            clmmProgram: PublicKey;
         }): Promise<{
             signature: string;
-            tokenMint: PublicKey;
-            poolTokenAta: PublicKey;
+            baseMint: PublicKey;
+            baseTokenAta: PublicKey;
         }> {
-            const tokenMint = args.tokenMint ?? Keypair.generate();
+            const baseMint = args.baseMint ?? Keypair.generate();
 
             const result = await txBuilder.createClmmPoolTx({
                 payer,
                 launch: args.launch,
-                tokenMint,
+                quoteMint: args.quoteMint,
+                baseMint,
+                ammConfig: args.ammConfig,
+                clmmProgram: args.clmmProgram,
                 provider,
             });
 
             if (!provider.sendAndConfirm) {
                 throw new Error("Provider does not support sendAndConfirm");
             }
+            // Note: observationKeypair is NOT a signer, it's just a writable account
             const signature = await provider.sendAndConfirm(result.transaction, result.signers);
             return {
                 signature,
-                tokenMint: result.tokenMint,
-                poolTokenAta: result.poolTokenAta,
+                baseMint: result.baseMint,
+                baseTokenAta: result.baseTokenAta,
             };
         }
 
@@ -613,6 +620,7 @@ export default {
             withdrawTx,
             withdrawIx,
             createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
+            addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
             fetchLaunch,
             fetchRoster,

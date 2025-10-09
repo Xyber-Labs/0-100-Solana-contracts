@@ -80,6 +80,7 @@ pub mod engine {
 
         // save sale mint
         state.sale_mint = Some(ctx.accounts.sale_mint.key());
+        state.clmm_base_mint = None;
 
         // Initialize escrow account
         let escrow = &mut ctx.accounts.escrow;
@@ -698,6 +699,10 @@ pub mod engine {
     pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         create_clmm_pool::create_clmm_pool(ctx)
     }
+
+    pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
+        add_clmm_liquidity::add_clmm_liquidity(ctx)
+    }
 }
 
 // -------------------------------
@@ -722,6 +727,7 @@ pub struct LaunchState {
     pub sale_mint: Option<Pubkey>,
     pub sale_allocation: u64,
     pub lp_allocation: u64,
+    pub clmm_base_mint: Option<Pubkey>,
 
     // Funding
     pub funding_period_end: i64, // Unix timestamp when funding period ends

@@ -1,9 +1,11 @@
 import { Program, BN } from "@coral-xyz/anchor";
 import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Engine as EngineIDL } from "../idl/engine";
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
 import { getConstant } from "./utils";
+
+const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -305,41 +307,262 @@ export class TxBuilder {
   async createClmmPoolTx(params: {
     payer: PublicKey;
     launch: PublicKey;
-    tokenMint: Keypair;
+    quoteMint: PublicKey;
+    baseMint: Keypair;
+    ammConfig: PublicKey;
+    clmmProgram: PublicKey;
     provider: any;
   }): Promise<{
     transaction: Transaction;
     signers: Keypair[];
-    tokenMint: PublicKey;
-    poolTokenAta: PublicKey;
+    baseMint: PublicKey;
+    baseTokenAta: PublicKey;
   }> {
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
-    const poolTokenAta = getAssociatedTokenAddressSync(
-      params.tokenMint.publicKey,
+    const [escrow] = this.getPda(["escrow", params.launch]);
+
+    const [poolState] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool"),
+        params.ammConfig.toBuffer(),
+        params.quoteMint.toBuffer(),
+        params.baseMint.publicKey.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const [observationState] = PublicKey.findProgramAddressSync(
+      [Buffer.from("observation"), poolState.toBuffer()],
+      params.clmmProgram
+    );
+
+    // Derive token vaults
+    const [quoteVault] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_vault"),
+        poolState.toBuffer(),
+        params.quoteMint.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const [baseVault] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_vault"),
+        poolState.toBuffer(),
+        params.baseMint.publicKey.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const [tickArrayBitmap] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_tick_array_bitmap_extension"),
+        poolState.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    // Get ATA for base_mint owned by payer
+    const baseTokenAta = getAssociatedTokenAddressSync(
+      params.baseMint.publicKey,
       params.payer
     );
+
 
     const createClmmPoolIx = await this.program.methods
       .createClmmPool()
       .accountsStrict({
+        clmmProgram: params.clmmProgram,
         payer: params.payer,
         launchState: params.launch,
-        tokenMint: params.tokenMint.publicKey,
+        escrow: escrow,
         mintAuthority: mintAuth,
-        poolTokenAta: poolTokenAta,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        ammConfig: params.ammConfig,
+        poolState: poolState,
+        quoteMint: params.quoteMint,
+        baseMint: params.baseMint.publicKey,
+        quoteVault: quoteVault,
+        baseVault: baseVault,
+        observationState: observationState,
+        tickArrayBitmap: tickArrayBitmap,
+        baseTokenAta: baseTokenAta,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       })
       .instruction();
 
-    const transaction = new Transaction().add(createClmmPoolIx);
+    const transaction = new Transaction()
+      .add(createClmmPoolIx);
 
     return {
       transaction,
-      signers: [params.tokenMint],
-      tokenMint: params.tokenMint.publicKey,
-      poolTokenAta,
+      signers: [params.baseMint],
+      baseMint: params.baseMint.publicKey,
+      baseTokenAta,
+    };
+  }
+
+  async addClmmLiquidityTx(params: {
+    payer: PublicKey;
+    launch: PublicKey;
+    quoteMint: PublicKey;
+    baseMint: PublicKey;
+    baseTokenAta: PublicKey;
+    ammConfig: PublicKey;
+    clmmProgram: PublicKey;
+    provider: any;
+  }): Promise<{
+    transaction: Transaction;
+    signers: Keypair[];
+  }> {
+    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
+    const [escrow] = this.getPda(["escrow", params.launch]);
+
+    const [poolState] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool"),
+        params.ammConfig.toBuffer(),
+        params.quoteMint.toBuffer(),
+        params.baseMint.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const [quoteVault] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_vault"),
+        poolState.toBuffer(),
+        params.quoteMint.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const [baseVault] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_vault"),
+        poolState.toBuffer(),
+        params.baseMint.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const quoteTokenAccount = getAssociatedTokenAddressSync(
+      params.quoteMint,
+      params.payer
+    );
+
+    const positionNftMint = anchor.web3.Keypair.generate();
+    const positionNftAccount = getAssociatedTokenAddressSync(
+      positionNftMint.publicKey,
+      params.payer
+    );
+
+    const [metadataAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("metadata"),
+        METADATA_PROGRAM_ID.toBuffer(),
+        positionNftMint.publicKey.toBuffer(),
+      ],
+      METADATA_PROGRAM_ID
+    );
+
+    const [personalPosition] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("position"),
+        positionNftMint.publicKey.toBuffer(),
+      ],
+      params.clmmProgram
+    );
+
+    const tickSpacing = 60;
+    const tickLowerIndex = 0;
+    const tickUpperIndex = 443580;
+
+    const tickLowerBuffer = Buffer.alloc(4);
+    tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
+
+    const tickUpperBuffer = Buffer.alloc(4);
+    tickUpperBuffer.writeInt32BE(tickUpperIndex, 0);
+
+    const [protocolPosition] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("protocol_position"),
+        poolState.toBuffer(),
+        tickLowerBuffer,
+        tickUpperBuffer,
+      ],
+      params.clmmProgram
+    );
+
+    const TICK_ARRAY_SIZE = 60;
+    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+
+    const tickArrayLowerBuffer = Buffer.alloc(4);
+    tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
+
+    const tickArrayUpperBuffer = Buffer.alloc(4);
+    tickArrayUpperBuffer.writeInt32BE(tickArrayUpperStartIndex, 0);
+
+    const [tickArrayLower] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("tick_array"),
+        poolState.toBuffer(),
+        tickArrayLowerBuffer,
+      ],
+      params.clmmProgram
+    );
+
+    const [tickArrayUpper] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("tick_array"),
+        poolState.toBuffer(),
+        tickArrayUpperBuffer,
+      ],
+      params.clmmProgram
+    );
+
+    const addLiquidityIx = await this.program.methods
+      .addClmmLiquidity()
+      .accountsStrict({
+        clmmProgram: params.clmmProgram,
+        payer: params.payer,
+        launchState: params.launch,
+        escrow: escrow,
+        poolState: poolState,
+        quoteMint: params.quoteMint,
+        baseMint: params.baseMint,
+        quoteVault: quoteVault,
+        baseVault: baseVault,
+        baseTokenAta: params.baseTokenAta,
+        positionNftMint: positionNftMint.publicKey,
+        positionNftAccount: positionNftAccount,
+        metadataAccount: metadataAccount,
+        personalPosition: personalPosition,
+        protocolPosition: protocolPosition,
+        tickArrayLower: tickArrayLower,
+        tickArrayUpper: tickArrayUpper,
+        quoteTokenAccount: quoteTokenAccount,
+        metadataProgram: METADATA_PROGRAM_ID,
+        token2022Program: TOKEN_2022_PROGRAM_ID,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        baseTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      })
+      .instruction();
+
+    const transaction = new Transaction()
+      .add(addLiquidityIx);
+
+    return {
+      transaction,
+      signers: [positionNftMint],
     };
   }
 }

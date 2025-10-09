@@ -8,6 +8,155 @@
   },
   "instructions": [
     {
+      "name": "add_clmm_liquidity",
+      "discriminator": [
+        95,
+        43,
+        52,
+        162,
+        180,
+        14,
+        143,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "clmm_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pool_state",
+          "writable": true
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_vault",
+          "writable": true
+        },
+        {
+          "name": "base_vault",
+          "writable": true
+        },
+        {
+          "name": "base_token_ata",
+          "writable": true
+        },
+        {
+          "name": "position_nft_mint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "position_nft_account",
+          "writable": true
+        },
+        {
+          "name": "metadata_account",
+          "writable": true
+        },
+        {
+          "name": "personal_position",
+          "writable": true
+        },
+        {
+          "name": "protocol_position",
+          "writable": true
+        },
+        {
+          "name": "tick_array_lower",
+          "writable": true
+        },
+        {
+          "name": "tick_array_upper",
+          "writable": true
+        },
+        {
+          "name": "quote_token_account",
+          "writable": true
+        },
+        {
+          "name": "metadata_program"
+        },
+        {
+          "name": "token_2022_program"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "base_token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_refund",
       "docs": [
         "Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ)."
@@ -39,6 +188,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -112,6 +266,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -159,6 +318,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -214,6 +378,10 @@
       ],
       "accounts": [
         {
+          "name": "clmm_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
           "name": "payer",
           "writable": true,
           "signer": true
@@ -223,9 +391,66 @@
           "writable": true
         },
         {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
           "name": "mint_authority",
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -248,16 +473,45 @@
           }
         },
         {
-          "name": "token_mint",
+          "name": "amm_config"
+        },
+        {
+          "name": "pool_state",
+          "writable": true
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "base_mint",
           "writable": true,
           "signer": true
         },
         {
-          "name": "pool_token_ata",
+          "name": "quote_vault",
           "writable": true
         },
         {
-          "name": "token_program",
+          "name": "base_vault",
+          "writable": true
+        },
+        {
+          "name": "observation_state",
+          "writable": true
+        },
+        {
+          "name": "tick_array_bitmap",
+          "writable": true
+        },
+        {
+          "name": "base_token_ata",
+          "writable": true
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "base_token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
@@ -267,6 +521,10 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -305,6 +563,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -379,6 +642,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -457,6 +725,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -575,6 +848,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -615,6 +893,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -660,6 +943,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -756,6 +1044,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -887,6 +1180,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -961,6 +1259,11 @@
               {
                 "kind": "const",
                 "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
                   48,
                   45,
                   49,
@@ -1021,6 +1324,19 @@
     }
   ],
   "accounts": [
+    {
+      "name": "AmmConfig",
+      "discriminator": [
+        218,
+        244,
+        33,
+        104,
+        203,
+        203,
+        43,
+        111
+      ]
+    },
     {
       "name": "EscrowAccount",
       "discriminator": [
@@ -1415,6 +1731,80 @@
   ],
   "types": [
     {
+      "name": "AmmConfig",
+      "docs": [
+        "Holds the current owner of the factory"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump to identify PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "index",
+            "type": "u16"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Address of the protocol owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_fee_rate",
+            "docs": [
+              "The protocol fee"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "trade_fee_rate",
+            "docs": [
+              "The trade fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "tick_spacing",
+            "docs": [
+              "The tick spacing"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "fund_fee_rate",
+            "docs": [
+              "The fund fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "padding_u32",
+            "type": "u32"
+          },
+          {
+            "name": "fund_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "BatchProcessed",
       "type": {
         "kind": "struct",
@@ -1628,6 +2018,12 @@
           {
             "name": "lp_allocation",
             "type": "u64"
+          },
+          {
+            "name": "clmm_base_mint",
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "funding_period_end",
@@ -2058,7 +2454,7 @@
     {
       "name": "SEED_ROOT",
       "type": "bytes",
-      "value": "[48, 45, 49, 48, 48, 45, 49]"
+      "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 }

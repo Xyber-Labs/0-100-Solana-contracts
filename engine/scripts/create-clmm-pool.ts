@@ -3,13 +3,33 @@ import { Program } from "@coral-xyz/anchor";
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 import { Command } from "commander";
-import * as fs from "fs";
 
 const program = new Command();
 
 program
   .requiredOption("--project-id <number>", "Project ID to create pool for")
-  .option("--token-mint <string>", "Token mint keypair path (generates new if not provided)")
+  .option("--amm-config-index <number>", "AMM config index (default: 0)", "0")
+  .addHelpText('after', `
+AMM Config Indices:
+
+DEVNET:
+  0: Tick 60,  Fee 0.25% (standard)
+  1: Tick 1,   Fee 0.01% (stablecoins)
+  2: Tick 10,  Fee 0.05%
+
+MAINNET:
+  0: Tick 10,  Fee 0.01%
+  1: Tick 60,  Fee 0.25% (standard)
+  2: Tick 10,  Fee 0.05%
+  3: Tick 120, Fee 1.00% (high volatility)
+  4: Tick 1,   Fee 0.01% (stablecoins)
+  5: Tick 1,   Fee 0.05%
+  6: Tick 1,   Fee 0.02%
+  7: Tick 1,   Fee 0.03%
+  8: Tick 1,   Fee 0.04%
+  9: Tick 120, Fee 2.00%
+ 10: Tick 10,  Fee 0.10%
+`)
   .parse(process.argv);
 
 const opts = program.opts();
@@ -17,7 +37,7 @@ const opts = program.opts();
 function parseArgs() {
   return {
     projectId: parseInt(opts.projectId),
-    tokenMintPath: opts.tokenMint
+    ammConfigIndex: parseInt(opts.ammConfigIndex)
   };
 }
 
@@ -44,44 +64,125 @@ async function createClmmPool(
   sdk: ReturnType<typeof EngineSDK.create>,
   provider: anchor.AnchorProvider,
   launchPda: anchor.web3.PublicKey,
-  tokenMintPath?: string
+  ammConfigIndex: number
 ) {
-  console.log("Creating CLMM pool...");
+  console.log("\n[1/2] Creating CLMM pool...");
 
-  let tokenMint: anchor.web3.Keypair;
-  if (tokenMintPath) {
-    const keypairData = JSON.parse(fs.readFileSync(tokenMintPath, "utf-8"));
-    tokenMint = anchor.web3.Keypair.fromSecretKey(new Uint8Array(keypairData));
-    console.log("Using existing token mint:", tokenMint.publicKey.toString());
+  const clusterUrl = provider.connection.rpcEndpoint;
+  const isDevnet = clusterUrl.includes("devnet");
+  const isMainnet = clusterUrl.includes("mainnet");
+
+  const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+
+  let RAYDIUM_CLMM: anchor.web3.PublicKey;
+  let clusterName: string;
+
+  if (isMainnet) {
+    RAYDIUM_CLMM = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+    clusterName = "mainnet";
+  } else if (isDevnet) {
+    RAYDIUM_CLMM = new anchor.web3.PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+    clusterName = "devnet";
   } else {
-    tokenMint = anchor.web3.Keypair.generate();
-    console.log("Generated new token mint:", tokenMint.publicKey.toString());
+    RAYDIUM_CLMM = new anchor.web3.PublicKey("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+    clusterName = "localnet";
   }
 
-  const result = await sdk.createClmmPool({
+  console.log(`Using ${clusterName} Raydium CLMM: ${RAYDIUM_CLMM.toBase58()}`);
+
+  // Derive AMM config PDA from index (u16 big-endian)
+  const indexBytes = Buffer.alloc(2);
+  indexBytes.writeUInt16BE(ammConfigIndex, 0);
+
+  const [ammConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("amm_config"), indexBytes],
+    RAYDIUM_CLMM
+  );
+
+  console.log(`Using AMM Config (index ${ammConfigIndex}): ${ammConfig.toBase58()}`);
+
+  let baseMint: anchor.web3.Keypair;
+  do {
+    baseMint = anchor.web3.Keypair.generate();
+  } while (baseMint.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+
+  const createPoolResult = await sdk.createClmmPoolTx({
+    payer: provider.wallet.publicKey,
     launch: launchPda,
-    tokenMint,
+    quoteMint: WSOL_MINT,
+    baseMint: baseMint,
+    ammConfig: ammConfig,
+    clmmProgram: RAYDIUM_CLMM,
+    provider,
   });
 
-  return { signature: result.signature, result, provider, tokenMint };
+  const poolSig = await provider.sendAndConfirm(
+    createPoolResult.transaction,
+    [(provider.wallet as any).payer, ...createPoolResult.signers]
+  );
+
+  console.log(`✅ Pool created: ${poolSig}`);
+  console.log(`   Base Mint: ${createPoolResult.baseMint.toBase58()}`);
+
+  return {
+    poolSig,
+    baseMint: createPoolResult.baseMint,
+    baseTokenAta: createPoolResult.baseTokenAta,
+    ammConfig,
+    WSOL_MINT,
+    RAYDIUM_CLMM
+  };
 }
 
-async function displayResults(
-  signature: string,
-  result: { tokenMint: anchor.web3.PublicKey; poolTokenAta: anchor.web3.PublicKey },
-  provider: anchor.AnchorProvider
+async function addLiquidity(
+  sdk: ReturnType<typeof EngineSDK.create>,
+  provider: anchor.AnchorProvider,
+  launchPda: anchor.web3.PublicKey,
+  poolData: {
+    baseMint: anchor.web3.PublicKey;
+    baseTokenAta: anchor.web3.PublicKey;
+    ammConfig: anchor.web3.PublicKey;
+    WSOL_MINT: anchor.web3.PublicKey;
+    RAYDIUM_CLMM: anchor.web3.PublicKey;
+  }
 ) {
-  console.log("Pool created successfully!");
-  console.log("Signature:", signature);
+  console.log("\n[2/2] Adding liquidity...");
 
-  const mintAccount = await provider.connection.getAccountInfo(result.tokenMint);
-  const tokenAccountInfo = await provider.connection.getAccountInfo(result.poolTokenAta);
+  const launchState = await sdk.fetchLaunch(launchPda);
+  const lpAllocationTokens = Number(launchState.lpAllocation) * 1_000_000_000;
+  const saleAllocationTokens = Number(launchState.saleAllocation) * 1_000_000_000;
+  const requiredQuoteForLiquidity = Math.ceil(
+    (lpAllocationTokens * Number(launchState.totalDeposited)) / saleAllocationTokens
+  ) + 1_000_000_000;
+  const requiredSOL = requiredQuoteForLiquidity / anchor.web3.LAMPORTS_PER_SOL;
 
-  console.log("Results:");
-  console.log("  Token mint:", result.tokenMint.toString());
-  console.log("  Pool token ATA:", result.poolTokenAta.toString());
-  console.log("  Mint account exists:", !!mintAccount);
-  console.log("  Token account (ATA) exists:", !!tokenAccountInfo);
+  console.log(`Need ~${requiredSOL.toFixed(2)} SOL for liquidity`);
+
+  const balance = await provider.connection.getBalance(provider.wallet.publicKey);
+  if (balance < requiredQuoteForLiquidity + 2 * anchor.web3.LAMPORTS_PER_SOL) {
+    console.warn(`⚠️  Low balance: ${balance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.warn(`    Need at least ${(requiredQuoteForLiquidity + 2 * anchor.web3.LAMPORTS_PER_SOL) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+  }
+
+  const addLiquidityResult = await sdk.addClmmLiquidityTx({
+    payer: provider.wallet.publicKey,
+    launch: launchPda,
+    quoteMint: poolData.WSOL_MINT,
+    baseMint: poolData.baseMint,
+    baseTokenAta: poolData.baseTokenAta,
+    ammConfig: poolData.ammConfig,
+    clmmProgram: poolData.RAYDIUM_CLMM,
+    provider,
+  });
+
+  const liquiditySig = await provider.sendAndConfirm(
+    addLiquidityResult.transaction,
+    [(provider.wallet as any).payer, ...addLiquidityResult.signers]
+  );
+
+  console.log(`✅ Liquidity added: ${liquiditySig}`);
+
+  return liquiditySig;
 }
 
 async function main() {
@@ -89,22 +190,30 @@ async function main() {
     const args = parseArgs();
     const { provider, sdk } = initializeSdk();
     const project = await findProject(sdk, args.projectId);
-    const { signature, result, provider: usedProvider } = await createClmmPool(
-      sdk,
-      provider,
-      project.launchPda,
-      args.tokenMintPath
-    );
-    await displayResults(signature, result, usedProvider);
+
+    const poolData = await createClmmPool(sdk, provider, project.launchPda, args.ammConfigIndex);
+    const liquiditySig = await addLiquidity(sdk, provider, project.launchPda, poolData);
+
+    console.log("\n=== CLMM Pool Creation Complete ===");
+    console.log(`Launch: ${project.launchPda.toBase58()}`);
+    console.log(`Base Mint: ${poolData.baseMint.toBase58()}`);
+    console.log(`Quote Mint (WSOL): ${poolData.WSOL_MINT.toBase58()}`);
+    console.log(`Pool Created: ${poolData.poolSig}`);
+    console.log(`Liquidity Added: ${liquiditySig}`);
   } catch (error) {
-    console.error("Transaction failed:");
+    console.error("\n❌ Transaction failed:");
     console.error(error);
     if (error.logs) {
-      console.error("Program logs:");
+      console.error("\nProgram logs:");
       error.logs.forEach((log: string) => console.error(log));
     }
     process.exit(1);
   }
 }
 
-main();
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
