@@ -97,16 +97,16 @@ export async function runFullFlow(
 
     // Add main instruction
     const initLaunchIx = await program.methods
-      .initLaunch(
-        new BN(config.hardCapLamports),
-        new BN(config.minRaiseLamports),
-        new BN(config.perWalletCap),
-        new BN(config.tauLamports),
-        new BN(config.saleAllocation),
-        new BN(config.lpAllocation),
-        new BN(5), // Use 30 seconds for testing
-        new BN(config.numBlocks)
-      )
+      .initLaunch({
+        hardCapLamports: new BN(config.hardCapLamports),
+        minRaiseLamports: new BN(config.minRaiseLamports),
+        perWalletCap: new BN(config.perWalletCap),
+        tauLamports: new BN(config.tauLamports),
+        saleAllocation: new BN(config.saleAllocation),
+        lpAllocation: new BN(config.lpAllocation),
+        fundingDurationSeconds: new BN(5), // Use 30 seconds for testing
+        numBlocks: new BN(config.numBlocks),
+      })
       .accountsStrict({
         creator: admin.publicKey,
         projectCounter,

@@ -1,7 +1,7 @@
+use crate::errors::ErrorCode;
+use crate::{HeapEntry, Roster};
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
-use crate::{Roster, HeapEntry};
-use crate::errors::ErrorCode;
 
 /// Domain separation for score hashing (fix this constant).
 const SCORE_DOMAIN: &[u8] = b"0-100/selection/v1";
@@ -14,13 +14,15 @@ pub fn ticket_at(t: u32, roster: &Account<Roster>) -> Result<(Pubkey, u32)> {
         Ok(i) => i, // exact boundary = start of some user's block
         Err(i) => {
             // i = index of first prefix > t, so user = i - 1
-            i.checked_sub(1)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
+            i.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)?
         }
     };
     let start = roster.prefix[idx];
     let c = roster.counts[idx];
-    require!(t < start.checked_add(c).ok_or(ErrorCode::ArithmeticOverflow)?, ErrorCode::MappingError);
+    require!(
+        t < start.checked_add(c).ok_or(ErrorCode::ArithmeticOverflow)?,
+        ErrorCode::MappingError
+    );
     let wallet = roster.wallets[idx];
     let local_j = t.checked_sub(start).ok_or(ErrorCode::ArithmeticOverflow)?;
     Ok((wallet, local_j))
@@ -54,7 +56,7 @@ pub fn tuple_gt(a: (Pubkey, u32), b: (Pubkey, u32)) -> bool {
 
 /// Tie-break demo: in MVP we accept any with score < threshold.
 /// If == threshold, we check whether (wallet, j) exists in heap (edge winners).
-pub fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &Vec<HeapEntry>) -> bool {
+pub fn tie_break_wins(wallet: Pubkey, j: u32, threshold: u128, heap: &[HeapEntry]) -> bool {
     heap.iter()
         .any(|e| e.score == threshold && e.wallet == wallet && e.local_j == j)
 }

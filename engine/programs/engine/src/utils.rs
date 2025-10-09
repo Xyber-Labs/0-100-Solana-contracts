@@ -1,3 +1,4 @@
+#![allow(clippy::all)]
 use uint::construct_uint;
 
 construct_uint! {

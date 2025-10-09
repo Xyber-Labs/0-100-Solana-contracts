@@ -36,30 +36,24 @@ pub mod engine {
     use crate::utils::selection::{ticket_at, ticket_score, tie_break_wins, tuple_gt, tuple_lt};
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
-    pub fn init_launch(
-        ctx: Context<InitLaunch>,
-        hard_cap_lamports: u64,
-        min_raise_lamports: u64,
-        per_wallet_cap: u64,
-        tau_lamports: u64,
-        sale_allocation: u64, // number of sale tokens
-        lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
-        funding_duration_seconds: i64,
-        num_blocks: u64, // N value for hash range calculation
-    ) -> Result<()> {
-        require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
+    pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
+        require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
         // Max duration: 7 days
         require!(
-            funding_duration_seconds > 0 && funding_duration_seconds <= 60 * 60 * 24 * 7,
+            params.funding_duration_seconds > 0
+                && params.funding_duration_seconds <= 60 * 60 * 24 * 7,
             EngineErrorCode::InvalidFundingDuration
         );
 
-        let n = if num_blocks == 0 {
+        let n = if params.num_blocks == 0 {
             DEFAULT_N
         } else {
-            num_blocks
+            params.num_blocks
         };
-        require!(n >= MIN_N && n <= MAX_N, EngineErrorCode::InvalidNumBlocks);
+        require!(
+            (MIN_N..=MAX_N).contains(&n),
+            EngineErrorCode::InvalidNumBlocks
+        );
 
         let counter = &mut ctx.accounts.project_counter;
         let project_id = counter
@@ -71,18 +65,18 @@ pub mod engine {
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
         state.creator = ctx.accounts.creator.key();
-        state.hard_cap_lamports = hard_cap_lamports;
-        state.min_raise_lamports = min_raise_lamports;
-        state.per_wallet_cap = per_wallet_cap;
-        state.tau_lamports = tau_lamports;
-        state.sale_allocation = sale_allocation;
-        state.lp_allocation = lp_allocation;
+        state.hard_cap_lamports = params.hard_cap_lamports;
+        state.min_raise_lamports = params.min_raise_lamports;
+        state.per_wallet_cap = params.per_wallet_cap;
+        state.tau_lamports = params.tau_lamports;
+        state.sale_allocation = params.sale_allocation;
+        state.lp_allocation = params.lp_allocation;
         state.num_blocks = n;
 
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
         state.funding_period_end = current_time
-            .checked_add(funding_duration_seconds)
+            .checked_add(params.funding_duration_seconds)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         state.total_deposited = 0;
         state.total_tickets = 0;
@@ -110,12 +104,12 @@ pub mod engine {
             project_id,
             creator: ctx.accounts.creator.key(),
             sale_mint: ctx.accounts.sale_mint.key(),
-            hard_cap_lamports,
-            min_raise_lamports,
-            per_wallet_cap,
-            tau_lamports,
-            sale_allocation,
-            lp_allocation,
+            hard_cap_lamports: params.hard_cap_lamports,
+            min_raise_lamports: params.min_raise_lamports,
+            per_wallet_cap: params.per_wallet_cap,
+            tau_lamports: params.tau_lamports,
+            sale_allocation: params.sale_allocation,
+            lp_allocation: params.lp_allocation,
             num_blocks: state.num_blocks,
         });
 
@@ -170,9 +164,9 @@ pub mod engine {
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
-        let num_hashes_u64 = num_hashes as u64;
-        let one = 1 as u64;
-        let forty = 40 as u64;
+        let num_hashes_u64 = num_hashes;
+        let one = 1_u64;
+        let forty = 40_u64;
 
         let num_hashes_minus_1 = num_hashes_u64
             .checked_sub(one)
@@ -234,7 +228,7 @@ pub mod engine {
             EngineErrorCode::MinRaiseNotMet
         );
 
-        require!(sel.finalized == false, EngineErrorCode::AlreadyFinalized);
+        require!(!sel.finalized, EngineErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
         // Auto-calculate k_capacity and total_tickets if not done yet
@@ -706,7 +700,7 @@ pub mod engine {
             &st.key().to_bytes(),
             &[st.mint_auth_bump()],
         ];
-        let signer_seeds = &[&seeds[..]];
+        let signer_seeds = &[seeds];
         let cpi_accounts = MintTo {
             mint: ctx.accounts.sale_mint.to_account_info(),
             to: ctx.accounts.user_ata.to_account_info(),
@@ -842,6 +836,18 @@ pub mod engine {
 // -------------------------------
 // Accounts & State
 // -------------------------------
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitLaunchParams {
+    pub hard_cap_lamports: u64,
+    pub min_raise_lamports: u64,
+    pub per_wallet_cap: u64,
+    pub tau_lamports: u64,
+    pub sale_allocation: u64, // number of sale tokens
+    pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
+    pub funding_duration_seconds: i64,
+    pub num_blocks: u64, // N value for hash range calculation
+}
 
 #[account]
 #[derive(InitSpace)]
