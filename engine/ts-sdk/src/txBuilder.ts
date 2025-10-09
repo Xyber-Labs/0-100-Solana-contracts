@@ -1,7 +1,16 @@
 import { Program, BN } from "@coral-xyz/anchor";
-import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  Transaction,
+  TransactionInstruction,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+} from "@solana/web3.js";
 import { Engine as EngineIDL } from "../idl/engine";
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
+import {
+  TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+} from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
 import { getConstant } from "./utils";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
@@ -17,17 +26,23 @@ export class TxBuilder {
   }
 
   getPda(seeds: (string | Buffer | PublicKey)[]): [PublicKey, number] {
-    const seedBuffers = [this.seedRoot, ...seeds.map(seed => {
-      if (typeof seed === 'string') {
-        return Buffer.from(seed);
-      } else if (typeof seed === 'object' && 'toBuffer' in seed) {
-        return seed.toBuffer();
-      } else {
-        return seed as Buffer;
-      }
-    })];
+    const seedBuffers = [
+      this.seedRoot,
+      ...seeds.map((seed) => {
+        if (typeof seed === "string") {
+          return Buffer.from(seed);
+        } else if (typeof seed === "object" && "toBuffer" in seed) {
+          return seed.toBuffer();
+        } else {
+          return seed as Buffer;
+        }
+      }),
+    ];
 
-    return PublicKey.findProgramAddressSync(seedBuffers, this.program.programId);
+    return PublicKey.findProgramAddressSync(
+      seedBuffers,
+      this.program.programId
+    );
   }
 
   async initLaunchIx(params: {
@@ -39,7 +54,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
-    fundingDurationSeconds: BN;
+    fundingDurationSeconds: number;
     numBlocks: number;
   }): Promise<{
     instruction: TransactionInstruction;
@@ -59,7 +74,7 @@ export class TxBuilder {
         params.tauLamports,
         params.saleAllocation,
         params.lpAllocation,
-        params.fundingDurationSeconds,
+        new BN(params.fundingDurationSeconds),
         new BN(params.numBlocks)
       )
       .accountsStrict({
@@ -100,7 +115,8 @@ export class TxBuilder {
       fromPubkey: params.creator,
       newAccountPubkey: params.saleMint.publicKey,
       space: 82,
-      lamports: await params.provider.connection.getMinimumBalanceForRentExemption(82),
+      lamports:
+        await params.provider.connection.getMinimumBalanceForRentExemption(82),
       programId: TOKEN_PROGRAM_ID,
     });
 
@@ -111,7 +127,11 @@ export class TxBuilder {
       params.creator
     );
 
-    const { instruction: initLaunchIx, launchState, escrow } = await this.initLaunchIx({
+    const {
+      instruction: initLaunchIx,
+      launchState,
+      escrow,
+    } = await this.initLaunchIx({
       creator: params.creator,
       saleMint: params.saleMint.publicKey,
       hardCapLamports: params.hardCapLamports,
@@ -120,7 +140,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationSeconds: new BN(30), // Default to 30 seconds for tx builder
+      fundingDurationSeconds: 30, // Default to 30 seconds for tx builder
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
     });
 
@@ -136,7 +156,6 @@ export class TxBuilder {
       signers: [params.saleMint],
     };
   }
-
 
   async initRosterIx(params: {
     launch: PublicKey;
@@ -166,12 +185,12 @@ export class TxBuilder {
     return { transaction, rosterPda };
   }
 
-  async setSeedIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-  }): Promise<{ instruction: TransactionInstruction; selectionPda: PublicKey }> {
+  async setSeedIx(params: { launch: PublicKey; payer: PublicKey }): Promise<{
+    instruction: TransactionInstruction;
+    selectionPda: PublicKey;
+  }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
-    
+
     const instruction = await this.program.methods
       .setSeed()
       .accountsStrict({
@@ -201,8 +220,15 @@ export class TxBuilder {
     amount: BN;
     roster?: PublicKey;
     escrow?: PublicKey;
-  }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
-    const [userContribution] = this.getPda(["user", params.launch, params.user]);
+  }): Promise<{
+    instruction: TransactionInstruction;
+    userContribution: PublicKey;
+  }> {
+    const [userContribution] = this.getPda([
+      "user",
+      params.launch,
+      params.user,
+    ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
@@ -240,8 +266,15 @@ export class TxBuilder {
     amount: BN;
     roster?: PublicKey;
     escrow?: PublicKey;
-  }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
-    const [userContribution] = this.getPda(["user", params.launch, params.user]);
+  }): Promise<{
+    instruction: TransactionInstruction;
+    userContribution: PublicKey;
+  }> {
+    const [userContribution] = this.getPda([
+      "user",
+      params.launch,
+      params.user,
+    ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
@@ -278,9 +311,17 @@ export class TxBuilder {
     user: PublicKey;
     selection?: PublicKey;
     escrow?: PublicKey;
-  }): Promise<{ instruction: TransactionInstruction; userContribution: PublicKey }> {
-    const [userContribution] = this.getPda(["user", params.launch, params.user]);
-    const selection = params.selection ?? this.getPda(["selection", params.launch])[0];
+  }): Promise<{
+    instruction: TransactionInstruction;
+    userContribution: PublicKey;
+  }> {
+    const [userContribution] = this.getPda([
+      "user",
+      params.launch,
+      params.user,
+    ]);
+    const selection =
+      params.selection ?? this.getPda(["selection", params.launch])[0];
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
@@ -293,7 +334,7 @@ export class TxBuilder {
         escrow,
       })
       .instruction();
-    
+
     return { instruction, userContribution };
   }
 
@@ -316,16 +357,25 @@ export class TxBuilder {
     userAta?: PublicKey;
     createAtaIfMissing?: boolean;
     payer: PublicKey;
-  }): Promise<{ instructions: TransactionInstruction[]; userAta: PublicKey; }> {
-    const [userContribution] = this.getPda(["user", params.launch, params.user]);
-    const selection = params.selection ?? this.getPda(["selection", params.launch])[0];
+  }): Promise<{ instructions: TransactionInstruction[]; userAta: PublicKey }> {
+    const [userContribution] = this.getPda([
+      "user",
+      params.launch,
+      params.user,
+    ]);
+    const selection =
+      params.selection ?? this.getPda(["selection", params.launch])[0];
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
-    const userAta = params.userAta ?? getAssociatedTokenAddressSync(params.saleMint, params.user, true);
+    const userAta =
+      params.userAta ??
+      getAssociatedTokenAddressSync(params.saleMint, params.user, true);
 
     const instructions: TransactionInstruction[] = [];
 
     if (params.createAtaIfMissing) {
-      const ataInfo = await this.program.provider.connection.getAccountInfo(userAta);
+      const ataInfo = await this.program.provider.connection.getAccountInfo(
+        userAta
+      );
       if (!ataInfo) {
         instructions.push(
           createAssociatedTokenAccountInstruction(
@@ -353,7 +403,7 @@ export class TxBuilder {
       .instruction();
 
     instructions.push(claimIx);
-    
+
     return { instructions, userAta };
   }
 

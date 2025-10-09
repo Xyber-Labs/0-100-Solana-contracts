@@ -1,12 +1,15 @@
-import { BN, Program } from '@coral-xyz/anchor';
+import { BN, Program } from "@coral-xyz/anchor";
 import {
   Keypair,
   PublicKey,
   SystemProgram,
   Transaction,
   ComputeBudgetProgram,
-} from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from '@solana/spl-token';
+} from "@solana/web3.js";
+import {
+  TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+} from "@solana/spl-token";
 interface LaunchConfig {
   hardCapLamports: number;
   minRaiseLamports: number;
@@ -27,8 +30,7 @@ export async function runFullFlow(
   provider: any,
   config: LaunchConfig,
   addLog: (log: string) => void
-): Promise<{ success: boolean; message: string; }> {
-
+): Promise<{ success: boolean; message: string }> {
   const admin = provider.wallet;
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
@@ -38,20 +40,22 @@ export async function runFullFlow(
   try {
     // Helper to wait
     async function waitForFundingPeriodEnd(launchPda: PublicKey) {
-      addLog('Fetching launch state to check funding period...');
+      addLog("Fetching launch state to check funding period...");
       const state = await sdk.fetchLaunch(launchPda);
       const currentTime = Math.floor(Date.now() / 1000);
       const fundingEndTime = state.fundingPeriodEnd.toNumber();
-      
+
       if (currentTime >= fundingEndTime) {
-        addLog('Funding period has already ended.');
+        addLog("Funding period has already ended.");
         return;
       }
-      
+
       const waitTime = fundingEndTime - currentTime;
       if (waitTime > 0) {
         addLog(`Waiting ${waitTime + 2} seconds for funding period to end...`);
-        await new Promise(resolve => setTimeout(resolve, (waitTime + 2) * 1000));
+        await new Promise((resolve) =>
+          setTimeout(resolve, (waitTime + 2) * 1000)
+        );
       }
     }
 
@@ -70,21 +74,27 @@ export async function runFullFlow(
     });
     tx.add(cuInstruction);
 
-
     // Add pre-instructions
     tx.add(
       SystemProgram.createAccount({
         fromPubkey: admin.publicKey,
         newAccountPubkey: testSaleMint.publicKey,
         space: 82,
-        lamports: await provider.connection.getMinimumBalanceForRentExemption(82),
+        lamports: await provider.connection.getMinimumBalanceForRentExemption(
+          82
+        ),
         programId: TOKEN_PROGRAM_ID,
       })
     );
     tx.add(
-      createInitializeMintInstruction(testSaleMint.publicKey, 6, mintAuth, admin.publicKey)
+      createInitializeMintInstruction(
+        testSaleMint.publicKey,
+        6,
+        mintAuth,
+        admin.publicKey
+      )
     );
-    
+
     // Add main instruction
     const initLaunchIx = await program.methods
       .initLaunch(
@@ -108,10 +118,12 @@ export async function runFullFlow(
       .instruction();
 
     tx.add(initLaunchIx);
-    
+
     // Set fee payer and recent blockhash
     tx.feePayer = admin.publicKey;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+    tx.recentBlockhash = (
+      await provider.connection.getLatestBlockhash()
+    ).blockhash;
 
     // Explicitly sign with the keypairs we created
     tx.partialSign(testSaleMint);
@@ -122,18 +134,17 @@ export async function runFullFlow(
     // Send the fully signed transaction
     const rawTx = signedTx.serialize();
     const signature = await provider.connection.sendRawTransaction(rawTx);
-    
+
     // Manually confirm the transaction
     const latestBlockhash = await provider.connection.getLatestBlockhash();
     await provider.connection.confirmTransaction({
-        blockhash: latestBlockhash.blockhash,
-        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        signature: signature,
+      blockhash: latestBlockhash.blockhash,
+      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+      signature: signature,
     });
 
     addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
-
 
     // 2. Initialize Roster
     addLog(`\n[2/8] Initializing Roster...`);
@@ -150,7 +161,9 @@ export async function runFullFlow(
     addLog(`   -> Target users for 2x overflow: ${numUsersToSimulate}`);
 
     if (numUsersToSimulate > 50) {
-      addLog(`   -> Capping simulation at 50 users to keep test runtime reasonable.`);
+      addLog(
+        `   -> Capping simulation at 50 users to keep test runtime reasonable.`
+      );
       numUsersToSimulate = 50;
     }
     if (numUsersToSimulate === 0) {
@@ -158,37 +171,51 @@ export async function runFullFlow(
       numUsersToSimulate = 1;
     }
 
-    addLog(`   -> Simulating ${numUsersToSimulate} users, each depositing for 1 ticket.`);
-    
+    addLog(
+      `   -> Simulating ${numUsersToSimulate} users, each depositing for 1 ticket.`
+    );
+
     // Step 1: Generate all user keypairs
-    const users = Array.from({ length: numUsersToSimulate }, () => Keypair.generate());
+    const users = Array.from({ length: numUsersToSimulate }, () =>
+      Keypair.generate()
+    );
 
     // Step 2: Airdrop to all users in parallel
-    addLog(`   -> Airdropping SOL to ${numUsersToSimulate} users in parallel...`);
+    addLog(
+      `   -> Airdropping SOL to ${numUsersToSimulate} users in parallel...`
+    );
     const airdropSigs = await Promise.all(
-      users.map(user => provider.connection.requestAirdrop(user.publicKey, 5 * 1e9))
+      users.map((user) =>
+        provider.connection.requestAirdrop(user.publicKey, 5 * 1e9)
+      )
     );
 
     // Step 3: Confirm all airdrops in parallel
     addLog("   -> Confirming airdrops...");
     const airdropBlockhash = await provider.connection.getLatestBlockhash();
     await Promise.all(
-      airdropSigs.map(sig => provider.connection.confirmTransaction({
-        signature: sig,
-        blockhash: airdropBlockhash.blockhash,
-        lastValidBlockHeight: airdropBlockhash.lastValidBlockHeight,
-      }))
+      airdropSigs.map((sig) =>
+        provider.connection.confirmTransaction({
+          signature: sig,
+          blockhash: airdropBlockhash.blockhash,
+          lastValidBlockHeight: airdropBlockhash.lastValidBlockHeight,
+        })
+      )
     );
     addLog("   -> Airdrops confirmed.");
 
     // Step 4: Deposit from all users in parallel
-    addLog(`   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`);
+    addLog(
+      `   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`
+    );
     await Promise.all(
-      users.map(user => sdk.deposit({
-        launch: testLaunchState,
-        amountLamports: depositAmount,
-        userKeypair: user,
-      }))
+      users.map((user) =>
+        sdk.deposit({
+          launch: testLaunchState,
+          amountLamports: depositAmount,
+          userKeypair: user,
+        })
+      )
     );
     addLog("   -> All deposits completed.");
 
@@ -208,7 +235,9 @@ export async function runFullFlow(
     const totalTicketsToProcess = state.totalTickets;
     let processed = 0;
     let crankTxCount = 0;
-    const balanceBeforeCrank = await provider.connection.getBalance(admin.publicKey);
+    const balanceBeforeCrank = await provider.connection.getBalance(
+      admin.publicKey
+    );
 
     while (processed < totalTicketsToProcess) {
       await sdk.processBatch({ launch: testLaunchState, maxItems: 10 });
@@ -218,7 +247,9 @@ export async function runFullFlow(
       addLog(`   -> Processed ${processed}/${totalTicketsToProcess} tickets`);
     }
 
-    const balanceAfterCrank = await provider.connection.getBalance(admin.publicKey);
+    const balanceAfterCrank = await provider.connection.getBalance(
+      admin.publicKey
+    );
     const crankCostLamports = balanceBeforeCrank - balanceAfterCrank;
     const crankCostSol = crankCostLamports / 1e9;
 
@@ -226,14 +257,15 @@ export async function runFullFlow(
     addLog(`   -> Total transactions: ${crankTxCount}`);
     addLog(`   -> Total cost: ${crankCostSol.toFixed(6)} SOL`);
 
-
     // 7. Finalize & Open Claims (now automatic)
     addLog(`\n[7/8] Verifying automatic finalization...`);
     const finalState = await sdk.fetchLaunch(testLaunchState);
     if (finalState.selectionFinalized && finalState.claimsOpen) {
       addLog("   -> Verified: Selection is finalized and claims are open.");
     } else {
-      throw new Error("Verification failed: Selection not finalized or claims not open.");
+      throw new Error(
+        "Verification failed: Selection not finalized or claims not open."
+      );
     }
 
     // 8. Create Pool
@@ -245,7 +277,9 @@ export async function runFullFlow(
       addLog(`      - Pool ID: ${poolState.poolId.toString()}`);
     } catch (error: any) {
       if (error.message && error.message.includes("NoValidBlockhash")) {
-        addLog("   -> Pool creation failed as expected: No valid blockhash found.");
+        addLog(
+          "   -> Pool creation failed as expected: No valid blockhash found."
+        );
         addLog("   -> This is the correct and expected behavior.");
       } else {
         // Re-throw if it's a different error
@@ -255,7 +289,6 @@ export async function runFullFlow(
 
     addLog("\n✅ Full flow finished successfully!");
     return { success: true, message: "Flow completed successfully" };
-
   } catch (error: any) {
     addLog(`\n--- SCRIPT FAILED ---`);
     addLog(`Error: ${error.message}`);
