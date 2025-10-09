@@ -245,20 +245,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       addLog('Initializing launch with custom parameters...');
       
       const saleMintKeypair = Keypair.generate();
-      const [launchPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("launch"), saleMintKeypair.publicKey.toBuffer()],
-        program.programId
-      );
-      const [escrowPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("escrow"), launchPda.toBuffer()],
-        program.programId
-      );
+      const [launchPda] = sdk.getLaunchPda(saleMintKeypair.publicKey);
+      const [escrowPda] = sdk.getEscrowPda(launchPda);
 
       // Get mint authority PDA
-      const [mintAuth] = PublicKey.findProgramAddressSync(
-        [Buffer.from("mint_auth"), launchPda.toBuffer()],
-        program.programId
-      );
+      const [mintAuth] = sdk.getMintAuthPda(launchPda);
 
       console.log('Creating initLaunch transaction with:');
       console.log('saleMint:', saleMintKeypair.publicKey.toString());
@@ -302,7 +293,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         )
         .accountsStrict({
           admin: (testWallet?.publicKey || publicKey)!,
-          projectCounter: PublicKey.findProgramAddressSync([Buffer.from("project_counter")], program.programId)[0],
+          projectCounter: sdk.getProjectCounterPda()[0],
           launchState: launchPda,
           saleMint: saleMintKeypair.publicKey,
           escrow: escrowPda,

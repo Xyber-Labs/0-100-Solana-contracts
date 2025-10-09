@@ -14,7 +14,8 @@ mod instructions;
 
 use crate::instructions::*;
 
-engine_macros::declare_id_from_keypair!("keys/engine.json");
+#[constant]
+pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
 // -------------------------------
 // Events (moved to events.rs)
@@ -50,7 +51,7 @@ pub mod engine {
         let project_counter = &mut ctx.accounts.project_counter;
         let project_id = project_counter.next_project_id;
         project_counter.next_project_id = project_counter.next_project_id.saturating_add(1);
-        
+
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
         state.admin = ctx.accounts.admin.key();
@@ -137,12 +138,12 @@ pub mod engine {
         // Get the most recent blockhash from the SlotHashes sysvar
         let slot_hashes = &ctx.accounts.slot_hashes;
         let data = slot_hashes.try_borrow_data()?;
-        
+
         // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
         // We take the most recent one.
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
-        
+
         // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
         let last_hash_pos = 8 + ((num_hashes - 1) * 40) + 8; // 8 for slot
         let seed: [u8; 32] = data[last_hash_pos as usize..(last_hash_pos + 32) as usize].try_into().unwrap();
@@ -562,7 +563,7 @@ pub mod engine {
         let amount = per.saturating_mul(y as u64);
 
         // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
-        let seeds: &[&[u8]] = &[b"mint_auth", &st.key().to_bytes(), &[st.mint_auth_bump()]];
+        let seeds: &[&[u8]] = &[SEED_ROOT, b"mint_auth", &st.key().to_bytes(), &[st.mint_auth_bump()]];
         let signer_seeds = &[seeds];
         let cpi_accounts = MintTo {
             mint: ctx.accounts.sale_mint.to_account_info(),
@@ -745,11 +746,11 @@ impl LaunchState {
         // Get the canonical bump for the mint authority PDA
         // We need to derive the launch state key first
         let launch_key = Pubkey::find_program_address(
-            &[b"launch", self.sale_mint.unwrap().as_ref()],
+            &[SEED_ROOT, b"launch", self.sale_mint.unwrap().as_ref()],
             &crate::ID,
         ).0;
         let (_, bump) = Pubkey::find_program_address(
-            &[b"mint_auth", launch_key.as_ref()],
+            &[SEED_ROOT, b"mint_auth", launch_key.as_ref()],
             &crate::ID,
         );
         bump
@@ -844,7 +845,7 @@ pub struct InitLaunch<'info> {
         init_if_needed,
         payer = admin,
         space = 8 + ProjectCounter::INIT_SPACE,
-        seeds = [b"project_counter"],
+        seeds = [SEED_ROOT, b"project_counter"],
         bump
     )]
     pub project_counter: Account<'info, ProjectCounter>,
@@ -853,7 +854,7 @@ pub struct InitLaunch<'info> {
         init,
         payer = admin,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
+        seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
@@ -867,7 +868,7 @@ pub struct InitLaunch<'info> {
         init,
         payer = admin,
         space = 8 + EscrowAccount::INIT_SPACE,
-        seeds = [b"escrow", launch_state.key().as_ref()],
+        seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()],
         bump
     )]
     pub escrow: Account<'info, EscrowAccount>,
@@ -887,7 +888,7 @@ pub struct InitRoster<'info> {
         init,
         payer = admin,
         space = 8 + Roster::INIT_SPACE,
-        seeds = [b"roster", launch_state.key().as_ref()],
+        seeds = [SEED_ROOT, b"roster", launch_state.key().as_ref()],
         bump
     )]
     pub roster: Account<'info, Roster>,
@@ -913,7 +914,7 @@ pub struct SetSeed<'info> {
         init,
         payer = payer,
         space = 8 + SelectionState::INIT_SPACE,
-        seeds = [b"selection", launch_state.key().as_ref()],
+        seeds = [SEED_ROOT, b"selection", launch_state.key().as_ref()],
         bump
     )]
     pub selection_state: Account<'info, SelectionState>,
@@ -952,7 +953,7 @@ pub struct Deposit<'info> {
         init_if_needed,
         payer = user,
         space = 8 + UserContribution::INIT_SPACE,
-        seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()],
+        seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()],
         bump
     )]
     pub user_contribution: Account<'info, UserContribution>,
@@ -974,7 +975,7 @@ pub struct Withdraw<'info> {
     pub user: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
+    #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut, has_one = launch)]
     pub roster: Account<'info, Roster>,
@@ -994,7 +995,7 @@ pub struct ClaimRefund<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
+    #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut)]
     pub selection_state: Account<'info, SelectionState>,
@@ -1009,7 +1010,7 @@ pub struct ClaimTokens<'info> {
     pub user: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, seeds = [b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
+    #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut)]
     pub selection_state: Account<'info, SelectionState>,
@@ -1018,7 +1019,7 @@ pub struct ClaimTokens<'info> {
     pub sale_mint: Account<'info, Mint>,
     /// CHECK: mint authority PDA
     /// Seeds: ["mint_auth", launch_state]
-    #[account(seeds = [b"mint_auth", launch_state.key().as_ref()], bump)]
+    #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
     pub mint_auth: UncheckedAccount<'info>,
 
     #[account(mut)]
@@ -1038,7 +1039,7 @@ pub struct CreatePool<'info> {
         init,
         payer = payer,
         space = 8 + PoolState::INIT_SPACE,
-        seeds = [b"pool", launch_state.key().as_ref()],
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
         bump
     )]
     pub pool_state: Account<'info, PoolState>,

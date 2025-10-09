@@ -39,6 +39,18 @@
               {
                 "kind": "const",
                 "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -100,6 +112,18 @@
               {
                 "kind": "const",
                 "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -132,6 +156,18 @@
           ],
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -269,6 +305,18 @@
               {
                 "kind": "const",
                 "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   112,
                   111,
                   111,
@@ -328,6 +376,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -394,6 +454,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -503,6 +575,18 @@
               {
                 "kind": "const",
                 "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   112,
                   114,
                   111,
@@ -528,6 +612,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -561,6 +657,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -645,6 +753,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -767,6 +887,18 @@
               {
                 "kind": "const",
                 "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
                   115,
                   101,
                   108,
@@ -826,6 +958,18 @@
           "writable": true,
           "pda": {
             "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
               {
                 "kind": "const",
                 "value": [
@@ -1908,6 +2052,13 @@
           }
         ]
       }
+    }
+  ],
+  "constants": [
+    {
+      "name": "SEED_ROOT",
+      "type": "bytes",
+      "value": "[48, 45, 49, 48, 48, 45, 49]"
     }
   ]
 }
