@@ -60,4 +60,16 @@ pub enum ErrorCode {
     InvalidNumBlocks,
     #[msg("An arithmetic operation overflowed")]
     ArithmeticOverflow,
+    #[msg("Creator grant missing")]
+    CreatorGrantMissing,
+    #[msg("Creator reserved tickets exceed capacity")]
+    ReservedExceedsCapacity,
+    #[msg("Creator daily cap reached for today")]
+    DailyCapReached,
+    #[msg("Nothing to claim")]
+    NothingToClaim,
+    #[msg("Creator initial deposit must be multiple of tau")]
+    InvalidCreatorDeposit,
+    #[msg("Creator refund already claimed")]
+    CreatorRefundAlreadyClaimed,
 }

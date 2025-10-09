@@ -100,3 +100,29 @@ pub struct NumBlocksUpdated {
     pub launch: Pubkey,
     pub new_num_blocks: u64,
 }
+
+#[event]
+pub struct CreatorGrantInitialized {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub locked_lamports: u64,
+    pub reserved_tickets: u32,
+    pub daily_lamports_limit: u64,
+}
+
+#[event]
+pub struct CreatorClaimed {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub tickets_claimed: u32,
+    pub lamports_equiv: u64,
+    pub tokens_minted: u64,
+    pub day_index: i64,
+    pub remaining_tickets: u32,
+}
+
+#[event]
+pub struct ClaimsOpened {
+    pub launch: Pubkey,
+    pub opened_at: i64,
+}

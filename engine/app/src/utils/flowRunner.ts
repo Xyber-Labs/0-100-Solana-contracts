@@ -19,6 +19,8 @@ interface LaunchConfig {
   lpAllocation: number;
   fundingDurationDays: number;
   numBlocks: number;
+  creatorInitialDepositLamports: number;
+  creatorDailyLamportsLimit: number;
 }
 
 // A simplified SDK type, as we don't have the full type in this context
@@ -60,12 +62,24 @@ export async function runFullFlow(
     }
 
     // 1. Initialize Launch
-    addLog(`[1/8] Initializing Launch...`);
+    addLog(`[1/9] Initializing Launch...`);
+    
+    // Debug: Check available methods
+    addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
+    
     const testSaleMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
+    
+    // Check if getCreatorGrantPda exists before calling it
+    let creatorGrant: PublicKey;
+    if (typeof sdk.getCreatorGrantPda === 'function') {
+      [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
+    } else {
+      throw new Error(`getCreatorGrantPda method not found on SDK. Available methods: ${Object.keys(sdk).join(', ')}`);
+    }
 
     const tx = new Transaction();
 
@@ -104,8 +118,10 @@ export async function runFullFlow(
         tauLamports: new BN(config.tauLamports),
         saleAllocation: new BN(config.saleAllocation),
         lpAllocation: new BN(config.lpAllocation),
-        fundingDurationSeconds: new BN(5), // Use 30 seconds for testing
+        fundingDurationSeconds: new BN(5), // Use 5 seconds for testing
         numBlocks: new BN(config.numBlocks),
+        creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
+        creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       })
       .accountsStrict({
         creator: admin.publicKey,
@@ -113,6 +129,7 @@ export async function runFullFlow(
         launchState: testLaunchState,
         saleMint: testSaleMint.publicKey,
         escrow,
+        creatorGrant,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
@@ -147,7 +164,7 @@ export async function runFullFlow(
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
     // 2. Initialize Roster
-    addLog(`\n[2/8] Initializing Roster...`);
+    addLog(`\n[2/9] Initializing Roster...`);
     await sdk.initRoster({ launch: testLaunchState });
     addLog("   -> Roster initialized.");
 
@@ -156,7 +173,7 @@ export async function runFullFlow(
     let numUsersToSimulate = Math.floor(k_capacity * 2);
     const depositAmount = new BN(config.tauLamports); // 1 ticket per user
 
-    addLog(`\n[3/8] Simulating deposits for a ~2x overflow...`);
+    addLog(`\n[3/9] Simulating deposits for a ~2x overflow...`);
     addLog(`   -> Capacity (k): ${k_capacity}`);
     addLog(`   -> Target users for 2x overflow: ${numUsersToSimulate}`);
 
@@ -220,17 +237,17 @@ export async function runFullFlow(
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End
-    addLog(`\n[4/8] Waiting for funding period to end...`);
+    addLog(`\n[4/9] Waiting for funding period to end...`);
     await waitForFundingPeriodEnd(testLaunchState);
     addLog("   -> Funding period closed.");
 
     // 5. Set VRF Seed
-    addLog(`\n[5/8] Setting VRF Seed...`);
+    addLog(`\n[5/9] Setting VRF Seed...`);
     await sdk.setSeed({ launch: testLaunchState });
     addLog("   -> VRF seed set.");
 
     // 6. Process Batches
-    addLog(`\n[6/8] Processing batches (cranking)...`);
+    addLog(`\n[6/9] Processing batches (cranking)...`);
     const state = await sdk.fetchLaunch(testLaunchState);
     const totalTicketsToProcess = state.totalTickets;
     let processed = 0;
@@ -258,7 +275,7 @@ export async function runFullFlow(
     addLog(`   -> Total cost: ${crankCostSol.toFixed(6)} SOL`);
 
     // 7. Finalize & Open Claims (now automatic)
-    addLog(`\n[7/8] Verifying automatic finalization...`);
+    addLog(`\n[7/9] Verifying automatic finalization...`);
     const finalState = await sdk.fetchLaunch(testLaunchState);
     if (finalState.selectionFinalized && finalState.claimsOpen) {
       addLog("   -> Verified: Selection is finalized and claims are open.");
@@ -269,7 +286,7 @@ export async function runFullFlow(
     }
 
     // 8. Create Pool
-    addLog(`\n[8/8] Creating Pool...`);
+    addLog(`\n[8/9] Creating Pool...`);
     try {
       await sdk.createPool({ launch: testLaunchState });
       addLog("   -> Pool created successfully!");
@@ -284,6 +301,48 @@ export async function runFullFlow(
       } else {
         // Re-throw if it's a different error
         throw error;
+      }
+    }
+
+    // 9. Test Creator Token Claiming (if creator deposit was made)
+    if (config.creatorInitialDepositLamports > 0) {
+      addLog(`\n[9/9] Testing Creator Token Claiming...`);
+      try {
+        // Use the same admin wallet as the creator (since that's who initialized the launch)
+        // Don't pass creatorKeypair - let the SDK use the provider's wallet (payer)
+        
+        // Create creator ATA for the sale mint
+        const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
+        
+        // Claim creator tokens (should respect daily limits)
+        if (typeof sdk.claimCreatorTokens === 'function') {
+          await sdk.claimCreatorTokens({
+            launch: testLaunchState,
+            saleMint: testSaleMint.publicKey,
+            creatorAta: creatorAta,
+            // Don't pass creatorKeypair - SDK will use provider's wallet
+            createAtaIfMissing: true,
+          });
+        } else {
+          throw new Error(`claimCreatorTokens method not found on SDK`);
+        }
+        
+        addLog("   -> Creator tokens claimed successfully!");
+        addLog(`   -> Creator ATA: ${creatorAta.toBase58()}`);
+        
+        // Check creator grant state
+        if (typeof sdk.fetchCreatorGrant === 'function') {
+          const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+          addLog(`   -> Reserved tickets: ${creatorGrantState.reservedTickets}`);
+          addLog(`   -> Claimed tickets: ${creatorGrantState.claimedTickets}`);
+          addLog(`   -> Daily ticket cap: ${creatorGrantState.dailyTicketCap}`);
+        } else {
+          addLog(`   -> fetchCreatorGrant method not found on SDK`);
+        }
+        
+      } catch (error: any) {
+        addLog(`   -> Creator token claiming failed: ${error.message}`);
+        // Don't fail the entire flow for this
       }
     }
 

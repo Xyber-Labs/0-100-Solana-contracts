@@ -16,6 +16,8 @@ interface LaunchConfig {
   lpAllocation: number;
   fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
   numBlocks: number;
+  creatorInitialDepositLamports: number;
+  creatorDailyLamportsLimit: number;
 }
 
 // Error boundary component
@@ -122,6 +124,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     numBlocks: 150, // ~1 minute window
+    creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
+    creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -1118,6 +1122,26 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 value={launchConfig.numBlocks}
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, numBlocks: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Initial Deposit (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorInitialDepositLamports / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorInitialDepositLamports: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Daily Limit (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorDailyLamportsLimit / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorDailyLamportsLimit: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
               />
             </div>
           </div>

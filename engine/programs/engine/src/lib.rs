@@ -9,6 +9,8 @@ mod state;
 mod types;
 mod utils;
 
+use instructions::claim_creator_refund::*;
+use instructions::claim_creator_tokens::*;
 use instructions::claim_refund::*;
 use instructions::claim_tokens::*;
 use instructions::create_pool::*;
@@ -81,6 +83,16 @@ pub mod engine {
     /// Checks if any of the last 10 blockhashes meets the probability threshold
     pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         create_pool::handler(ctx)
+    }
+
+    /// Claim creator tokens with daily limits
+    pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
+        claim_creator_tokens::handler(ctx)
+    }
+
+    /// Claim creator refund for failed launches
+    pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
+        claim_creator_refund::handler(ctx)
     }
 }
 

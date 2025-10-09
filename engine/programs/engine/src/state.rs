@@ -40,6 +40,11 @@ pub struct LaunchState {
     // Claims
     pub claims_open: bool,
     pub tokens_per_ticket: Option<u64>,
+
+    // Creator grant fields
+    pub creator_reserved_tickets: u32,
+    pub creator_grant_present: bool,
+    pub claims_opened_at: Option<i64>,
 }
 
 impl LaunchState {
@@ -129,4 +134,32 @@ pub struct PoolState {
     pub range_start: [u8; 32],
     pub range_end: [u8; 32],
     pub created: bool,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct CreatorGrant {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+
+    // Creator's special deposit locked in escrow
+    pub locked_lamports: u64,
+
+    // How many tickets are guaranteed (8 SOL / τ)
+    pub reserved_tickets: u32,
+
+    // Daily limit in lamports (usually = 1 SOL)
+    pub daily_lamports_limit: u64,
+
+    // Cap in tickets/day = floor(daily_lamports_limit / τ)
+    pub daily_ticket_cap: u32,
+
+    // How many "tickets" they have already claimed
+    pub claimed_tickets: u32,
+
+    // Timeslot for "claim day" (day index from claims start)
+    pub last_claim_day: i64,
+    pub claimed_today_tickets: u32,
+
+    pub refunded: bool,
 }

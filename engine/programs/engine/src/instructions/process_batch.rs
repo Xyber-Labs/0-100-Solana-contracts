@@ -33,10 +33,13 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
             .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
         roster_build_prefix(roster)?;
         roster.shard_base = 0; // single-shard MVP
-        st.total_tickets = roster.total_in_shard;
+        st.total_tickets = roster.total_in_shard; // only public tickets (without creator)
     }
 
-    let k = st.k_capacity as usize;
+    // Calculate reserved tickets and lottery capacity
+    let reserved = st.creator_reserved_tickets.min(st.k_capacity);
+    require!(reserved <= st.k_capacity, EngineErrorCode::ReservedExceedsCapacity);
+    let k_heap = (st.k_capacity - reserved) as usize;
 
     let from_t = sel.processed; // Capture initial value for event
     let mut steps = 0usize;
@@ -46,7 +49,7 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
         let score = ticket_score(&seed, &wallet, local_j);
 
         // maintain top-K (max-heap behavior via vector)
-        if sel.heap.len() < k {
+        if sel.heap.len() < k_heap {
             sel.heap.push(HeapEntry {
                 score,
                 wallet,
@@ -92,66 +95,71 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
 
-    // If we haven't set capacity yet, set it once at the start (your code already does this).
-    if st.k_capacity == 0 {
-        st.k_capacity = (st
-            .hard_cap_lamports
-            .checked_div(st.tau_lamports)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
-        roster_build_prefix(roster)?;
-        roster.shard_base = 0;
-        st.total_tickets = roster.total_in_shard;
-    }
-
     // If no overflow, short-circuit and open claims immediately without heap work
-    let k = st.k_capacity as usize;
-    if st.total_tickets as usize <= k {
-        // Everyone wins
+    if st.total_tickets as usize <= k_heap {
         st.selection_finalized = true;
         st.threshold_score = Some(u128::MAX);
-        st.tokens_per_ticket = Some(
-            st.sale_allocation
-                .checked_div(st.total_tickets as u64)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?,
-        );
-        st.claims_open = true;
-        // Mark selection_state finalized for consistency
-        sel.finalized = true;
-        sel.threshold = st.threshold_score;
-        emit!(SelectionFinalized {
-            launch: st.key(),
-            threshold: st.threshold_score.unwrap(),
-            k_capacity: st.k_capacity,
-        });
-        return Ok(());
-    }
-
-    // Overflow path (existing heap maintenance already done above).
-    // If we've processed all tickets, finalize + open claims here.
-    if sel.processed == st.total_tickets && !sel.finalized {
-        require!(sel.heap.len() == k, EngineErrorCode::HeapNotFull);
-        let mut worst: Option<u128> = None;
-        for h in sel.heap.iter() {
-            worst = Some(worst.map_or(h.score, |w| w.max(h.score)));
-        }
-        let thr = worst.unwrap();
-        sel.finalized = true;
-        sel.threshold = Some(thr);
-
-        st.selection_finalized = true;
-        st.threshold_score = Some(thr);
-        // tokens per ticket uses K (capacity), not number of winners (ties handled in y_i)
         st.tokens_per_ticket = Some(
             st.sale_allocation
                 .checked_div(st.k_capacity as u64)
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?,
         );
         st.claims_open = true;
+        let now = Clock::get()?.unix_timestamp;
+        st.claims_opened_at = Some(now);
+
+        sel.finalized = true;
+        sel.threshold = st.threshold_score;
+
+        emit!(SelectionFinalized {
+            launch: st.key(),
+            threshold: st.threshold_score.unwrap(),
+            k_capacity: st.k_capacity,
+        });
+        emit!(ClaimsOpened {
+            launch: st.key(),
+            opened_at: now,
+        });
+
+        return Ok(());
+    }
+
+    // Overflow path (existing heap maintenance already done above).
+    // If we've processed all tickets, finalize + open claims here.
+    if sel.processed == st.total_tickets && !sel.finalized {
+        let thr = if k_heap == 0 {
+            0u128 // no lottery winners
+        } else {
+            require!(sel.heap.len() == k_heap, EngineErrorCode::HeapNotFull);
+            let mut worst: Option<u128> = None;
+            for h in sel.heap.iter() {
+                worst = Some(worst.map_or(h.score, |w| w.max(h.score)));
+            }
+            worst.unwrap()
+        };
+
+        sel.finalized = true;
+        sel.threshold = Some(thr);
+
+        st.selection_finalized = true;
+        st.threshold_score = Some(thr);
+        st.tokens_per_ticket = Some(
+            st.sale_allocation
+                .checked_div(st.k_capacity as u64)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+        );
+        st.claims_open = true;
+        let now = Clock::get()?.unix_timestamp;
+        st.claims_opened_at = Some(now);
 
         emit!(SelectionFinalized {
             launch: st.key(),
             threshold: thr,
             k_capacity: st.k_capacity,
+        });
+        emit!(ClaimsOpened {
+            launch: st.key(),
+            opened_at: now,
         });
     }
 

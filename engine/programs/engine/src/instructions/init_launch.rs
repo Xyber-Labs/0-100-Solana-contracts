@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::{LaunchInitialized, FundingPeriodStarted};
-use crate::state::{EscrowAccount, LaunchState, ProjectCounter};
+use crate::events::{LaunchInitialized, FundingPeriodStarted, CreatorGrantInitialized};
+use crate::state::{EscrowAccount, LaunchState, ProjectCounter, CreatorGrant};
 use crate::constants::{SEED_ROOT, DEFAULT_N, MIN_N, MAX_N};
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::Sysvar;
@@ -45,6 +45,16 @@ pub struct InitLaunch<'info> {
     )]
     pub escrow: Account<'info, EscrowAccount>,
 
+    /// Creator grant account (PDA off launch_state)
+    #[account(
+        init_if_needed,
+        payer = creator,
+        space = 8 + CreatorGrant::INIT_SPACE,
+        seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
+        bump
+    )]
+    pub creator_grant: Account<'info, CreatorGrant>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -58,6 +68,10 @@ pub struct InitLaunchParams {
     pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
     pub funding_duration_seconds: i64,
     pub num_blocks: u64, // N value for hash range calculation
+    
+    // Creator grant parameters
+    pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
+    pub creator_daily_lamports_limit: u64,     // usually 1 * LAMPORTS_PER_SOL
 }
 
 
@@ -79,6 +93,9 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         (MIN_N..=MAX_N).contains(&n),
         EngineErrorCode::InvalidNumBlocks
     );
+
+    // Get keys before any mutable borrows
+    let launch_key = ctx.accounts.launch_state.key();
 
     let counter = &mut ctx.accounts.project_counter;
     let project_id = counter
@@ -115,15 +132,52 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.claims_open = false;
     state.tokens_per_ticket = None;
 
+    // Initialize creator grant fields
+    state.creator_reserved_tickets = 0;
+    state.creator_grant_present = false;
+    state.claims_opened_at = None;
+
     // save sale mint
     state.sale_mint = ctx.accounts.sale_mint.key();
 
     // Initialize escrow account
     let escrow = &mut ctx.accounts.escrow;
-    let launch_key = state.key();
     let funding_end = state.funding_period_end;
     escrow.launch = launch_key;
     escrow.balance = 0;
+
+    // Handle creator deposit and grant initialization
+    let amount = params.creator_initial_deposit_lamports;
+    if amount > 0 {
+        require!(amount % state.tau_lamports == 0, EngineErrorCode::InvalidCreatorDeposit);
+
+        // Calculate reserved tickets
+        let reserved_tickets = (amount / state.tau_lamports) as u32;
+
+        state.creator_reserved_tickets = reserved_tickets;
+        state.creator_grant_present = true;
+
+        // Initialize creator grant
+        let cg = &mut ctx.accounts.creator_grant;
+        cg.launch = state.key();
+        cg.creator = ctx.accounts.creator.key();
+        cg.locked_lamports = amount;
+        cg.reserved_tickets = reserved_tickets;
+        cg.daily_lamports_limit = params.creator_daily_lamports_limit;
+        cg.daily_ticket_cap = (params.creator_daily_lamports_limit / state.tau_lamports) as u32;
+        cg.claimed_tickets = 0;
+        cg.last_claim_day = -1;
+        cg.claimed_today_tickets = 0;
+        cg.refunded = false;
+
+        emit!(CreatorGrantInitialized {
+            launch: state.key(),
+            creator: cg.creator,
+            locked_lamports: amount,
+            reserved_tickets,
+            daily_lamports_limit: params.creator_daily_lamports_limit,
+        });
+    }
 
     emit!(LaunchInitialized {
         project_id,

@@ -10,11 +10,11 @@ import { Engine as EngineIDL } from "../idl/engine";
 import {
   TOKEN_PROGRAM_ID,
   createInitializeMintInstruction,
+  createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
 import { getConstant } from "./utils";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
-import { createAssociatedTokenAccountInstruction } from "@solana/spl-token";
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -56,15 +56,19 @@ export class TxBuilder {
     lpAllocation: BN;
     fundingDurationSeconds: number;
     numBlocks: number;
+    creatorInitialDepositLamports: BN;
+    creatorDailyLamportsLimit: BN;
   }): Promise<{
     instruction: TransactionInstruction;
     launchState: PublicKey;
     escrow: PublicKey;
     projectCounter: PublicKey;
+    creatorGrant: PublicKey;
   }> {
     const [launchState] = this.getPda(["launch", params.saleMint]);
     const [escrow] = this.getPda(["escrow", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
+    const [creatorGrant] = this.getPda(["creator", launchState]);
 
     const instruction = await this.program.methods
       .initLaunch({
@@ -76,6 +80,8 @@ export class TxBuilder {
         lpAllocation: params.lpAllocation,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
         numBlocks: new BN(params.numBlocks),
+        creatorInitialDepositLamports: params.creatorInitialDepositLamports,
+        creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       })
       .accountsStrict({
         creator: params.creator,
@@ -83,6 +89,7 @@ export class TxBuilder {
         saleMint: params.saleMint,
         escrow: escrow,
         projectCounter: projectCounter,
+        creatorGrant: creatorGrant,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
@@ -92,6 +99,7 @@ export class TxBuilder {
       launchState,
       escrow,
       projectCounter,
+      creatorGrant,
     };
   }
 
@@ -104,11 +112,14 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
+    creatorInitialDepositLamports: BN;
+    creatorDailyLamportsLimit: BN;
     provider: any;
   }): Promise<{
     transaction: Transaction;
     launchState: PublicKey;
     escrow: PublicKey;
+    creatorGrant: PublicKey;
     signers: Keypair[];
   }> {
     const createMintAccountIx = SystemProgram.createAccount({
@@ -131,6 +142,7 @@ export class TxBuilder {
       instruction: initLaunchIx,
       launchState,
       escrow,
+      creatorGrant,
     } = await this.initLaunchIx({
       creator: params.creator,
       saleMint: params.saleMint.publicKey,
@@ -142,6 +154,8 @@ export class TxBuilder {
       lpAllocation: params.lpAllocation,
       fundingDurationSeconds: 30, // Default to 30 seconds for tx builder
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
+      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
+      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
     });
 
     const transaction = new Transaction()
@@ -153,6 +167,7 @@ export class TxBuilder {
       transaction,
       launchState,
       escrow,
+      creatorGrant,
       signers: [params.saleMint],
     };
   }
@@ -449,5 +464,84 @@ export class TxBuilder {
   async fetchProjectCounter() {
     const [pda] = this.getPda(["project_counter"]);
     return this.program.account.projectCounter.fetch(pda);
+  }
+
+  async claimCreatorTokensTx(params: {
+    launch: PublicKey;
+    saleMint: PublicKey;
+    creator: PublicKey;
+    creatorAta?: PublicKey;
+    createAtaIfMissing?: boolean;
+    payer: PublicKey;
+  }): Promise<{ transaction: Transaction; creatorAta: PublicKey }> {
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
+    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
+    const creatorAta =
+      params.creatorAta ??
+      getAssociatedTokenAddressSync(params.saleMint, params.creator, true);
+
+    const transaction = new Transaction();
+
+    if (params.createAtaIfMissing) {
+      const ataInfo = await this.program.provider.connection.getAccountInfo(
+        creatorAta
+      );
+      if (!ataInfo) {
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            params.payer,
+            creatorAta,
+            params.creator,
+            params.saleMint
+          )
+        );
+      }
+    }
+
+    const claimIx = await this.program.methods
+      .claimCreatorTokens()
+      .accountsStrict({
+        creator: params.creator,
+        launchState: params.launch,
+        creatorGrant,
+        saleMint: params.saleMint,
+        mintAuth,
+        creatorAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    transaction.add(claimIx);
+
+    return { transaction, creatorAta };
+  }
+
+  async claimCreatorRefundTx(params: {
+    launch: PublicKey;
+    creator: PublicKey;
+  }): Promise<{ transaction: Transaction }> {
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
+    const [escrow] = this.getPda(["escrow", params.launch]);
+
+    const transaction = new Transaction();
+
+    const claimIx = await this.program.methods
+      .claimCreatorRefund()
+      .accountsStrict({
+        creator: params.creator,
+        launchState: params.launch,
+        creatorGrant,
+        escrow,
+      })
+      .instruction();
+
+    transaction.add(claimIx);
+
+    return { transaction };
+  }
+
+  async fetchCreatorGrant(launch: PublicKey) {
+    const [creatorGrantPda] = this.getPda(["creator", launch]);
+    return this.program.account.creatorGrant.fetch(creatorGrantPda);
   }
 }

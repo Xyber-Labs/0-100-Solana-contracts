@@ -90,6 +90,10 @@ export default {
       return txBuilder.getPda(["pool", launch]);
     }
 
+    function getCreatorGrantPda(launch: PublicKey): [PublicKey, number] {
+      return txBuilder.getPda(["creator", launch]);
+    }
+
     // -------------- Utility --------------
     function getUserAta(mint: PublicKey, owner: PublicKey): PublicKey {
       return getAssociatedTokenAddressSync(mint, owner, true);
@@ -131,6 +135,8 @@ export default {
       lpAllocation: BN;
       fundingDurationSeconds: number;
       numBlocks?: number;
+      creatorInitialDepositLamports: BN;
+      creatorDailyLamportsLimit: BN;
       // In tests you can pass preInstructions to create/init mint
       preInstructions?: TransactionInstruction[];
       signers?: Keypair[]; // if payer != provider.wallet
@@ -153,6 +159,8 @@ export default {
           lpAllocation: args.lpAllocation,
           fundingDurationSeconds: args.fundingDurationSeconds,
           numBlocks: args.numBlocks ?? 0,
+          creatorInitialDepositLamports: args.creatorInitialDepositLamports,
+          creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
         }
       );
 
@@ -466,6 +474,76 @@ export default {
       });
     }
 
+    async function claimCreatorTokens(args: {
+      launch: PublicKey;
+      saleMint: PublicKey;
+      creatorKeypair?: Keypair;
+      creatorAta?: PublicKey;
+      createAtaIfMissing?: boolean;
+    }): Promise<{ signature: string; creatorAta: PublicKey }> {
+      const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
+      const { transaction, creatorAta } = await txBuilder.claimCreatorTokensTx({
+        launch: args.launch,
+        saleMint: args.saleMint,
+        creator: creatorPubkey,
+        creatorAta: args.creatorAta,
+        createAtaIfMissing: args.createAtaIfMissing,
+        payer: payer,
+      });
+
+      const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature, creatorAta };
+    }
+
+    async function claimCreatorTokensTx(args: {
+      launch: PublicKey;
+      saleMint: PublicKey;
+      creator: PublicKey;
+      creatorAta?: PublicKey;
+      createAtaIfMissing?: boolean;
+    }): Promise<{ transaction: Transaction; creatorAta: PublicKey }> {
+      return txBuilder.claimCreatorTokensTx({
+        launch: args.launch,
+        saleMint: args.saleMint,
+        creator: args.creator,
+        creatorAta: args.creatorAta,
+        createAtaIfMissing: args.createAtaIfMissing,
+        payer: payer,
+      });
+    }
+
+    async function claimCreatorRefund(args: {
+      launch: PublicKey;
+      creatorKeypair?: Keypair;
+    }): Promise<{ signature: string }> {
+      const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
+      const { transaction } = await txBuilder.claimCreatorRefundTx({
+        launch: args.launch,
+        creator: creatorPubkey,
+      });
+
+      const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature };
+    }
+
+    async function claimCreatorRefundTx(args: {
+      launch: PublicKey;
+      creator: PublicKey;
+    }): Promise<{ transaction: Transaction }> {
+      return txBuilder.claimCreatorRefundTx({
+        launch: args.launch,
+        creator: args.creator,
+      });
+    }
+
     // =============================
     //         FETCH helpers
     // =============================
@@ -484,6 +562,10 @@ export default {
 
     async function fetchUserContribution(launch: PublicKey, user: PublicKey) {
       return txBuilder.fetchUserContribution(launch, user);
+    }
+
+    async function fetchCreatorGrant(launch: PublicKey) {
+      return txBuilder.fetchCreatorGrant(launch);
     }
 
     async function fetchProjectCounter() {
@@ -588,6 +670,7 @@ export default {
       getMintAuthPda,
       getProjectCounterPda,
       getPoolPda,
+      getCreatorGrantPda,
       deriveAllPdas,
 
       // Utils
@@ -604,6 +687,10 @@ export default {
       claimTokens,
       claimRefundTx,
       claimTokensTx,
+      claimCreatorTokens,
+      claimCreatorTokensTx,
+      claimCreatorRefund,
+      claimCreatorRefundTx,
       createPool,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
@@ -621,6 +708,7 @@ export default {
       fetchRoster,
       fetchSelection,
       fetchUserContribution,
+      fetchCreatorGrant,
       fetchProjectCounter,
       fetchPoolState,
       fetchAllProjects,

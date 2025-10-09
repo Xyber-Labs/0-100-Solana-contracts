@@ -14,6 +14,201 @@ export type Engine = {
   },
   "instructions": [
     {
+      "name": "claimCreatorRefund",
+      "docs": [
+        "Claim creator refund for failed launches"
+      ],
+      "discriminator": [
+        168,
+        92,
+        198,
+        50,
+        65,
+        220,
+        247,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState"
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimCreatorTokens",
+      "docs": [
+        "Claim creator tokens with daily limits"
+      ],
+      "discriminator": [
+        126,
+        208,
+        113,
+        43,
+        222,
+        70,
+        91,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "saleMint",
+          "writable": true
+        },
+        {
+          "name": "mintAuth",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorAta",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimRefund",
       "docs": [
         "Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ)."
@@ -556,6 +751,50 @@ export type Engine = {
           }
         },
         {
+          "name": "creatorGrant",
+          "docs": [
+            "Creator grant account (PDA off launch_state)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -857,6 +1096,19 @@ export type Engine = {
   ],
   "accounts": [
     {
+      "name": "creatorGrant",
+      "discriminator": [
+        80,
+        101,
+        45,
+        193,
+        223,
+        50,
+        10,
+        157
+      ]
+    },
+    {
       "name": "escrowAccount",
       "discriminator": [
         36,
@@ -960,6 +1212,45 @@ export type Engine = {
         11,
         127,
         180
+      ]
+    },
+    {
+      "name": "claimsOpened",
+      "discriminator": [
+        126,
+        92,
+        24,
+        148,
+        242,
+        66,
+        8,
+        28
+      ]
+    },
+    {
+      "name": "creatorClaimed",
+      "discriminator": [
+        118,
+        206,
+        30,
+        219,
+        62,
+        164,
+        54,
+        200
+      ]
+    },
+    {
+      "name": "creatorGrantInitialized",
+      "discriminator": [
+        72,
+        56,
+        13,
+        95,
+        94,
+        214,
+        58,
+        184
       ]
     },
     {
@@ -1251,6 +1542,36 @@ export type Engine = {
       "code": 6028,
       "name": "arithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
+    },
+    {
+      "code": 6029,
+      "name": "creatorGrantMissing",
+      "msg": "Creator grant missing"
+    },
+    {
+      "code": 6030,
+      "name": "reservedExceedsCapacity",
+      "msg": "Creator reserved tickets exceed capacity"
+    },
+    {
+      "code": 6031,
+      "name": "dailyCapReached",
+      "msg": "Creator daily cap reached for today"
+    },
+    {
+      "code": 6032,
+      "name": "nothingToClaim",
+      "msg": "Nothing to claim"
+    },
+    {
+      "code": 6033,
+      "name": "invalidCreatorDeposit",
+      "msg": "Creator initial deposit must be multiple of tau"
+    },
+    {
+      "code": 6034,
+      "name": "creatorRefundAlreadyClaimed",
+      "msg": "Creator refund already claimed"
     }
   ],
   "types": [
@@ -1274,6 +1595,134 @@ export type Engine = {
           {
             "name": "heapLen",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "claimsOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "openedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "ticketsClaimed",
+            "type": "u32"
+          },
+          {
+            "name": "lamportsEquiv",
+            "type": "u64"
+          },
+          {
+            "name": "tokensMinted",
+            "type": "u64"
+          },
+          {
+            "name": "dayIndex",
+            "type": "i64"
+          },
+          {
+            "name": "remainingTickets",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorGrant",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "lockedLamports",
+            "type": "u64"
+          },
+          {
+            "name": "reservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "dailyLamportsLimit",
+            "type": "u64"
+          },
+          {
+            "name": "dailyTicketCap",
+            "type": "u32"
+          },
+          {
+            "name": "claimedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "lastClaimDay",
+            "type": "i64"
+          },
+          {
+            "name": "claimedTodayTickets",
+            "type": "u32"
+          },
+          {
+            "name": "refunded",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorGrantInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "lockedLamports",
+            "type": "u64"
+          },
+          {
+            "name": "reservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "dailyLamportsLimit",
+            "type": "u64"
           }
         ]
       }
@@ -1401,6 +1850,14 @@ export type Engine = {
           },
           {
             "name": "numBlocks",
+            "type": "u64"
+          },
+          {
+            "name": "creatorInitialDepositLamports",
+            "type": "u64"
+          },
+          {
+            "name": "creatorDailyLamportsLimit",
             "type": "u64"
           }
         ]
@@ -1548,6 +2005,20 @@ export type Engine = {
             "name": "tokensPerTicket",
             "type": {
               "option": "u64"
+            }
+          },
+          {
+            "name": "creatorReservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "creatorGrantPresent",
+            "type": "bool"
+          },
+          {
+            "name": "claimsOpenedAt",
+            "type": {
+              "option": "i64"
             }
           }
         ]
