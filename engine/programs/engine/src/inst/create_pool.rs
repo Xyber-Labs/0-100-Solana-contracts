@@ -1,0 +1,138 @@
+use anchor_lang::{prelude::*, solana_program::sysvar};
+
+use crate::{
+    errors::ErrorCode as EngineErrorCode,
+    events::PoolCreated,
+    utils::pool,
+    LaunchState, PoolState, ProjectCounter, SEED_ROOT,
+};
+
+#[derive(Accounts)]
+pub struct CreatePool<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(mut)]
+    pub launch_state: Account<'info, LaunchState>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + PoolState::INIT_SPACE,
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
+        bump
+    )]
+    pub pool_state: Account<'info, PoolState>,
+
+    #[account(mut)]
+    pub project_counter: Account<'info, ProjectCounter>,
+
+    /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
+    #[account(address = sysvar::slot_hashes::ID)]
+    pub slot_hashes: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
+    let st = &mut ctx.accounts.launch_state;
+    let pool_state = &mut ctx.accounts.pool_state;
+
+    // Check if selection is finalized and claims are open
+    require!(st.selection_finalized, EngineErrorCode::NotFinalized);
+    require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
+
+    // Get the SlotHashes sysvar
+    let slot_hashes = &ctx.accounts.slot_hashes;
+    let data = slot_hashes.try_borrow_data()?;
+
+    // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
+    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
+
+    let hashes_to_check = std::cmp::min(64, num_hashes);
+    let mut found_valid_hash = false;
+    let mut valid_slot = 0u64;
+    let mut valid_hash = [0u8; 32];
+
+    for i in 0..hashes_to_check {
+        // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+        let hash_pos = 8u64
+            .checked_add(
+                i.checked_mul(40)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+            )
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let slot_pos = hash_pos;
+        let blockhash_pos = hash_pos
+            .checked_add(8)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
+
+        let slot = u64::from_le_bytes(
+            data[slot_pos as usize
+                ..(slot_pos
+                    .checked_add(8)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?)
+                    as usize]
+                .try_into()
+                .unwrap(),
+        );
+        let blockhash: [u8; 32] = data[blockhash_pos as usize
+            ..(blockhash_pos
+                .checked_add(32)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+            .try_into()
+            .unwrap();
+
+        // Check if this blockhash is within the project's personal range
+        if pool::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
+            found_valid_hash = true;
+            valid_slot = slot;
+            valid_hash = blockhash;
+            break;
+        }
+    }
+
+    require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
+    let (valid_slot, valid_hash) = (valid_slot, valid_hash);
+
+    // Get pool ID from project counter
+    let counter = &mut ctx.accounts.project_counter;
+    let pool_id = counter
+        .last_pool_id
+        .checked_add(1)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    counter.last_pool_id = pool_id;
+
+    // Calculate and store the project's range
+    let (range_start, range_end) = pool::calculate_project_range(st.project_id, st.num_blocks);
+    let mut range_start_bytes = [0u8; 32];
+    range_start.to_big_endian(&mut range_start_bytes);
+    let mut range_end_bytes = [0u8; 32];
+    range_end.to_big_endian(&mut range_end_bytes);
+
+    // Initialize pool state
+    pool_state.launch = st.key();
+    pool_state.pool_id = pool_id;
+    pool_state.project_id = st.project_id;
+    pool_state.created_slot = valid_slot;
+    pool_state.created_blockhash = valid_hash;
+    pool_state.range_start = range_start_bytes;
+    pool_state.range_end = range_end_bytes;
+    pool_state.created = true;
+
+    // TODO: Add CPI call to Raydium here
+
+    emit!(PoolCreated {
+        launch: st.key(),
+        pool_id,
+        project_id: st.project_id,
+        blockhash: valid_hash,
+        slot: valid_slot,
+        range_start: range_start_bytes,
+        range_end: range_end_bytes,
+    });
+
+    Ok(())
+}
