@@ -55,11 +55,10 @@ pub mod engine {
         let n = if num_blocks == 0 { DEFAULT_N } else { num_blocks };
         require!(n >= MIN_N && n <= MAX_N, EngineErrorCode::InvalidNumBlocks);
         
-        // Get and increment project ID
         let counter = &mut ctx.accounts.project_counter;
-        let project_id = counter.next_project_id;
-        counter.next_project_id = counter.next_project_id.checked_add(1)
+        let project_id = counter.last_project_id.checked_add(1)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        counter.last_project_id = project_id;
         
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
@@ -657,9 +656,9 @@ pub mod engine {
 
         // Get pool ID from project counter
         let counter = &mut ctx.accounts.project_counter;
-        let pool_id = counter.next_project_id;
-        counter.next_project_id = counter.next_project_id.checked_add(1)
+        let pool_id = counter.last_pool_id.checked_add(1)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        counter.last_pool_id = pool_id;
 
         // Calculate and store the project's range
         let (range_start, range_end) = utils::calculate_project_range(st.project_id, st.num_blocks);
@@ -813,7 +812,8 @@ pub struct SelectionState {
 #[account]
 #[derive(InitSpace)]
 pub struct ProjectCounter {
-    pub next_project_id: u64,
+    pub last_project_id: u64,
+    pub last_pool_id: u64,
 }
 
 #[account]

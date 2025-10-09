@@ -1348,6 +1348,11 @@
       "code": 6027,
       "name": "InvalidNumBlocks",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
+    },
+    {
+      "code": 6028,
+      "name": "ArithmeticOverflow",
+      "msg": "An arithmetic operation overflowed"
     }
   ],
   "types": [
@@ -1738,7 +1743,11 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "next_project_id",
+            "name": "last_project_id",
+            "type": "u64"
+          },
+          {
+            "name": "last_pool_id",
             "type": "u64"
           }
         ]

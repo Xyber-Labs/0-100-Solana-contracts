@@ -1354,6 +1354,11 @@ export type Engine = {
       "code": 6027,
       "name": "invalidNumBlocks",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
+    },
+    {
+      "code": 6028,
+      "name": "arithmeticOverflow",
+      "msg": "An arithmetic operation overflowed"
     }
   ],
   "types": [
@@ -1744,7 +1749,11 @@ export type Engine = {
         "kind": "struct",
         "fields": [
           {
-            "name": "nextProjectId",
+            "name": "lastProjectId",
+            "type": "u64"
+          },
+          {
+            "name": "lastPoolId",
             "type": "u64"
           }
         ]
