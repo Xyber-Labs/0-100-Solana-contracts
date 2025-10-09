@@ -3,6 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "build": "anchor build && yarn install",
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
     "script:local-flow": "ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node --no-cache scripts/run-local-flow.ts",
     "script:remote-flow": "ANCHOR_PROVIDER_URL=http://10.186.0.84:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node scripts/run-local-flow.ts"
