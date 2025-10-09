@@ -2,14 +2,14 @@
 use anchor_lang::prelude::borsh::BorshSchema;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 use solana_program::keccak;
 use solana_program::sysvar::clock::Clock;
 use solana_program::sysvar::{self, Sysvar};
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
-mod utils;
-mod events;
 mod errors;
+mod events;
+mod utils;
 
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 
@@ -23,7 +23,6 @@ const MIN_N: u64 = 100;
 const MAX_N: u64 = 500_000;
 const DEFAULT_N: u64 = 81_000;
 
-
 // -------------------------------
 // Events (moved to events.rs)
 // -------------------------------
@@ -31,10 +30,10 @@ const DEFAULT_N: u64 = 81_000;
 #[program]
 pub mod engine {
     use super::*;
-    use crate::events::*;
     use crate::errors::ErrorCode as EngineErrorCode;
-    use crate::utils::selection::{ticket_at, ticket_score, tuple_lt, tuple_gt, tie_break_wins};
-    use crate::utils::roster::{roster_add_or_incr, roster_decr, roster_build_prefix};
+    use crate::events::*;
+    use crate::utils::roster::{roster_add_or_incr, roster_build_prefix, roster_decr};
+    use crate::utils::selection::{ticket_at, ticket_score, tie_break_wins, tuple_gt, tuple_lt};
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
     pub fn init_launch(
@@ -50,16 +49,25 @@ pub mod engine {
     ) -> Result<()> {
         require!(tau_lamports > 0, EngineErrorCode::InvalidTau);
         // Max duration: 7 days
-        require!(funding_duration_seconds > 0 && funding_duration_seconds <= 60 * 60 * 24 * 7, EngineErrorCode::InvalidFundingDuration);
+        require!(
+            funding_duration_seconds > 0 && funding_duration_seconds <= 60 * 60 * 24 * 7,
+            EngineErrorCode::InvalidFundingDuration
+        );
 
-        let n = if num_blocks == 0 { DEFAULT_N } else { num_blocks };
+        let n = if num_blocks == 0 {
+            DEFAULT_N
+        } else {
+            num_blocks
+        };
         require!(n >= MIN_N && n <= MAX_N, EngineErrorCode::InvalidNumBlocks);
-        
+
         let counter = &mut ctx.accounts.project_counter;
-        let project_id = counter.last_project_id.checked_add(1)
+        let project_id = counter
+            .last_project_id
+            .checked_add(1)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         counter.last_project_id = project_id;
-        
+
         let state = &mut ctx.accounts.launch_state;
         state.project_id = project_id;
         state.creator = ctx.accounts.creator.key();
@@ -73,7 +81,8 @@ pub mod engine {
 
         // Set funding period end time (current time + duration)
         let current_time = Clock::get()?.unix_timestamp;
-        state.funding_period_end = current_time.checked_add(funding_duration_seconds)
+        state.funding_period_end = current_time
+            .checked_add(funding_duration_seconds)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         state.total_deposited = 0;
         state.total_tickets = 0;
@@ -135,16 +144,21 @@ pub mod engine {
         Ok(())
     }
 
-
     /// Permissionless seed setter using recent blockhash.
     pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        
+
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-        
+        require!(
+            current_time >= st.funding_period_end,
+            EngineErrorCode::FundingPeriodNotEnded
+        );
+        require!(
+            st.total_deposited >= st.min_raise_lamports,
+            EngineErrorCode::MinRaiseNotMet
+        );
+
         require!(st.vrf_seed.is_none(), EngineErrorCode::SeedAlreadySet);
 
         // Get the most recent blockhash from the SlotHashes sysvar
@@ -155,20 +169,29 @@ pub mod engine {
         // We take the most recent one.
         let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
         require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
-        
+
         let num_hashes_u64 = num_hashes as u64;
         let one = 1 as u64;
         let forty = 40 as u64;
 
-        let num_hashes_minus_1 = num_hashes_u64.checked_sub(one).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let offset = num_hashes_minus_1.checked_mul(forty).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let num_hashes_minus_1 = num_hashes_u64
+            .checked_sub(one)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let offset = num_hashes_minus_1
+            .checked_mul(forty)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
-        let last_hash_pos = 8u64.checked_add(offset).ok_or(EngineErrorCode::ArithmeticOverflow)?
-            .checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 for slot
+        let last_hash_pos = 8u64
+            .checked_add(offset)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?
+            .checked_add(8)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 for slot
 
         let start = last_hash_pos as usize;
-        let end = last_hash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)? as usize;
+        let end = last_hash_pos
+            .checked_add(32)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)? as usize;
 
         let seed: [u8; 32] = data[start..end].try_into().unwrap();
 
@@ -185,7 +208,7 @@ pub mod engine {
 
         // Hash the seed for security (don't expose raw seed)
         let seed_hash = keccak::hash(&seed);
-        
+
         emit!(SeedSet {
             launch: ctx.accounts.launch_state.key(),
             seed_hash: seed_hash.0,
@@ -199,24 +222,32 @@ pub mod engine {
         let st = &mut ctx.accounts.launch_state;
         let sel = &mut ctx.accounts.selection_state;
         let roster = &mut ctx.accounts.roster;
-        
+
         // Check if funding period has ended
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
-        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-        
+        require!(
+            current_time >= st.funding_period_end,
+            EngineErrorCode::FundingPeriodNotEnded
+        );
+        require!(
+            st.total_deposited >= st.min_raise_lamports,
+            EngineErrorCode::MinRaiseNotMet
+        );
+
         require!(sel.finalized == false, EngineErrorCode::AlreadyFinalized);
         let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
-        
+
         // Auto-calculate k_capacity and total_tickets if not done yet
         if st.k_capacity == 0 {
-            st.k_capacity = (st.hard_cap_lamports.checked_div(st.tau_lamports)
+            st.k_capacity = (st
+                .hard_cap_lamports
+                .checked_div(st.tau_lamports)
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
             roster_build_prefix(roster)?;
             roster.shard_base = 0; // single-shard MVP
             st.total_tickets = roster.total_in_shard;
         }
-        
+
         let k = st.k_capacity as usize;
 
         let from_t = sel.processed; // Capture initial value for event
@@ -264,13 +295,20 @@ pub mod engine {
                     };
                 }
             }
-            sel.processed = sel.processed.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-            steps = steps.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            sel.processed = sel
+                .processed
+                .checked_add(1)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            steps = steps
+                .checked_add(1)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
 
         // If we haven’t set capacity yet, set it once at the start (your code already does this).
         if st.k_capacity == 0 {
-            st.k_capacity = (st.hard_cap_lamports.checked_div(st.tau_lamports)
+            st.k_capacity = (st
+                .hard_cap_lamports
+                .checked_div(st.tau_lamports)
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
             roster_build_prefix(roster)?;
             roster.shard_base = 0;
@@ -283,8 +321,11 @@ pub mod engine {
             // Everyone wins
             st.selection_finalized = true;
             st.threshold_score = Some(u128::MAX);
-            st.tokens_per_ticket = Some(st.sale_allocation.checked_div(st.total_tickets as u64)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?);
+            st.tokens_per_ticket = Some(
+                st.sale_allocation
+                    .checked_div(st.total_tickets as u64)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+            );
             st.claims_open = true;
             // Mark selection_state finalized for consistency
             sel.finalized = true;
@@ -312,8 +353,11 @@ pub mod engine {
             st.selection_finalized = true;
             st.threshold_score = Some(thr);
             // tokens per ticket uses K (capacity), not number of winners (ties handled in y_i)
-            st.tokens_per_ticket = Some(st.sale_allocation.checked_div(st.k_capacity as u64)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?);
+            st.tokens_per_ticket = Some(
+                st.sale_allocation
+                    .checked_div(st.k_capacity as u64)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+            );
             st.claims_open = true;
 
             emit!(SelectionFinalized {
@@ -340,10 +384,13 @@ pub mod engine {
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        
+
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time < st.funding_period_end, EngineErrorCode::FundingPeriodEnded);
+        require!(
+            current_time < st.funding_period_end,
+            EngineErrorCode::FundingPeriodEnded
+        );
         require!(
             amount > 0 && amount % st.tau_lamports == 0,
             EngineErrorCode::AmountNotMultipleTau
@@ -352,7 +399,10 @@ pub mod engine {
         // per-wallet cap check
         let current = ctx.accounts.user_contribution.deposited;
         require!(
-            current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)? <= st.per_wallet_cap,
+            current
+                .checked_add(amount)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?
+                <= st.per_wallet_cap,
             EngineErrorCode::PerWalletCapExceeded
         );
 
@@ -372,12 +422,16 @@ pub mod engine {
         )?;
 
         // Update escrow balance
-        ctx.accounts.escrow.balance = ctx.accounts.escrow.balance.checked_add(amount)
+        ctx.accounts.escrow.balance = ctx
+            .accounts
+            .escrow
+            .balance
+            .checked_add(amount)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // update user
         let user = &mut ctx.accounts.user_contribution;
-        
+
         // Initialize wallet field if this is the first deposit
         if user.wallet == Pubkey::default() {
             user.launch = st.key();
@@ -385,12 +439,18 @@ pub mod engine {
             user.claimed_refund = false;
             user.claimed_tokens = false;
         }
-        
+
         let old_tickets = user.ticket_count;
-        user.deposited = current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let new_tickets = (user.deposited.checked_div(st.tau_lamports)
+        user.deposited = current
+            .checked_add(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let new_tickets = (user
+            .deposited
+            .checked_div(st.tau_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
-        let delta = new_tickets.checked_sub(old_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let delta = new_tickets
+            .checked_sub(old_tickets)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         user.ticket_count = new_tickets;
 
         // roster update (append or incr)
@@ -403,8 +463,14 @@ pub mod engine {
             &ctx.accounts.system_program,
         )?;
 
-        st.total_deposited = st.total_deposited.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        st.total_tickets = st.total_tickets.checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_deposited = st
+            .total_deposited
+            .checked_add(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_tickets = st
+            .total_tickets
+            .checked_add(delta)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         emit!(DepositMade {
             launch: st.key(),
@@ -422,34 +488,65 @@ pub mod engine {
     /// Withdraw during funding window (reduces ticket_count and returns lamports).
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let st = &mut ctx.accounts.launch_state;
-        
+
         // Check if funding period is still active
         let current_time = Clock::get()?.unix_timestamp;
-        require!(current_time < st.funding_period_end, EngineErrorCode::FundingPeriodEnded);
+        require!(
+            current_time < st.funding_period_end,
+            EngineErrorCode::FundingPeriodEnded
+        );
         let user = &mut ctx.accounts.user_contribution;
-        require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
+        require!(
+            user.deposited >= amount,
+            EngineErrorCode::InsufficientDeposit
+        );
 
         // return lamports from escrow to user
-        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
-        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += amount;
+        **ctx
+            .accounts
+            .escrow
+            .to_account_info()
+            .try_borrow_mut_lamports()? -= amount;
+        **ctx
+            .accounts
+            .user
+            .to_account_info()
+            .try_borrow_mut_lamports()? += amount;
 
         // Update escrow balance
-        ctx.accounts.escrow.balance = ctx.accounts.escrow.balance.checked_sub(amount)
+        ctx.accounts.escrow.balance = ctx
+            .accounts
+            .escrow
+            .balance
+            .checked_sub(amount)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // recompute tickets
         let old_tickets = user.ticket_count;
-        user.deposited = user.deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let new_tickets = (user.deposited.checked_div(st.tau_lamports)
+        user.deposited = user
+            .deposited
+            .checked_sub(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let new_tickets = (user
+            .deposited
+            .checked_div(st.tau_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
-        let lost = old_tickets.checked_sub(new_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let lost = old_tickets
+            .checked_sub(new_tickets)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         user.ticket_count = new_tickets;
 
         // roster decrement
         let roster = &mut ctx.accounts.roster;
         roster_decr(roster, user.wallet, lost)?;
-        st.total_tickets = st.total_tickets.checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        st.total_deposited = st.total_deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_tickets = st
+            .total_tickets
+            .checked_sub(lost)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        st.total_deposited = st
+            .total_deposited
+            .checked_sub(amount)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         emit!(Withdrawn {
             launch: st.key(),
@@ -475,8 +572,16 @@ pub mod engine {
         if current_time >= st.funding_period_end && st.total_deposited < st.min_raise_lamports {
             let refund = user.deposited;
             if refund > 0 {
-                **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
-                **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
+                **ctx
+                    .accounts
+                    .escrow
+                    .to_account_info()
+                    .try_borrow_mut_lamports()? -= refund;
+                **ctx
+                    .accounts
+                    .user
+                    .to_account_info()
+                    .try_borrow_mut_lamports()? += refund;
             }
             user.claimed_refund = true;
 
@@ -492,7 +597,9 @@ pub mod engine {
 
         // Otherwise, proceed as before: requires finalized selection and y calculation
         require!(st.selection_finalized, EngineErrorCode::NotFinalized);
-        let threshold = st.threshold_score.ok_or(EngineErrorCode::ThresholdMissing)?;
+        let threshold = st
+            .threshold_score
+            .ok_or(EngineErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
         let mut y = 0u32;
@@ -507,13 +614,19 @@ pub mod engine {
                         &ctx.accounts.selection_state.heap,
                     ))
             {
-                y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+                y = y
+                    .checked_add(1)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?;
             }
         }
 
-        let approved_lamports = (y as u64).checked_mul(st.tau_lamports)
+        let approved_lamports = (y as u64)
+            .checked_mul(st.tau_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let refund = user.deposited.checked_sub(approved_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let refund = user
+            .deposited
+            .checked_sub(approved_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if refund > 0 {
             **ctx
                 .accounts
@@ -547,9 +660,14 @@ pub mod engine {
             .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
         // Tokens are claimed only if the raise was successful
-        require!(st.total_deposited >= st.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-        
-        let threshold = st.threshold_score.ok_or(EngineErrorCode::ThresholdMissing)?;
+        require!(
+            st.total_deposited >= st.min_raise_lamports,
+            EngineErrorCode::MinRaiseNotMet
+        );
+
+        let threshold = st
+            .threshold_score
+            .ok_or(EngineErrorCode::ThresholdMissing)?;
         let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
         let user = &mut ctx.accounts.user_contribution;
@@ -568,18 +686,26 @@ pub mod engine {
                         &ctx.accounts.selection_state.heap,
                     ))
             {
-                y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+                y = y
+                    .checked_add(1)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?;
             }
         }
         if y == 0 {
             user.claimed_tokens = true;
             return Ok(());
         }
-        let amount = per.checked_mul(y as u64)
+        let amount = per
+            .checked_mul(y as u64)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
-        let seeds: &[&[u8]] = &[SEED_ROOT, b"mint_auth", &st.key().to_bytes(), &[st.mint_auth_bump()]];
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"mint_auth",
+            &st.key().to_bytes(),
+            &[st.mint_auth_bump()],
+        ];
         let signer_seeds = &[&seeds[..]];
         let cpi_accounts = MintTo {
             mint: ctx.accounts.sale_mint.to_account_info(),
@@ -631,13 +757,32 @@ pub mod engine {
 
         for i in 0..hashes_to_check {
             // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
-            let hash_pos = 8u64.checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
+            let hash_pos = 8u64
+                .checked_add(
+                    i.checked_mul(40)
+                        .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+                )
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?;
             let slot_pos = hash_pos;
-            let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
+            let blockhash_pos = hash_pos
+                .checked_add(8)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
 
-            let slot = u64::from_le_bytes(data[slot_pos as usize..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize].try_into().unwrap());
-            let blockhash: [u8; 32] = data[blockhash_pos as usize..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize].try_into().unwrap();
+            let slot = u64::from_le_bytes(
+                data[slot_pos as usize
+                    ..(slot_pos
+                        .checked_add(8)
+                        .ok_or(EngineErrorCode::ArithmeticOverflow)?)
+                        as usize]
+                    .try_into()
+                    .unwrap(),
+            );
+            let blockhash: [u8; 32] = data[blockhash_pos as usize
+                ..(blockhash_pos
+                    .checked_add(32)
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                .try_into()
+                .unwrap();
 
             // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
@@ -653,10 +798,11 @@ pub mod engine {
         require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
         let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
-
         // Get pool ID from project counter
         let counter = &mut ctx.accounts.project_counter;
-        let pool_id = counter.last_pool_id.checked_add(1)
+        let pool_id = counter
+            .last_pool_id
+            .checked_add(1)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         counter.last_pool_id = pool_id;
 
@@ -745,7 +891,8 @@ impl LaunchState {
         let launch_key = Pubkey::find_program_address(
             &[SEED_ROOT, b"launch", self.sale_mint.as_ref()],
             &crate::ID,
-        ).0;
+        )
+        .0;
         let (_, bump) = Pubkey::find_program_address(
             &[SEED_ROOT, b"mint_auth", launch_key.as_ref()],
             &crate::ID,
@@ -878,10 +1025,10 @@ pub struct InitLaunch<'info> {
 pub struct InitRoster<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    
+
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-    
+
     #[account(
         init,
         payer = payer,
@@ -890,7 +1037,7 @@ pub struct InitRoster<'info> {
         bump
     )]
     pub roster: Account<'info, Roster>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -913,7 +1060,6 @@ pub struct SetSeed<'info> {
     pub slot_hashes: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
-
 
 #[derive(Accounts)]
 pub struct ProcessBatch<'info> {
@@ -968,7 +1114,7 @@ pub struct Withdraw<'info> {
     /// CHECK: This is the launch account referenced by the roster
     #[account(address = launch_state.key())]
     pub launch: UncheckedAccount<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -1039,9 +1185,6 @@ pub struct CreatePool<'info> {
 // -------------------------------
 // Utility / helpers
 // -------------------------------
-
-
-
 
 // -------------------------------
 // Errors (moved to errors.rs)
