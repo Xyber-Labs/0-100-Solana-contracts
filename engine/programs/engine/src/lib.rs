@@ -14,6 +14,8 @@ mod instructions;
 
 use crate::instructions::*;
 
+declare_id!("5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH");
+
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
