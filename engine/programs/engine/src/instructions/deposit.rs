@@ -4,7 +4,8 @@ use solana_program::sysvar::clock::Clock;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::DepositMade;
 use crate::utils::roster::roster_add_or_incr;
-use crate::{EscrowAccount, LaunchState, Roster, UserContribution, SEED_ROOT};
+use crate::state::{EscrowAccount, LaunchState, Roster, UserContribution};
+use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {

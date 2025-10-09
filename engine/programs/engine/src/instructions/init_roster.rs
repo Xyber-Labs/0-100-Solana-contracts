@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::events::RosterInitialized;
-use crate::{LaunchState, Roster, SEED_ROOT};
+use crate::state::{LaunchState, Roster};
+use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct InitRoster<'info> {

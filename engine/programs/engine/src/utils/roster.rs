@@ -1,5 +1,5 @@
 use crate::errors::ErrorCode;
-use crate::Roster;
+use crate::state::Roster;
 use anchor_lang::prelude::*;
 
 /// Append or increment user's count; realloc roster if needed (MVP simplistic).

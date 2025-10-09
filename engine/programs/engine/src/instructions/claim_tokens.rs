@@ -3,7 +3,8 @@ use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::TokensClaimed;
 use crate::utils::selection::{ticket_score, tie_break_wins};
-use crate::{LaunchState, SelectionState, UserContribution, SEED_ROOT};
+use crate::state::{LaunchState, SelectionState, UserContribution};
+use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct ClaimTokens<'info> {

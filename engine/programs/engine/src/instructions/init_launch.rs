@@ -2,7 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::{LaunchInitialized, FundingPeriodStarted};
-use crate::{EscrowAccount, LaunchState, ProjectCounter, SEED_ROOT, DEFAULT_N, MIN_N, MAX_N};
+use crate::state::{EscrowAccount, LaunchState, ProjectCounter};
+use crate::constants::{SEED_ROOT, DEFAULT_N, MIN_N, MAX_N};
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::Sysvar;
 

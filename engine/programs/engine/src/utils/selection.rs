@@ -1,5 +1,6 @@
 use crate::errors::ErrorCode;
-use crate::{HeapEntry, Roster};
+use crate::types::HeapEntry;
+use crate::state::Roster;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 

@@ -3,7 +3,8 @@ use anchor_lang::solana_program::keccak;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::{self, Sysvar};
 use crate::events::SeedSet;
-use crate::{LaunchState, SelectionState, SEED_ROOT};
+use crate::state::{LaunchState, SelectionState};
+use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {

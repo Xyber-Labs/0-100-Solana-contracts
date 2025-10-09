@@ -4,7 +4,7 @@ use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::*;
 use crate::utils::roster::roster_build_prefix;
 use crate::utils::selection::{ticket_at, ticket_score, tuple_gt, tuple_lt};
-use crate::{HeapEntry, ProcessBatch};
+use crate::types::{HeapEntry, ProcessBatch};
 
 pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
     let st = &mut ctx.accounts.launch_state;

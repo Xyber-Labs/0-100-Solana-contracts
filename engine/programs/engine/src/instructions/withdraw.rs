@@ -3,7 +3,8 @@ use anchor_lang::solana_program::sysvar::clock::Clock;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::Withdrawn;
 use crate::utils::roster::roster_decr;
-use crate::{EscrowAccount, LaunchState, Roster, UserContribution, SEED_ROOT};
+use crate::state::{EscrowAccount, LaunchState, Roster, UserContribution};
+use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {

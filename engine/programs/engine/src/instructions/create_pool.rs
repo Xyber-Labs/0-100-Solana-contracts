@@ -2,7 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::PoolCreated;
-use crate::{LaunchState, PoolState, ProjectCounter, SEED_ROOT};
+use crate::state::{LaunchState, PoolState, ProjectCounter};
+use crate::constants::SEED_ROOT;
 use crate::utils::pool;
 
 #[derive(Accounts)]
