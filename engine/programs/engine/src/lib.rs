@@ -34,6 +34,7 @@ pub mod engine {
     use crate::events::*;
     use crate::utils::roster::{roster_add_or_incr, roster_build_prefix, roster_decr};
     use crate::utils::selection::{ticket_at, ticket_score, tie_break_wins, tuple_gt, tuple_lt};
+    use crate::utils::pool;
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
     pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
@@ -781,7 +782,7 @@ pub mod engine {
             // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
             // Check if this blockhash is within the project's personal range
-            if utils::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
+            if pool::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
                 found_valid_hash = true;
                 valid_slot = slot;
                 valid_hash = blockhash;
@@ -801,7 +802,7 @@ pub mod engine {
         counter.last_pool_id = pool_id;
 
         // Calculate and store the project's range
-        let (range_start, range_end) = utils::calculate_project_range(st.project_id, st.num_blocks);
+        let (range_start, range_end) = pool::calculate_project_range(st.project_id, st.num_blocks);
         let mut range_start_bytes = [0u8; 32];
         range_start.to_big_endian(&mut range_start_bytes);
         let mut range_end_bytes = [0u8; 32];
