@@ -256,16 +256,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       
       // Add the main instruction
       const initLaunchIx = await program.methods
-        .initLaunch(
-          new BN(launchConfig.hardCapLamports),
-          new BN(launchConfig.minRaiseLamports),
-          new BN(launchConfig.perWalletCap),
-          new BN(launchConfig.tauLamports),
-          new BN(launchConfig.saleAllocation),
-          new BN(launchConfig.lpAllocation),
-          launchConfig.fundingDurationDays,
-          new BN(launchConfig.numBlocks)
-        )
+        .initLaunch({
+          hardCapLamports: new BN(launchConfig.hardCapLamports),
+          minRaiseLamports: new BN(launchConfig.minRaiseLamports),
+          perWalletCap: new BN(launchConfig.perWalletCap),
+          tauLamports: new BN(launchConfig.tauLamports),
+          saleAllocation: new BN(launchConfig.saleAllocation),
+          lpAllocation: new BN(launchConfig.lpAllocation),
+          fundingDurationSeconds: launchConfig.fundingDurationDays,
+          numBlocks: new BN(launchConfig.numBlocks),
+        })
         .accountsStrict({
           admin: (testWallet?.publicKey || publicKey)!,
           projectCounter: sdk.getProjectCounterPda()[0],

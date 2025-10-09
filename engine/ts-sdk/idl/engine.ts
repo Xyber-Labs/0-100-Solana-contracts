@@ -562,36 +562,12 @@ export type Engine = {
       ],
       "args": [
         {
-          "name": "hardCapLamports",
-          "type": "u64"
-        },
-        {
-          "name": "minRaiseLamports",
-          "type": "u64"
-        },
-        {
-          "name": "perWalletCap",
-          "type": "u64"
-        },
-        {
-          "name": "tauLamports",
-          "type": "u64"
-        },
-        {
-          "name": "saleAllocation",
-          "type": "u64"
-        },
-        {
-          "name": "lpAllocation",
-          "type": "u64"
-        },
-        {
-          "name": "fundingDurationSeconds",
-          "type": "i64"
-        },
-        {
-          "name": "numBlocks",
-          "type": "u64"
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "initLaunchParams"
+            }
+          }
         }
       ]
     },
@@ -1386,6 +1362,46 @@ export type Engine = {
           {
             "name": "localJ",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initLaunchParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hardCapLamports",
+            "type": "u64"
+          },
+          {
+            "name": "minRaiseLamports",
+            "type": "u64"
+          },
+          {
+            "name": "perWalletCap",
+            "type": "u64"
+          },
+          {
+            "name": "tauLamports",
+            "type": "u64"
+          },
+          {
+            "name": "saleAllocation",
+            "type": "u64"
+          },
+          {
+            "name": "lpAllocation",
+            "type": "u64"
+          },
+          {
+            "name": "fundingDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "numBlocks",
+            "type": "u64"
           }
         ]
       }

@@ -67,16 +67,16 @@ export class TxBuilder {
     const [projectCounter] = this.getPda(["project_counter"]);
 
     const instruction = await this.program.methods
-      .initLaunch(
-        params.hardCapLamports,
-        params.minRaiseLamports,
-        params.perWalletCap,
-        params.tauLamports,
-        params.saleAllocation,
-        params.lpAllocation,
-        new BN(params.fundingDurationSeconds),
-        new BN(params.numBlocks)
-      )
+      .initLaunch({
+        hardCapLamports: params.hardCapLamports,
+        minRaiseLamports: params.minRaiseLamports,
+        perWalletCap: params.perWalletCap,
+        tauLamports: params.tauLamports,
+        saleAllocation: params.saleAllocation,
+        lpAllocation: params.lpAllocation,
+        fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+        numBlocks: new BN(params.numBlocks),
+      })
       .accountsStrict({
         creator: params.creator,
         launchState: launchState,

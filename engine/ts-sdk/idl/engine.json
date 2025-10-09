@@ -556,36 +556,12 @@
       ],
       "args": [
         {
-          "name": "hard_cap_lamports",
-          "type": "u64"
-        },
-        {
-          "name": "min_raise_lamports",
-          "type": "u64"
-        },
-        {
-          "name": "per_wallet_cap",
-          "type": "u64"
-        },
-        {
-          "name": "tau_lamports",
-          "type": "u64"
-        },
-        {
-          "name": "sale_allocation",
-          "type": "u64"
-        },
-        {
-          "name": "lp_allocation",
-          "type": "u64"
-        },
-        {
-          "name": "funding_duration_seconds",
-          "type": "i64"
-        },
-        {
-          "name": "num_blocks",
-          "type": "u64"
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitLaunchParams"
+            }
+          }
         }
       ]
     },
@@ -1380,6 +1356,46 @@
           {
             "name": "local_j",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitLaunchParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hard_cap_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_raise_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "per_wallet_cap",
+            "type": "u64"
+          },
+          {
+            "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "sale_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "lp_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "funding_duration_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "num_blocks",
+            "type": "u64"
           }
         ]
       }
