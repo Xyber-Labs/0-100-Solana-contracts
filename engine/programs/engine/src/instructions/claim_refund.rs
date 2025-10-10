@@ -40,6 +40,10 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
                 .user
                 .to_account_info()
                 .try_borrow_mut_lamports()? += refund;
+            
+            // Update escrow balance
+            let escrow = &mut ctx.accounts.escrow;
+            escrow.balance = escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
         user.claimed_refund = true;
 
@@ -96,6 +100,10 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
             .user
             .to_account_info()
             .try_borrow_mut_lamports()? += refund;
+        
+        // Update escrow balance
+        let escrow = &mut ctx.accounts.escrow;
+        escrow.balance = escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     user.claimed_refund = true;
 
