@@ -1591,6 +1591,31 @@
       "code": 6040,
       "name": "InvalidOwner",
       "msg": "Invalid owner for ATA"
+    },
+    {
+      "code": 6041,
+      "name": "InvalidHardCap",
+      "msg": "Hard cap must be > 0"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidMinRaise",
+      "msg": "Min raise must be > 0"
+    },
+    {
+      "code": 6043,
+      "name": "HardCapNotDivisibleByTau",
+      "msg": "Hard cap must be divisible by tau"
+    },
+    {
+      "code": 6044,
+      "name": "PerWalletCapTooSmall",
+      "msg": "Per-wallet cap must be >= tau"
+    },
+    {
+      "code": 6045,
+      "name": "MinRaiseTooHigh",
+      "msg": "Min raise must be <= hard cap"
     }
   ],
   "types": [

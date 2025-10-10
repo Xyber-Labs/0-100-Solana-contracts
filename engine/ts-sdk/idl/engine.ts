@@ -1597,6 +1597,31 @@ export type Engine = {
       "code": 6040,
       "name": "invalidOwner",
       "msg": "Invalid owner for ATA"
+    },
+    {
+      "code": 6041,
+      "name": "invalidHardCap",
+      "msg": "Hard cap must be > 0"
+    },
+    {
+      "code": 6042,
+      "name": "invalidMinRaise",
+      "msg": "Min raise must be > 0"
+    },
+    {
+      "code": 6043,
+      "name": "hardCapNotDivisibleByTau",
+      "msg": "Hard cap must be divisible by tau"
+    },
+    {
+      "code": 6044,
+      "name": "perWalletCapTooSmall",
+      "msg": "Per-wallet cap must be >= tau"
+    },
+    {
+      "code": 6045,
+      "name": "minRaiseTooHigh",
+      "msg": "Min raise must be <= hard cap"
     }
   ],
   "types": [

@@ -84,4 +84,15 @@ pub enum ErrorCode {
     InvalidMint,
     #[msg("Invalid owner for ATA")]
     InvalidOwner,
+
+    #[msg("Hard cap must be > 0")]
+    InvalidHardCap,
+    #[msg("Min raise must be > 0")]
+    InvalidMinRaise,
+    #[msg("Hard cap must be divisible by tau")]
+    HardCapNotDivisibleByTau,
+    #[msg("Per-wallet cap must be >= tau")]
+    PerWalletCapTooSmall,
+    #[msg("Min raise must be <= hard cap")]
+    MinRaiseTooHigh,
 }

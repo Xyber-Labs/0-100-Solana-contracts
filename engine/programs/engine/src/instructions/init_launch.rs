@@ -76,7 +76,22 @@ pub struct InitLaunchParams {
 
 
 pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
+    require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
+    require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
+    require!(
+        params.hard_cap_lamports % params.tau_lamports == 0,
+        EngineErrorCode::HardCapNotDivisibleByTau
+    );
+    require!(
+        params.per_wallet_cap >= params.tau_lamports,
+        EngineErrorCode::PerWalletCapTooSmall
+    );
+    require!(
+        params.min_raise_lamports <= params.hard_cap_lamports,
+        EngineErrorCode::MinRaiseTooHigh
+    );
+
     // Max duration: 7 days
     require!(
         params.funding_duration_seconds > 0
