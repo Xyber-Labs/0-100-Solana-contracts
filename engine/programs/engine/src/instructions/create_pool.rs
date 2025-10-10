@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::PoolCreated;
-use crate::state::{LaunchState, PoolState, ProjectCounter};
+use crate::state::{LaunchState, PoolState};
 use crate::constants::SEED_ROOT;
 use crate::utils::pool;
 
@@ -22,9 +22,6 @@ pub struct CreatePool<'info> {
         bump
     )]
     pub pool_state: Account<'info, PoolState>,
-
-    #[account(mut)]
-    pub project_counter: Account<'info, ProjectCounter>,
 
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
@@ -98,14 +95,6 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
-    // Get pool ID from project counter
-    let counter = &mut ctx.accounts.project_counter;
-    let pool_id = counter
-        .last_pool_id
-        .checked_add(1)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    counter.last_pool_id = pool_id;
-
     // Calculate and store the project's range
     let (range_start, range_end) = pool::calculate_project_range(st.project_id, st.num_blocks);
     let mut range_start_bytes = [0u8; 32];
@@ -115,7 +104,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
 
     // Initialize pool state
     pool_state.launch = st.key();
-    pool_state.pool_id = pool_id;
+    pool_state.pool_id = st.project_id; // Use project_id as pool_id for 1-to-1 mapping
     pool_state.project_id = st.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
@@ -127,7 +116,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
 
     emit!(PoolCreated {
         launch: st.key(),
-        pool_id,
+        pool_id: st.project_id,
         project_id: st.project_id,
         blockhash: valid_hash,
         slot: valid_slot,

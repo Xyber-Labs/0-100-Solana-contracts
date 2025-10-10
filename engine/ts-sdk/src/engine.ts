@@ -408,7 +408,6 @@ export default {
     }): Promise<{ signature: string }> {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
       const [poolState] = getPoolPda(args.launch);
-      const [projectCounter] = getProjectCounterPda();
 
       // SlotHashes sysvar
       const SLOT_HASHES_SYSVAR = new PublicKey(
@@ -420,7 +419,6 @@ export default {
         payer: payerPubkey,
         launchState: args.launch,
         poolState,
-        projectCounter,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: SystemProgram.programId,
       });

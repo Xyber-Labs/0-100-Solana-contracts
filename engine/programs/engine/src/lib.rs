@@ -59,6 +59,11 @@ pub mod engine {
     // User (UI)
     // -------------------------------
 
+    /// Create AMM pool
+    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
+        create_pool::handler(ctx)
+    }
+
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         deposit::handler(ctx, amount)
@@ -77,12 +82,6 @@ pub mod engine {
     /// Claim tokens (post open_claims): mint tokens_per_ticket * y_i to user ATA.
     pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         claim_tokens::handler(ctx)
-    }
-
-    /// Create pool with blockhash verification
-    /// Checks if any of the last 10 blockhashes meets the probability threshold
-    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
-        create_pool::handler(ctx)
     }
 
     /// Claim creator tokens with daily limits

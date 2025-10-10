@@ -84,7 +84,8 @@ describe("engine litesvm", () => {
     assert.equal(state.lpAllocation.toNumber(), LP_ALLOCATION.toNumber());
     assert.equal(state.totalDeposited.toNumber(), 0);
     assert.equal(state.totalTickets, 0);
-    assert.equal(state.kCapacity, 0);
+    const expectedKCapacity = HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber();
+    assert.equal(state.kCapacity, expectedKCapacity);
     assert.isFalse(state.selectionFinalized);
     assert.equal(state.selectionProcessed, 0);
     assert.isNull(state.thresholdScore);

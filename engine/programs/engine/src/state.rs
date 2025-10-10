@@ -120,7 +120,6 @@ pub struct SelectionState {
 #[derive(InitSpace)]
 pub struct ProjectCounter {
     pub last_project_id: u64,
-    pub last_pool_id: u64,
 }
 
 #[account]

@@ -419,8 +419,7 @@ export type Engine = {
     {
       "name": "createPool",
       "docs": [
-        "Create pool with blockhash verification",
-        "Checks if any of the last 10 blockhashes meets the probability threshold"
+        "Create AMM pool"
       ],
       "discriminator": [
         233,
@@ -479,10 +478,6 @@ export type Engine = {
               }
             ]
           }
-        },
-        {
-          "name": "projectCounter",
-          "writable": true
         },
         {
           "name": "slotHashes",
@@ -1560,41 +1555,46 @@ export type Engine = {
     },
     {
       "code": 6032,
+      "name": "u64ConversionOverflow",
+      "msg": "u64 to u32 conversion overflow"
+    },
+    {
+      "code": 6033,
       "name": "creatorGrantMissing",
       "msg": "Creator grant missing"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "reservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "dailyCapReached",
       "msg": "Creator daily cap reached for today"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "invalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "creatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "invalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "invalidOwner",
       "msg": "Invalid owner for ATA"
     }
@@ -2178,10 +2178,6 @@ export type Engine = {
         "fields": [
           {
             "name": "lastProjectId",
-            "type": "u64"
-          },
-          {
-            "name": "lastPoolId",
             "type": "u64"
           }
         ]
