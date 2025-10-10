@@ -717,6 +717,22 @@ describe("engine litesvm", () => {
 
     console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedTokens} tokens`);
 
+    console.log("=== Testing Creator Deposit Fix ===");
+    // Verify that the creator deposit fix works by checking escrow balance
+    const escrowBalance = client.getBalance(sdk.getEscrowPda(testLaunchState)[0]);
+    console.log(`Main launch escrow balance: ${Number(escrowBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    
+    // The escrow should contain the creator's initial deposit (8 SOL) plus user deposits (20 SOL hard cap)
+    // Plus some lamports for account rent
+    const creatorDeposit = new anchor.BN(8).mul(new anchor.BN(anchor.web3.LAMPORTS_PER_SOL));
+    const userDeposits = testHardCap;
+    const expectedMinBalance = creatorDeposit.add(userDeposits);
+    
+    assert.isTrue(Number(escrowBalance) >= expectedMinBalance.toNumber());
+    console.log(`Escrow balance ${Number(escrowBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    
+    console.log("Creator deposit fix verified: escrow contains creator's initial deposit");
+
     console.log("=== Testing User Refund and Token Claiming ===");
     // Test regular user refund and token claiming
     const testUser = users[0];

@@ -140,17 +140,23 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     // save sale mint
     state.sale_mint = ctx.accounts.sale_mint.key();
 
-    // Initialize escrow account
-    let escrow = &mut ctx.accounts.escrow;
-    let funding_end = state.funding_period_end;
-    escrow.launch = launch_key;
-    escrow.balance = 0;
-
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
         require!(amount % state.tau_lamports == 0, EngineErrorCode::InvalidCreatorDeposit);
 
+        // Transfer creator deposit to escrow
+        **ctx.accounts.creator.to_account_info().try_borrow_mut_lamports()? -= amount;
+        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? += amount;
+    }
+
+    // Initialize escrow account
+    let escrow = &mut ctx.accounts.escrow;
+    let funding_end = state.funding_period_end;
+    escrow.launch = launch_key;
+    escrow.balance = amount;
+
+    if amount > 0 {
         // Calculate reserved tickets
         let reserved_tickets = (amount / state.tau_lamports) as u32;
 
