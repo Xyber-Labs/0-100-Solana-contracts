@@ -658,7 +658,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       // Request airdrop from faucet
       const signature = await connection.requestAirdrop(
         activePublicKey,
-        10 * 1e9 // 10 SOL in lamports
+        1000 * 1e9 // 10 SOL in lamports
       );
       
       addLog(`Airdrop signature: ${signature}`);
@@ -1011,7 +1011,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
                 disabled={(!publicKey && !testWallet) || isLoading}
               >
-                💧 Request 10 SOL
+                💧 Request 1000 SOL
               </button>
             </div>
             <label className="flex items-center space-x-2 text-xs">

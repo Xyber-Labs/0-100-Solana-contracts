@@ -126,8 +126,7 @@ export class TxBuilder {
       fromPubkey: params.creator,
       newAccountPubkey: params.saleMint.publicKey,
       space: 82,
-      lamports:
-        await params.provider.connection.getMinimumBalanceForRentExemption(82),
+      lamports: 2039280, // Fixed rent exemption for 82 bytes
       programId: TOKEN_PROGRAM_ID,
     });
 
@@ -388,10 +387,23 @@ export class TxBuilder {
     const instructions: TransactionInstruction[] = [];
 
     if (params.createAtaIfMissing) {
-      const ataInfo = await this.program.provider.connection.getAccountInfo(
-        userAta
-      );
-      if (!ataInfo) {
+      // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
+      try {
+        const ataInfo = await this.program.provider.connection.getAccountInfo(
+          userAta
+        );
+        if (!ataInfo) {
+          instructions.push(
+            createAssociatedTokenAccountInstruction(
+              params.payer,
+              userAta,
+              params.user,
+              params.saleMint
+            )
+          );
+        }
+      } catch (error) {
+        // If connection.getAccountInfo fails (e.g., in LiteSVM), always create ATA
         instructions.push(
           createAssociatedTokenAccountInstruction(
             params.payer,
@@ -483,10 +495,24 @@ export class TxBuilder {
     const transaction = new Transaction();
 
     if (params.createAtaIfMissing) {
-      const ataInfo = await this.program.provider.connection.getAccountInfo(
-        creatorAta
-      );
-      if (!ataInfo) {
+      // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
+      // TODO: Consider, should we really use ts-sdk in LiteSVM?!
+      try {
+        const ataInfo = await this.program.provider.connection.getAccountInfo(
+          creatorAta
+        );
+        if (!ataInfo) {
+          transaction.add(
+            createAssociatedTokenAccountInstruction(
+              params.payer,
+              creatorAta,
+              params.creator,
+              params.saleMint
+            )
+          );
+        }
+      } catch (error) {
+        // If connection.getAccountInfo fails (e.g., in LiteSVM), always create ATA
         transaction.add(
           createAssociatedTokenAccountInstruction(
             params.payer,
