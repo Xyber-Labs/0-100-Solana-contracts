@@ -164,6 +164,8 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         )?;
     }
 
+    state.total_deposited = amount;
+
     // Initialize escrow account
     let escrow = &mut ctx.accounts.escrow;
     let funding_end = state.funding_period_end;
