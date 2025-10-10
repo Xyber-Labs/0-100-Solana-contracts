@@ -14,7 +14,10 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(mut, seeds = [crate::SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]

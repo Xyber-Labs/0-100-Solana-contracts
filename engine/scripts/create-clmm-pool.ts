@@ -191,15 +191,88 @@ async function main() {
     const { provider, sdk } = initializeSdk();
     const project = await findProject(sdk, args.projectId);
 
-    const poolData = await createClmmPool(sdk, provider, project.launchPda, args.ammConfigIndex);
-    const liquiditySig = await addLiquidity(sdk, provider, project.launchPda, poolData);
+    console.log("\nCreating CLMM pool and adding liquidity in single transaction...");
+
+    const clusterUrl = provider.connection.rpcEndpoint;
+    const isDevnet = clusterUrl.includes("devnet");
+    const isMainnet = clusterUrl.includes("mainnet");
+
+    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+
+    let RAYDIUM_CLMM: anchor.web3.PublicKey;
+    let clusterName: string;
+
+    if (isMainnet) {
+      RAYDIUM_CLMM = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+      clusterName = "mainnet";
+    } else if (isDevnet) {
+      RAYDIUM_CLMM = new anchor.web3.PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+      clusterName = "devnet";
+    } else {
+      RAYDIUM_CLMM = new anchor.web3.PublicKey("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+      clusterName = "localnet";
+    }
+
+    console.log(`Using ${clusterName} Raydium CLMM: ${RAYDIUM_CLMM.toBase58()}`);
+
+    // Derive AMM config PDA
+    const indexBytes = Buffer.alloc(2);
+    indexBytes.writeUInt16BE(args.ammConfigIndex, 0);
+
+    const [ammConfig] = anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("amm_config"), indexBytes],
+      RAYDIUM_CLMM
+    );
+
+    console.log(`Using AMM Config (index ${args.ammConfigIndex}): ${ammConfig.toBase58()}`);
+
+    // Generate base mint
+    let baseMint: anchor.web3.Keypair;
+    do {
+      baseMint = anchor.web3.Keypair.generate();
+    } while (baseMint.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+
+    // Get create pool transaction
+    const createPoolResult = await sdk.createClmmPoolTx({
+      payer: provider.wallet.publicKey,
+      launch: project.launchPda,
+      quoteMint: WSOL_MINT,
+      baseMint: baseMint,
+      ammConfig: ammConfig,
+      clmmProgram: RAYDIUM_CLMM,
+      provider,
+    });
+
+    // Get add liquidity transaction
+    const addLiquidityResult = await sdk.addClmmLiquidityTx({
+      payer: provider.wallet.publicKey,
+      launch: project.launchPda,
+      quoteMint: WSOL_MINT,
+      baseMint: baseMint.publicKey,
+      baseTokenAta: createPoolResult.baseTokenAta,
+      ammConfig: ammConfig,
+      clmmProgram: RAYDIUM_CLMM,
+      provider,
+    });
+
+    // Combine both transactions into one
+    const combinedTx = new anchor.web3.Transaction();
+    combinedTx.add(...createPoolResult.transaction.instructions);
+    combinedTx.add(...addLiquidityResult.transaction.instructions);
+
+    const allSigners = [
+      (provider.wallet as any).payer,
+      ...createPoolResult.signers,
+      ...addLiquidityResult.signers
+    ];
+
+    const signature = await provider.sendAndConfirm(combinedTx, allSigners);
 
     console.log("\n=== CLMM Pool Creation Complete ===");
     console.log(`Launch: ${project.launchPda.toBase58()}`);
-    console.log(`Base Mint: ${poolData.baseMint.toBase58()}`);
-    console.log(`Quote Mint (WSOL): ${poolData.WSOL_MINT.toBase58()}`);
-    console.log(`Pool Created: ${poolData.poolSig}`);
-    console.log(`Liquidity Added: ${liquiditySig}`);
+    console.log(`Base Mint: ${baseMint.publicKey.toBase58()}`);
+    console.log(`Quote Mint (WSOL): ${WSOL_MINT.toBase58()}`);
+    console.log(`Transaction: ${signature}`);
   } catch (error) {
     console.error("\n❌ Transaction failed:");
     console.error(error);
