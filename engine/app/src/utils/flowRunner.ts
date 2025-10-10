@@ -21,6 +21,7 @@ interface LaunchConfig {
   numBlocks: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
+  creatorClaimLockPeriodSec: number;
 }
 
 // A simplified SDK type, as we don't have the full type in this context
@@ -50,7 +51,7 @@ export async function runFullFlow(
 
   // Override creator deposit for this specific test
   const LAMPORTS_PER_SOL = 1_000_000_000;
-  config.creatorInitialDepositLamports = 1 * LAMPORTS_PER_SOL;
+  config.creatorInitialDepositLamports = 8 * LAMPORTS_PER_SOL;
   
   addLog(`\n--- Using Simulation Parameters ---`);
   addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
@@ -171,6 +172,7 @@ export async function runFullFlow(
         numBlocks: new BN(config.numBlocks),
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
+        creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       })
       .accountsStrict({
         creator: admin.publicKey,
@@ -410,46 +412,83 @@ export async function runFullFlow(
     // 10. Test Creator Token Claiming (if creator deposit was made)
     if (config.creatorInitialDepositLamports > 0) {
       addLog(`\n[10/10] Testing Creator Token Claiming...`);
-      try {
-        // Use the same admin wallet as the creator (since that's who initialized the launch)
-        // Don't pass creatorKeypair - let the SDK use the provider's wallet (payer)
+      addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
+      addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds`);
+      addLog(`   -> Claiming all available tickets with 1-second intervals...`);
+
+      const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
+      
+      let creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+      const totalReservedTickets = creatorGrantState.reservedTickets;
+      addLog(`   -> Total reserved tickets to claim: ${totalReservedTickets}`);
+
+      let successCount = 0;
+      let failureCount = 0;
+      let attempt = 0;
+
+      while (creatorGrantState.claimedTickets < totalReservedTickets) {
+        attempt++;
+        // Wait ~0.33 seconds before each attempt
+        await new Promise(resolve => setTimeout(resolve, 333));
+        addLog(`\n   --- Attempt ${attempt} (Claimed: ${creatorGrantState.claimedTickets}/${totalReservedTickets}) ---`);
         
-        // Create creator ATA for the sale mint
-        const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
-        const initialCreatorTokenBalance = await getTokenBalance(creatorAta);
-        
-        // Claim creator tokens (should respect daily limits)
-        if (typeof sdk.claimCreatorTokens === 'function') {
+        try {
           await sdk.claimCreatorTokens({
             launch: testLaunchState,
             saleMint: testSaleMint.publicKey,
             creatorAta: creatorAta,
-            // Don't pass creatorKeypair - SDK will use provider's wallet
             createAtaIfMissing: true,
           });
-        } else {
-          throw new Error(`claimCreatorTokens method not found on SDK`);
+          addLog(`   -> ✅ SUCCESS: Claim successful!`);
+          successCount++;
+        } catch (error: any) {
+          if (error.message.includes("DailyCapReached")) {
+            addLog(`   -> ❌ FAILURE (EXPECTED): Claim failed due to time lock. Error: DailyCapReached`);
+            failureCount++;
+          } else {
+            addLog(`   -> ❌ FAILURE (UNEXPECTED): Claim failed with an unexpected error: ${error.message}`);
+            throw error;
+          }
         }
-        
-        addLog("   -> Creator tokens claimed successfully!");
-        const finalCreatorTokenBalance = await getTokenBalance(creatorAta);
-        const tokensClaimed = finalCreatorTokenBalance - initialCreatorTokenBalance;
-        addLog(`   -> Creator ATA: ${creatorAta.toBase58()}`);
-        addLog(`   -> Tokens claimed in this transaction: ${tokensClaimed.toFixed(6)}`);
-        
-        // Check creator grant state
-        if (typeof sdk.fetchCreatorGrant === 'function') {
-          const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
-          addLog(`   -> Reserved tickets: ${creatorGrantState.reservedTickets}`);
-          addLog(`   -> Claimed tickets: ${creatorGrantState.claimedTickets}`);
-          addLog(`   -> Daily ticket cap: ${creatorGrantState.dailyTicketCap}`);
-        } else {
-          addLog(`   -> fetchCreatorGrant method not found on SDK`);
-        }
-        
+        // Refresh state for the loop condition
+        creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+      }
+
+      addLog(`\n--- All tickets claimed. Verifying no more tokens can be claimed... ---`);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 333)); // wait a bit
+        await sdk.claimCreatorTokens({
+          launch: testLaunchState,
+          saleMint: testSaleMint.publicKey,
+          creatorAta: creatorAta,
+        });
+        // If this succeeds, it's an error
+        addLog(`   -> ❌ VERIFICATION FAILED: Claim succeeded when it should have failed (no tickets left).`);
       } catch (error: any) {
-        addLog(`   -> Creator token claiming failed: ${error.message}`);
-        // Don't fail the entire flow for this
+        if (error.message.includes("DailyCapReached")) {
+          addLog(`   -> ✅ VERIFICATION PASSED: Final claim failed as expected because no tickets remain.`);
+        } else {
+          addLog(`   -> ❌ VERIFICATION FAILED: Final claim failed with an unexpected error: ${error.message}`);
+        }
+      }
+
+      addLog(`\n--- Claiming Test Summary ---`);
+      addLog(`   -> Total Attempts to clear tickets: ${attempt}`);
+      addLog(`   -> Successful Claims: ${successCount}`);
+      addLog(`   -> Failed Claims (Expected): ${failureCount}`);
+      
+      const finalCreatorTokenBalance = await getTokenBalance(creatorAta);
+      const finalGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+      
+      addLog(`\n--- Final State ---`);
+      addLog(`   -> Creator ATA final balance: ${finalCreatorTokenBalance.toFixed(6)}`);
+      addLog(`   -> Reserved tickets: ${finalGrantState.reservedTickets}`);
+      addLog(`   -> Claimed tickets: ${finalGrantState.claimedTickets}`);
+
+      if (finalGrantState.claimedTickets === totalReservedTickets) {
+        addLog(`   -> ✅ VERIFICATION PASSED: All reserved tickets have been claimed.`);
+      } else {
+        addLog(`   -> ❌ VERIFICATION FAILED: Not all tickets were claimed.`);
       }
     }
 

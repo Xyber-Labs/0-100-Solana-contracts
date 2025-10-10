@@ -137,6 +137,7 @@ export default {
       numBlocks?: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
+      creatorClaimLockPeriodSec: BN;
       // In tests you can pass preInstructions to create/init mint
       preInstructions?: TransactionInstruction[];
       signers?: Keypair[]; // if payer != provider.wallet
@@ -161,6 +162,7 @@ export default {
           numBlocks: args.numBlocks ?? 0,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
+          creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,
         }
       );
 

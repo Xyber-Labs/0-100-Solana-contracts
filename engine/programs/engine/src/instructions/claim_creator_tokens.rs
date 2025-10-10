@@ -47,16 +47,16 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     // Day calculation: count days from claims opening
     let now = Clock::get()?.unix_timestamp;
     let start = st.claims_opened_at.unwrap_or(now);
-    let day = (now - start).div_euclid(86_400);
+    let period = (now - start).div_euclid(st.creator_claim_lock_period_sec);
 
-    if cg.last_claim_day != day {
-        cg.last_claim_day = day;
-        cg.claimed_today_tickets = 0;
+    if cg.last_claim_period != period {
+        cg.last_claim_period = period;
+        cg.claimed_in_period_tickets = 0;
     }
 
     let remaining = cg.reserved_tickets.saturating_sub(cg.claimed_tickets);
-    let daily_left = cg.daily_ticket_cap.saturating_sub(cg.claimed_today_tickets);
-    let to_claim = remaining.min(daily_left);
+    let left_in_period = cg.daily_ticket_cap.saturating_sub(cg.claimed_in_period_tickets);
+    let to_claim = remaining.min(left_in_period);
     require!(to_claim > 0, EngineErrorCode::DailyCapReached);
 
     let amount = per.checked_mul(to_claim as u64).ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -82,7 +82,7 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     token::mint_to(cpi_ctx, amount)?;
 
     cg.claimed_tickets = cg.claimed_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    cg.claimed_today_tickets = cg.claimed_today_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    cg.claimed_in_period_tickets = cg.claimed_in_period_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(CreatorClaimed {
         launch: st.key(),
@@ -90,7 +90,7 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         tickets_claimed: to_claim,
         lamports_equiv: (to_claim as u64).checked_mul(st.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
-        day_index: day,
+        day_index: period,
         remaining_tickets: cg.reserved_tickets - cg.claimed_tickets,
     });
 

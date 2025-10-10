@@ -1622,6 +1622,11 @@ export type Engine = {
       "code": 6045,
       "name": "minRaiseTooHigh",
       "msg": "Min raise must be <= hard cap"
+    },
+    {
+      "code": 6046,
+      "name": "invalidClaimLockPeriod",
+      "msg": "Creator claim lock period must be > 0"
     }
   ],
   "types": [
@@ -1735,11 +1740,11 @@ export type Engine = {
             "type": "u32"
           },
           {
-            "name": "lastClaimDay",
+            "name": "lastClaimPeriod",
             "type": "i64"
           },
           {
-            "name": "claimedTodayTickets",
+            "name": "claimedInPeriodTickets",
             "type": "u32"
           },
           {
@@ -1909,6 +1914,10 @@ export type Engine = {
           {
             "name": "creatorDailyLamportsLimit",
             "type": "u64"
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
           }
         ]
       }
@@ -2070,6 +2079,10 @@ export type Engine = {
             "type": {
               "option": "i64"
             }
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
           }
         ]
       }

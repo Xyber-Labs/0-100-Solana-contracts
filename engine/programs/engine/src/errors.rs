@@ -95,4 +95,6 @@ pub enum ErrorCode {
     PerWalletCapTooSmall,
     #[msg("Min raise must be <= hard cap")]
     MinRaiseTooHigh,
+    #[msg("Creator claim lock period must be > 0")]
+    InvalidClaimLockPeriod,
 }

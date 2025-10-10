@@ -1616,6 +1616,11 @@
       "code": 6045,
       "name": "MinRaiseTooHigh",
       "msg": "Min raise must be <= hard cap"
+    },
+    {
+      "code": 6046,
+      "name": "InvalidClaimLockPeriod",
+      "msg": "Creator claim lock period must be > 0"
     }
   ],
   "types": [
@@ -1729,11 +1734,11 @@
             "type": "u32"
           },
           {
-            "name": "last_claim_day",
+            "name": "last_claim_period",
             "type": "i64"
           },
           {
-            "name": "claimed_today_tickets",
+            "name": "claimed_in_period_tickets",
             "type": "u32"
           },
           {
@@ -1903,6 +1908,10 @@
           {
             "name": "creator_daily_lamports_limit",
             "type": "u64"
+          },
+          {
+            "name": "creator_claim_lock_period_sec",
+            "type": "i64"
           }
         ]
       }
@@ -2064,6 +2073,10 @@
             "type": {
               "option": "i64"
             }
+          },
+          {
+            "name": "creator_claim_lock_period_sec",
+            "type": "i64"
           }
         ]
       }

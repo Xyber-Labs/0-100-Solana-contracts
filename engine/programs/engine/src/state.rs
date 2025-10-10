@@ -45,6 +45,7 @@ pub struct LaunchState {
     pub creator_reserved_tickets: u32,
     pub creator_grant_present: bool,
     pub claims_opened_at: Option<i64>,
+    pub creator_claim_lock_period_sec: i64,
 }
 
 impl LaunchState {
@@ -157,8 +158,8 @@ pub struct CreatorGrant {
     pub claimed_tickets: u32,
 
     // Timeslot for "claim day" (day index from claims start)
-    pub last_claim_day: i64,
-    pub claimed_today_tickets: u32,
+    pub last_claim_period: i64,
+    pub claimed_in_period_tickets: u32,
 
     pub refunded: bool,
 }

@@ -18,6 +18,7 @@ interface LaunchConfig {
   numBlocks: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
+  creatorClaimLockPeriodSec: number;
 }
 
 // Error boundary component
@@ -139,6 +140,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     numBlocks: 1024, // ~1 minute window
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
+    creatorClaimLockPeriodSec: 2, // 2 seconds for testing
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -360,6 +362,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           numBlocks: new BN(launchConfig.numBlocks),
           creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
           creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
+          creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
         })
         .accountsStrict({
           creator: (testWallet?.publicKey || publicKey)!,
@@ -1124,6 +1127,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorDailyLamportsLimit: parseFloat(e.target.value) * 1e9 }))}
                 className="terminal-input w-full"
                 step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Claim Lock (s)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorClaimLockPeriodSec}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorClaimLockPeriodSec: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
               />
             </div>
           </div>

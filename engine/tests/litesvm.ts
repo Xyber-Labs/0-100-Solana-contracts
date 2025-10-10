@@ -53,6 +53,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
     });
 
@@ -114,6 +117,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
     });
 
@@ -141,6 +147,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
     });
 
@@ -199,6 +208,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
     });
 
@@ -279,6 +291,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -308,6 +323,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -337,6 +355,9 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
@@ -507,6 +528,7 @@ describe("engine litesvm", () => {
         numBlocks: new anchor.BN(1000),
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
+        creatorClaimLockPeriodSec: new anchor.BN(2),
       })
       .accountsStrict({
         creator: admin.publicKey,
@@ -539,8 +561,8 @@ describe("engine litesvm", () => {
       assert.equal(creatorGrantState.dailyLamportsLimit.toNumber(), dailyLimit.toNumber());
       assert.equal(creatorGrantState.dailyTicketCap, dailyLimit.toNumber() / TAU_LAMPORTS.toNumber());
       assert.equal(creatorGrantState.claimedTickets, 0);
-      assert.equal(creatorGrantState.lastClaimDay, -1);
-      assert.equal(creatorGrantState.claimedTodayTickets, 0);
+      assert.equal(creatorGrantState.lastClaimPeriod, -1);
+      assert.equal(creatorGrantState.claimedInPeriodTickets, 0);
       assert.isFalse(creatorGrantState.refunded);
       assert.ok(creatorGrantState.creator.equals(admin.publicKey));
       assert.ok(creatorGrantState.launch.equals(testLaunchState));
@@ -582,6 +604,7 @@ describe("engine litesvm", () => {
       numBlocks: 1000,
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       creator: adminKeypair,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
@@ -734,8 +757,8 @@ describe("engine litesvm", () => {
     const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
     const expectedFirstDayTickets = dailyLimit.toNumber() / testTau.toNumber();
     assert.equal(creatorGrantAfterClaim.claimedTickets, expectedFirstDayTickets);
-    assert.equal(creatorGrantAfterClaim.claimedTodayTickets, expectedFirstDayTickets);
-    assert.equal(creatorGrantAfterClaim.lastClaimDay, 0);
+    assert.equal(creatorGrantAfterClaim.claimedInPeriodTickets, expectedFirstDayTickets);
+    assert.equal(creatorGrantAfterClaim.lastClaimPeriod, 0);
 
     // Verify creator token balance
     const tokenAccountInfo = client.getAccount(creatorAta);
@@ -848,20 +871,20 @@ describe("engine litesvm", () => {
     console.log(`  - Reserved tickets: ${finalCreatorGrant.reservedTickets}`);
     console.log(`  - Claimed tickets: ${finalCreatorGrant.claimedTickets}`);
     console.log(`  - Daily ticket cap: ${finalCreatorGrant.dailyTicketCap}`);
-    console.log(`  - Last claim day: ${finalCreatorGrant.lastClaimDay}`);
-    console.log(`  - Claimed today tickets: ${finalCreatorGrant.claimedTodayTickets}`);
+    console.log(`  - Last claim period: ${finalCreatorGrant.lastClaimPeriod}`);
+    console.log(`  - Claimed in period tickets: ${finalCreatorGrant.claimedInPeriodTickets}`);
     console.log(`  - Refunded: ${finalCreatorGrant.refunded}`);
     
     // Verify that creator can claim more tokens on subsequent days
     // (This would require time advancement in a real scenario)
     if (creatorDepositAmount.toNumber() > 0) {
       assert.equal(finalCreatorGrant.claimedTickets, 2); // Only claimed first day's limit
-      assert.equal(finalCreatorGrant.claimedTodayTickets, 2);
-      assert.equal(finalCreatorGrant.lastClaimDay.toNumber(), 0);
+      assert.equal(finalCreatorGrant.claimedInPeriodTickets, 2);
+      assert.equal(finalCreatorGrant.lastClaimPeriod.toNumber(), 0);
     } else {
       assert.equal(finalCreatorGrant.claimedTickets, 0); // No tokens claimed without deposit
-      assert.equal(finalCreatorGrant.claimedTodayTickets, 0);
-      assert.equal(finalCreatorGrant.lastClaimDay.toNumber(), -1);
+      assert.equal(finalCreatorGrant.claimedInPeriodTickets, 0);
+      assert.equal(finalCreatorGrant.lastClaimPeriod.toNumber(), -1);
     }
     assert.isFalse(finalCreatorGrant.refunded);
 

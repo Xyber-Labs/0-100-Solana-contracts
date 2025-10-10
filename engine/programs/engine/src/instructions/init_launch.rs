@@ -72,6 +72,7 @@ pub struct InitLaunchParams {
     // Creator grant parameters
     pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
     pub creator_daily_lamports_limit: u64,     // usually 1 * LAMPORTS_PER_SOL
+    pub creator_claim_lock_period_sec: i64,
 }
 
 
@@ -91,6 +92,7 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         params.min_raise_lamports <= params.hard_cap_lamports,
         EngineErrorCode::MinRaiseTooHigh
     );
+    require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
 
     // Max duration: 7 days
     require!(
@@ -154,6 +156,7 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.creator_reserved_tickets = 0;
     state.creator_grant_present = false;
     state.claims_opened_at = None;
+    state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
 
     // save sale mint
     state.sale_mint = ctx.accounts.sale_mint.key();
@@ -213,8 +216,8 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
     cg.daily_ticket_cap = daily_ticket_cap_u64 as u32;
     cg.claimed_tickets = 0;
-    cg.last_claim_day = -1;
-    cg.claimed_today_tickets = 0;
+    cg.last_claim_period = -1;
+    cg.claimed_in_period_tickets = 0;
     cg.refunded = false;
 
     if amount > 0 {

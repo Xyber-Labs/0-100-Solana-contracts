@@ -58,6 +58,7 @@ export class TxBuilder {
     numBlocks: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
+    creatorClaimLockPeriodSec: BN;
   }): Promise<{
     instruction: TransactionInstruction;
     launchState: PublicKey;
@@ -82,6 +83,7 @@ export class TxBuilder {
         numBlocks: new BN(params.numBlocks),
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
+        creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       })
       .accountsStrict({
         creator: params.creator,
@@ -114,6 +116,7 @@ export class TxBuilder {
     lpAllocation: BN;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
+    creatorClaimLockPeriodSec: BN;
     provider: any;
   }): Promise<{
     transaction: Transaction;
@@ -155,6 +158,7 @@ export class TxBuilder {
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
+      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
     });
 
     const transaction = new Transaction()
