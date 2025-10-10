@@ -123,7 +123,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     saleAllocation: 1000000,
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
-    numBlocks: 150, // ~1 minute window
+    numBlocks: 1024, // ~1 minute window
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
   };

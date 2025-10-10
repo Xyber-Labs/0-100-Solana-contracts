@@ -48,7 +48,11 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
 
     // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
     // We take the most recent one.
-    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    let num_hashes = u64::from_le_bytes(
+        data[0..8]
+            .try_into()
+            .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
+    );
     require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
 
     let num_hashes_u64 = num_hashes;
@@ -74,7 +78,9 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
         .checked_add(32)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
 
-    let seed: [u8; 32] = data[start..end].try_into().unwrap();
+    let seed: [u8; 32] = data[start..end]
+        .try_into()
+        .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
 
     // Initialize SelectionState
     let sel = &mut ctx.accounts.selection_state;

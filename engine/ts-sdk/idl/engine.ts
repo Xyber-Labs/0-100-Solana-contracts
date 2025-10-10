@@ -1540,36 +1540,41 @@ export type Engine = {
     },
     {
       "code": 6028,
+      "name": "invalidSlotHashesData",
+      "msg": "Invalid slot hashes data"
+    },
+    {
+      "code": 6029,
       "name": "arithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "creatorGrantMissing",
       "msg": "Creator grant missing"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "reservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "dailyCapReached",
       "msg": "Creator daily cap reached for today"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "invalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "creatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     }

@@ -1534,36 +1534,41 @@
     },
     {
       "code": 6028,
+      "name": "InvalidSlotHashesData",
+      "msg": "Invalid slot hashes data"
+    },
+    {
+      "code": 6029,
       "name": "ArithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "CreatorGrantMissing",
       "msg": "Creator grant missing"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "ReservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "DailyCapReached",
       "msg": "Creator daily cap reached for today"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "InvalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "CreatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     }
