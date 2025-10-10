@@ -2,7 +2,7 @@ use crate::errors::ErrorCode;
 use crate::state::Roster;
 use anchor_lang::prelude::*;
 
-const MAX_ROSTER_SIZE: usize = 100;
+const MAX_ROSTER_SIZE: usize = 3000;
 
 /// Append or increment user's count; realloc roster if needed (MVP simplistic).
 pub fn roster_add_or_incr(
