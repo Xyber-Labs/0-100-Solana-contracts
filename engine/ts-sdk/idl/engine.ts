@@ -1740,14 +1740,6 @@ export type Engine = {
             "type": "u32"
           },
           {
-            "name": "lastClaimPeriod",
-            "type": "i64"
-          },
-          {
-            "name": "claimedInPeriodTickets",
-            "type": "u32"
-          },
-          {
             "name": "refunded",
             "type": "bool"
           }

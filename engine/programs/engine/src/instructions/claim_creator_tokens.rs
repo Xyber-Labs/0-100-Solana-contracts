@@ -44,20 +44,27 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let per = st.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let cg = &mut ctx.accounts.creator_grant;
 
-    // Day calculation: count days from claims opening
+    // Calculate how many tokens have vested/accrued over time.
     let now = Clock::get()?.unix_timestamp;
     let start = st.claims_opened_at.unwrap_or(now);
-    let period = (now - start).div_euclid(st.creator_claim_lock_period_sec);
 
-    if cg.last_claim_period != period {
-        cg.last_claim_period = period;
-        cg.claimed_in_period_tickets = 0;
-    }
+    // How many full periods have passed since claiming opened.
+    let periods_passed = (now - start).div_euclid(st.creator_claim_lock_period_sec);
 
-    let remaining = cg.reserved_tickets.saturating_sub(cg.claimed_tickets);
-    let left_in_period = cg.daily_ticket_cap.saturating_sub(cg.claimed_in_period_tickets);
-    let to_claim = remaining.min(left_in_period);
-    require!(to_claim > 0, EngineErrorCode::DailyCapReached);
+    // Calculate the ceiling of claimable tickets based on periods passed.
+    // We add 1 to include the current, partially-elapsed period.
+    let unlocked_ceiling = (periods_passed as u32)
+        .saturating_add(1)
+        .saturating_mul(cg.daily_ticket_cap);
+
+    // The total unlocked amount cannot exceed the total reserved tickets.
+    let total_unlocked = unlocked_ceiling.min(cg.reserved_tickets);
+
+    // The amount to claim now is the difference between what's unlocked and what's already been claimed.
+    let to_claim = total_unlocked.saturating_sub(cg.claimed_tickets);
+    
+    // If there's nothing to claim, exit.
+    require!(to_claim > 0, EngineErrorCode::NothingToClaim);
 
     let amount = per.checked_mul(to_claim as u64).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
@@ -82,7 +89,6 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     token::mint_to(cpi_ctx, amount)?;
 
     cg.claimed_tickets = cg.claimed_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    cg.claimed_in_period_tickets = cg.claimed_in_period_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(CreatorClaimed {
         launch: st.key(),
@@ -90,7 +96,7 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         tickets_claimed: to_claim,
         lamports_equiv: (to_claim as u64).checked_mul(st.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
-        day_index: period,
+        day_index: periods_passed, // Using periods_passed for logging
         remaining_tickets: cg.reserved_tickets - cg.claimed_tickets,
     });
 

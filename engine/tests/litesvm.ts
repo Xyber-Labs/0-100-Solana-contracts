@@ -561,8 +561,6 @@ describe("engine litesvm", () => {
       assert.equal(creatorGrantState.dailyLamportsLimit.toNumber(), dailyLimit.toNumber());
       assert.equal(creatorGrantState.dailyTicketCap, dailyLimit.toNumber() / TAU_LAMPORTS.toNumber());
       assert.equal(creatorGrantState.claimedTickets, 0);
-      assert.equal(creatorGrantState.lastClaimPeriod, -1);
-      assert.equal(creatorGrantState.claimedInPeriodTickets, 0);
       assert.isFalse(creatorGrantState.refunded);
       assert.ok(creatorGrantState.creator.equals(admin.publicKey));
       assert.ok(creatorGrantState.launch.equals(testLaunchState));
@@ -757,8 +755,6 @@ describe("engine litesvm", () => {
     const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
     const expectedFirstDayTickets = dailyLimit.toNumber() / testTau.toNumber();
     assert.equal(creatorGrantAfterClaim.claimedTickets, expectedFirstDayTickets);
-    assert.equal(creatorGrantAfterClaim.claimedInPeriodTickets, expectedFirstDayTickets);
-    assert.equal(creatorGrantAfterClaim.lastClaimPeriod, 0);
 
     // Verify creator token balance
     const tokenAccountInfo = client.getAccount(creatorAta);
@@ -871,20 +867,14 @@ describe("engine litesvm", () => {
     console.log(`  - Reserved tickets: ${finalCreatorGrant.reservedTickets}`);
     console.log(`  - Claimed tickets: ${finalCreatorGrant.claimedTickets}`);
     console.log(`  - Daily ticket cap: ${finalCreatorGrant.dailyTicketCap}`);
-    console.log(`  - Last claim period: ${finalCreatorGrant.lastClaimPeriod}`);
-    console.log(`  - Claimed in period tickets: ${finalCreatorGrant.claimedInPeriodTickets}`);
     console.log(`  - Refunded: ${finalCreatorGrant.refunded}`);
     
     // Verify that creator can claim more tokens on subsequent days
     // (This would require time advancement in a real scenario)
     if (creatorDepositAmount.toNumber() > 0) {
       assert.equal(finalCreatorGrant.claimedTickets, 2); // Only claimed first day's limit
-      assert.equal(finalCreatorGrant.claimedInPeriodTickets, 2);
-      assert.equal(finalCreatorGrant.lastClaimPeriod.toNumber(), 0);
     } else {
       assert.equal(finalCreatorGrant.claimedTickets, 0); // No tokens claimed without deposit
-      assert.equal(finalCreatorGrant.claimedInPeriodTickets, 0);
-      assert.equal(finalCreatorGrant.lastClaimPeriod.toNumber(), -1);
     }
     assert.isFalse(finalCreatorGrant.refunded);
 

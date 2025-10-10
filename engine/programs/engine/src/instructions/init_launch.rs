@@ -216,8 +216,6 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
     cg.daily_ticket_cap = daily_ticket_cap_u64 as u32;
     cg.claimed_tickets = 0;
-    cg.last_claim_period = -1;
-    cg.claimed_in_period_tickets = 0;
     cg.refunded = false;
 
     if amount > 0 {

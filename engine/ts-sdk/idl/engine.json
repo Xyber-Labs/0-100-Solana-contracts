@@ -1734,14 +1734,6 @@
             "type": "u32"
           },
           {
-            "name": "last_claim_period",
-            "type": "i64"
-          },
-          {
-            "name": "claimed_in_period_tickets",
-            "type": "u32"
-          },
-          {
             "name": "refunded",
             "type": "bool"
           }

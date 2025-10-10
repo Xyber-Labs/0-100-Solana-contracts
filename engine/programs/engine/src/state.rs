@@ -157,9 +157,5 @@ pub struct CreatorGrant {
     // How many "tickets" they have already claimed
     pub claimed_tickets: u32,
 
-    // Timeslot for "claim day" (day index from claims start)
-    pub last_claim_period: i64,
-    pub claimed_in_period_tickets: u32,
-
     pub refunded: bool,
 }
