@@ -13,7 +13,12 @@ pub struct ClaimRefund<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"selection", launch_state.key().as_ref()],
+        bump,
+        constraint = selection_state.launch == launch_state.key(),
+    )]
     pub selection_state: Account<'info, SelectionState>,
     /// CHECK:
     #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
