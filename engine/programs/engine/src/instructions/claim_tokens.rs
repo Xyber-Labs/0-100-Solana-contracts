@@ -24,7 +24,11 @@ pub struct ClaimTokens<'info> {
     #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
     pub mint_auth: UncheckedAccount<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = user_ata.mint == sale_mint.key() @ EngineErrorCode::InvalidMint,
+        constraint = user_ata.owner == user.key() @ EngineErrorCode::InvalidOwner,
+    )]
     pub user_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }

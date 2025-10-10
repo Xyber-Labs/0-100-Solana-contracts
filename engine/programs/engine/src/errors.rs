@@ -78,4 +78,8 @@ pub enum ErrorCode {
     InvalidCreatorDeposit,
     #[msg("Creator refund already claimed")]
     CreatorRefundAlreadyClaimed,
+    #[msg("Invalid mint for ATA")]
+    InvalidMint,
+    #[msg("Invalid owner for ATA")]
+    InvalidOwner,
 }

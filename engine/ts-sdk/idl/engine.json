@@ -1581,6 +1581,16 @@
       "code": 6037,
       "name": "CreatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidMint",
+      "msg": "Invalid mint for ATA"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidOwner",
+      "msg": "Invalid owner for ATA"
     }
   ],
   "types": [

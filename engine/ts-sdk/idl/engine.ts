@@ -1587,6 +1587,16 @@ export type Engine = {
       "code": 6037,
       "name": "creatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
+    },
+    {
+      "code": 6038,
+      "name": "invalidMint",
+      "msg": "Invalid mint for ATA"
+    },
+    {
+      "code": 6039,
+      "name": "invalidOwner",
+      "msg": "Invalid owner for ATA"
     }
   ],
   "types": [
