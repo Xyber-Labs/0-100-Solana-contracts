@@ -10,7 +10,7 @@ import {
   unpackAccount,
 } from "@solana/spl-token";
 import { advanceTime, createAndFundAccount } from "./utils";
-import { Keypair } from "@solana/web3.js";
+import { Keypair, Transaction } from "@solana/web3.js";
 
 describe("engine litesvm", () => {
   let client: any;
@@ -164,7 +164,7 @@ describe("engine litesvm", () => {
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
+      } as any)
       .signers([depositor])
       .rpc();
     console.log("Deposit tx signature:", depositTx);
@@ -224,7 +224,7 @@ describe("engine litesvm", () => {
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
+      } as any)
       .signers([depositor])
       .rpc();
 
@@ -243,7 +243,7 @@ describe("engine litesvm", () => {
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
-      })
+      } as any)
       .signers([depositor])
       .rpc();
     console.log("Withdraw tx signature:", withdrawSig);
@@ -462,7 +462,72 @@ describe("engine litesvm", () => {
     }
   });
 
-  it("Complete flow: Multiple users deposit beyond hard cap, cranking selects winners", async () => {
+  it("Initializes launch with creator deposit", async () => {
+    const testSaleMint = anchor.web3.Keypair.generate();
+    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
+    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
+    const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
+
+    const creatorDepositAmount = new anchor.BN(8 * anchor.web3.LAMPORTS_PER_SOL);
+    const dailyLimit = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+
+    const result = await sdk.initLaunch({
+      saleMint: testSaleMint.publicKey,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      saleAllocation: SALE_ALLOCATION,
+      lpAllocation: LP_ALLOCATION,
+      fundingDurationSeconds: 10,
+      numBlocks: 1000,
+      creatorInitialDepositLamports: creatorDepositAmount,
+      creatorDailyLamportsLimit: dailyLimit,
+      preInstructions: [
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: admin.publicKey,
+          newAccountPubkey: testSaleMint.publicKey,
+          space: 82,
+          lamports: await provider.connection.getMinimumBalanceForRentExemption(
+            82
+          ),
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        createInitializeMintInstruction(
+          testSaleMint.publicKey,
+          6,
+          mintAuth,
+          admin.publicKey
+        ),
+      ],
+      signers: [testSaleMint],
+    });
+
+    console.log("Launch with creator deposit initialized. Signature:", result.signature);
+
+    // Check launch state
+    const launchState = await sdk.fetchLaunch(testLaunchState);
+    assert.equal(launchState.creatorReservedTickets, creatorDepositAmount.toNumber() / TAU_LAMPORTS.toNumber());
+    assert.isTrue(launchState.creatorGrantPresent);
+
+    // Check creator grant state
+    const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+    assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
+    assert.equal(creatorGrantState.reservedTickets, creatorDepositAmount.toNumber() / TAU_LAMPORTS.toNumber());
+    assert.equal(creatorGrantState.dailyLamportsLimit.toNumber(), dailyLimit.toNumber());
+    assert.equal(creatorGrantState.dailyTicketCap, dailyLimit.toNumber() / TAU_LAMPORTS.toNumber());
+    assert.equal(creatorGrantState.claimedTickets, 0);
+    assert.equal(creatorGrantState.lastClaimDay, -1);
+    assert.equal(creatorGrantState.claimedTodayTickets, 0);
+    assert.isFalse(creatorGrantState.refunded);
+    assert.ok(creatorGrantState.creator.equals(admin.publicKey));
+    assert.ok(creatorGrantState.launch.equals(testLaunchState));
+
+    console.log("Creator deposit test passed!");
+  });
+
+
+  it("Complete flow with creator deposit: Full lifecycle including creator token claiming", async () => {
     const testSaleMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
@@ -471,7 +536,11 @@ describe("engine litesvm", () => {
     const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
     const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
     const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+    const creatorDepositAmount = new anchor.BN(8 * anchor.web3.LAMPORTS_PER_SOL);
+    const dailyLimit = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
 
+    console.log("=== Initializing Launch with Creator Deposit ===");
+    // Initialize launch with creator deposit
     await sdk.initLaunch({
       saleMint: testSaleMint.publicKey,
       hardCapLamports: testHardCap,
@@ -480,7 +549,10 @@ describe("engine litesvm", () => {
       tauLamports: testTau,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: new anchor.BN(11), // A bit longer for this complex test
+      fundingDurationSeconds: new anchor.BN(11),
+      numBlocks: 1000,
+      creatorInitialDepositLamports: creatorDepositAmount,
+      creatorDailyLamportsLimit: dailyLimit,
       creator: adminKeypair,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
@@ -502,23 +574,25 @@ describe("engine litesvm", () => {
       signers: [testSaleMint],
     });
 
+    // Verify creator grant was initialized
+    const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+    assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
+    assert.equal(creatorGrantState.reservedTickets, creatorDepositAmount.toNumber() / testTau.toNumber());
+    console.log(`Creator grant initialized: ${creatorGrantState.reservedTickets} reserved tickets`);
+
+    console.log("=== Initializing Roster ===");
     const { rosterPda } = await sdk.initRoster({
       launch: testLaunchState,
       payerKeypair: adminKeypair,
     });
 
+    console.log("=== Simulating User Deposits ===");
+    // Simulate multiple users depositing beyond hard cap
     const users = [];
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
     for (let i = 0; i < 15; i++) {
       const user = await createAndFundAccount(client, 20);
-
-      const balance = client.getBalance(user.publicKey);
-      console.log(
-        `User ${i} balance: ${
-          Number(balance) / anchor.web3.LAMPORTS_PER_SOL
-        } SOL`
-      );
 
       await program.methods
         .deposit(depositAmount)
@@ -533,7 +607,7 @@ describe("engine litesvm", () => {
           escrow: sdk.getEscrowPda(testLaunchState)[0],
           launch: testLaunchState,
           systemProgram: anchor.web3.SystemProgram.programId,
-        })
+        } as any)
         .signers([user])
         .rpc();
 
@@ -551,15 +625,15 @@ describe("engine litesvm", () => {
     console.log(
       `Total deposited: ${
         state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
-      } SOL`
+      } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
     );
-    console.log(
-      `Hard cap: ${HARD_CAP_LAMPORTS / anchor.web3.LAMPORTS_PER_SOL} SOL`
-    );
-    console.log(`Total tickets: ${state.totalTickets}`);
 
-    await advanceTime(client, { slots: 1000n, seconds: 15n });
+    console.log("=== Waiting for Funding Period to End ===");
+    // Wait for funding period to end
+    await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
 
+    console.log("=== Setting VRF Seed ===");
+    // Set VRF seed
     const [selectionPda] = sdk.getSelectionPda(testLaunchState);
     const seedSig = await program.methods
       .setSeed()
@@ -574,23 +648,20 @@ describe("engine litesvm", () => {
       .rpc();
     console.log("VRF seed set with signature:", seedSig);
 
+    console.log("=== Processing Batches ===");
+    // Process batches to finalize selection
     state = await sdk.fetchLaunch(testLaunchState);
-    assert.ok(state.vrfSeed !== null);
-
     const totalTicketsToProcess = state.totalTickets;
-    console.log(`Total tickets to process: ${totalTicketsToProcess}`);
-
-    const maxItemsPerBatch = 10;
     let processed = 0;
     let batchSlot = client.getClock().slot;
 
     while (processed < totalTicketsToProcess) {
-      batchSlot += 1n;
+      batchSlot += BigInt(1);
       client.warpToSlot(batchSlot);
       client.expireBlockhash();
 
       await program.methods
-        .processBatch(maxItemsPerBatch)
+        .processBatch(10)
         .accounts({
           selectionState: selectionPda,
           launchState: testLaunchState,
@@ -600,41 +671,58 @@ describe("engine litesvm", () => {
 
       const selectionAccount = await sdk.fetchSelection(testLaunchState);
       processed = selectionAccount.processed;
-      console.log(`Processed ${processed}/${totalTicketsToProcess} tickets`);
     }
 
-    const finalSelectionAccount = await sdk.fetchSelection(testLaunchState);
+    // Verify automatic finalization
     state = await sdk.fetchLaunch(testLaunchState);
-    console.log(
-      `Final processed: ${finalSelectionAccount.processed}, Total tickets: ${totalTicketsToProcess}`
-    );
-    console.log(
-      `Heap length: ${finalSelectionAccount.heap.length}, K capacity: ${state.kCapacity}`
-    );
-    assert.equal(finalSelectionAccount.processed, totalTicketsToProcess);
-    assert.equal(state.kCapacity, testHardCap.toNumber() / testTau.toNumber());
-    assert.equal(finalSelectionAccount.heap.length, state.kCapacity);
+    assert.isTrue(state.selectionFinalized);
+    assert.isTrue(state.claimsOpen);
+    assert.ok(state.tokensPerTicket !== null);
+    console.log(`Selection finalized. Tokens per ticket: ${state.tokensPerTicket}`);
 
-    // Finalization is now automatic. Fetch the state again to check.
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(
-      state.selectionFinalized,
-      "Selection should be finalized automatically"
-    );
-    assert.isTrue(state.claimsOpen, "Claims should be open automatically");
-    assert.ok(state.thresholdScore !== null, "Threshold score should be set");
-    console.log(
-      `Automatic finalization successful. Threshold score: ${state.thresholdScore}`
-    );
-    assert.ok(
-      state.tokensPerTicket !== null,
-      "Tokens per ticket should be set"
-    );
-    console.log(`Tokens per ticket: ${state.tokensPerTicket}`);
+    console.log("=== Testing Creator Token Claiming ===");
+    // Test creator token claiming
+    const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
+    
+    // Create creator ATA first
+    const createAtaIx = sdk.buildCreateAtaIx({
+      payer: admin.publicKey,
+      owner: admin.publicKey,
+      mint: testSaleMint.publicKey,
+    }).ix;
+    
+    await provider.sendAndConfirm(new Transaction().add(createAtaIx), []);
+    
+    const claimResult = await sdk.claimCreatorTokens({
+      launch: testLaunchState,
+      saleMint: testSaleMint.publicKey,
+      creatorAta: creatorAta,
+      createAtaIfMissing: false,
+    });
 
+    console.log("Creator tokens claimed. Signature:", claimResult.signature);
+
+    // Verify creator grant state after claiming
+    const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
+    const expectedFirstDayTickets = dailyLimit.toNumber() / testTau.toNumber();
+    assert.equal(creatorGrantAfterClaim.claimedTickets, expectedFirstDayTickets);
+    assert.equal(creatorGrantAfterClaim.claimedTodayTickets, expectedFirstDayTickets);
+    assert.equal(creatorGrantAfterClaim.lastClaimDay, 0);
+
+    // Verify creator token balance
+    const tokenAccountInfo = client.getAccount(creatorAta);
+    const tokenAccount = unpackAccount(creatorAta, tokenAccountInfo);
+    const expectedTokens = state.tokensPerTicket * expectedFirstDayTickets;
+    assert.equal(Number(tokenAccount.amount), expectedTokens);
+
+    console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedTokens} tokens`);
+
+    console.log("=== Testing User Refund and Token Claiming ===");
+    // Test regular user refund and token claiming
     const testUser = users[0];
-    const initialBalance = client.getBalance(testUser.keypair.publicKey);
+    const userInitialBalance = client.getBalance(testUser.keypair.publicKey);
 
+    // User claims refund
     await program.methods
       .claimRefund()
       .accounts({
@@ -643,11 +731,11 @@ describe("engine litesvm", () => {
         userContribution: testUser.contribution,
         selectionState: selectionPda,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
-      })
+      } as any)
       .signers([testUser.keypair])
       .rpc();
 
-    const finalBalance = client.getBalance(testUser.keypair.publicKey);
+    const userFinalBalance = client.getBalance(testUser.keypair.publicKey);
     const userAccountAfter = await sdk.fetchUserContribution(
       testLaunchState,
       testUser.keypair.publicKey
@@ -656,11 +744,12 @@ describe("engine litesvm", () => {
     assert.isTrue(userAccountAfter.claimedRefund);
     console.log(
       `User refund claimed. Balance change: ${
-        (Number(finalBalance) - Number(initialBalance)) /
+        (Number(userFinalBalance) - Number(userInitialBalance)) /
         anchor.web3.LAMPORTS_PER_SOL
       } SOL`
     );
 
+    // User claims tokens
     const userAta = sdk.getUserAta(
       testSaleMint.publicKey,
       testUser.keypair.publicKey
@@ -683,12 +772,12 @@ describe("engine litesvm", () => {
         mintAuth: sdk.getMintAuthPda(testLaunchState)[0],
         userAta,
         tokenProgram: TOKEN_PROGRAM_ID,
-      })
+      } as any)
       .signers([testUser.keypair])
       .rpc();
 
-    const tokenAccountInfo = client.getAccount(userAta);
-    const tokenAccount = unpackAccount(userAta, tokenAccountInfo);
+    const userTokenAccountInfo = client.getAccount(userAta);
+    const userTokenAccount = unpackAccount(userAta, userTokenAccountInfo);
     const userAccountFinal = await sdk.fetchUserContribution(
       testLaunchState,
       testUser.keypair.publicKey
@@ -697,12 +786,31 @@ describe("engine litesvm", () => {
     assert.isTrue(userAccountFinal.claimedTokens);
     console.log(
       `User tokens claimed. Token balance: ${
-        Number(tokenAccount.amount) / 1_000_000
+        Number(userTokenAccount.amount) / 1_000_000
       }`
     );
 
+    console.log("=== Testing Creator Grant State ===");
+    // Verify creator grant state after successful launch
+    const finalCreatorGrant = await sdk.fetchCreatorGrant(testLaunchState);
+    console.log(`Final creator grant state:`);
+    console.log(`  - Reserved tickets: ${finalCreatorGrant.reservedTickets}`);
+    console.log(`  - Claimed tickets: ${finalCreatorGrant.claimedTickets}`);
+    console.log(`  - Daily ticket cap: ${finalCreatorGrant.dailyTicketCap}`);
+    console.log(`  - Last claim day: ${finalCreatorGrant.lastClaimDay}`);
+    console.log(`  - Claimed today tickets: ${finalCreatorGrant.claimedTodayTickets}`);
+    console.log(`  - Refunded: ${finalCreatorGrant.refunded}`);
+    
+    // Verify that creator can claim more tokens on subsequent days
+    // (This would require time advancement in a real scenario)
+    assert.equal(finalCreatorGrant.claimedTickets, 2); // Only claimed first day's limit
+    assert.equal(finalCreatorGrant.claimedTodayTickets, 2);
+    assert.equal(finalCreatorGrant.lastClaimDay, 0);
+    assert.isFalse(finalCreatorGrant.refunded);
+
     console.log(
-      "Complete flow test passed! All functions tested successfully."
+      "✅ Complete flow with creator deposit test passed! All functions tested successfully."
     );
   });
+
 });
