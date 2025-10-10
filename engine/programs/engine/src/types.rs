@@ -18,10 +18,10 @@ pub struct HeapEntry {
 
 #[derive(Accounts)]
 pub struct ProcessBatch<'info> {
-    #[account(mut)]
+    #[account(mut, constraint = selection_state.launch == launch_state.key())]
     pub selection_state: Account<'info, crate::state::SelectionState>,
     #[account(mut)]
     pub launch_state: Account<'info, crate::state::LaunchState>,
-    #[account(mut)]
+    #[account(mut, constraint = roster.launch == launch_state.key())]
     pub roster: Account<'info, crate::state::Roster>,
 }

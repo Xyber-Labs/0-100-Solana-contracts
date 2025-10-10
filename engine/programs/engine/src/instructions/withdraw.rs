@@ -14,10 +14,10 @@ pub struct Withdraw<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    #[account(mut, has_one = launch)]
+    #[account(mut, has_one = launch, constraint = roster.launch == launch_state.key())]
     pub roster: Account<'info, Roster>,
     /// Escrow account (PDA off launch_state)
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
+    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: This is the launch account referenced by the roster
