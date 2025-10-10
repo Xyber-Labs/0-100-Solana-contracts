@@ -35,6 +35,7 @@ pub struct ClaimTokens<'info> {
 
 pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
     let st = &mut ctx.accounts.launch_state;
+    require!(ctx.accounts.sale_mint.key() == st.sale_mint, EngineErrorCode::Unauthorized);
     require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
     let per = st
         .tokens_per_ticket
