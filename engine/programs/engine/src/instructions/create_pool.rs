@@ -52,8 +52,10 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let mut valid_slot = 0u64;
     let mut valid_hash = [0u8; 32];
 
+    // The SlotHashes sysvar is a LIFO queue. The most recent hash is at index 0.
+    // We iterate forwards, from most recent to oldest.
     for i in 0..hashes_to_check {
-        // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+        // Position is calculated as: 8 bytes (for num_hashes) + i * 40 bytes (size of each SlotHash entry)
         let hash_pos = 8u64
             .checked_add(
                 i.checked_mul(40)

@@ -6,7 +6,8 @@ import sys
 from time import sleep
 import requests
 
-RPC_URL = "http://10.186.0.84:8899/"
+# RPC_URL = "http://10.186.0.84:8899/"
+RPC_URL = "http://127.0.0.1:8899/"
 SLOT_HASHES_PUBKEY = "SysvarS1otHashes111111111111111111111111111"
 COMMITMENT = "processed"  # можно: processed | confirmed | finalized
 LIMIT = 32  # сколько записей вывести из начала (самые свежие)
