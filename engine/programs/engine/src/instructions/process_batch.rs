@@ -25,12 +25,7 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
     require!(!sel.finalized, EngineErrorCode::AlreadyFinalized);
     let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
-    // Auto-calculate k_capacity and total_tickets if not done yet
-    if st.k_capacity == 0 {
-        st.k_capacity = (st
-            .hard_cap_lamports
-            .checked_div(st.tau_lamports)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
+    if roster.prefix.is_empty() {
         roster_build_prefix(roster)?;
         roster.shard_base = 0; // single-shard MVP
         st.total_tickets = roster.total_in_shard; // only public tickets (without creator)

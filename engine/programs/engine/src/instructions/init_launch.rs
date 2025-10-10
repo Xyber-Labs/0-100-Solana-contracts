@@ -122,7 +122,10 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     state.total_deposited = 0;
     state.total_tickets = 0;
-    state.k_capacity = 0;
+    
+    let k_cap_u64 = params.hard_cap_lamports.checked_div(params.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(k_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    state.k_capacity = k_cap_u64 as u32;
 
     state.selection_finalized = false;
     state.selection_processed = 0;
@@ -173,11 +176,13 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     escrow.balance = amount;
 
     // Always initialize creator grant (even with 0 deposit)
-    let reserved_tickets = if amount > 0 {
-        (amount / state.tau_lamports) as u32
+    let reserved_tickets_u64 = if amount > 0 {
+        amount.checked_div(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?
     } else {
         0
     };
+    require!(reserved_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    let reserved_tickets = reserved_tickets_u64 as u32;
 
     state.creator_reserved_tickets = reserved_tickets;
     state.creator_grant_present = amount > 0;
@@ -189,7 +194,9 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     cg.locked_lamports = amount;
     cg.reserved_tickets = reserved_tickets;
     cg.daily_lamports_limit = params.creator_daily_lamports_limit;
-    cg.daily_ticket_cap = (params.creator_daily_lamports_limit / state.tau_lamports) as u32;
+    let daily_ticket_cap_u64 = params.creator_daily_lamports_limit.checked_div(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    cg.daily_ticket_cap = daily_ticket_cap_u64 as u32;
     cg.claimed_tickets = 0;
     cg.last_claim_day = -1;
     cg.claimed_today_tickets = 0;

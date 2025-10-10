@@ -95,10 +95,12 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     user.deposited = current
         .checked_add(amount)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let new_tickets = (user
+    let new_tickets_u64 = user
         .deposited
         .checked_div(st.tau_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(new_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    let new_tickets = new_tickets_u64 as u32;
     let delta = new_tickets
         .checked_sub(old_tickets)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;

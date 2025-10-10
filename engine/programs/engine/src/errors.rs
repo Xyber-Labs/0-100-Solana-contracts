@@ -66,6 +66,8 @@ pub enum ErrorCode {
     HeapCapacityExceeded,
     #[msg("An arithmetic operation overflowed")]
     ArithmeticOverflow,
+    #[msg("u64 to u32 conversion overflow")]
+    U64ConversionOverflow,
     #[msg("Creator grant missing")]
     CreatorGrantMissing,
     #[msg("Creator reserved tickets exceed capacity")]
