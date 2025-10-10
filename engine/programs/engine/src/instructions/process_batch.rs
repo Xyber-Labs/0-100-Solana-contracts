@@ -41,6 +41,9 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
     require!(reserved <= st.k_capacity, EngineErrorCode::ReservedExceedsCapacity);
     let k_heap = (st.k_capacity - reserved) as usize;
 
+    const MAX_HEAP_SIZE: usize = 100;
+    require!(k_heap <= MAX_HEAP_SIZE, EngineErrorCode::HeapCapacityExceeded);
+
     let from_t = sel.processed; // Capture initial value for event
     let mut steps = 0usize;
     while sel.processed < st.total_tickets && steps < max_items as usize {

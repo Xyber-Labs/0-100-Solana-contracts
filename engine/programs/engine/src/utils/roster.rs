@@ -2,6 +2,8 @@ use crate::errors::ErrorCode;
 use crate::state::Roster;
 use anchor_lang::prelude::*;
 
+const MAX_ROSTER_SIZE: usize = 100;
+
 /// Append or increment user's count; realloc roster if needed (MVP simplistic).
 pub fn roster_add_or_incr(
     roster: &mut Account<Roster>,
@@ -17,6 +19,7 @@ pub fn roster_add_or_incr(
         return Ok(());
     }
     // append new
+    require!(roster.wallets.len() < MAX_ROSTER_SIZE, ErrorCode::RosterFull);
     roster.wallets.push(wallet);
     roster.counts.push(delta);
     Ok(())

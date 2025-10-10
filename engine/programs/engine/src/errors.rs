@@ -60,6 +60,10 @@ pub enum ErrorCode {
     InvalidNumBlocks,
     #[msg("Invalid slot hashes data")]
     InvalidSlotHashesData,
+    #[msg("Roster is full")]
+    RosterFull,
+    #[msg("Heap capacity exceeded")]
+    HeapCapacityExceeded,
     #[msg("An arithmetic operation overflowed")]
     ArithmeticOverflow,
     #[msg("Creator grant missing")]
