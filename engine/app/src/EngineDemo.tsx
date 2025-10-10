@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js';
 import EngineSDK from 'zero-hundred-engine-sdk';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
@@ -94,6 +94,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   // --- New state for the full flow runner ---
   const [isFlowRunning, setIsFlowRunning] = useState(false);
+
+  // Helper function to convert UI selection to seconds
+  const getFundingDurationInSeconds = (daysValue: number): number => {
+    switch (daysValue) {
+      case 0: return 10; // 10 seconds for testing
+      case 1: return 30; // 30 seconds for testing
+      case 2: return 2 * 24 * 60 * 60;
+      case 3: return 3 * 24 * 60 * 60;
+      case 4: return 4 * 24 * 60 * 60;
+      case 5: return 5 * 24 * 60 * 60;
+      default: return 10;
+    }
+  };
 
   // Helper function to safely get numeric values from BN, string, or number
   const safeToNumber = (value: any): number => {
@@ -212,6 +225,75 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [publicKey, signTransaction, signAllTransactions, connection, testWallet]);
 
+  const fetchLaunchData = useCallback(async () => {
+    if (!sdk || !launchState) return;
+    
+    try {
+      const data = await sdk.fetchLaunch(launchState);
+      setLaunchData(data);
+      addLog('Launch data refreshed');
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch launch data - ${error}`);
+      
+      // If account doesn't exist yet, wait and retry
+      if (error instanceof Error && error.message.includes('Account does not exist')) {
+        addLog('Account not found, waiting and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        try {
+          const retryData = await sdk.fetchLaunch(launchState);
+          setLaunchData(retryData);
+          addLog('Launch data refreshed after retry');
+        } catch (retryError) {
+          addLog(`ERROR: Retry failed - ${retryError}`);
+        }
+      }
+    }
+  }, [sdk, launchState]);
+
+  const fetchUserData = useCallback(async () => {
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!sdk || !launchState || !activePublicKey) return;
+    
+    try {
+      const data = await sdk.fetchUserContribution(launchState, activePublicKey);
+      setUserContributions(data);
+      addLog('User contribution data refreshed');
+    } catch (error: any) {
+      // User account doesn't exist yet - this is normal before first deposit
+      if (error.message?.includes('Account does not exist')) {
+        setUserContributions(null);
+        addLog('User account not created yet (normal before first deposit)');
+      } else {
+        addLog(`ERROR: Failed to fetch user data - ${error}`);
+      }
+    }
+  }, [sdk, launchState, publicKey, testWallet]);
+
+  const fetchSelectionData = useCallback(async () => {
+    if (!sdk || !launchState) return;
+    
+    try {
+      const data = await sdk.fetchSelection(launchState);
+      setSelectionData(data);
+      addLog('Selection data refreshed');
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch selection data - ${error}`);
+    }
+  }, [sdk, launchState]);
+  
+  const fetchBalance = useCallback(async () => {
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!activePublicKey) return;
+    
+    try {
+      const currentBalance = await connection.getBalance(activePublicKey);
+      setBalance(currentBalance);
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch balance - ${error}`);
+    }
+  }, [publicKey, connection, testWallet]);
+  
   const initLaunch = useCallback(async () => {
     if (!sdk || !program) {
       addLog('ERROR: SDK not initialized');
@@ -228,6 +310,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       // Get mint authority PDA
       const [mintAuth] = sdk.getMintAuthPda(launchPda);
+      const [creatorGrant] = sdk.getCreatorGrantPda(launchPda);
+      const [projectCounter] = sdk.getProjectCounterPda();
 
       console.log('Creating initLaunch transaction with:');
       console.log('saleMint:', saleMintKeypair.publicKey.toString());
@@ -235,6 +319,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       
       // Create the transaction manually to handle signers properly
       const transaction = new Transaction();
+
+      // Add compute unit limit
+      transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
+      );
       
       addLog(`Creating transaction for saleMint: ${saleMintKeypair.publicKey.toString()}`);
       
@@ -267,15 +356,18 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           tauLamports: new BN(launchConfig.tauLamports),
           saleAllocation: new BN(launchConfig.saleAllocation),
           lpAllocation: new BN(launchConfig.lpAllocation),
-          fundingDurationSeconds: launchConfig.fundingDurationDays,
+          fundingDurationSeconds: new BN(getFundingDurationInSeconds(launchConfig.fundingDurationDays)),
           numBlocks: new BN(launchConfig.numBlocks),
+          creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
+          creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
         })
         .accountsStrict({
-          admin: (testWallet?.publicKey || publicKey)!,
-          projectCounter: sdk.getProjectCounterPda()[0],
+          creator: (testWallet?.publicKey || publicKey)!,
+          projectCounter,
           launchState: launchPda,
           saleMint: saleMintKeypair.publicKey,
           escrow: escrowPda,
+          creatorGrant,
           systemProgram: SystemProgram.programId,
         })
         .instruction();
@@ -371,66 +463,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, program, publicKey, launchConfig]);
-
-  const fetchLaunchData = useCallback(async () => {
-    if (!sdk || !launchState) return;
-    
-    try {
-      const data = await sdk.fetchLaunch(launchState);
-      setLaunchData(data);
-      addLog('Launch data refreshed');
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch launch data - ${error}`);
-      
-      // If account doesn't exist yet, wait and retry
-      if (error instanceof Error && error.message.includes('Account does not exist')) {
-        addLog('Account not found, waiting and retrying...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        try {
-          const retryData = await sdk.fetchLaunch(launchState);
-          setLaunchData(retryData);
-          addLog('Launch data refreshed after retry');
-        } catch (retryError) {
-          addLog(`ERROR: Retry failed - ${retryError}`);
-        }
-      }
-    }
-  }, [sdk, launchState]);
-
-  const fetchUserData = useCallback(async () => {
-    const activePublicKey = testWallet?.publicKey || publicKey;
-    if (!sdk || !launchState || !activePublicKey) return;
-    
-    try {
-      const data = await sdk.fetchUserContribution(launchState, activePublicKey);
-      setUserContributions(data);
-      addLog('User contribution data refreshed');
-    } catch (error: any) {
-      // User account doesn't exist yet - this is normal before first deposit
-      if (error.message?.includes('Account does not exist')) {
-        setUserContributions(null);
-        addLog('User account not created yet (normal before first deposit)');
-      } else {
-        addLog(`ERROR: Failed to fetch user data - ${error}`);
-      }
-    }
-  }, [sdk, launchState, publicKey, testWallet]);
-
-  const fetchSelectionData = useCallback(async () => {
-    if (!sdk || !launchState) return;
-    
-    try {
-      const data = await sdk.fetchSelection(launchState);
-      setSelectionData(data);
-      addLog('Selection data refreshed');
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch selection data - ${error}`);
-    }
-  }, [sdk, launchState]);
-
- // Removed function dependencies
+  }, [sdk, program, publicKey, launchConfig, fetchLaunchData]);
 
   const initRoster = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -474,7 +507,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchLaunchData]);
 
   const processBatch = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -496,46 +529,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
-
-  const finalizeSelection = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Finalizing selection...');
-      const { signature } = await sdk.finalizeSelection({ launch: launchState });
-      addLog(`SUCCESS: Selection finalized - Signature: ${signature}`);
-      await fetchLaunchData();
-      await fetchSelectionData();
-    } catch (error) {
-      addLog(`ERROR: Failed to finalize selection - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
-
-  const openClaims = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Opening claims...');
-      const { signature } = await sdk.openClaims({ launch: launchState });
-      addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to open claims - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchSelectionData]);
 
   const deposit = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -561,7 +555,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchBalance, fetchLaunchData, fetchUserData]);
 
   const withdraw = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -586,7 +580,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchBalance, fetchLaunchData, fetchUserData]);
 
   const claimRefund = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -605,7 +599,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchUserData]);
 
   const claimTokens = useCallback(async () => {
     if (!sdk || !launchState || !saleMint) {
@@ -629,19 +623,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, saleMint]); // Removed function dependencies
-
-  const fetchBalance = useCallback(async () => {
-    const activePublicKey = testWallet?.publicKey || publicKey;
-    if (!activePublicKey) return;
-    
-    try {
-      const currentBalance = await connection.getBalance(activePublicKey);
-      setBalance(currentBalance);
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch balance - ${error}`);
-    }
-  }, [publicKey, connection, testWallet]);
+  }, [sdk, launchState, saleMint, fetchUserData]);
 
   const requestFaucet = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
@@ -956,14 +938,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         addLog(`ERROR: Failed to refresh data after state change - ${error}`);
       }
     }
-  }, [launchState, sdk]); // Removed function dependencies to prevent infinite loops
+  }, [launchState, sdk, fetchLaunchData, fetchUserData]);
 
   // Auto-fetch balance when wallet connects or test wallet changes
   useEffect(() => {
     if (publicKey || testWallet) {
       fetchBalance();
     }
-  }, [publicKey, testWallet]); // Removed fetchBalance dependency to prevent infinite loops
+  }, [publicKey, testWallet, fetchBalance]);
 
   useEffect(() => {
     if (autoScroll && logContainerRef.current) {
@@ -1475,22 +1457,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <span className="terminal-prompt">$</span> Process Batch
             </button>
             
-            <button 
-              onClick={finalizeSelection}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading || isFlowRunning}
-            >
-              <span className="terminal-prompt">$</span> Finalize Selection
-            </button>
-            
-            <button 
-              onClick={openClaims}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading || isFlowRunning}
-            >
-              <span className="terminal-prompt">$</span> Open Claims
-            </button>
-
             <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
 
             <button 
@@ -1599,15 +1565,12 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         <div className="text-xs terminal-output space-y-1">
           <div><span className="terminal-success">1.</span> Initialize SDK</div>
           <div><span className="terminal-success">2.</span> Init Launch</div>
-          <div><span className="terminal-success">3.</span> Open Funding</div>
-          <div><span className="terminal-success">4.</span> Init Roster <span className="terminal-error">(Required before deposits!)</span></div>
-          <div><span className="terminal-success">5.</span> Deposit SOL</div>
-          <div><span className="terminal-success">6.</span> Close Deposits</div>
-          <div><span className="terminal-success">7.</span> Set VRF Seed</div>
-          <div><span className="terminal-success">8.</span> Process Batch</div>
-          <div><span className="terminal-success">9.</span> Finalize Selection</div>
-          <div><span className="terminal-success">10.</span> Open Claims</div>
-          <div><span className="terminal-success">11.</span> Claim Tokens/Refund</div>
+          <div><span className="terminal-success">3.</span> Init Roster <span className="terminal-error">(Required before deposits!)</span></div>
+          <div><span className="terminal-success">4.</span> Deposit SOL (Wait for funding period to start)</div>
+          <div><span className="terminal-success">5.</span> Wait for Funding Period to End</div>
+          <div><span className="terminal-success">6.</span> Set VRF Seed (This starts the selection process)</div>
+          <div><span className="terminal-success">7.</span> Process Batch (Repeat until all tickets processed)</div>
+          <div><span className="terminal-success">8.</span> Claim Tokens/Refund (Claims open automatically after processing)</div>
         </div>
       </div>
 
