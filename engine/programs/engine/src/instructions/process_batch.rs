@@ -101,7 +101,7 @@ pub fn handler(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
         st.threshold_score = Some(u128::MAX);
         st.tokens_per_ticket = Some(
             st.sale_allocation
-                .checked_div(st.k_capacity as u64)
+                .checked_div(st.total_tickets.max(1) as u64)
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?,
         );
         st.claims_open = true;

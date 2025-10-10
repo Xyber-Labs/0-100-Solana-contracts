@@ -39,6 +39,27 @@ export async function runFullFlow(
 
   let testLaunchState: PublicKey;
 
+  // --- Simulation Parameters ---
+  const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
+  const SALE_PERCENTAGE = 0.45946; // 45.946%
+  const TOKEN_DECIMALS = 6;
+  
+  // Calculate sale_allocation based on simulation parameters
+  const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
+  config.saleAllocation = saleAllocation;
+
+  // Override creator deposit for this specific test
+  const LAMPORTS_PER_SOL = 1_000_000_000;
+  config.creatorInitialDepositLamports = 1 * LAMPORTS_PER_SOL;
+  
+  addLog(`\n--- Using Simulation Parameters ---`);
+  addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
+  addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
+  addLog(`   -> Calculated Sale Allocation (atomic units): ${config.saleAllocation.toLocaleString()}`);
+  addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
+  addLog(`------------------------------------`);
+  // --- End Simulation Parameters ---
+
   try {
     // Helper to wait
     async function waitForFundingPeriodEnd(launchPda: PublicKey) {
