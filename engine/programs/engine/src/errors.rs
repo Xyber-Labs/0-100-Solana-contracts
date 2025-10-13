@@ -36,8 +36,6 @@ pub enum ErrorCode {
     InvalidTau,
     #[msg("Invalid K")]
     InvalidK,
-    #[msg("Not fully processed")]
-    NotFullyProcessed,
     #[msg("Heap not full")]
     HeapNotFull,
     #[msg("User not found in roster")]
@@ -68,12 +66,8 @@ pub enum ErrorCode {
     ArithmeticOverflow,
     #[msg("u64 to u32 conversion overflow")]
     U64ConversionOverflow,
-    #[msg("Creator grant missing")]
-    CreatorGrantMissing,
     #[msg("Creator reserved tickets exceed capacity")]
     ReservedExceedsCapacity,
-    #[msg("Creator daily cap reached for today")]
-    DailyCapReached,
     #[msg("Nothing to claim")]
     NothingToClaim,
     #[msg("Creator initial deposit must be multiple of tau")]
