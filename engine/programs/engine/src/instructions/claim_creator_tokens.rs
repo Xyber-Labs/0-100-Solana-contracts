@@ -1,9 +1,9 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::CreatorClaimed;
-use crate::state::{LaunchState, CreatorGrant};
-use crate::constants::SEED_ROOT;
+use crate::state::{CreatorGrant, LaunchState};
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 #[derive(Accounts)]
 pub struct ClaimCreatorTokens<'info> {
@@ -38,11 +38,16 @@ pub struct ClaimCreatorTokens<'info> {
 
 pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
+    require!(
+        ctx.accounts.sale_mint.key() == launch_state.sale_mint,
+        EngineErrorCode::Unauthorized
+    );
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
 
-    let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
-    let cg = &mut ctx.accounts.creator_grant;
+    let per = launch_state
+        .tokens_per_ticket
+        .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
+    let creator_grant = &mut ctx.accounts.creator_grant;
 
     // Calculate how many tokens have vested/accrued over time.
     let now = Clock::get()?.unix_timestamp;
@@ -55,18 +60,20 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     // We add 1 to include the current, partially-elapsed period.
     let unlocked_ceiling = (periods_passed as u32)
         .saturating_add(1)
-        .saturating_mul(cg.daily_ticket_cap);
+        .saturating_mul(creator_grant.daily_ticket_cap);
 
     // The total unlocked amount cannot exceed the total reserved tickets.
-    let total_unlocked = unlocked_ceiling.min(cg.reserved_tickets);
+    let total_unlocked = unlocked_ceiling.min(creator_grant.reserved_tickets);
 
     // The amount to claim now is the difference between what's unlocked and what's already been claimed.
-    let to_claim = total_unlocked.saturating_sub(cg.claimed_tickets);
-    
+    let to_claim = total_unlocked.saturating_sub(creator_grant.claimed_tickets);
+
     // If there's nothing to claim, exit.
     require!(to_claim > 0, EngineErrorCode::NothingToClaim);
 
-    let amount = per.checked_mul(to_claim as u64).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let amount = per
+        .checked_mul(to_claim as u64)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     // Mint tokens
     let seeds: &[&[u8]] = &[
@@ -88,16 +95,21 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     );
     token::mint_to(cpi_ctx, amount)?;
 
-    cg.claimed_tickets = cg.claimed_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    creator_grant.claimed_tickets = creator_grant
+        .claimed_tickets
+        .checked_add(to_claim)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(CreatorClaimed {
         launch: launch_state.key(),
         creator: ctx.accounts.creator.key(),
         tickets_claimed: to_claim,
-        lamports_equiv: (to_claim as u64).checked_mul(launch_state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?,
+        lamports_equiv: (to_claim as u64)
+            .checked_mul(launch_state.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
         day_index: periods_passed, // Using periods_passed for logging
-        remaining_tickets: cg.reserved_tickets - cg.claimed_tickets,
+        remaining_tickets: creator_grant.reserved_tickets - creator_grant.claimed_tickets,
     });
 
     Ok(())
