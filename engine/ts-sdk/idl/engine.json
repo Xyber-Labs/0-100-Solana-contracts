@@ -1806,6 +1806,11 @@
       "code": 6051,
       "name": "ShardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
+    },
+    {
+      "code": 6052,
+      "name": "NoTokensToClaim",
+      "msg": "User has no tokens to claim"
     }
   ],
   "types": [

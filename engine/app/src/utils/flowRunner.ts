@@ -10,6 +10,19 @@ import {
   TOKEN_PROGRAM_ID,
   createInitializeMintInstruction,
 } from "@solana/spl-token";
+import { sha256 } from "js-sha256";
+
+// Define a type for our BigInts to avoid confusion
+type u64 = bigint;
+const U32_MAX = BigInt(2) ** BigInt(32) - BigInt(1);
+
+// Helper to read a 128-bit LE BigInt from a buffer
+function readBigUInt128LE(buf: Buffer, offset = 0): bigint {
+  const first = buf.readBigUInt64LE(offset);
+  const second = buf.readBigUInt64LE(offset + 8);
+  return first + (second << BigInt(64));
+}
+
 interface LaunchConfig {
   hardCapLamports: number;
   minRaiseLamports: number;
@@ -62,6 +75,62 @@ export async function runFullFlow(
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
 
+  // --- Utility functions for winner selection simulation ---
+  function permute_u32(seed: Buffer, n: u64, i: u64): u64 {
+    if (n === BigInt(0)) return BigInt(0);
+    let x = i;
+    for (let j = 0; j < 4; j++) {
+      const round_seed = Buffer.concat([seed, Buffer.from([j])]);
+      const h = sha256.create();
+      h.update(round_seed);
+      const x_buf = Buffer.alloc(4);
+      x_buf.writeUInt32LE(Number(x), 0);
+      h.update(x_buf);
+      const hash_bytes = Buffer.from(h.digest());
+      const r = readBigUInt128LE(Buffer.from(hash_bytes.slice(0, 16)));
+      const pivot = n - (n % BigInt(2));
+      if (x < pivot) {
+        // Simulate Rust's `(r as u32).wrapping_add(x)`
+        const r_u32 = r & U32_MAX;
+        const sum_wrapped = (r_u32 + x) & U32_MAX;
+        x = sum_wrapped % pivot;
+      }
+    }
+    return x;
+  }
+
+  async function isWinner(
+    user_idx_in_shard: number,
+    ticket_count: number,
+    shard_id: number
+  ): Promise<boolean> {
+    const launchStateData = await sdk.fetchLaunch(testLaunchState);
+    const shardState = await sdk.program.account.rosterShard.fetch(
+      sdk.getRosterShardPda(testLaunchState, shard_id)[0]
+    );
+
+    const seed = launchStateData.vrfSeed;
+    if (!seed) throw new Error("VRF seed not set");
+
+    const reserved = Math.min(
+      launchStateData.creatorReservedTickets,
+      launchStateData.kCapacity
+    );
+    const k_pub = BigInt(launchStateData.kCapacity) - BigInt(reserved);
+    const n = BigInt(launchStateData.publicTotalTickets);
+    const base =
+      BigInt(shardState.shardBase) +
+      BigInt(shardState.prefix[user_idx_in_shard]);
+
+    for (let j = 0; j < ticket_count; j++) {
+      const t = base + BigInt(j);
+      if (permute_u32(Buffer.from(seed), n, t) < k_pub) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   try {
     // Helper to wait
     async function waitForFundingPeriodEnd(launchPda: PublicKey) {
@@ -84,6 +153,45 @@ export async function runFullFlow(
       }
     }
 
+    let adminBalance: number;
+    try {
+      adminBalance = await provider.connection.getBalance(admin.publicKey);
+    } catch (error) {
+      // Fallback for LiteSVM - assume 10 SOL balance
+      adminBalance = 10 * 1e9;
+      addLog(`Using fallback admin balance: ${adminBalance / 1e9} SOL`);
+    }
+
+    const MIN_BALANCE_FOR_FEES = 500000000; // 0.5 SOL
+
+    if (adminBalance < MIN_BALANCE_FOR_FEES) {
+      const errorMessage = `Admin wallet balance is too low (${(
+        adminBalance / 1e9
+      ).toFixed(
+        2
+      )} SOL). Please fund it with at least ${
+        MIN_BALANCE_FOR_FEES / 1e9
+      } SOL to cover transaction fees.`;
+      addLog(errorMessage);
+      return { success: false, message: errorMessage };
+    }
+
+    const availableForCreatorDeposit = adminBalance - MIN_BALANCE_FOR_FEES;
+    const adjustedCreatorDeposit = Math.min(
+      config.creatorInitialDepositLamports,
+      availableForCreatorDeposit
+    );
+
+    if (adjustedCreatorDeposit < config.creatorInitialDepositLamports) {
+      addLog(`Admin balance: ${(adminBalance / 1e9).toFixed(2)} SOL`);
+      addLog(
+        `Reducing creator deposit from ${(
+          config.creatorInitialDepositLamports / 1e9
+        ).toFixed(2)} SOL to ${(adjustedCreatorDeposit / 1e9).toFixed(2)} SOL`
+      );
+    }
+    config.creatorInitialDepositLamports = adjustedCreatorDeposit;
+
     // Helper to get token balance
     async function getTokenBalance(ata: PublicKey): Promise<number> {
       try {
@@ -100,24 +208,6 @@ export async function runFullFlow(
     
     // Debug: Check available methods
     addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
-    
-    let adminBalance: number;
-    try {
-      adminBalance = await provider.connection.getBalance(admin.publicKey);
-    } catch (error) {
-      // Fallback for LiteSVM - assume 10 SOL balance
-      adminBalance = 10 * 1e9;
-      addLog(`Using fallback admin balance: ${adminBalance / 1e9} SOL`);
-    }
-    
-    const availableForCreatorDeposit = adminBalance - 500000000; // Reserve 0.5 SOL for fees
-    const adjustedCreatorDeposit = Math.min(config.creatorInitialDepositLamports, availableForCreatorDeposit);
-    
-    if (adjustedCreatorDeposit < config.creatorInitialDepositLamports) {
-      addLog(`Admin balance: ${adminBalance / 1e9} SOL`);
-      addLog(`Reducing creator deposit from ${config.creatorInitialDepositLamports / 1e9} SOL to ${adjustedCreatorDeposit / 1e9} SOL`);
-      config.creatorInitialDepositLamports = adjustedCreatorDeposit;
-    }
     
     const testSaleMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
@@ -337,64 +427,94 @@ export async function runFullFlow(
       }
     }
 
-    // 9. Test User Token/Refund Claiming
+    // 9. Test User Token & Refund Claiming
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
-    // In new flow we don't have on-chain winners list; perform random subset for demo
-    const allUsers = Array.from(usersWithDeposits.values());
-    const half = Math.floor(allUsers.length / 2);
-    const winners = allUsers.slice(0, half).map(u => u.keypair.publicKey);
-    const losers = allUsers.slice(half).map(u => u.keypair.publicKey);
-    addLog(`   -> Winners (simulated subset for demo): ${winners.length}, Losers: ${losers.length}`);
 
-    let totalTokensClaimed = 0;
-    let totalRefundsClaimed = 0;
-    const initialAdminBalanceForClaims = await provider.connection.getBalance(admin.publicKey);
+    const allUsersData = Array.from(usersWithDeposits.values());
 
-    // Claim for winners
-    for (const winnerPubkey of winners) {
-      const winnerData = usersWithDeposits.get(winnerPubkey.toBase58());
-      if (winnerData) {
-        const userAta = sdk.getUserAta(testSaleMint.publicKey, winnerData.keypair.publicKey);
+    // --- New Claiming Logic ---
+    // This logic is more robust. It doesn't rely on a client-side simulation
+    // of the winner selection. Instead, it behaves like a real user would:
+    // 1. Try to claim tokens.
+    // 2. If the contract says there are no tokens to claim, then try to claim a refund.
+    let successfulTokenClaims = 0;
+    let successfulRefundClaims = 0;
+    let tokensClaimed = 0;
+    let failedClaims = 0;
+
+    for (const userData of allUsersData) {
+      try {
+        // Attempt to claim tokens for every user
+        const userAta = sdk.getUserAta(
+          testSaleMint.publicKey,
+          userData.keypair.publicKey
+        );
         const initialBalance = await getTokenBalance(userAta);
-        
+
         await sdk.claimTokens({
           launch: testLaunchState,
           saleMint: testSaleMint.publicKey,
-          userKeypair: winnerData.keypair,
+          userKeypair: userData.keypair,
           createAtaIfMissing: true,
           shardId: 0,
         });
 
         const finalBalance = await getTokenBalance(userAta);
-        totalTokensClaimed += (finalBalance - initialBalance);
+        tokensClaimed += finalBalance - initialBalance;
+        successfulTokenClaims++;
+      } catch (error: any) {
+        // If it fails with "NoTokensToClaim", they are a loser, so claim refund
+        if (error.message && error.message.includes("NoTokensToClaim")) {
+          try {
+            await sdk.claimRefund({
+              launch: testLaunchState,
+              userKeypair: userData.keypair,
+              shardId: 0,
+            });
+            successfulRefundClaims++;
+          } catch (refundError: any) {
+            addLog(
+              `   -> ❌ Refund failed for ${userData.keypair.publicKey.toBase58()}: ${
+                refundError.message
+              }`
+            );
+            failedClaims++;
+          }
+        } else {
+          // If it's another error, log it
+          addLog(
+            `   -> ❌ Token claim failed for ${userData.keypair.publicKey.toBase58()}: ${
+              error.message
+            }`
+          );
+          failedClaims++;
+        }
       }
     }
-    if(winners.length > 0) addLog(`   -> Total tokens claimed by winners: ${totalTokensClaimed.toFixed(6)}`);
 
-    // Claim for losers
-    for (const loserPubkey of losers) {
-      const loserData = usersWithDeposits.get(loserPubkey.toBase58());
-      if (loserData) {
-        await sdk.claimRefund({
-          launch: testLaunchState,
-          userKeypair: loserData.keypair,
-          shardId: 0,
-        });
-        // We can't easily track the refund amount per user without fetching balances,
-        // so we'll check the admin's balance change as a proxy.
-      }
+    addLog(
+      `   -> Winners (successful token claims): ${successfulTokenClaims}`
+    );
+    addLog(`   -> Losers (successful refund claims): ${successfulRefundClaims}`);
+    if (failedClaims > 0) {
+      addLog(`   -> Failed claims (token or refund): ${failedClaims}`);
     }
-    
-    const finalAdminBalanceForClaims = await provider.connection.getBalance(admin.publicKey);
-    // Note: This is an approximation as it includes fees.
-    totalRefundsClaimed = (finalAdminBalanceForClaims - initialAdminBalanceForClaims) / 1e9; 
-    
-    if (losers.length > 0) addLog(`   -> Admin balance change after refunds (proxy for SOL refunded): ~${totalRefundsClaimed.toFixed(6)} SOL`);
+    addLog(
+      `   -> Total tokens claimed by winners: ${tokensClaimed.toFixed(6)}`
+    );
 
+    // Final check for any remaining errors
+    if (failedClaims > 0) {
+      throw new Error(
+        `${failedClaims} users failed to claim either tokens or a refund.`
+      );
+    }
 
     // 10. Test Creator Token Claiming (if creator deposit was made)
     if (config.creatorInitialDepositLamports > 0) {
-      addLog(`\n[10/10] Testing Creator Token Claiming (Accrued Vesting)...`);
+      addLog(
+        `\n[10/10] Testing Creator Token Claiming (Accrued Vesting)...`
+      );
       addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
       addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);
 

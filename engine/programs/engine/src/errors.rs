@@ -109,4 +109,6 @@ pub enum ErrorCode {
     ShardNotFinalized,
     #[msg("Claims cannot be opened before all shards finalized")]
     ShardsNotFullyFinalized,
+    #[msg("User has no tokens to claim")]
+    NoTokensToClaim,
 }

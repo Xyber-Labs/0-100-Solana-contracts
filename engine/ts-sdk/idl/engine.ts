@@ -1812,6 +1812,11 @@ export type Engine = {
       "code": 6051,
       "name": "shardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
+    },
+    {
+      "code": 6052,
+      "name": "noTokensToClaim",
+      "msg": "User has no tokens to claim"
     }
   ],
   "types": [

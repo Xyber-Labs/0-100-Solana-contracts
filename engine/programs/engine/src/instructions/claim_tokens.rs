@@ -86,10 +86,7 @@ pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
             y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
     }
-    if y == 0 {
-        user.claimed_tokens = true;
-        return Ok(());
-    }
+    require!(y > 0, EngineErrorCode::NoTokensToClaim);
     let amount = per
         .checked_mul(y as u64)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;

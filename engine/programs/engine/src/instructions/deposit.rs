@@ -73,6 +73,13 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         ],
     )?;
 
+    ctx.accounts.escrow.balance = ctx
+        .accounts
+        .escrow
+        .balance
+        .checked_add(amount)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
     // update user
     let user = &mut ctx.accounts.user_contribution;
     let is_first_deposit = user.wallet == Pubkey::default();
