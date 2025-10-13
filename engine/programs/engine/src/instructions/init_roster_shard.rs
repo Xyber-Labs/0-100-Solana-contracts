@@ -1,0 +1,43 @@
+use anchor_lang::prelude::*;
+use crate::constants::SEED_ROOT;
+use crate::events::RosterShardInitialized;
+use crate::state::{LaunchState, RosterShard};
+
+#[derive(Accounts)]
+#[instruction(shard_id: u16)]
+pub struct InitRosterShard<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut)]
+    pub launch_state: Account<'info, LaunchState>,
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + RosterShard::INIT_SPACE,
+        seeds = [SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &shard_id.to_le_bytes()],
+        bump,
+    )]
+    pub roster_shard: Account<'info, RosterShard>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handler(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
+    let st = &mut ctx.accounts.launch_state;
+    let shard = &mut ctx.accounts.roster_shard;
+    shard.launch = st.key();
+    shard.shard_id = shard_id;
+    shard.total_in_shard = 0;
+    shard.shard_base = 0;
+
+    // Ensure launch_state.roster_shards reflects at least max(shard_id) + 1
+    let required = shard_id.saturating_add(1);
+    st.roster_shards = st.roster_shards.max(required);
+
+    emit!(RosterShardInitialized {
+        launch: st.key(),
+        shard_id,
+    });
+    Ok(())
+}
+
+

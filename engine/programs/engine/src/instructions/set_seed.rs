@@ -3,8 +3,7 @@ use anchor_lang::solana_program::keccak;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::{self, Sysvar};
 use crate::events::SeedSet;
-use crate::state::{LaunchState, SelectionState};
-use crate::constants::SEED_ROOT;
+use crate::state::LaunchState;
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
@@ -12,14 +11,6 @@ pub struct SetSeed<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + SelectionState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"selection", launch_state.key().as_ref()],
-        bump
-    )]
-    pub selection_state: Account<'info, SelectionState>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -81,15 +72,6 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
     let seed: [u8; 32] = data[start..end]
         .try_into()
         .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
-
-    // Initialize SelectionState
-    let sel = &mut ctx.accounts.selection_state;
-    sel.launch = st.key();
-    sel.vrf_seed = seed;
-    sel.processed = 0;
-    sel.finalized = false;
-    sel.threshold = None;
-    sel.heap = Vec::new();
 
     st.vrf_seed = Some(seed);
 

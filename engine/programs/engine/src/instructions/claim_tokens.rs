@@ -2,8 +2,8 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::TokensClaimed;
-use crate::utils::selection::{ticket_score, tie_break_wins};
-use crate::state::{LaunchState, SelectionState, UserContribution};
+use crate::utils::selection::permute_u32;
+use crate::state::{LaunchState, UserContribution, RosterShard};
 use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
@@ -14,8 +14,9 @@ pub struct ClaimTokens<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    #[account(mut, constraint = selection_state.launch == launch_state.key())]
-    pub selection_state: Account<'info, SelectionState>,
+    // Sharded roster account to compute ticket indices
+    #[account(constraint = roster_shard.launch == launch_state.key())]
+    pub roster_shard: Account<'info, RosterShard>,
 
     #[account(mut)]
     pub sale_mint: Account<'info, Mint>,
@@ -47,30 +48,42 @@ pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
         EngineErrorCode::MinRaiseNotMet
     );
 
-    let threshold = st
-        .threshold_score
-        .ok_or(EngineErrorCode::ThresholdMissing)?;
     let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
     let user = &mut ctx.accounts.user_contribution;
     require!(!user.claimed_tokens, EngineErrorCode::AlreadyClaimedTokens);
 
-    // recompute y_i
+    // recompute y_i using permutation condition
+    let reserved = st.creator_reserved_tickets.min(st.k_capacity);
+    let k_pub = st
+        .k_capacity
+        .checked_sub(reserved)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let n = st.public_total_tickets;
+    let shard = &ctx.accounts.roster_shard;
+    // Ensure shard is finalized and consistent
+    require!(st.roster_finalized_up_to >= shard.shard_id as i32, EngineErrorCode::ShardNotFinalized);
+    require!(
+        shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
+        EngineErrorCode::ShardNotFinalized
+    );
+    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
+    let u = user.idx_in_shard as usize;
+    let base = shard.shard_base
+        .checked_add(*shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+    // Early exit to avoid permute on n==0 and when no public winners are possible
+    if k_pub == 0 || n == 0 {
+        user.claimed_tokens = true;
+        return Ok(());
+    }
+
     let mut y = 0u32;
     for j in 0..user.ticket_count {
-        let s = ticket_score(&seed, &user.wallet, j);
-        if s < threshold
-            || (s == threshold
-                && tie_break_wins(
-                    user.wallet,
-                    j,
-                    threshold,
-                    &ctx.accounts.selection_state.heap,
-                ))
-        {
-            y = y
-                .checked_add(1)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let t = base.checked_add(j).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        if permute_u32(&seed, n, t) < k_pub {
+            y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
     }
     if y == 0 {

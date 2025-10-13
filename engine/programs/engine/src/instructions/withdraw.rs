@@ -2,8 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::Withdrawn;
-use crate::utils::roster::roster_decr;
-use crate::state::{EscrowAccount, LaunchState, Roster, UserContribution};
+use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
 use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
@@ -14,8 +13,9 @@ pub struct Withdraw<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    #[account(mut, has_one = launch, constraint = roster.launch == launch_state.key())]
-    pub roster: Account<'info, Roster>,
+    // Legacy roster removed from new flow
+    #[account(mut, constraint = roster_shard.launch == launch_state.key())]
+    pub roster_shard: Account<'info, RosterShard>,
     /// Escrow account (PDA off launch_state)
     #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
     pub escrow: Account<'info, EscrowAccount>,
@@ -54,14 +54,6 @@ pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         .to_account_info()
         .try_borrow_mut_lamports()? += amount;
 
-    // Update escrow balance
-    ctx.accounts.escrow.balance = ctx
-        .accounts
-        .escrow
-        .balance
-        .checked_sub(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
     // recompute tickets
     let old_tickets = user.ticket_count;
     user.deposited = user
@@ -77,9 +69,16 @@ pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     user.ticket_count = new_tickets;
 
-    // roster decrement
-    let roster = &mut ctx.accounts.roster;
-    roster_decr(roster, user.wallet, lost)?;
+    // Sharded roster decrement
+    let shard = &mut ctx.accounts.roster_shard;
+    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
+    let u = user.idx_in_shard as usize;
+    if shard.counts.len() <= u { shard.counts.resize(u+1, 0); }
+    shard.counts[u] = shard.counts[u]
+        .checked_sub(lost)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    shard.prefix.clear();
+    shard.total_in_shard = 0; // prevent stale reads pre-finalization
     st.total_tickets = st
         .total_tickets
         .checked_sub(lost)

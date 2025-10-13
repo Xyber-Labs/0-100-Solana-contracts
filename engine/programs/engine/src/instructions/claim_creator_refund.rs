@@ -20,7 +20,11 @@ pub struct ClaimCreatorRefund<'info> {
     pub creator_grant: Account<'info, CreatorGrant>,
 
     /// CHECK: Escrow account
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
+    #[account(
+        mut,
+        address = crate::utils::pool::escrow_address(launch_state.key()),
+        constraint = escrow.launch == launch_state.key()
+    )]
     pub escrow: Account<'info, EscrowAccount>,
 }
 
@@ -53,10 +57,6 @@ pub fn handler(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
             .creator
             .to_account_info()
             .try_borrow_mut_lamports()? += refund;
-        
-        // Update escrow balance
-        let escrow = &mut ctx.accounts.escrow;
-        escrow.balance = escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     
     cg.refunded = true;

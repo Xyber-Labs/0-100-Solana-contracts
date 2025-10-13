@@ -45,6 +45,11 @@ export class TxBuilder {
     );
   }
 
+  getRosterShardPda(launch: PublicKey, shardId: number): [PublicKey, number] {
+    const le = Buffer.from(Uint8Array.of(shardId & 0xff, (shardId >> 8) & 0xff));
+    return this.getPda(["roster_shard", launch, le]);
+  }
+
   async initLaunchIx(params: {
     creator: PublicKey;
     saleMint: PublicKey;
@@ -214,7 +219,6 @@ export class TxBuilder {
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
-        selectionState: selectionPda,
         slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
         systemProgram: SystemProgram.programId,
       })
@@ -237,6 +241,8 @@ export class TxBuilder {
     user: PublicKey;
     amount: BN;
     roster?: PublicKey;
+    rosterShard?: PublicKey;
+    shardId?: number; // if rosterShard not provided
     escrow?: PublicKey;
   }): Promise<{
     instruction: TransactionInstruction;
@@ -248,19 +254,23 @@ export class TxBuilder {
       params.user,
     ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
+    const rosterShard =
+      params.rosterShard ??
+      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
       .deposit(params.amount)
-      .accountsStrict({
+      .accounts({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
         roster: roster,
+        rosterShard,
         escrow: escrow,
         launch: params.launch,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .instruction();
 
     return { instruction, userContribution };
@@ -283,6 +293,8 @@ export class TxBuilder {
     user: PublicKey;
     amount: BN;
     roster?: PublicKey;
+    rosterShard?: PublicKey;
+    shardId?: number;
     escrow?: PublicKey;
   }): Promise<{
     instruction: TransactionInstruction;
@@ -294,19 +306,23 @@ export class TxBuilder {
       params.user,
     ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
+    const rosterShard =
+      params.rosterShard ??
+      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
       .withdraw(params.amount)
-      .accountsStrict({
+      .accounts({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
         roster: roster,
+        rosterShard,
         escrow: escrow,
         launch: params.launch,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .instruction();
 
     return { instruction, userContribution };
@@ -327,7 +343,8 @@ export class TxBuilder {
   async claimRefundIx(params: {
     launch: PublicKey;
     user: PublicKey;
-    selection?: PublicKey;
+    rosterShard?: PublicKey;
+    shardId?: number;
     escrow?: PublicKey;
   }): Promise<{
     instruction: TransactionInstruction;
@@ -338,19 +355,22 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const selection =
-      params.selection ?? this.getPda(["selection", params.launch])[0];
+    const rosterShard =
+      params.rosterShard ??
+      (params.shardId !== undefined
+        ? this.getRosterShardPda(params.launch, params.shardId)[0]
+        : (() => { throw new Error("Provide shardId or rosterShard for claimRefund"); })());
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
       .claimRefund()
-      .accountsStrict({
+      .accounts({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
-        selectionState: selection,
+        rosterShard,
         escrow,
-      })
+      } as any)
       .instruction();
 
     return { instruction, userContribution };
@@ -371,7 +391,8 @@ export class TxBuilder {
     launch: PublicKey;
     saleMint: PublicKey;
     user: PublicKey;
-    selection?: PublicKey;
+    rosterShard?: PublicKey;
+    shardId?: number;
     userAta?: PublicKey;
     createAtaIfMissing?: boolean;
     payer: PublicKey;
@@ -381,8 +402,11 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const selection =
-      params.selection ?? this.getPda(["selection", params.launch])[0];
+    const rosterShard =
+      params.rosterShard ??
+      (params.shardId !== undefined
+        ? this.getRosterShardPda(params.launch, params.shardId)[0]
+        : (() => { throw new Error("Provide shardId or rosterShard for claimTokens"); })());
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
     const userAta =
       params.userAta ??
@@ -421,16 +445,16 @@ export class TxBuilder {
 
     const claimIx = await this.program.methods
       .claimTokens()
-      .accountsStrict({
+      .accounts({
         user: params.user,
         launchState: params.launch,
         userContribution,
-        selectionState: selection,
+        rosterShard,
         saleMint: params.saleMint,
         mintAuth,
         userAta,
         tokenProgram: TOKEN_PROGRAM_ID,
-      })
+      } as any)
       .instruction();
 
     instructions.push(claimIx);
@@ -467,9 +491,53 @@ export class TxBuilder {
     return this.program.account.roster.fetch(pda);
   }
 
-  async fetchSelection(launch: PublicKey) {
-    const [pda] = this.getPda(["selection", launch]);
-    return this.program.account.selectionState.fetch(pda);
+
+  async initRosterShardIx(params: {
+    launch: PublicKey;
+    payer: PublicKey;
+    shardId: number;
+  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
+    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    const instruction = await (this.program.methods as any)
+      .initRosterShard(params.shardId)
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        rosterShard,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .instruction();
+    return { instruction, rosterShard };
+  }
+
+  async finalizeRosterShardIx(params: {
+    launch: PublicKey;
+    payer: PublicKey;
+    shardId: number;
+  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
+    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    const instruction = await (this.program.methods as any)
+      .finalizeRosterShard(params.shardId)
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        rosterShard,
+      } as any)
+      .instruction();
+    return { instruction, rosterShard };
+  }
+
+  async openClaimsIx(params: {
+    launch: PublicKey;
+    payer: PublicKey;
+  }): Promise<TransactionInstruction> {
+    return (this.program.methods as any)
+      .openClaims()
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+      } as any)
+      .instruction();
   }
 
   async fetchUserContribution(launch: PublicKey, user: PublicKey) {
@@ -500,7 +568,6 @@ export class TxBuilder {
 
     if (params.createAtaIfMissing) {
       // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
-      // TODO: Consider, should we really use ts-sdk in LiteSVM?!
       try {
         const ataInfo = await this.program.provider.connection.getAccountInfo(
           creatorAta

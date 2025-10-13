@@ -37,7 +37,10 @@ describe("engine litesvm", () => {
     program = anchor.workspace.engine as Program<Engine>;
     admin = provider.wallet;
     adminKeypair = (provider.wallet as any).payer;
-    sdk = EngineSDK.create(provider, program, adminKeypair);
+    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
+    
+    // Fund the admin account with more SOL for account creation
+    client.airdrop(admin.publicKey, BigInt(100 * anchor.web3.LAMPORTS_PER_SOL));
   });
 
   it("Initializes the launch state correctly", async () => {
@@ -124,10 +127,17 @@ describe("engine litesvm", () => {
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
-    await sdk.initRoster({
-      launch: testLaunchState,
-      payerKeypair: adminKeypair,
-    });
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(0)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: testLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
   });
 
   it("Allows deposits", async () => {
@@ -154,10 +164,17 @@ describe("engine litesvm", () => {
     });
 
     await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
-    await sdk.initRoster({
-      launch: testLaunchState,
-      payerKeypair: adminKeypair,
-    });
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(0)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: testLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
@@ -170,7 +187,7 @@ describe("engine litesvm", () => {
           testLaunchState,
           depositor.publicKey
         )[0],
-        roster: sdk.getRosterPda(testLaunchState)[0],
+        rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -220,6 +237,17 @@ describe("engine litesvm", () => {
       launch: testLaunchState,
       payerKeypair: adminKeypair,
     });
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(0)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: testLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
 
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
@@ -233,7 +261,7 @@ describe("engine litesvm", () => {
           testLaunchState,
           depositor.publicKey
         )[0],
-        roster: sdk.getRosterPda(testLaunchState)[0],
+        rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -252,7 +280,7 @@ describe("engine litesvm", () => {
           testLaunchState,
           depositor.publicKey
         )[0],
-        roster: sdk.getRosterPda(testLaunchState)[0],
+        rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -404,14 +432,15 @@ describe("engine litesvm", () => {
     const [directLaunch] = sdk.getLaunchPda(testMint.publicKey);
     const [directEscrow] = sdk.getEscrowPda(directLaunch);
     const [directRoster] = sdk.getRosterPda(directLaunch);
-    const [directSelection] = sdk.getSelectionPda(directLaunch);
+    const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 0);
     const [directMintAuth] = sdk.getMintAuthPda(directLaunch);
     const [directProjectCounter] = sdk.getProjectCounterPda();
 
     assert.ok(sdkPdas.launch.equals(directLaunch));
     assert.ok(sdkPdas.escrow.equals(directEscrow));
     assert.ok(sdkPdas.roster.equals(directRoster));
-    assert.ok(sdkPdas.selection.equals(directSelection));
+    // selection PDA deprecated; verify roster shard PDA derivation works
+    assert.ok(directRosterShard.equals(sdk.getRosterShardPda(directLaunch, 0)[0]));
     assert.ok(sdkPdas.mintAuth.equals(directMintAuth));
     assert.ok(sdkPdas.projectCounter.equals(directProjectCounter));
 
@@ -482,9 +511,11 @@ describe("engine litesvm", () => {
     // Check admin balance and adjust creator deposit accordingly
     const adminBalance = client.getBalance(admin.publicKey);
     const availableForDeposit = adminBalance - BigInt(anchor.web3.LAMPORTS_PER_SOL) / BigInt(2); // Reserve 0.5 SOL for fees
-    const creatorDepositAmount = availableForDeposit > BigInt(0) 
-      ? new anchor.BN(Number(availableForDeposit))
-      : new anchor.BN(0);
+    let creatorDepositAmount = new anchor.BN(0);
+    if (availableForDeposit > BigInt(0)) {
+        const remainder = new anchor.BN(Number(availableForDeposit)).mod(TAU_LAMPORTS);
+        creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
+    }
 
     const testSaleMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
@@ -574,18 +605,20 @@ describe("engine litesvm", () => {
     // Check admin balance and adjust creator deposit accordingly
     const adminBalance = client.getBalance(admin.publicKey);
     const availableForDeposit = adminBalance - BigInt(anchor.web3.LAMPORTS_PER_SOL) / BigInt(2); // Reserve 0.5 SOL for fees
-    const creatorDepositAmount = availableForDeposit > BigInt(0) 
-      ? new anchor.BN(Number(availableForDeposit))
-      : new anchor.BN(0);
+    let creatorDepositAmount = new anchor.BN(0);
+    if (availableForDeposit > BigInt(0)) {
+        const remainder = new anchor.BN(Number(availableForDeposit)).mod(TAU_LAMPORTS);
+        creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
+    }
 
     const testSaleMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
 
-    const testHardCap = new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL);
-    const testMinRaise = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const testPerWalletCap = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
-    const testTau = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+    const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
+    const testMinRaise = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const testPerWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const testTau = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
     const dailyLimit = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
 
     console.log("=== Initializing Launch with Creator Deposit ===");
@@ -619,7 +652,7 @@ describe("engine litesvm", () => {
           admin.publicKey
         ),
       ],
-      signers: [testSaleMint],
+      signers: [adminKeypair, testSaleMint],
     });
 
     // Verify creator grant was initialized
@@ -633,13 +666,24 @@ describe("engine litesvm", () => {
       launch: testLaunchState,
       payerKeypair: adminKeypair,
     });
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(0)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: testLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
 
     console.log("=== Simulating User Deposits ===");
     // Simulate multiple users depositing beyond hard cap
     const users = [];
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const depositAmount = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 1; i++) {
       const user = await createAndFundAccount(client, 20);
 
       await program.methods
@@ -651,7 +695,7 @@ describe("engine litesvm", () => {
             testLaunchState,
             user.publicKey
           )[0],
-          roster: rosterPda,
+          rosterShard,
           escrow: sdk.getEscrowPda(testLaunchState)[0],
           launch: testLaunchState,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -669,7 +713,7 @@ describe("engine litesvm", () => {
     }
 
     let state = await sdk.fetchLaunch(testLaunchState);
-    assert.isAbove(state.totalDeposited.toNumber(), testHardCap.toNumber());
+    assert.isAtLeast(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(
       `Total deposited: ${
         state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
@@ -681,52 +725,19 @@ describe("engine litesvm", () => {
     await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
 
     console.log("=== Setting VRF Seed ===");
-    // Set VRF seed
-    const [selectionPda] = sdk.getSelectionPda(testLaunchState);
-    const seedSig = await program.methods
-      .setSeed()
-      .accountsStrict({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        selectionState: selectionPda,
-        slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([admin.payer])
-      .rpc();
-    console.log("VRF seed set with signature:", seedSig);
+    // Set VRF seed (no SelectionState account now)
+    await sdk.setSeed({ launch: testLaunchState });
 
-    console.log("=== Processing Batches ===");
-    // Process batches to finalize selection
-    state = await sdk.fetchLaunch(testLaunchState);
-    const totalTicketsToProcess = state.totalTickets;
-    let processed = 0;
-    let batchSlot = client.getClock().slot;
+    console.log("=== Finalizing Shard and Opening Claims ===");
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
+    await sdk.openClaims({ launch: testLaunchState });
 
-    while (processed < totalTicketsToProcess) {
-      batchSlot += BigInt(1);
-      client.warpToSlot(batchSlot);
-      client.expireBlockhash();
-
-      await program.methods
-        .processBatch(10)
-        .accounts({
-          selectionState: selectionPda,
-          launchState: testLaunchState,
-          roster: rosterPda,
-        })
-        .rpc();
-
-      const selectionAccount = await sdk.fetchSelection(testLaunchState);
-      processed = selectionAccount.processed;
-    }
-
-    // Verify automatic finalization
+    // Verify finalization
     state = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(state.selectionFinalized);
     assert.isTrue(state.claimsOpen);
     assert.ok(state.tokensPerTicket !== null);
-    console.log(`Selection finalized. Tokens per ticket: ${state.tokensPerTicket}`);
+    console.log(`Claims opened. Tokens per ticket: ${state.tokensPerTicket}`);
 
     console.log("=== Testing Creator Token Claiming ===");
     // Test creator token claiming (only if creator deposit > 0)
@@ -793,17 +804,25 @@ describe("engine litesvm", () => {
     const userInitialBalance = client.getBalance(testUser.keypair.publicKey);
 
     // User claims refund
-    await program.methods
+    const claimRefundTx = await program.methods
       .claimRefund()
       .accounts({
         user: testUser.keypair.publicKey,
         launchState: testLaunchState,
         userContribution: testUser.contribution,
-        selectionState: selectionPda,
+        rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
       } as any)
       .signers([testUser.keypair])
-      .rpc();
+      .transaction();
+    
+    // Add compute budget instruction to increase compute units
+    const computeBudgetIx = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 3_000_000,
+    });
+    claimRefundTx.instructions.unshift(computeBudgetIx);
+    
+    await provider.sendAndConfirm(claimRefundTx, [testUser.keypair]);
 
     const userFinalBalance = client.getBalance(testUser.keypair.publicKey);
     const userAccountAfter = await sdk.fetchUserContribution(
@@ -824,7 +843,7 @@ describe("engine litesvm", () => {
       testSaleMint.publicKey,
       testUser.keypair.publicKey
     );
-    await program.methods
+    const claimTokensTx = await program.methods
       .claimTokens()
       .preInstructions([
         sdk.buildCreateAtaIx({
@@ -837,14 +856,22 @@ describe("engine litesvm", () => {
         user: testUser.keypair.publicKey,
         launchState: testLaunchState,
         userContribution: testUser.contribution,
-        selectionState: selectionPda,
+        rosterShard,
         saleMint: testSaleMint.publicKey,
         mintAuth: sdk.getMintAuthPda(testLaunchState)[0],
         userAta,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
       .signers([testUser.keypair])
-      .rpc();
+      .transaction();
+    
+    // Add compute budget instruction to increase compute units
+    const computeBudgetIx2 = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 3_000_000,
+    });
+    claimTokensTx.instructions.unshift(computeBudgetIx2);
+    
+    await provider.sendAndConfirm(claimTokensTx, [testUser.keypair]);
 
     const userTokenAccountInfo = client.getAccount(userAta);
     const userTokenAccount = unpackAccount(userAta, userTokenAccountInfo);

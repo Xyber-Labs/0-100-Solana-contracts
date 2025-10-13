@@ -269,47 +269,7 @@
           }
         },
         {
-          "name": "selection_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  101,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
+          "name": "roster_shard"
         },
         {
           "name": "escrow",
@@ -386,8 +346,7 @@
           }
         },
         {
-          "name": "selection_state",
-          "writable": true
+          "name": "roster_shard"
         },
         {
           "name": "sale_mint",
@@ -591,7 +550,7 @@
           }
         },
         {
-          "name": "roster",
+          "name": "roster_shard",
           "writable": true
         },
         {
@@ -602,10 +561,7 @@
           "writable": true
         },
         {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
+          "name": "launch"
         },
         {
           "name": "system_program",
@@ -616,6 +572,89 @@
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "finalize_roster_shard",
+      "docs": [
+        "Finalize roster shard (compute prefix, set shard_base, bump totals)"
+      ],
+      "discriminator": [
+        124,
+        151,
+        200,
+        25,
+        61,
+        233,
+        114,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "roster_shard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              },
+              {
+                "kind": "arg",
+                "path": "shard_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u16"
         }
       ]
     },
@@ -911,6 +950,121 @@
       "args": []
     },
     {
+      "name": "init_roster_shard",
+      "docs": [
+        "Initialize roster shard account"
+      ],
+      "discriminator": [
+        251,
+        25,
+        110,
+        80,
+        137,
+        49,
+        197,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "roster_shard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              },
+              {
+                "kind": "arg",
+                "path": "shard_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "open_claims",
+      "docs": [
+        "Open claims after all shards finalized"
+      ],
+      "discriminator": [
+        111,
+        108,
+        90,
+        115,
+        178,
+        90,
+        24,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "process_batch",
       "docs": [
         "Permissionless crank: process up to max_items tickets (t = processed ..)."
@@ -925,95 +1079,7 @@
         206,
         67
       ],
-      "accounts": [
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "selection_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  101,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "roster",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        }
-      ],
+      "accounts": [],
       "args": [
         {
           "name": "max_items",
@@ -1045,49 +1111,6 @@
         {
           "name": "launch_state",
           "writable": true
-        },
-        {
-          "name": "selection_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  101,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
         },
         {
           "name": "slot_hashes",
@@ -1168,7 +1191,7 @@
           }
         },
         {
-          "name": "roster",
+          "name": "roster_shard",
           "writable": true
         },
         {
@@ -1179,10 +1202,7 @@
           "writable": true
         },
         {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
+          "name": "launch"
         },
         {
           "name": "system_program",
@@ -1277,16 +1297,16 @@
       ]
     },
     {
-      "name": "SelectionState",
+      "name": "RosterShard",
       "discriminator": [
-        235,
-        126,
-        97,
         31,
-        31,
-        163,
-        172,
-        135
+        213,
+        128,
+        164,
+        233,
+        238,
+        137,
+        178
       ]
     },
     {
@@ -1445,6 +1465,32 @@
         158,
         188,
         249
+      ]
+    },
+    {
+      "name": "RosterShardFinalized",
+      "discriminator": [
+        136,
+        212,
+        55,
+        122,
+        118,
+        122,
+        150,
+        85
+      ]
+    },
+    {
+      "name": "RosterShardInitialized",
+      "discriminator": [
+        110,
+        2,
+        21,
+        250,
+        126,
+        114,
+        61,
+        90
       ]
     },
     {
@@ -1735,6 +1781,31 @@
       "code": 6046,
       "name": "InvalidClaimLockPeriod",
       "msg": "Creator claim lock period must be > 0"
+    },
+    {
+      "code": 6047,
+      "name": "NotSupported",
+      "msg": "Operation not supported in current version"
+    },
+    {
+      "code": 6048,
+      "name": "RosterShardFull",
+      "msg": "Roster shard is full"
+    },
+    {
+      "code": 6049,
+      "name": "InvalidFinalizeOrder",
+      "msg": "Roster finalization order violated"
+    },
+    {
+      "code": 6050,
+      "name": "ShardNotFinalized",
+      "msg": "Roster shard not finalized"
+    },
+    {
+      "code": 6051,
+      "name": "ShardsNotFullyFinalized",
+      "msg": "Claims cannot be opened before all shards finalized"
     }
   ],
   "types": [
@@ -1951,26 +2022,6 @@
       }
     },
     {
-      "name": "HeapEntry",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "score",
-            "type": "u128"
-          },
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "local_j",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "InitLaunchParams",
       "type": {
         "kind": "struct",
@@ -2155,6 +2206,18 @@
             "type": {
               "option": "u128"
             }
+          },
+          {
+            "name": "roster_shards",
+            "type": "u16"
+          },
+          {
+            "name": "roster_finalized_up_to",
+            "type": "i32"
+          },
+          {
+            "name": "public_total_tickets",
+            "type": "u32"
           },
           {
             "name": "claims_open",
@@ -2396,6 +2459,88 @@
       }
     },
     {
+      "name": "RosterShard",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "wallets",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "counts",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "prefix",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "total_in_shard",
+            "type": "u32"
+          },
+          {
+            "name": "shard_base",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RosterShardFinalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "total_in_shard",
+            "type": "u32"
+          },
+          {
+            "name": "shard_base",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RosterShardInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "SeedSet",
       "type": {
         "kind": "struct",
@@ -2426,57 +2571,8 @@
             "type": "pubkey"
           },
           {
-            "name": "threshold",
-            "type": "u128"
-          },
-          {
             "name": "k_capacity",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "SelectionState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "vrf_seed",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "processed",
-            "type": "u32"
-          },
-          {
-            "name": "finalized",
-            "type": "bool"
-          },
-          {
-            "name": "threshold",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "heap",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "HeapEntry"
-                }
-              }
-            }
           }
         ]
       }
@@ -2533,6 +2629,14 @@
           {
             "name": "claimed_tokens",
             "type": "bool"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "idx_in_shard",
+            "type": "u32"
           }
         ]
       }

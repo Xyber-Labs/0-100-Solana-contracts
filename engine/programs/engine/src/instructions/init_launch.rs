@@ -26,7 +26,7 @@ pub struct InitLaunch<'info> {
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()], // for MVP use sale_mint as launch_id
+        seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()],
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
@@ -111,7 +111,6 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         EngineErrorCode::InvalidNumBlocks
     );
 
-    // Get keys before any mutable borrows
     let launch_key = ctx.accounts.launch_state.key();
 
     let counter = &mut ctx.accounts.project_counter;
@@ -149,6 +148,11 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.threshold_score = None;
     state.vrf_seed = None;
 
+    // Sharded roster fields
+    state.roster_shards = 0; // UI must set before creating shards
+    state.roster_finalized_up_to = -1;
+    state.public_total_tickets = 0;
+
     state.claims_open = false;
     state.tokens_per_ticket = None;
 
@@ -165,9 +169,8 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
         require!(state.tau_lamports > 0, EngineErrorCode::InvalidTau);
-        // TODO: Re-enable divisibility check after fixing BN/u64 conversion issues
-        // let remainder = amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        // require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
+        let remainder = amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
 
         // Transfer creator deposit to escrow using system program
         let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(

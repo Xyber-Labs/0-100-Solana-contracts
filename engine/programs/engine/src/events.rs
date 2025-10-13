@@ -64,7 +64,6 @@ pub struct BatchProcessed {
 #[event]
 pub struct SelectionFinalized {
     pub launch: Pubkey,
-    pub threshold: u128,
     pub k_capacity: u32,
 }
 
@@ -125,4 +124,18 @@ pub struct CreatorClaimed {
 pub struct ClaimsOpened {
     pub launch: Pubkey,
     pub opened_at: i64,
+}
+
+#[event]
+pub struct RosterShardInitialized {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+}
+
+#[event]
+pub struct RosterShardFinalized {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub total_in_shard: u32,
+    pub shard_base: u32,
 }

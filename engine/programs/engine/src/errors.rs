@@ -97,4 +97,16 @@ pub enum ErrorCode {
     MinRaiseTooHigh,
     #[msg("Creator claim lock period must be > 0")]
     InvalidClaimLockPeriod,
+
+    // New errors for sharded roster / new flow
+    #[msg("Operation not supported in current version")]
+    NotSupported,
+    #[msg("Roster shard is full")]
+    RosterShardFull,
+    #[msg("Roster finalization order violated")]
+    InvalidFinalizeOrder,
+    #[msg("Roster shard not finalized")]
+    ShardNotFinalized,
+    #[msg("Claims cannot be opened before all shards finalized")]
+    ShardsNotFullyFinalized,
 }

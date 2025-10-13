@@ -9,8 +9,8 @@ import requests
 # RPC_URL = "http://10.186.0.84:8899/"
 RPC_URL = "http://127.0.0.1:8899/"
 SLOT_HASHES_PUBKEY = "SysvarS1otHashes111111111111111111111111111"
-COMMITMENT = "processed"  # можно: processed | confirmed | finalized
-LIMIT = 32  # сколько записей вывести из начала (самые свежие)
+COMMITMENT = "processed"  # can be: processed | confirmed | finalized
+LIMIT = 32  # how many entries to show from the beginning (newest first)
 
 def rpc(method, params):
     payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
@@ -27,7 +27,7 @@ def get_account_binary(pubkey, commitment="processed"):
     if not val or not val.get("data"):
         raise RuntimeError("empty account data")
     data_field = val["data"]
-    # data может быть ["<base64>", "base64"] или просто "<base64>"
+    # data can be ["<base64>", "base64"] or just "<base64>"
     if isinstance(data_field, list):
         b64 = data_field[0]
     else:
@@ -47,7 +47,7 @@ def parse_slot_hashes(data: bytes):
         slot, = struct.unpack_from("<Q", data, off); off += 8
         h = data[off:off+32]; off += 32
         entries.append((slot, h))
-    return entries  # порядок: самые свежие ПЕРВЫМИ
+    return entries  # order: newest first
 
 def main():
     try:

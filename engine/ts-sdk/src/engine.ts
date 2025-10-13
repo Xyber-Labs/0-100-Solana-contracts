@@ -15,7 +15,6 @@ import {
 } from "@solana/spl-token";
 
 // ---- IDL ----
-// The path may differ in your repo. If you have a re-export of IDL types, adjust the import below.
 import type { Engine as EngineIDL } from "../idl/engine";
 
 // Import IDL as a dynamic import to avoid require
@@ -52,6 +51,7 @@ export default {
     admin?: Keypair
   ) {
     const payer = admin?.publicKey ?? provider.publicKey!;
+    const adminKeypair = admin;
     const txBuilder = new TxBuilder(program, admin);
 
     // -------------- PDA helpers --------------
@@ -67,8 +67,8 @@ export default {
       return txBuilder.getPda(["roster", launch]);
     }
 
-    function getSelectionPda(launch: PublicKey): [PublicKey, number] {
-      return txBuilder.getPda(["selection", launch]);
+    function getRosterShardPda(launch: PublicKey, shardId: number): [PublicKey, number] {
+      return txBuilder.getRosterShardPda(launch, shardId);
     }
 
     function getUserContributionPda(
@@ -205,13 +205,12 @@ export default {
       launch: PublicKey;
       payerKeypair?: Keypair; // if payer is not provider.wallet
     }): Promise<{ selectionPda: PublicKey; signature: string }> {
-      const [selectionPda] = getSelectionPda(args.launch);
+      const [selectionPda] = txBuilder.getPda(["selection", args.launch]);
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
 
       const rpc = program.methods.setSeed().accountsStrict({
         payer: payerPubkey,
         launchState: args.launch,
-        selectionState: selectionPda,
         slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
         systemProgram: SystemProgram.programId,
       });
@@ -219,23 +218,9 @@ export default {
       return { selectionPda, signature: await rpc.rpc() };
     }
 
-    async function processBatch(args: {
-      launch: PublicKey;
-      maxItems: number; // u16
-      roster?: PublicKey;
-      selection?: PublicKey;
-    }): Promise<{ signature: string }> {
-      const roster = args.roster ?? getRosterPda(args.launch)[0];
-      const selection = args.selection ?? getSelectionPda(args.launch)[0];
-      const signature = await program.methods
-        .processBatch(args.maxItems)
-        .accountsStrict({
-          selectionState: selection,
-          launchState: args.launch,
-          roster,
-        })
-        .rpc();
-      return { signature };
+    // processBatch deprecated in on-chain program; keep for compatibility but will fail
+    async function processBatch(_: any): Promise<{ signature: string }> {
+      throw new Error("processBatch deprecated; use finalizeRosterShard + openClaims");
     }
 
     async function deposit(args: {
@@ -243,6 +228,8 @@ export default {
       amountLamports: BN;
       userKeypair?: Keypair;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ userPda: PublicKey; signature: string }> {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
@@ -251,6 +238,8 @@ export default {
         user: userPubkey,
         amount: args.amountLamports,
         roster: args.roster,
+        rosterShard: args.rosterShard,
+        shardId: args.shardId,
         escrow: args.escrow,
       });
 
@@ -268,24 +257,28 @@ export default {
       amountLamports: BN;
       userKeypair?: Keypair;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ signature: string }> {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
-      const [userPda] = getUserContributionPda(args.launch, userPubkey);
-      const roster = args.roster ?? getRosterPda(args.launch)[0];
-      const escrow = args.escrow ?? getEscrowPda(args.launch)[0];
-
-      const rpc = program.methods.withdraw(args.amountLamports).accountsStrict({
-        user: userPubkey,
-        launchState: args.launch,
-        userContribution: userPda,
-        roster,
-        escrow,
+      const { transaction } = await txBuilder.withdrawTx({
         launch: args.launch,
-        systemProgram: SystemProgram.programId,
-      });
-      if (args.userKeypair) rpc.signers([args.userKeypair]);
-      return { signature: await rpc.rpc() };
+        user: userPubkey,
+        amount: args.amountLamports,
+        roster: args.roster,
+        // @ts-ignore pass-through for updated builder
+        rosterShard: args.rosterShard,
+        // @ts-ignore pass-through for updated builder
+        shardId: args.shardId,
+        escrow: args.escrow,
+      } as any);
+      const signers = args.userKeypair ? [args.userKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature };
     }
 
     async function withdrawTx(args: {
@@ -293,6 +286,8 @@ export default {
       amountLamports: BN;
       userPubkey?: PublicKey;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
       const user = args.userPubkey ?? payer;
@@ -301,8 +296,12 @@ export default {
         user,
         amount: args.amountLamports,
         roster: args.roster,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
     }
 
     async function withdrawIx(args: {
@@ -310,6 +309,8 @@ export default {
       amountLamports: BN;
       userPubkey?: PublicKey;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{
       instruction: TransactionInstruction;
@@ -321,8 +322,12 @@ export default {
         user,
         amount: args.amountLamports,
         roster: args.roster,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
     }
 
     async function depositTx(args: {
@@ -330,6 +335,8 @@ export default {
       amountLamports: BN;
       userPubkey?: PublicKey;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
       const user = args.userPubkey ?? payer;
@@ -338,8 +345,12 @@ export default {
         user,
         amount: args.amountLamports,
         roster: args.roster,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
     }
 
     async function depositIx(args: {
@@ -347,6 +358,8 @@ export default {
       amountLamports: BN;
       userPubkey?: PublicKey;
       roster?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{
       instruction: TransactionInstruction;
@@ -358,23 +371,31 @@ export default {
         user,
         amount: args.amountLamports,
         roster: args.roster,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
     }
 
     async function claimRefund(args: {
       launch: PublicKey;
       userKeypair?: Keypair;
-      selection?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ signature: string }> {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
       const { transaction } = await txBuilder.claimRefundTx({
         launch: args.launch,
         user: userPubkey,
-        selection: args.selection,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
       const signers = args.userKeypair ? [args.userKeypair] : [];
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
@@ -386,15 +407,19 @@ export default {
     async function claimRefundTx(args: {
       launch: PublicKey;
       userPubkey: PublicKey;
-      selection?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       escrow?: PublicKey;
     }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
       return txBuilder.claimRefundTx({
         launch: args.launch,
         user: args.userPubkey,
-        selection: args.selection,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         escrow: args.escrow,
-      });
+      } as any);
     }
 
     /**
@@ -432,7 +457,8 @@ export default {
       launch: PublicKey;
       saleMint: PublicKey;
       userKeypair?: Keypair;
-      selection?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       userAta?: PublicKey;
       createAtaIfMissing?: boolean;
     }): Promise<{ signature: string; userAta: PublicKey }> {
@@ -441,11 +467,14 @@ export default {
         launch: args.launch,
         saleMint: args.saleMint,
         user: userPubkey,
-        selection: args.selection,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         userAta: args.userAta,
         createAtaIfMissing: args.createAtaIfMissing,
         payer: payer,
-      });
+      } as any);
 
       const signers = args.userKeypair ? [args.userKeypair] : [];
       if (!provider.sendAndConfirm) {
@@ -459,7 +488,8 @@ export default {
       launch: PublicKey;
       saleMint: PublicKey;
       userPubkey: PublicKey;
-      selection?: PublicKey;
+      rosterShard?: PublicKey;
+      shardId?: number;
       userAta?: PublicKey;
       createAtaIfMissing?: boolean;
     }): Promise<{ transaction: Transaction; userAta: PublicKey }> {
@@ -467,11 +497,58 @@ export default {
         launch: args.launch,
         saleMint: args.saleMint,
         user: args.userPubkey,
-        selection: args.selection,
+        // @ts-ignore
+        rosterShard: args.rosterShard,
+        // @ts-ignore
+        shardId: args.shardId,
         userAta: args.userAta,
         createAtaIfMissing: args.createAtaIfMissing,
         payer: payer,
+      } as any);
+    }
+
+    async function initRosterShard(args: { launch: PublicKey; shardId: number }): Promise<{ rosterShard: PublicKey; signature: string }> {
+      const { instruction, rosterShard } = await txBuilder.initRosterShardIx({
+        launch: args.launch,
+        payer,
+        shardId: args.shardId,
       });
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = payer;
+      const signers = adminKeypair ? [adminKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { rosterShard, signature };
+    }
+
+    async function finalizeRosterShard(args: { launch: PublicKey; shardId: number }): Promise<{ signature: string }> {
+      const { instruction } = await txBuilder.finalizeRosterShardIx({
+        launch: args.launch,
+        payer,
+        shardId: args.shardId,
+      });
+      const tx = new Transaction().add(instruction);
+      tx.feePayer = payer;
+      const signers = adminKeypair ? [adminKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
+    }
+
+    async function openClaims(args: { launch: PublicKey }): Promise<{ signature: string }> {
+      const ix = await txBuilder.openClaimsIx({ launch: args.launch, payer });
+      const tx = new Transaction().add(ix);
+      tx.feePayer = payer;
+      const signers = adminKeypair ? [adminKeypair] : [];
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
     }
 
     async function claimCreatorTokens(args: {
@@ -556,9 +633,6 @@ export default {
       return txBuilder.fetchRoster(launch);
     }
 
-    async function fetchSelection(launch: PublicKey) {
-      return txBuilder.fetchSelection(launch);
-    }
 
     async function fetchUserContribution(launch: PublicKey, user: PublicKey) {
       return txBuilder.fetchUserContribution(launch, user);
@@ -649,10 +723,9 @@ export default {
       const [launch] = getLaunchPda(saleMint);
       const [escrow] = getEscrowPda(launch);
       const [roster] = getRosterPda(launch);
-      const [selection] = getSelectionPda(launch);
       const [mintAuth] = getMintAuthPda(launch);
       const [projectCounter] = getProjectCounterPda();
-      return { launch, escrow, roster, selection, mintAuth, projectCounter };
+      return { launch, escrow, roster, mintAuth, projectCounter };
     }
 
     // ---- Returned API ----
@@ -665,7 +738,7 @@ export default {
       getLaunchPda,
       getEscrowPda,
       getRosterPda,
-      getSelectionPda,
+      getRosterShardPda,
       getUserContributionPda,
       getMintAuthPda,
       getProjectCounterPda,
@@ -685,6 +758,9 @@ export default {
       withdraw,
       claimRefund,
       claimTokens,
+      initRosterShard,
+      finalizeRosterShard,
+      openClaims,
       claimRefundTx,
       claimTokensTx,
       claimCreatorTokens,
@@ -706,7 +782,6 @@ export default {
 
       fetchLaunch,
       fetchRoster,
-      fetchSelection,
       fetchUserContribution,
       fetchCreatorGrant,
       fetchProjectCounter,

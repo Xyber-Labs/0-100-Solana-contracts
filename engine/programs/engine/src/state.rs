@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::constants::ROSTER_SHARD_CAP;
 
 // -------------------------------
 // Account Structures
@@ -36,6 +37,11 @@ pub struct LaunchState {
     pub selection_processed: u32, // mirror, not used in MVP (kept in SelectionState)
     pub selection_finalized: bool,
     pub threshold_score: Option<u128>,
+
+    // Sharded roster and permutation-based selection fields
+    pub roster_shards: u16,              // number of roster shards allocated for this launch
+    pub roster_finalized_up_to: i32,     // -1 until finalization starts; then last finalized shard_id
+    pub public_total_tickets: u32,       // sum of total_in_shard over finalized shards
 
     // Claims
     pub claims_open: bool,
@@ -78,6 +84,10 @@ pub struct UserContribution {
     pub ticket_count: u32,
     pub claimed_refund: bool,
     pub claimed_tokens: bool,
+
+    // Sharded roster placement (assigned on first deposit)
+    pub shard_id: u16,
+    pub idx_in_shard: u32,
 }
 
 #[account]
@@ -96,6 +106,22 @@ pub struct Roster {
     pub prefix: Vec<u32>, // prefix[u] = Σ counts[k], k<u
     pub total_in_shard: u32,
     pub shard_base: u32, // 0 in MVP
+}
+
+// New sharded roster account
+#[account]
+#[derive(InitSpace)]
+pub struct RosterShard {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    #[max_len(ROSTER_SHARD_CAP)]
+    pub wallets: Vec<Pubkey>,
+    #[max_len(ROSTER_SHARD_CAP)]
+    pub counts: Vec<u32>,
+    #[max_len(ROSTER_SHARD_CAP)]
+    pub prefix: Vec<u32>,
+    pub total_in_shard: u32,
+    pub shard_base: u32,
 }
 
 #[account]

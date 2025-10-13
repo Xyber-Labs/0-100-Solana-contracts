@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js';
-import EngineSDK from 'zero-hundred-engine-sdk';
+import EngineSDK from '../../ts-sdk/src/engine';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { runFullFlow } from './utils/flowRunner';
@@ -81,7 +81,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [launchData, setLaunchData] = useState<any>(null);
   const [userContributions, setUserContributions] = useState<any>(null);
-  const [selectionData, setSelectionData] = useState<any>(null);
   const [showLaunchForm, setShowLaunchForm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<number>(0);
@@ -207,11 +206,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         preflightCommitment: 'confirmed',
       });
       
-      // Load IDL dynamically
+      // Load IDL dynamically with proper error handling
       const idl = await EngineSDK.loadIdl();
       
-      // Import and initialize program using SDK's built-in IDL
-      const program = new Program(idl as any, provider);
+      // Debug: Check IDL structure
+      console.log('IDL structure:', {
+        address: idl.address,
+        instructions: idl.instructions?.length,
+        accounts: idl.accounts?.length,
+        types: idl.types?.length
+      });
+      
+      // Initialize program using standard Anchor approach
+      const program = new Program(idl, provider);
       
       // Create SDK instance
       const sdkInstance = EngineSDK.create(provider, program as any);
@@ -272,17 +279,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, launchState, publicKey, testWallet]);
 
-  const fetchSelectionData = useCallback(async () => {
-    if (!sdk || !launchState) return;
-    
-    try {
-      const data = await sdk.fetchSelection(launchState);
-      setSelectionData(data);
-      addLog('Selection data refreshed');
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch selection data - ${error}`);
-    }
-  }, [sdk, launchState]);
   
   const fetchBalance = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
@@ -468,25 +464,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, program, publicKey, launchConfig, fetchLaunchData]);
 
-  const initRoster = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Initializing roster...');
-      const { rosterPda, signature } = await sdk.initRoster({ launch: launchState });
-      setRoster(rosterPda);
-      addLog(`SUCCESS: Roster initialized - Signature: ${signature}`);
-      addLog(`Roster PDA: ${rosterPda.toString()}`);
-    } catch (error) {
-      addLog(`ERROR: Failed to initialize roster - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]);
 
 
   const setSeed = useCallback(async () => {
@@ -512,27 +489,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, launchState, fetchLaunchData]);
 
-  const processBatch = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Processing batch...');
-      const { signature } = await sdk.processBatch({
-        launch: launchState,
-        maxItems: 10,
-      });
-      addLog(`SUCCESS: Batch processed - Signature: ${signature}`);
-      await fetchSelectionData();
-    } catch (error) {
-      addLog(`ERROR: Failed to process batch - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState, fetchSelectionData]);
 
   const deposit = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -768,7 +724,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           setUserContributions(restoredUserContributions);
         }
         
-        setSelectionData(project.selectionData);
         setCurrentProjectId(project.id);
       } catch (error) {
         addLog(`ERROR: Failed to restore data - ${error}`);
@@ -1445,11 +1400,26 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <div className="my-2 border-t border-gray-600"></div>
             
             <button 
-              onClick={initRoster}
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Initializing roster shard 0...');
+                  const { signature } = await sdk.initRosterShard({
+                    launch: launchState,
+                    shardId: 0,
+                  });
+                  addLog(`SUCCESS: Roster shard 0 initialized - Signature: ${signature}`);
+                } catch (error) {
+                  addLog(`ERROR: Failed to initialize roster shard - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
               className="terminal-button w-full text-left"
               disabled={!launchState || isLoading || isFlowRunning}
             >
-              <span className="terminal-prompt">$</span> Init Roster
+              <span className="terminal-prompt">$</span> Init Roster Shard
             </button>
             
             
@@ -1462,12 +1432,51 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </button>
             
             <button 
-              onClick={processBatch}
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Finalizing roster shard 0...');
+                  const { signature } = await sdk.finalizeRosterShard({
+                    launch: launchState,
+                    shardId: 0,
+                  });
+                  addLog(`SUCCESS: Roster shard 0 finalized - Signature: ${signature}`);
+                } catch (error) {
+                  addLog(`ERROR: Failed to finalize roster shard - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
               className="terminal-button w-full text-left"
               disabled={!launchState || isLoading || isFlowRunning}
             >
-              <span className="terminal-prompt">$</span> Process Batch
+              <span className="terminal-prompt">$</span> Finalize Roster Shard
             </button>
+            
+            <button 
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Opening claims...');
+                  const { signature } = await sdk.openClaims({
+                    launch: launchState,
+                  });
+                  addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
+                  await fetchLaunchData();
+                } catch (error) {
+                  addLog(`ERROR: Failed to open claims - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              className="terminal-button w-full text-left"
+              disabled={!launchState || isLoading || isFlowRunning}
+            >
+              <span className="terminal-prompt">$</span> Open Claims
+            </button>
+            
             
             <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
 
@@ -1549,22 +1558,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
           )}
 
-          {/* Selection Data Display */}
-          {selectionData && (
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <div className="terminal-prompt mb-2 text-xs">Selection Data:</div>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="terminal-output">Processed:</span>
-                  <span className="terminal-success">{selectionData.processed || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="terminal-output">Heap Length:</span>
-                  <span className="terminal-success">{selectionData.heap?.length || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1577,12 +1570,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         <div className="text-xs terminal-output space-y-1">
           <div><span className="terminal-success">1.</span> Initialize SDK</div>
           <div><span className="terminal-success">2.</span> Init Launch</div>
-          <div><span className="terminal-success">3.</span> Init Roster <span className="terminal-error">(Required before deposits!)</span></div>
+          <div><span className="terminal-success">3.</span> Init Roster Shard <span className="terminal-error">(Required before deposits!)</span></div>
           <div><span className="terminal-success">4.</span> Deposit SOL (Wait for funding period to start)</div>
           <div><span className="terminal-success">5.</span> Wait for Funding Period to End</div>
-          <div><span className="terminal-success">6.</span> Set VRF Seed (This starts the selection process)</div>
-          <div><span className="terminal-success">7.</span> Process Batch (Repeat until all tickets processed)</div>
-          <div><span className="terminal-success">8.</span> Claim Tokens/Refund (Claims open automatically after processing)</div>
+          <div><span className="terminal-success">6.</span> Set VRF Seed</div>
+          <div><span className="terminal-success">7.</span> Finalize Roster Shard</div>
+          <div><span className="terminal-success">8.</span> Open Claims</div>
+          <div><span className="terminal-success">9.</span> Claim Tokens/Refund</div>
         </div>
       </div>
 
