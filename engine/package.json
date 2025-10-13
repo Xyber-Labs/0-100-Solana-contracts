@@ -4,6 +4,9 @@
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
+    "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|full flow' --invert",
+    "test:litesvm:raydium": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm'",
+    "test:litesvm:full": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'full flow'",
     "script:local-flow": "ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node scripts/run-local-flow.ts"
   },
   "dependencies": {

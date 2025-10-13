@@ -58,4 +58,6 @@ pub enum ErrorCode {
     NoValidBlockhash,
     #[msg("Mint already exists")]
     MintAlreadyExists,
+    #[msg("An arithmetic operation overflowed")]
+    ArithmeticOverflow,
 }

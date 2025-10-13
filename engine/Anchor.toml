@@ -23,6 +23,9 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
+litesvm-basic = "yarn run test:litesvm:basic"
+litesvm-raydium = "yarn run test:litesvm:raydium"
+litesvm-full = "yarn run test:litesvm:full"
 farm-sol = "ts-node scripts/farm-sol.ts"
 sync-id = "node scripts/sync-program-id.js"
 init-launch = "ts-node scripts/init-launch.ts"

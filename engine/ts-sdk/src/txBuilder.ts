@@ -1,8 +1,14 @@
-import { Program, BN } from "@coral-xyz/anchor";
-import { Transaction, TransactionInstruction, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
-import { Engine as EngineIDL } from "../idl/engine";
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, getAssociatedTokenAddressSync, ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import * as anchor from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { Engine as EngineIDL } from "../idl/engine";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID
+} from "@solana/spl-token";
 import { getConstant } from "./utils";
 
 const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
@@ -90,7 +96,7 @@ export class TxBuilder {
     fundingDurationSec: BN;
     provider: any;
   }): Promise<{
-    transaction: Transaction;
+    initLaunchTx: Transaction;
     launchState: PublicKey;
     escrow: PublicKey;
     signers: Keypair[];
@@ -125,13 +131,13 @@ export class TxBuilder {
       fundingDurationSec: params.fundingDurationSec
     });
 
-    const transaction = new Transaction()
+    const initLaunchTx = new Transaction()
       .add(createMintAccountIx)
       .add(initializeMintIx)
       .add(initLaunchIx);
 
     return {
-      transaction,
+      initLaunchTx,
       launchState,
       escrow,
       signers: [params.saleMint],
@@ -172,7 +178,7 @@ export class TxBuilder {
     admin: PublicKey;
   }): Promise<{ instruction: TransactionInstruction; selectionPda: PublicKey }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
-    
+
     const instruction = await this.program.methods
       .setSeed()
       .accountsStrict({
@@ -318,7 +324,6 @@ export class TxBuilder {
     baseMint: PublicKey;
     baseTokenAta: PublicKey;
   }> {
-    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
     const [escrow] = this.getPda(["escrow", params.launch]);
 
     const [poolState] = PublicKey.findProgramAddressSync(
@@ -336,7 +341,6 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    // Derive token vaults
     const [quoteVault] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
@@ -363,30 +367,29 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    // Get ATA for base_mint owned by payer
     const baseTokenAta = getAssociatedTokenAddressSync(
       params.baseMint.publicKey,
-      params.payer
+      escrow,
+      true // allowOwnerOffCurve for PDA
     );
 
 
     const createClmmPoolIx = await this.program.methods
       .createClmmPool()
       .accountsStrict({
-        clmmProgram: params.clmmProgram,
         payer: params.payer,
         launchState: params.launch,
         escrow: escrow,
-        mintAuthority: mintAuth,
-        ammConfig: params.ammConfig,
-        poolState: poolState,
-        quoteMint: params.quoteMint,
+        baseEscrowAta: baseTokenAta,
         baseMint: params.baseMint.publicKey,
-        quoteVault: quoteVault,
-        baseVault: baseVault,
-        observationState: observationState,
-        tickArrayBitmap: tickArrayBitmap,
-        baseTokenAta: baseTokenAta,
+        quoteMint: params.quoteMint,
+        raydiumAmmConfig: params.ammConfig,
+        raydiumPoolState: poolState,
+        raydiumBaseVault: baseVault,
+        raydiumQuoteVault: quoteVault,
+        raydiumObservationState: observationState,
+        raydiumTickArrayBitmap: tickArrayBitmap,
+        raydiumProgram: params.clmmProgram,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -419,7 +422,6 @@ export class TxBuilder {
     transaction: Transaction;
     signers: Keypair[];
   }> {
-    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
     const [escrow] = this.getPda(["escrow", params.launch]);
 
     const [poolState] = PublicKey.findProgramAddressSync(
@@ -529,23 +531,23 @@ export class TxBuilder {
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity()
       .accountsStrict({
-        clmmProgram: params.clmmProgram,
-        payer: params.payer,
+        creator: params.payer,
+        raydiumProgram: params.clmmProgram,
         launchState: params.launch,
-        escrow: escrow,
-        poolState: poolState,
-        quoteMint: params.quoteMint,
         baseMint: params.baseMint,
-        quoteVault: quoteVault,
-        baseVault: baseVault,
-        baseTokenAta: params.baseTokenAta,
-        positionNftMint: positionNftMint.publicKey,
-        positionNftAccount: positionNftAccount,
-        metadataAccount: metadataAccount,
-        personalPosition: personalPosition,
-        protocolPosition: protocolPosition,
-        tickArrayLower: tickArrayLower,
-        tickArrayUpper: tickArrayUpper,
+        escrow: escrow,
+        baseEscrowAta: params.baseTokenAta,
+        quoteMint: params.quoteMint,
+        raydiumPoolState: poolState,
+        raydiumQuoteVault: quoteVault,
+        raydiumBaseVault: baseVault,
+        raydiumPositionNftMint: positionNftMint.publicKey,
+        raydiumPositionNftAccount: positionNftAccount,
+        raydiumMetadataAccount: metadataAccount,
+        raydiumPersonalPosition: personalPosition,
+        raydiumProtocolPosition: protocolPosition,
+        raydiumTickArrayLower: tickArrayLower,
+        raydiumTickArrayUpper: tickArrayUpper,
         quoteTokenAccount: quoteTokenAccount,
         metadataProgram: METADATA_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
@@ -557,7 +559,12 @@ export class TxBuilder {
       })
       .instruction();
 
+    const computeBudgetIx = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 400_000,
+    });
+
     const transaction = new Transaction()
+      .add(computeBudgetIx)
       .add(addLiquidityIx);
 
     return {
