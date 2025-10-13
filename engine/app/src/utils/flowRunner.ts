@@ -523,17 +523,9 @@ export async function runFullFlow(
 
     const allUsersData = Array.from(usersWithDeposits.values());
 
-    // --- New Claiming Logic ---
-    // This logic is more robust. It doesn't rely on a client-side simulation
-    // of the winner selection. Instead, it behaves like a real user would:
-    // 1. Try to claim tokens.
-    // 2. If the contract says there are no tokens to claim, then try to claim a refund.
-    let successfulTokenClaims = 0;
-    let successfulRefundClaims = 0;
-    let tokensClaimed = 0;
-    let failedClaims = 0;
+    addLog(`   -> Claiming for ${allUsersData.length} users in parallel...`);
 
-    for (const userData of allUsersData) {
+    const claimPromises = allUsersData.map(async (userData) => {
       try {
         // Attempt to claim tokens for every user
         const userAta = sdk.getUserAta(
@@ -551,8 +543,10 @@ export async function runFullFlow(
         });
 
         const finalBalance = await getTokenBalance(userAta);
-        tokensClaimed += finalBalance - initialBalance;
-        successfulTokenClaims++;
+        return {
+          status: "winner",
+          tokensClaimed: finalBalance - initialBalance,
+        };
       } catch (error: any) {
         // If it fails with "NoTokensToClaim", they are a loser, so claim refund
         if (error.message && error.message.includes("NoTokensToClaim")) {
@@ -562,24 +556,55 @@ export async function runFullFlow(
               userKeypair: userData.keypair,
               shardId: userData.shardId,
             });
-            successfulRefundClaims++;
+            return { status: "loser" };
           } catch (refundError: any) {
-            addLog(
-              `   -> ❌ Refund failed for ${userData.keypair.publicKey.toBase58()}: ${
-                refundError.message
-              }`
-            );
-            failedClaims++;
+            return {
+              status: "failed",
+              type: "refund",
+              error: refundError,
+              publicKey: userData.keypair.publicKey,
+            };
           }
         } else {
           // If it's another error, log it
-          addLog(
-            `   -> ❌ Token claim failed for ${userData.keypair.publicKey.toBase58()}: ${
-              error.message
-            }`
-          );
-          failedClaims++;
+          return {
+            status: "failed",
+            type: "token",
+            error: error,
+            publicKey: userData.keypair.publicKey,
+          };
         }
+      }
+    });
+
+    const results = await Promise.all(claimPromises);
+
+    let successfulTokenClaims = 0;
+    let successfulRefundClaims = 0;
+    let tokensClaimed = 0;
+    let failedClaims = 0;
+
+    for (const result of results) {
+      switch (result.status) {
+        case "winner":
+          successfulTokenClaims++;
+          tokensClaimed += result.tokensClaimed || 0;
+          break;
+        case "loser":
+          successfulRefundClaims++;
+          break;
+        case "failed":
+          failedClaims++;
+          if (result.publicKey && result.error) {
+            addLog(
+              `   -> ❌ ${
+                result.type
+              } claim failed for ${result.publicKey.toBase58()}: ${
+                result.error.message
+              }`
+            );
+          }
+          break;
       }
     }
 
