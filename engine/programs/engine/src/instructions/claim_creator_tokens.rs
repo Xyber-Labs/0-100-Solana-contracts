@@ -76,6 +76,9 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let amount = per
         .checked_mul(to_claim as u64)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    
+    // Debug logging
+    msg!("DEBUG: Creator claim - per={}, to_claim={}, amount={}", per, to_claim, amount);
 
     // Mint tokens
     let seeds: &[&[u8]] = &[

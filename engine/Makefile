@@ -227,5 +227,8 @@ create-program-id:
 get-program-id:
 	solana-keygen pubkey ./deploy-keypair.json
 
+logs:
+	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
+
 # Default target
 .DEFAULT_GOAL := help

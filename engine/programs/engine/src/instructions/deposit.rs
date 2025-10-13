@@ -121,7 +121,8 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         user.shard_id = shard.shard_id;
         user.idx_in_shard = shard.wallets.len() as u32;
         shard.wallets.push(ctx.accounts.user.key());
-        shard.counts.push(new_tickets);
+        // Start counts at 0 for first deposit; we'll add the delta below.
+        shard.counts.push(0);
         shard.prefix.clear(); // invalidate prefix if already built
     } else {
         // must stay in the same shard

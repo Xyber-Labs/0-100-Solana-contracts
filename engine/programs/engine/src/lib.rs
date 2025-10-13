@@ -7,7 +7,7 @@ mod events;
 mod instructions;
 mod state;
 mod types;
-mod utils;
+pub mod utils;
 
 use instructions::claim_creator_refund::*;
 use instructions::claim_creator_tokens::*;

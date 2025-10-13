@@ -231,6 +231,7 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.creator_grant_present = amount > 0;
 
     // Total project tokens = sale allocation + creator's allocation
+    // Creator gets tokens proportional to their tickets: reserved_tickets * (sale_allocation / k_capacity)
     let creator_allocation = if reserved_tickets > 0 && state.k_capacity > 0 {
         (params.sale_allocation as u128)
             .checked_mul(reserved_tickets as u128)

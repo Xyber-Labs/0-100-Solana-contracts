@@ -149,8 +149,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   
   // Default launch configuration (matching tests)
   const defaultConfig: LaunchConfig = {
-    hardCapLamports: 20 * 1e9, // 20 SOL
-    minRaiseLamports: 10 * 1e9, // 10 SOL
+    hardCapLamports: 450 * 1e9, // 20,000 SOL for large tests
+    minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
     saleAllocation: '459460000000000', // 45.946% of 1B supply with 6 decimals
@@ -158,7 +158,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 10, // Default custom seconds
     numBlocks: 1024, // ~1 minute window
-    rosterShardCap: 100,
+    rosterShardCap: 250, // Safe size for Solana account limits (250 * 40 bytes = 10,000 bytes)
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
@@ -660,6 +660,20 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     addLog('Logs cleared');
   };
 
+  const downloadLogs = () => {
+    const logContent = logs.join('\n');
+    const blob = new Blob([logContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flow-runner-logs.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addLog('Logs downloaded as flow-runner-logs.txt');
+  };
+
   const resetState = () => {
     setLaunchState(null);
     setSaleMint(null);
@@ -949,15 +963,30 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     addLog('--- RUNNING FULL TEST FLOW ---');
     addLog(`[DEBUG] Passing saleAllocation to flowRunner: ${launchConfig.saleAllocation}`);
     
-    const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog, simConfig);
-
-    if (result.success) {
-      addLog('--- ✅ FULL TEST FLOW COMPLETED SUCCESSFULLY ---');
-    } else {
-      addLog(`--- ❌ FULL TEST FLOW FAILED: ${result.message} ---`);
+    try {
+      const result = await runFullFlow(
+        sdk,
+        program,
+        sdk.program.provider,
+        launchConfig,
+        addLog,
+        simConfig
+      );
+      if (result.success) {
+        addLog(`--- ✅ FULL TEST FLOW SUCCEEDED ---`);
+      } else {
+        addLog(`--- ❌ FULL TEST FLOW FAILED: ${result.message} ---`);
+      }
+    } catch (error: any) {
+      console.error("Error in handleRunFlow:", error);
+      let errorMessage = "An unexpected error occurred in the UI.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      addLog(`--- ❌ FULL TEST FLOW FAILED: ${errorMessage} ---`);
+    } finally {
+      setIsFlowRunning(false);
     }
-
-    setIsFlowRunning(false);
   }, [sdk, program, launchConfig, addLog, simConfig]);
 
   return (
@@ -1056,9 +1085,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <input
                 type="number"
                 value={launchConfig.tauLamports / 1e9}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, tauLamports: parseFloat(e.target.value) * 1e9 }))}
+                onChange={(e) =>
+                  setLaunchConfig({
+                    ...launchConfig,
+                    tauLamports: Math.round(parseFloat(e.target.value) * 1e9),
+                  })
+                }
                 className="terminal-input w-full"
-                step="0.1"
               />
             </div>
             <div>
@@ -1697,6 +1730,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               />
               <span className="terminal-output">Auto-scroll</span>
             </label>
+            <button onClick={downloadLogs} className="terminal-button text-xs">
+              Download Logs
+            </button>
             <button onClick={clearLogs} className="terminal-button text-xs">
               Clear Logs
             </button>

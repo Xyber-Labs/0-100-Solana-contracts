@@ -8,3 +8,4 @@ test-ledger
 ts-sdk/dist
 deploy-keypair.json
 .venv
+log*.txt
