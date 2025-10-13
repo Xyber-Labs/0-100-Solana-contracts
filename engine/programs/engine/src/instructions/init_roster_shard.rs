@@ -13,9 +13,9 @@ pub struct InitRosterShard<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + RosterShard::INIT_SPACE 
-                + (32 * ROSTER_SHARD_CAP) 
-                + (4 * ROSTER_SHARD_CAP) 
+        space = 8 + RosterShard::INIT_SPACE
+                + (32 * ROSTER_SHARD_CAP)
+                + (4 * ROSTER_SHARD_CAP)
                 + (4 * ROSTER_SHARD_CAP),
         seeds = [SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &shard_id.to_le_bytes()],
         bump,
