@@ -14,7 +14,8 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
-  fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
+  fundingDurationDays: number; // Represents dropdown selection
+  fundingDurationSeconds: number; // Represents custom input
   numBlocks: number;
   rosterShardCap: number;
   creatorInitialDepositLamports: number;
@@ -98,20 +99,32 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isProjectManagerCollapsed, setIsProjectManagerCollapsed] = useState(true);
 
+  // --- New state for custom duration ---
+  const [durationOption, setDurationOption] = useState('dropdown'); // 'dropdown' or 'custom'
+
   // --- New state for the full flow runner ---
   const [isFlowRunning, setIsFlowRunning] = useState(false);
 
-  // Helper function to convert UI selection to seconds
-  const getFundingDurationInSeconds = (daysValue: number): number => {
+  // Helper to get seconds from dropdown value
+  const getSecondsFromDropdown = (daysValue: number) => {
     switch (daysValue) {
-      case 0: return 10; // 10 seconds for testing
-      case 1: return 30; // 30 seconds for testing
-      case 2: return 2 * 24 * 60 * 60;
-      case 3: return 3 * 24 * 60 * 60;
-      case 4: return 4 * 24 * 60 * 60;
-      case 5: return 5 * 24 * 60 * 60;
+      case 0: return 10;
+      case 1: return 30;
+      case 2: return 60;
+      case 3: return 2 * 24 * 60 * 60;
+      case 4: return 3 * 24 * 60 * 60;
+      case 5: return 4 * 24 * 60 * 60;
+      case 6: return 5 * 24 * 60 * 60;
       default: return 10;
     }
+  };
+
+  // Helper function to convert UI selection to seconds
+  const getFundingDurationInSeconds = (): number => {
+    if (durationOption === 'custom') {
+      return launchConfig.fundingDurationSeconds;
+    }
+    return getSecondsFromDropdown(launchConfig.fundingDurationDays);
   };
 
   // Helper function to safely get numeric values from BN, string, or number
@@ -142,6 +155,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     saleAllocation: 1000000,
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
+    fundingDurationSeconds: 10, // Default custom seconds
     numBlocks: 1024, // ~1 minute window
     rosterShardCap: 100,
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
@@ -367,7 +381,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           tauLamports: new BN(launchConfig.tauLamports),
           saleAllocation: new BN(launchConfig.saleAllocation),
           lpAllocation: new BN(launchConfig.lpAllocation),
-          fundingDurationSeconds: new BN(getFundingDurationInSeconds(launchConfig.fundingDurationDays)),
+          fundingDurationSeconds: new BN(getFundingDurationInSeconds()),
           numBlocks: new BN(launchConfig.numBlocks),
           rosterShardCap: launchConfig.rosterShardCap,
           creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
@@ -653,7 +667,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setSelection(null);
     setLaunchData(null);
     setUserContributions(null);
-    setSelectionData(null);
     setCurrentProjectId(null);
     addLog('State reset');
   };
@@ -1060,18 +1073,57 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Funding Duration</label>
-              <select
-                value={launchConfig.fundingDurationDays}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationDays: parseInt(e.target.value) }))}
-                className="terminal-input w-full"
-              >
-                <option value={0}>10 seconds (testing)</option>
-                <option value={1}>30 seconds (testing)</option>
-                <option value={2}>2 days</option>
-                <option value={3}>3 days</option>
-                <option value={4}>4 days</option>
-                <option value={5}>5 days</option>
-              </select>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={durationOption}
+                  onChange={(e) => {
+                    const newOption = e.target.value;
+                    setDurationOption(newOption);
+                    if (newOption === 'dropdown') {
+                      // Reset custom seconds to match dropdown
+                      setLaunchConfig(prev => ({
+                        ...prev,
+                        fundingDurationSeconds: getSecondsFromDropdown(prev.fundingDurationDays)
+                      }));
+                    }
+                  }}
+                  className="terminal-input w-1/3"
+                >
+                  <option value="dropdown">Presets</option>
+                  <option value="custom">Custom (s)</option>
+                </select>
+
+                {durationOption === 'dropdown' ? (
+                  <select
+                    value={launchConfig.fundingDurationDays}
+                    onChange={(e) => {
+                      const daysValue = parseInt(e.target.value);
+                      setLaunchConfig(prev => ({
+                        ...prev,
+                        fundingDurationDays: daysValue,
+                        fundingDurationSeconds: getSecondsFromDropdown(daysValue)
+                      }));
+                    }}
+                    className="terminal-input w-2/3"
+                  >
+                    <option value={0}>10 seconds (testing)</option>
+                    <option value={1}>30 seconds (testing)</option>
+                    <option value={2}>60 seconds (testing)</option>
+                    <option value={3}>2 days</option>
+                    <option value={4}>3 days</option>
+                    <option value={5}>4 days</option>
+                    <option value={6}>5 days</option>
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    value={launchConfig.fundingDurationSeconds}
+                    onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationSeconds: parseInt(e.target.value) || 0 }))}
+                    className="terminal-input w-2/3"
+                    placeholder="Enter seconds"
+                  />
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Num Blocks (Window)</label>

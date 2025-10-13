@@ -1,4 +1,4 @@
-import { BN, Program, AnchorProvider } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import {
   Keypair,
   PublicKey,
@@ -10,18 +10,6 @@ import {
   TOKEN_PROGRAM_ID,
   createInitializeMintInstruction,
 } from "@solana/spl-token";
-import { sha256 } from "js-sha256";
-
-// Define a type for our BigInts to avoid confusion
-type u64 = bigint;
-const U32_MAX = BigInt(2) ** BigInt(32) - BigInt(1);
-
-// Helper to read a 128-bit LE BigInt from a buffer
-function readBigUInt128LE(buf: Buffer, offset = 0): bigint {
-  const first = buf.readBigUInt64LE(offset);
-  const second = buf.readBigUInt64LE(offset + 8);
-  return first + (second << BigInt(64));
-}
 
 interface LaunchConfig {
   hardCapLamports: number;
@@ -30,7 +18,7 @@ interface LaunchConfig {
   tauLamports: number;
   saleAllocation: number;
   lpAllocation: number;
-  fundingDurationDays: number;
+  fundingDurationSeconds: number; // New field for direct seconds
   numBlocks: number;
   rosterShardCap: number;
   creatorInitialDepositLamports: number;
@@ -57,19 +45,6 @@ export async function runFullFlow(
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
 
-  // Helper function to convert UI selection to seconds
-  const getFundingDurationInSeconds = (daysValue: number): number => {
-    switch (daysValue) {
-      case 0: return 10; // 10 seconds for testing
-      case 1: return 30; // 30 seconds for testing
-      case 2: return 2 * 24 * 60 * 60;
-      case 3: return 3 * 24 * 60 * 60;
-      case 4: return 4 * 24 * 60 * 60;
-      case 5: return 5 * 24 * 60 * 60;
-      default: return 30; // Default to 30s
-    }
-  };
-
   let testLaunchState: PublicKey;
 
   // --- Simulation Parameters ---
@@ -93,62 +68,6 @@ export async function runFullFlow(
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
-
-  // --- Utility functions for winner selection simulation ---
-  function permute_u32(seed: Buffer, n: u64, i: u64): u64 {
-    if (n === BigInt(0)) return BigInt(0);
-    let x = i;
-    for (let j = 0; j < 4; j++) {
-      const round_seed = Buffer.concat([seed, Buffer.from([j])]);
-      const h = sha256.create();
-      h.update(round_seed);
-      const x_buf = Buffer.alloc(4);
-      x_buf.writeUInt32LE(Number(x), 0);
-      h.update(x_buf);
-      const hash_bytes = Buffer.from(h.digest());
-      const r = readBigUInt128LE(Buffer.from(hash_bytes.slice(0, 16)));
-      const pivot = n - (n % BigInt(2));
-      if (x < pivot) {
-        // Simulate Rust's `(r as u32).wrapping_add(x)`
-        const r_u32 = r & U32_MAX;
-        const sum_wrapped = (r_u32 + x) & U32_MAX;
-        x = sum_wrapped % pivot;
-      }
-    }
-    return x;
-  }
-
-  async function isWinner(
-    user_idx_in_shard: number,
-    ticket_count: number,
-    shard_id: number
-  ): Promise<boolean> {
-    const launchStateData = await sdk.fetchLaunch(testLaunchState);
-    const shardState = await sdk.program.account.rosterShard.fetch(
-      sdk.getRosterShardPda(testLaunchState, shard_id)[0]
-    );
-
-    const seed = launchStateData.vrfSeed;
-    if (!seed) throw new Error("VRF seed not set");
-
-    const reserved = Math.min(
-      launchStateData.creatorReservedTickets,
-      launchStateData.kCapacity
-    );
-    const k_pub = BigInt(launchStateData.kCapacity) - BigInt(reserved);
-    const n = BigInt(launchStateData.publicTotalTickets);
-    const base =
-      BigInt(shardState.shardBase) +
-      BigInt(shardState.prefix[user_idx_in_shard]);
-
-    for (let j = 0; j < ticket_count; j++) {
-      const t = base + BigInt(j);
-      if (permute_u32(Buffer.from(seed), n, t) < k_pub) {
-        return true;
-      }
-    }
-    return false;
-  }
 
   try {
     // Helper to wait
@@ -277,7 +196,7 @@ export async function runFullFlow(
         tauLamports: new BN(config.tauLamports),
         saleAllocation: new BN(config.saleAllocation),
         lpAllocation: new BN(config.lpAllocation),
-        fundingDurationSeconds: new BN(getFundingDurationInSeconds(config.fundingDurationDays)),
+        fundingDurationSeconds: new BN(config.fundingDurationSeconds),
         numBlocks: new BN(config.numBlocks),
         rosterShardCap: config.rosterShardCap,
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
@@ -299,8 +218,9 @@ export async function runFullFlow(
 
     // Set fee payer and recent blockhash
     tx.feePayer = admin.publicKey;
-    // For LiteSVM, use a dummy blockhash
-    tx.recentBlockhash = "11111111111111111111111111111111";
+    tx.recentBlockhash = (
+      await provider.connection.getLatestBlockhash()
+    ).blockhash;
 
     // Send transaction using provider's sendAndConfirm method
     const signature = await provider.sendAndConfirm(tx, [testSaleMint]);
@@ -379,20 +299,27 @@ export async function runFullFlow(
     addLog(
       `   -> Funding ${numUsersToSimulate} users with transfers from admin...`
     );
-    await Promise.all(
-      users.map(async (user) => {
-        const fundingAmount = user.depositAmount.toNumber() + feeBufferPerUser;
-        const transferIx = SystemProgram.transfer({
-          fromPubkey: admin.publicKey,
-          toPubkey: user.keypair.publicKey,
-          lamports: fundingAmount,
-        });
-        const tx = new Transaction().add(transferIx);
-        tx.feePayer = admin.publicKey;
-        tx.recentBlockhash = "11111111111111111111111111111111";
-        await provider.sendAndConfirm(tx, []);
-      })
-    );
+    const FUNDING_BATCH_SIZE = 50; // Process 50 users at a time
+    for (let i = 0; i < users.length; i += FUNDING_BATCH_SIZE) {
+      const batch = users.slice(i, i + FUNDING_BATCH_SIZE);
+      addLog(`   -> Funding batch ${Math.floor(i / FUNDING_BATCH_SIZE) + 1}...`);
+      await Promise.all(
+        batch.map(async (user) => {
+          const fundingAmount = user.depositAmount.toNumber() + feeBufferPerUser;
+          const transferIx = SystemProgram.transfer({
+            fromPubkey: admin.publicKey,
+            toPubkey: user.keypair.publicKey,
+            lamports: fundingAmount,
+          });
+          const tx = new Transaction().add(transferIx);
+          tx.feePayer = admin.publicKey;
+          tx.recentBlockhash = (
+            await provider.connection.getLatestBlockhash()
+          ).blockhash;
+          await provider.sendAndConfirm(tx, []);
+        })
+      );
+    }
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, handling sharding in batches
@@ -519,68 +446,76 @@ export async function runFullFlow(
 
     const allUsersData = Array.from(usersWithDeposits.values());
 
-    addLog(`   -> Claiming for ${allUsersData.length} users in parallel...`);
+    addLog(`   -> Claiming for ${allUsersData.length} users in batches of 50...`);
+    const CLAIM_BATCH_SIZE = 50;
+    let allResults = [];
 
-    const claimPromises = allUsersData.map(async (userData) => {
-      try {
-        // Attempt to claim tokens for every user
-        const userAta = sdk.getUserAta(
-          testSaleMint.publicKey,
-          userData.keypair.publicKey
-        );
-        const initialBalance = await getTokenBalance(userAta);
+    for (let i = 0; i < allUsersData.length; i += CLAIM_BATCH_SIZE) {
+      const batch = allUsersData.slice(i, i + CLAIM_BATCH_SIZE);
+      addLog(`   -> Processing claim batch ${Math.floor(i / CLAIM_BATCH_SIZE) + 1}...`);
+      
+      const claimPromises = batch.map(async (userData) => {
+        try {
+          // Attempt to claim tokens for every user
+          const userAta = sdk.getUserAta(
+            testSaleMint.publicKey,
+            userData.keypair.publicKey
+          );
+          const initialBalance = await getTokenBalance(userAta);
 
-        await sdk.claimTokens({
-          launch: testLaunchState,
-          saleMint: testSaleMint.publicKey,
-          userKeypair: userData.keypair,
-          createAtaIfMissing: true,
-          shardId: userData.shardId,
-        });
+          await sdk.claimTokens({
+            launch: testLaunchState,
+            saleMint: testSaleMint.publicKey,
+            userKeypair: userData.keypair,
+            createAtaIfMissing: true,
+            shardId: userData.shardId,
+          });
 
-        const finalBalance = await getTokenBalance(userAta);
-        return {
-          status: "winner",
-          tokensClaimed: finalBalance - initialBalance,
-        };
-      } catch (error: any) {
-        // If it fails with "NoTokensToClaim", they are a loser, so claim refund
-        if (error.message && error.message.includes("NoTokensToClaim")) {
-          try {
-            await sdk.claimRefund({
-              launch: testLaunchState,
-              userKeypair: userData.keypair,
-              shardId: userData.shardId,
-            });
-            return { status: "loser" };
-          } catch (refundError: any) {
+          const finalBalance = await getTokenBalance(userAta);
+          return {
+            status: "winner",
+            tokensClaimed: finalBalance - initialBalance,
+          };
+        } catch (error: any) {
+          // If it fails with "NoTokensToClaim", they are a loser, so claim refund
+          if (error.message && error.message.includes("NoTokensToClaim")) {
+            try {
+              await sdk.claimRefund({
+                launch: testLaunchState,
+                userKeypair: userData.keypair,
+                shardId: userData.shardId,
+              });
+              return { status: "loser" };
+            } catch (refundError: any) {
+              return {
+                status: "failed",
+                type: "refund",
+                error: refundError,
+                publicKey: userData.keypair.publicKey,
+              };
+            }
+          } else {
+            // If it's another error, log it
             return {
               status: "failed",
-              type: "refund",
-              error: refundError,
+              type: "token",
+              error: error,
               publicKey: userData.keypair.publicKey,
             };
           }
-        } else {
-          // If it's another error, log it
-          return {
-            status: "failed",
-            type: "token",
-            error: error,
-            publicKey: userData.keypair.publicKey,
-          };
         }
-      }
-    });
+      });
 
-    const results = await Promise.all(claimPromises);
+      const batchResults = await Promise.all(claimPromises);
+      allResults.push(...batchResults);
+    }
 
     let successfulTokenClaims = 0;
     let successfulRefundClaims = 0;
     let tokensClaimed = 0;
     let failedClaims = 0;
 
-    for (const result of results) {
+    for (const result of allResults) {
       switch (result.status) {
         case "winner":
           successfulTokenClaims++;
