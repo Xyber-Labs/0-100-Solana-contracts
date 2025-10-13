@@ -159,7 +159,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationSeconds: 30, // Default to 30 seconds for tx builder
+      fundingDurationSeconds: 15, // Default to 30 seconds for tx builder
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,

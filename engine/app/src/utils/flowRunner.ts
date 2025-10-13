@@ -1,4 +1,4 @@
-import { BN, Program } from "@coral-xyz/anchor";
+import { BN, Program, AnchorProvider } from "@coral-xyz/anchor";
 import {
   Keypair,
   PublicKey,
@@ -40,16 +40,34 @@ interface LaunchConfig {
 // A simplified SDK type, as we don't have the full type in this context
 type Sdk = any;
 
+interface SimulationConfig {
+  numUsers: number;
+}
+
 export async function runFullFlow(
   sdk: Sdk,
   program: Program,
   provider: any,
   config: LaunchConfig,
-  addLog: (log: string) => void
+  addLog: (log: string) => void,
+  simConfig: SimulationConfig
 ): Promise<{ success: boolean; message: string }> {
   const admin = provider.wallet;
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
+
+  // Helper function to convert UI selection to seconds
+  const getFundingDurationInSeconds = (daysValue: number): number => {
+    switch (daysValue) {
+      case 0: return 10; // 10 seconds for testing
+      case 1: return 30; // 30 seconds for testing
+      case 2: return 2 * 24 * 60 * 60;
+      case 3: return 3 * 24 * 60 * 60;
+      case 4: return 4 * 24 * 60 * 60;
+      case 5: return 5 * 24 * 60 * 60;
+      default: return 30; // Default to 30s
+    }
+  };
 
   let testLaunchState: PublicKey;
 
@@ -258,7 +276,7 @@ export async function runFullFlow(
         tauLamports: new BN(config.tauLamports),
         saleAllocation: new BN(config.saleAllocation),
         lpAllocation: new BN(config.lpAllocation),
-        fundingDurationSeconds: new BN(5), // Use 5 seconds for testing
+        fundingDurationSeconds: new BN(getFundingDurationInSeconds(config.fundingDurationDays)),
         numBlocks: new BN(config.numBlocks),
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
@@ -293,66 +311,79 @@ export async function runFullFlow(
     await sdk.initRosterShard({ launch: testLaunchState, shardId: 0 });
     addLog("   -> Shard 0 initialized.");
 
-    // 3. Simulate deposits to create a ~2x overflow
-    const k_capacity = config.hardCapLamports / config.tauLamports;
-    let numUsersToSimulate = Math.floor(k_capacity * 2);
-    const depositAmount = new BN(config.tauLamports); // 1 ticket per user
-    const usersWithDeposits = new Map<string, { keypair: Keypair; tickets: number }>();
+    // 3. Simulate deposits for 1000 users with various amounts
+    const TARGET_USERS = simConfig.numUsers;
+    const MAX_TICKETS_PER_USER = 5; // e.g., users can deposit for 1 to 5 tickets
+    const usersWithDeposits = new Map<
+      string,
+      { keypair: Keypair; tickets: number; shardId: number }
+    >();
 
-    addLog(`\n[3/10] Simulating deposits for a ~2x overflow...`);
-    addLog(`   -> Capacity (k): ${k_capacity}`);
-    addLog(`   -> Target users for 2x overflow: ${numUsersToSimulate}`);
-
-    if (numUsersToSimulate > 50) {
-      addLog(
-        `   -> Capping simulation at 50 users to keep test runtime reasonable.`
-      );
-      numUsersToSimulate = 50;
-    }
-    if (numUsersToSimulate === 0) {
-      addLog(`   -> At least one user will be simulated.`);
-      numUsersToSimulate = 1;
-    }
-
+    addLog(`\n[3/10] Simulating deposits for up to ${TARGET_USERS} users...`);
     addLog(
-      `   -> Simulating ${numUsersToSimulate} users, each depositing for 1 ticket.`
+      `   -> Each user will deposit for a random amount of tickets (1-${MAX_TICKETS_PER_USER}).`
     );
 
-    // Step 1: Generate all user keypairs
-    const users = Array.from({ length: numUsersToSimulate }, () =>
-      Keypair.generate()
-    );
+    // Step 1: Generate all potential user keypairs and their desired deposits
+    let users = Array.from({ length: TARGET_USERS }, () => {
+      const keypair = Keypair.generate();
+      const tickets = Math.floor(Math.random() * MAX_TICKETS_PER_USER) + 1;
+      const depositAmount = new BN(config.tauLamports * tickets);
+      return { keypair, tickets, depositAmount };
+    });
 
+    // Step 2: Check admin balance and filter users we can afford to fund
     let currentAdminBalance: number;
     try {
       currentAdminBalance = await provider.connection.getBalance(admin.publicKey);
     } catch (error) {
       currentAdminBalance = 500000000; // Fallback: assume 0.5 SOL remaining
     }
-    
-    const fundingPerUser = Number(depositAmount) + 5000000; // deposit + ~0.005 SOL buffer for fees
-    const maxAffordableUsers = Math.floor(currentAdminBalance / fundingPerUser);
-    
-    if (maxAffordableUsers < numUsersToSimulate) {
-      addLog(`Admin balance: ${currentAdminBalance / 1e9} SOL`);
-      addLog(`Reducing users from ${numUsersToSimulate} to ${maxAffordableUsers} due to insufficient funds`);
-      numUsersToSimulate = Math.max(1, maxAffordableUsers);
-      users.splice(numUsersToSimulate); // Trim users array
+
+    const feeBufferPerUser = 5000000; // ~0.005 SOL buffer for fees
+    const affordableUsers = [];
+    let cumulativeCost = 0;
+
+    for (const user of users) {
+      const costForThisUser = user.depositAmount.toNumber() + feeBufferPerUser;
+      if (cumulativeCost + costForThisUser <= currentAdminBalance) {
+        cumulativeCost += costForThisUser;
+        affordableUsers.push(user);
+      } else {
+        break; // Stop when we can't afford the next user
+      }
     }
-    
-    if (numUsersToSimulate === 0) {
-      throw new Error("Insufficient admin balance to fund any users");
+
+    if (users.length !== affordableUsers.length) {
+      addLog(
+        `   -> Admin balance can only fund ${affordableUsers.length} out of ${TARGET_USERS} users.`
+      );
+      if (affordableUsers.length === 0) {
+        throw new Error(
+          "Insufficient admin balance to fund any users for the simulation."
+        );
+      }
+      users = affordableUsers;
     }
-    
+
+    const numUsersToSimulate = users.length;
+    addLog(
+      `   -> Total cost to fund ${numUsersToSimulate} users: ${(
+        cumulativeCost / LAMPORTS_PER_SOL
+      ).toFixed(4)} SOL`
+    );
+
+    // Step 3: Fund users
     addLog(
       `   -> Funding ${numUsersToSimulate} users with transfers from admin...`
     );
     await Promise.all(
       users.map(async (user) => {
+        const fundingAmount = user.depositAmount.toNumber() + feeBufferPerUser;
         const transferIx = SystemProgram.transfer({
           fromPubkey: admin.publicKey,
-          toPubkey: user.publicKey,
-          lamports: fundingPerUser,
+          toPubkey: user.keypair.publicKey,
+          lamports: fundingAmount,
         });
         const tx = new Transaction().add(transferIx);
         tx.feePayer = admin.publicKey;
@@ -362,25 +393,83 @@ export async function runFullFlow(
     );
     addLog("   -> All users funded.");
 
-    // Step 4: Deposit from all users in parallel
+    // Step 4: Deposit from all users, handling sharding in batches
     addLog(
-      `   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`
+      `   -> Sending ${numUsersToSimulate} deposit transactions in batches of 50...`
     );
-    await Promise.all(
-      users.map((user) =>
-        sdk.deposit({
-          launch: testLaunchState,
-          amountLamports: depositAmount,
-          userKeypair: user,
-          shardId: 0,
-        }).then(() => {
-          usersWithDeposits.set(user.publicKey.toBase58(), {
-            keypair: user,
-            tickets: depositAmount.toNumber() / config.tauLamports,
-          });
-        })
-      )
-    );
+    let currentShardId = 0;
+    const BATCH_SIZE = 50;
+
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      addLog(`   -> Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`);
+
+      const depositPromises = batch.map((user) =>
+        (async () => {
+          let successfulDeposit = false;
+          let attemptShardId = currentShardId;
+
+          while (!successfulDeposit) {
+            try {
+              await sdk.deposit({
+                launch: testLaunchState,
+                amountLamports: user.depositAmount,
+                userKeypair: user.keypair,
+                shardId: attemptShardId,
+              });
+              usersWithDeposits.set(user.keypair.publicKey.toBase58(), {
+                keypair: user.keypair,
+                tickets: user.tickets,
+                shardId: attemptShardId,
+              });
+              successfulDeposit = true;
+            } catch (error: any) {
+              if (
+                error.message &&
+                error.message.includes("RosterShardFull")
+              ) {
+                // This shard is full, try initializing the next one.
+                const nextShardId = attemptShardId + 1;
+                try {
+                  const newProvider = new AnchorProvider(
+                    provider.connection,
+                    provider.wallet, // admin wallet
+                    AnchorProvider.defaultOptions()
+                  );
+                  await sdk.initRosterShard({
+                    launch: testLaunchState,
+                    shardId: nextShardId,
+                    provider: newProvider,
+                  });
+                } catch (initError: any) {
+                  // error 0x0 is 'AccountInUse', which is fine. It means another promise created it.
+                  if (
+                    !initError.message.includes("custom program error: 0x0")
+                  ) {
+                    throw initError; // Rethrow other initialization errors
+                  }
+                }
+                // Retry with the next shard
+                attemptShardId = nextShardId;
+              } else {
+                // A different, unexpected error occurred.
+                throw error;
+              }
+            }
+          }
+        })()
+      );
+
+      // Wait for all deposits in the current batch to complete
+      await Promise.all(depositPromises);
+
+      // After the batch, update the global shard ID for the next batch to start from.
+      const maxShardInBatch = Array.from(usersWithDeposits.values()).reduce(
+        (max, u) => Math.max(max, u.shardId),
+        currentShardId
+      );
+      currentShardId = maxShardInBatch;
+    }
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End
@@ -395,8 +484,10 @@ export async function runFullFlow(
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
-    addLog(`   -> Shard 0 finalized.`);
+    for (let i = 0; i <= currentShardId; i++) {
+      await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
+      addLog(`   -> Shard ${i} finalized.`);
+    }
 
     // 7. Open Claims
     addLog(`\n[7/10] Opening claims...`);
@@ -456,7 +547,7 @@ export async function runFullFlow(
           saleMint: testSaleMint.publicKey,
           userKeypair: userData.keypair,
           createAtaIfMissing: true,
-          shardId: 0,
+          shardId: userData.shardId,
         });
 
         const finalBalance = await getTokenBalance(userAta);
@@ -469,7 +560,7 @@ export async function runFullFlow(
             await sdk.claimRefund({
               launch: testLaunchState,
               userKeypair: userData.keypair,
-              shardId: 0,
+              shardId: userData.shardId,
             });
             successfulRefundClaims++;
           } catch (refundError: any) {

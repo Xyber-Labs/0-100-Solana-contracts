@@ -21,6 +21,11 @@ interface LaunchConfig {
   creatorClaimLockPeriodSec: number;
 }
 
+// --- New interface for simulation parameters ---
+interface SimulationConfig {
+  numUsers: number;
+}
+
 // Error boundary component
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error?: Error}> {
   constructor(props: any) {
@@ -141,8 +146,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
   };
+
+  // --- New state for simulation config ---
+  const defaultSimConfig: SimulationConfig = {
+    numUsers: 300,
+  };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
+  const [simConfig, setSimConfig] = useState<SimulationConfig>(defaultSimConfig);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -593,7 +604,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     try {
       setIsLoading(true);
-      addLog('Requesting 10 SOL from faucet...');
+      addLog('Requesting 1000 SOL from faucet...');
       addLog(`Requesting for address: ${activePublicKey.toString()}`);
       
       // Request airdrop from faucet
@@ -920,7 +931,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
     
-    const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog);
+    const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog, simConfig);
 
     if (result.success) {
       addLog('--- ✅ FULL TEST FLOW COMPLETED SUCCESSFULLY ---');
@@ -929,7 +940,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
 
     setIsFlowRunning(false);
-  }, [sdk, program, launchConfig, addLog]);
+  }, [sdk, program, launchConfig, addLog, simConfig]);
 
   return (
     <ErrorBoundary>
@@ -982,6 +993,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         
         {showLaunchForm && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-black bg-opacity-30 rounded border">
+            {/* --- Launch Parameters --- */}
+            <div className="col-span-full">
+              <h3 className="text-sm font-bold terminal-glow mb-2">Launch Parameters</h3>
+            </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Hard Cap (SOL)</label>
               <input
@@ -1090,6 +1105,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 type="number"
                 value={launchConfig.creatorClaimLockPeriodSec}
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorClaimLockPeriodSec: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            {/* --- Simulation Parameters --- */}
+            <div className="col-span-full mt-4">
+               <h3 className="text-sm font-bold terminal-glow mb-2">Simulation Parameters</h3>
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Number of Users</label>
+              <input
+                type="number"
+                value={simConfig.numUsers}
+                onChange={(e) => setSimConfig(prev => ({ ...prev, numUsers: parseInt(e.target.value) || 0 }))}
                 className="terminal-input w-full"
               />
             </div>
