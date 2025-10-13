@@ -31,12 +31,12 @@ pub struct CreatePool<'info> {
 }
 
 pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
-    require!(st.selection_finalized, EngineErrorCode::NotFinalized);
-    require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
+    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     // Get the SlotHashes sysvar
@@ -53,7 +53,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let mut valid_hash = [0u8; 32];
 
     // The SlotHashes sysvar is a LIFO queue. The most recent hash is at index 0.
-    // We iterate forwards, from most recent to oldest.
+    // We iterate forwards, from most recent to oldelaunch_state.
     for i in 0..hashes_to_check {
         // Position is calculated as: 8 bytes (for num_hashes) + i * 40 bytes (size of each SlotHash entry)
         let hash_pos = 8u64
@@ -86,7 +86,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
         // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
         // Check if this blockhash is within the project's personal range
-        if pool::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
+        if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, launch_state.num_blocks) {
             found_valid_hash = true;
             valid_slot = slot;
             valid_hash = blockhash;
@@ -98,16 +98,16 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
     // Calculate and store the project's range
-    let (range_start, range_end) = pool::calculate_project_range(st.project_id, st.num_blocks);
+    let (range_start, range_end) = pool::calculate_project_range(launch_state.project_id, launch_state.num_blocks);
     let mut range_start_bytes = [0u8; 32];
     range_start.to_big_endian(&mut range_start_bytes);
     let mut range_end_bytes = [0u8; 32];
     range_end.to_big_endian(&mut range_end_bytes);
 
     // Initialize pool state
-    pool_state.launch = st.key();
-    pool_state.pool_id = st.project_id; // Use project_id as pool_id for 1-to-1 mapping
-    pool_state.project_id = st.project_id;
+    pool_state.launch = launch_state.key();
+    pool_state.pool_id = launch_state.project_id; // Use project_id as pool_id for 1-to-1 mapping
+    pool_state.project_id = launch_state.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
     pool_state.range_start = range_start_bytes;
@@ -117,9 +117,9 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     // TODO: Add CPI call to Raydium here
 
     emit!(PoolCreated {
-        launch: st.key(),
-        pool_id: st.project_id,
-        project_id: st.project_id,
+        launch: launch_state.key(),
+        pool_id: launch_state.project_id,
+        project_id: launch_state.project_id,
         blockhash: valid_hash,
         slot: valid_slot,
         range_start: range_start_bytes,

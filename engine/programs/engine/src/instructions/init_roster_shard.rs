@@ -25,19 +25,19 @@ pub struct InitRosterShard<'info> {
 }
 
 pub fn handler(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
-    shard.launch = st.key();
+    shard.launch = launch_state.key();
     shard.shard_id = shard_id;
     shard.total_in_shard = 0;
     shard.shard_base = 0;
 
     // Ensure launch_state.roster_shards reflects at least max(shard_id) + 1
     let required = shard_id.saturating_add(1);
-    st.roster_shards = st.roster_shards.max(required);
+    launch_state.roster_shards = launch_state.roster_shards.max(required);
 
     emit!(RosterShardInitialized {
-        launch: st.key(),
+        launch: launch_state.key(),
         shard_id,
     });
     Ok(())

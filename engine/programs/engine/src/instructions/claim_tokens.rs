@@ -35,34 +35,34 @@ pub struct ClaimTokens<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
-    require!(ctx.accounts.sale_mint.key() == st.sale_mint, EngineErrorCode::Unauthorized);
-    require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
-    let per = st
+    let launch_state = &mut ctx.accounts.launch_state;
+    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
+    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    let per = launch_state
         .tokens_per_ticket
         .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
     // Tokens are claimed only if the raise was successful
     require!(
-        st.total_deposited >= st.min_raise_lamports,
+        launch_state.total_deposited >= launch_state.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
 
-    let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
+    let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
     let user = &mut ctx.accounts.user_contribution;
     require!(!user.claimed_tokens, EngineErrorCode::AlreadyClaimedTokens);
 
     // recompute y_i using permutation condition
-    let reserved = st.creator_reserved_tickets.min(st.k_capacity);
-    let k_pub = st
+    let reserved = launch_state.creator_reserved_tickets.min(launch_state.k_capacity);
+    let k_pub = launch_state
         .k_capacity
         .checked_sub(reserved)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let n = st.public_total_tickets;
+    let n = launch_state.public_total_tickets;
     let shard = &ctx.accounts.roster_shard;
     // Ensure shard is finalized and consistent
-    require!(st.roster_finalized_up_to >= shard.shard_id as i32, EngineErrorCode::ShardNotFinalized);
+    require!(launch_state.roster_finalized_up_to >= shard.shard_id as i32, EngineErrorCode::ShardNotFinalized);
     require!(
         shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
         EngineErrorCode::ShardNotFinalized
@@ -95,8 +95,8 @@ pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"mint_auth",
-        &st.key().to_bytes(),
-        &[st.mint_auth_bump()],
+        &launch_state.key().to_bytes(),
+        &[launch_state.mint_auth_bump()],
     ];
     let signer_seeds = &[seeds];
     let cpi_accounts = MintTo {
@@ -114,7 +114,7 @@ pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
     user.claimed_tokens = true;
 
     emit!(TokensClaimed {
-        launch: st.key(),
+        launch: launch_state.key(),
         user: ctx.accounts.user.key(),
         amount,
         y_approved: y,

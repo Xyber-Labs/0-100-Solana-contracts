@@ -209,22 +209,22 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.creator_grant_present = amount > 0;
 
     // Initialize creator grant
-    let cg = &mut ctx.accounts.creator_grant;
-    cg.launch = state.key();
-    cg.creator = ctx.accounts.creator.key();
-    cg.locked_lamports = amount;
-    cg.reserved_tickets = reserved_tickets;
-    cg.daily_lamports_limit = params.creator_daily_lamports_limit;
+    let creator_grant = &mut ctx.accounts.creator_grant;
+    creator_grant.launch = creator_grant.key();
+    creator_grant.creator = ctx.accounts.creator.key();
+    creator_grant.locked_lamports = amount;
+    creator_grant.reserved_tickets = reserved_tickets;
+    creator_grant.daily_lamports_limit = params.creator_daily_lamports_limit;
     let daily_ticket_cap_u64 = params.creator_daily_lamports_limit.checked_div(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
-    cg.daily_ticket_cap = daily_ticket_cap_u64 as u32;
-    cg.claimed_tickets = 0;
-    cg.refunded = false;
+    creator_grant.daily_ticket_cap = daily_ticket_cap_u64 as u32;
+    creator_grant.claimed_tickets = 0;
+    creator_grant.refunded = false;
 
     if amount > 0 {
         emit!(CreatorGranted {
             launch: state.key(),
-            creator: cg.creator,
+            creator: creator_grant.creator,
             locked_lamports: amount,
             reserved_tickets,
             daily_lamports_limit: params.creator_daily_lamports_limit,

@@ -22,13 +22,13 @@ pub struct ClaimRefund<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let user = &mut ctx.accounts.user_contribution;
     require!(!user.claimed_refund, EngineErrorCode::AlreadyClaimedRefund);
 
     // If funding is complete and min raise is not met, issue a full refund without selection
     let current_time = Clock::get()?.unix_timestamp;
-    if current_time >= st.funding_period_end && st.total_deposited < st.min_raise_lamports {
+    if current_time >= launch_state.funding_period_end && launch_state.total_deposited < launch_state.min_raise_lamports {
         let refund = user.deposited;
         if refund > 0 {
             **ctx
@@ -51,7 +51,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
         user.claimed_refund = true;
 
         emit!(RefundClaimed {
-            launch: st.key(),
+            launch: launch_state.key(),
             user: ctx.accounts.user.key(),
             refunded_lamports: refund,
             y_approved: 0,
@@ -61,18 +61,18 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
     }
 
     // Otherwise, proceed with permutation path
-    require!(st.selection_finalized, EngineErrorCode::NotFinalized);
-    let seed = st.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
+    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
+    let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
-    let reserved = st.creator_reserved_tickets.min(st.k_capacity);
-    let k_pub = st
+    let reserved = launch_state.creator_reserved_tickets.min(launch_state.k_capacity);
+    let k_pub = launch_state
         .k_capacity
         .checked_sub(reserved)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let n = st.public_total_tickets;
+    let n = launch_state.public_total_tickets;
     let shard = &ctx.accounts.roster_shard;
     // Ensure shard is finalized and consistent
-    require!(st.roster_finalized_up_to >= shard.shard_id as i32, EngineErrorCode::ShardNotFinalized);
+    require!(launch_state.roster_finalized_up_to >= shard.shard_id as i32, EngineErrorCode::ShardNotFinalized);
     require!(
         shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
         EngineErrorCode::ShardNotFinalized
@@ -104,7 +104,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
             escrow.balance = escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
         user.claimed_refund = true;
-        emit!(RefundClaimed { launch: st.key(), user: ctx.accounts.user.key(), refunded_lamports: refund, y_approved: 0 });
+        emit!(RefundClaimed { launch: launch_state.key(), user: ctx.accounts.user.key(), refunded_lamports: refund, y_approved: 0 });
         return Ok(());
     }
 
@@ -115,7 +115,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
     }
 
     let approved_lamports = (y as u64)
-        .checked_mul(st.tau_lamports)
+        .checked_mul(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let refund = user
         .deposited
@@ -142,7 +142,7 @@ pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
     user.claimed_refund = true;
 
     emit!(RefundClaimed {
-        launch: st.key(),
+        launch: launch_state.key(),
         user: ctx.accounts.user.key(),
         refunded_lamports: refund,
         y_approved: y,

@@ -28,12 +28,12 @@ pub struct Withdraw<'info> {
 }
 
 pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time < st.funding_period_end,
+        current_time < launch_state.funding_period_end,
         EngineErrorCode::FundingPeriodEnded
     );
     let user = &mut ctx.accounts.user_contribution;
@@ -62,7 +62,7 @@ pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let new_tickets = (user
         .deposited
-        .checked_div(st.tau_lamports)
+        .checked_div(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
     let lost = old_tickets
         .checked_sub(new_tickets)
@@ -79,23 +79,23 @@ pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     shard.prefix.clear();
     shard.total_in_shard = 0; // prevent stale reads pre-finalization
-    st.total_tickets = st
+    launch_state.total_tickets = launch_state
         .total_tickets
         .checked_sub(lost)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    st.total_deposited = st
+    launch_state.total_deposited = launch_state
         .total_deposited
         .checked_sub(amount)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(Withdrawn {
-        launch: st.key(),
+        launch: launch_state.key(),
         user: ctx.accounts.user.key(),
         amount,
         tickets_before: old_tickets,
         tickets_after: new_tickets,
-        total_deposited: st.total_deposited,
-        total_tickets: st.total_tickets,
+        total_deposited: launch_state.total_deposited,
+        total_tickets: launch_state.total_tickets,
     });
 
     Ok(())

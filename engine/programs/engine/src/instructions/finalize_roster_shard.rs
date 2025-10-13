@@ -21,15 +21,15 @@ pub struct FinalizeRosterShard<'info> {
 }
 
 pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
 
     // Preconditions: funding ended
     let now = Clock::get()?.unix_timestamp;
-    require!(now >= st.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
+    require!(now >= launch_state.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
 
     // Enforce sequential finalization
-    let expected = st
+    let expected = launch_state
         .roster_finalized_up_to
         .checked_add(1)
         .ok_or(EngineErrorCode::ArithmeticOverflow)? as u16;
@@ -54,16 +54,16 @@ pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
     shard.total_in_shard = run;
 
     // Assign shard base and bump global total
-    shard.shard_base = st.public_total_tickets;
-    st.public_total_tickets = st
+    shard.shard_base = launch_state.public_total_tickets;
+    launch_state.public_total_tickets = launch_state
         .public_total_tickets
         .checked_add(shard.total_in_shard)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    st.roster_finalized_up_to = shard_id as i32;
+    launch_state.roster_finalized_up_to = shard_id as i32;
 
     emit!(RosterShardFinalized {
-        launch: st.key(),
+        launch: launch_state.key(),
         shard_id,
         total_in_shard: shard.total_in_shard,
         shard_base: shard.shard_base,
