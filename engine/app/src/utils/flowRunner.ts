@@ -228,10 +228,24 @@ export async function runFullFlow(
     addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
-    // 2. Initialize Roster Shard 0 (new sharded system)
-    addLog(`\n[2/10] Initializing Roster Shard 0...`);
-    await sdk.initRosterShard({ launch: testLaunchState, shardId: 0 });
-    addLog("   -> Shard 0 initialized.");
+    // 2. Pre-initialize all necessary roster shards
+    const numShards = Math.ceil(simConfig.numUsers / config.rosterShardCap);
+    addLog(
+      `\n[2/10] Calculated ${numShards} shards needed for ${simConfig.numUsers} users with a capacity of ${config.rosterShardCap}. Initializing...`
+    );
+    for (let i = 0; i < numShards; i++) {
+      try {
+        await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
+        addLog(`   -> Shard ${i} initialized.`);
+      } catch (error: any) {
+        // This might happen if another process initialized it, which is fine.
+        if (error.message && error.message.includes("custom program error: 0x0")) {
+            addLog(`   -> Shard ${i} was already initialized.`);
+        } else {
+            throw error;
+        }
+      }
+    }
 
     // 3. Simulate deposits for 1000 users with various amounts
     const TARGET_USERS = simConfig.numUsers;
@@ -247,11 +261,12 @@ export async function runFullFlow(
     );
 
     // Step 1: Generate all potential user keypairs and their desired deposits
-    let users = Array.from({ length: TARGET_USERS }, () => {
+    let users = Array.from({ length: TARGET_USERS }, (_, i) => {
       const keypair = Keypair.generate();
       const tickets = Math.floor(Math.random() * MAX_TICKETS_PER_USER) + 1;
       const depositAmount = new BN(config.tauLamports * tickets);
-      return { keypair, tickets, depositAmount };
+      const shardId = Math.floor(i / config.rosterShardCap);
+      return { keypair, tickets, depositAmount, shardId };
     });
 
     // Step 2: Check admin balance and filter users we can afford to fund
@@ -322,11 +337,10 @@ export async function runFullFlow(
     }
     addLog("   -> All users funded.");
 
-    // Step 4: Deposit from all users, handling sharding in batches
+    // Step 4: Deposit from all users, using pre-calculated shard IDs
     addLog(
       `   -> Sending ${numUsersToSimulate} deposit transactions in batches of 50...`
     );
-    let currentShardId = 0;
     const BATCH_SIZE = 50;
 
     for (let i = 0; i < users.length; i += BATCH_SIZE) {
@@ -335,63 +349,34 @@ export async function runFullFlow(
 
       const depositPromises = batch.map((user) =>
         (async () => {
-          let successfulDeposit = false;
-          let attemptShardId = currentShardId;
-
-          while (!successfulDeposit) {
-            try {
-              await sdk.deposit({
-                launch: testLaunchState,
-                amountLamports: user.depositAmount,
-                userKeypair: user.keypair,
-                shardId: attemptShardId,
-              });
-              usersWithDeposits.set(user.keypair.publicKey.toBase58(), {
-                keypair: user.keypair,
-                tickets: user.tickets,
-                shardId: attemptShardId,
-              });
-              successfulDeposit = true;
-            } catch (error: any) {
-              if (
-                error.message &&
-                error.message.includes("RosterShardFull")
-              ) {
-                // This shard is full, try initializing the next one.
-                const nextShardId = attemptShardId + 1;
-                try {
-                  await sdk.initRosterShard({
-                    launch: testLaunchState,
-                    shardId: nextShardId,
-                  });
-                } catch (initError: any) {
-                  // error 0x0 is 'AccountInUse', which is fine. It means another promise created it.
-                  if (
-                    !initError.message.includes("custom program error: 0x0")
-                  ) {
-                    throw initError; // Rethrow other initialization errors
-                  }
-                }
-                // Retry with the next shard
-                attemptShardId = nextShardId;
-              } else {
-                // A different, unexpected error occurred.
-                throw error;
-              }
-            }
+          try {
+            await sdk.deposit({
+              launch: testLaunchState,
+              amountLamports: user.depositAmount,
+              userKeypair: user.keypair,
+              shardId: user.shardId, // Use pre-calculated shard ID
+            });
+            usersWithDeposits.set(user.keypair.publicKey.toBase58(), {
+              keypair: user.keypair,
+              tickets: user.tickets,
+              shardId: user.shardId,
+            });
+          } catch (error: any) {
+            addLog(
+              `   -> ❌ Deposit failed for user in shard ${user.shardId}: ${error.message}`
+            );
+            // Stop the simulation on failure to prevent cascading issues.
+            throw new Error(
+              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${
+                user.shardId
+              }: ${error.message}`
+            );
           }
         })()
       );
 
       // Wait for all deposits in the current batch to complete
       await Promise.all(depositPromises);
-
-      // After the batch, update the global shard ID for the next batch to start from.
-      const maxShardInBatch = Array.from(usersWithDeposits.values()).reduce(
-        (max, u) => Math.max(max, u.shardId),
-        currentShardId
-      );
-      currentShardId = maxShardInBatch;
     }
     addLog("   -> All deposits completed.");
 
@@ -407,7 +392,7 @@ export async function runFullFlow(
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
-    for (let i = 0; i <= currentShardId; i++) {
+    for (let i = 0; i < numShards; i++) {
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
       addLog(`   -> Shard ${i} finalized.`);
     }
