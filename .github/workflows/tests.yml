@@ -81,7 +81,7 @@ jobs:
       - name: Run tests
         env:
           TS_NODE_CACHE: "false"
-        run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/bankrun.ts
+        run: npx ts-mocha -p ./tsconfig.json -t 1000000 engine/tests/bankrun.ts
 
       - name: Save Solana CLI cache
         if: steps.solana-restore.outputs.cache-hit != 'true'
