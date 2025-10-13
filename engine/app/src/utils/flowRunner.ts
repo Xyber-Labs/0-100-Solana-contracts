@@ -557,6 +557,7 @@ export async function runFullFlow(
       );
     }
 
+    let totalTokensClaimedByCreator = 0;
     // 10. Test Creator Token Claiming (if creator deposit was made)
     if (config.creatorInitialDepositLamports > 0) {
       addLog(
@@ -581,7 +582,9 @@ export async function runFullFlow(
             createAtaIfMissing: true,
           });
           const finalBalance = await getTokenBalance(creatorAta);
-          addLog(`      -> ✅ SUCCESS: Claim succeeded. Tokens claimed: ${(finalBalance - initialBalance).toFixed(6)}`);
+          const claimedAmount = finalBalance - initialBalance;
+          addLog(`      -> ✅ SUCCESS: Claim succeeded. Tokens claimed: ${claimedAmount.toFixed(6)}`);
+          totalTokensClaimedByCreator += claimedAmount;
           initialSuccess++;
         } catch (error: any) {
           if (error.message.includes("NothingToClaim")) {
@@ -619,7 +622,9 @@ export async function runFullFlow(
           creatorAta: creatorAta,
         });
         const finalBalance = await getTokenBalance(creatorAta);
-        addLog(`   -> ✅ SUCCESS: Claimed all remaining tokens. Tokens claimed: ${(finalBalance - initialBalance).toFixed(6)}`);
+        const claimedAmount = finalBalance - initialBalance;
+        addLog(`   -> ✅ SUCCESS: Claimed all remaining tokens. Tokens claimed: ${claimedAmount.toFixed(6)}`);
+        totalTokensClaimedByCreator += claimedAmount;
       } catch (error: any) {
         // Debug: Check if all tokens were already claimed
         const creatorGrantAfterError = await sdk.fetchCreatorGrant(testLaunchState);
@@ -659,6 +664,14 @@ export async function runFullFlow(
         addLog(`   -> ❌ VERIFICATION FAILED: Not all tickets were claimed (${finalGrantState.claimedTickets}/${finalGrantState.reservedTickets}).`);
       }
     }
+
+    addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);
+    addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);
+    addLog(`   Total claimed by creator: ${totalTokensClaimedByCreator.toFixed(6)}`);
+    addLog(`   ------------------------------------`);
+    const totalDistributed = tokensClaimed + totalTokensClaimedByCreator;
+    addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);
+    addLog(`--- END SUMMARY ---\n`);
 
     addLog("\n✅ Full flow finished successfully!");
     return { success: true, message: "Flow completed successfully" };
