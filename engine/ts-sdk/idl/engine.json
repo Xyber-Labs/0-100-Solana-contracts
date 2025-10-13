@@ -1364,16 +1364,16 @@
       ]
     },
     {
-      "name": "CreatorGrantInitialized",
+      "name": "CreatorGranted",
       "discriminator": [
-        72,
-        56,
-        13,
-        95,
-        94,
-        214,
-        58,
-        184
+        139,
+        253,
+        204,
+        61,
+        77,
+        195,
+        247,
+        170
       ]
     },
     {
@@ -1916,7 +1916,7 @@
       }
     },
     {
-      "name": "CreatorGrantInitialized",
+      "name": "CreatorGranted",
       "type": {
         "kind": "struct",
         "fields": [

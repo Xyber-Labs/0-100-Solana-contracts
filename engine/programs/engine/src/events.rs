@@ -101,7 +101,7 @@ pub struct NumBlocksUpdated {
 }
 
 #[event]
-pub struct CreatorGrantInitialized {
+pub struct CreatorGranted {
     pub launch: Pubkey,
     pub creator: Pubkey,
     pub locked_lamports: u64,

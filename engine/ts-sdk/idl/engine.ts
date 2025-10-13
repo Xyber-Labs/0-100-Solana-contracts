@@ -1370,16 +1370,16 @@ export type Engine = {
       ]
     },
     {
-      "name": "creatorGrantInitialized",
+      "name": "creatorGranted",
       "discriminator": [
-        72,
-        56,
-        13,
-        95,
-        94,
-        214,
-        58,
-        184
+        139,
+        253,
+        204,
+        61,
+        77,
+        195,
+        247,
+        170
       ]
     },
     {
@@ -1922,7 +1922,7 @@ export type Engine = {
       }
     },
     {
-      "name": "creatorGrantInitialized",
+      "name": "creatorGranted",
       "type": {
         "kind": "struct",
         "fields": [

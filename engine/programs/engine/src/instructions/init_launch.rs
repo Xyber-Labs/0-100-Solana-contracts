@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::Mint;
 use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::{LaunchInitialized, FundingPeriodStarted, CreatorGrantInitialized};
+use crate::events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized};
 use crate::state::{EscrowAccount, LaunchState, ProjectCounter, CreatorGrant};
 use crate::constants::{SEED_ROOT, DEFAULT_N, MIN_N, MAX_N};
 use anchor_lang::solana_program::sysvar::clock::Clock;
@@ -222,7 +222,7 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     cg.refunded = false;
 
     if amount > 0 {
-        emit!(CreatorGrantInitialized {
+        emit!(CreatorGranted {
             launch: state.key(),
             creator: cg.creator,
             locked_lamports: amount,
