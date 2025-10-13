@@ -26,6 +26,7 @@ interface LaunchConfig {
 // --- New interface for simulation parameters ---
 interface SimulationConfig {
   numUsers: number;
+  maxTicketsPerUser: number;
 }
 
 // Error boundary component
@@ -167,6 +168,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   // --- New state for simulation config ---
   const defaultSimConfig: SimulationConfig = {
     numUsers: 300,
+    maxTicketsPerUser: 3,
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -1223,6 +1225,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 type="number"
                 value={simConfig.numUsers}
                 onChange={(e) => setSimConfig(prev => ({ ...prev, numUsers: parseInt(e.target.value) || 0 }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Max Tickets Per User</label>
+              <input
+                type="number"
+                value={simConfig.maxTicketsPerUser}
+                onChange={(e) => setSimConfig(prev => ({ ...prev, maxTicketsPerUser: parseInt(e.target.value) || 0 }))}
                 className="terminal-input w-full"
               />
             </div>

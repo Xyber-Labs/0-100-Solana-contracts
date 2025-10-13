@@ -31,6 +31,7 @@ type Sdk = any;
 
 interface SimulationConfig {
   numUsers: number;
+  maxTicketsPerUser: number;
 }
 
 export async function runFullFlow(
@@ -249,7 +250,7 @@ export async function runFullFlow(
 
     // 3. Simulate deposits for 1000 users with various amounts
     const TARGET_USERS = simConfig.numUsers;
-    const MAX_TICKETS_PER_USER = 5; // e.g., users can deposit for 1 to 5 tickets
+    const MAX_TICKETS_PER_USER = simConfig.maxTicketsPerUser; // Use value from simConfig
     const usersWithDeposits = new Map<
       string,
       { keypair: Keypair; tickets: number; shardId: number }
