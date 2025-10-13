@@ -45,23 +45,43 @@ jobs:
           path: /home/runner/.local/share/solana/install
           key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
 
-      - name: Install Solana
+      - name: Install Solana (if cache miss)
         if: steps.solana-restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euxo pipefail
-          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash -s - v${{ env.SOLANA_VERSION }}
-      
+          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash -s - v${SOLANA_VERSION}
+
       - name: Add Solana to PATH
         shell: bash
         run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-      
+
       - name: Verify Solana
         shell: bash
         run: solana --version
 
+      - name: Save Solana CLI cache
+        if: steps.solana-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.local/share/solana/install
+          key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
 
-      - name: Install AVM and Anchor
+      - name: Add Cargo bin to PATH
+        shell: bash
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Restore AVM/Anchor cache
+        id: avm-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            /home/runner/.cargo/bin/avm
+            /home/runner/.avm
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}
+
+      - name: Install AVM + Anchor (if cache miss)
+        if: steps.avm-restore.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euxo pipefail
@@ -69,6 +89,21 @@ jobs:
           avm install ${ANCHOR_VERSION}
           avm use ${ANCHOR_VERSION}
           anchor --version
+
+      - name: Verify Anchor
+        shell: bash
+        run: |
+          avm use ${ANCHOR_VERSION}
+          anchor --version
+          
+      - name: Save AVM/Anchor cache
+        if: steps.avm-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /home/runner/.cargo/bin/avm
+            /home/runner/.avm
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}
 
       - name: Enable Yarn
         run: |
@@ -83,14 +118,7 @@ jobs:
           TS_NODE_CACHE: "false"
         run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/utils.ts
 
-      - name: Run livesvm tests
+      - name: Run litesvm tests
         env:
           TS_NODE_CACHE: "false"
-        run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/livesvm.ts
-
-      - name: Save Solana CLI cache
-        if: steps.solana-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: /home/runner/.local/share/solana/install
-          key: solana-${{ runner.os }}-${{ env.SOLANA_VERSION }}
+        run: npx ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts
