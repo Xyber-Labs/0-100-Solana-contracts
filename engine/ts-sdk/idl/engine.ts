@@ -1063,6 +1063,47 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -2252,6 +2293,10 @@ export type Engine = {
           {
             "name": "creatorClaimLockPeriodSec",
             "type": "i64"
+          },
+          {
+            "name": "creatorInitialDeposit",
+            "type": "u64"
           },
           {
             "name": "rosterShardCap",

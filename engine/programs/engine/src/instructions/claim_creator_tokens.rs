@@ -73,9 +73,10 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     // If there's nothing to claim, exit.
     require!(to_claim > 0, EngineErrorCode::NothingToClaim);
 
-    let amount = per
-        .checked_mul(to_claim as u64)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let amount = (per as u128)
+        .checked_mul(to_claim as u128)
+        .and_then(|val| val.checked_div(1_000_000))
+        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
     
     // Debug logging
     msg!("DEBUG: Creator claim - per={}, to_claim={}, amount={}", per, to_claim, amount);

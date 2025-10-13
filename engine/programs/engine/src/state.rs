@@ -52,6 +52,7 @@ pub struct LaunchState {
     pub creator_grant_present: bool,
     pub claims_opened_at: Option<i64>,
     pub creator_claim_lock_period_sec: i64,
+    pub creator_initial_deposit: u64,
     pub roster_shard_cap: u16,
 }
 

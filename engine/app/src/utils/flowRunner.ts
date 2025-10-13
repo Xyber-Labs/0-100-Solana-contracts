@@ -455,6 +455,7 @@ export async function runFullFlow(
             userKeypair: userData.keypair,
             createAtaIfMissing: true,
             shardId: userData.shardId,
+            computeUnits: 2_000_000,
           });
 
           const finalBalance = await getTokenBalance(userAta);
@@ -566,6 +567,7 @@ export async function runFullFlow(
             saleMint: testSaleMint.publicKey,
             creatorAta: creatorAta,
             createAtaIfMissing: true,
+            computeUnits: 2_000_000,
           });
           const finalBalance = await getTokenBalance(creatorAta);
           const claimedAmount = finalBalance - initialBalance;
@@ -651,7 +653,11 @@ export async function runFullFlow(
       }
     }
 
+    const finalLaunchState = await sdk.fetchLaunch(testLaunchState);
+    const totalSOLCollected = finalLaunchState.totalDeposited.toNumber() / LAMPORTS_PER_SOL;
+
     addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);
+    addLog(`   Total SOL collected:      ${totalSOLCollected.toFixed(4)} SOL`);
     addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);
     addLog(`   Total claimed by creator: ${totalTokensClaimedByCreator.toFixed(6)}`);
     addLog(`   ------------------------------------`);

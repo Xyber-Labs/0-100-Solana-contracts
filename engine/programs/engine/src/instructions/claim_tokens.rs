@@ -107,9 +107,10 @@ pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
         }
     }
     require!(y > 0, EngineErrorCode::NoTokensToClaim);
-    let amount = per
-        .checked_mul(y as u64)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let amount = (per as u128)
+        .checked_mul(y as u128)
+        .and_then(|val| val.checked_div(1_000_000))
+        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
 
     // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
     let seeds: &[&[u8]] = &[

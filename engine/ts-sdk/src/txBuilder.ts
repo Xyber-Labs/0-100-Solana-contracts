@@ -536,11 +536,13 @@ export class TxBuilder {
     launch: PublicKey;
     payer: PublicKey;
   }): Promise<TransactionInstruction> {
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
     return (this.program.methods as any)
       .openClaims()
       .accounts({
         payer: params.payer,
         launchState: params.launch,
+        creatorGrant,
       } as any)
       .instruction();
   }
