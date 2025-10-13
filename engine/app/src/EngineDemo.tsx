@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
-import EngineSDK from 'zero-hundred-engine-sdk';
+import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js';
+import EngineSDK from '../../ts-sdk/src/engine';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { runFullFlow } from './utils/flowRunner';
@@ -12,10 +12,21 @@ interface LaunchConfig {
   minRaiseLamports: number;
   perWalletCap: number;
   tauLamports: number;
-  saleAllocation: number;
+  saleAllocation: string;
   lpAllocation: number;
-  fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
+  fundingDurationDays: number; // Represents dropdown selection
+  fundingDurationSeconds: number; // Represents custom input
   numBlocks: number;
+  rosterShardCap: number;
+  creatorInitialDepositLamports: number;
+  creatorDailyLamportsLimit: number;
+  creatorClaimLockPeriodSec: number;
+}
+
+// --- New interface for simulation parameters ---
+interface SimulationConfig {
+  numUsers: number;
+  maxTicketsPerUser: number;
 }
 
 // Error boundary component
@@ -78,7 +89,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [launchData, setLaunchData] = useState<any>(null);
   const [userContributions, setUserContributions] = useState<any>(null);
-  const [selectionData, setSelectionData] = useState<any>(null);
   const [showLaunchForm, setShowLaunchForm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState<number>(0);
@@ -90,8 +100,34 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isProjectManagerCollapsed, setIsProjectManagerCollapsed] = useState(true);
 
+  // --- New state for custom duration ---
+  const [durationOption, setDurationOption] = useState('dropdown'); // 'dropdown' or 'custom'
+
   // --- New state for the full flow runner ---
   const [isFlowRunning, setIsFlowRunning] = useState(false);
+  const [faucetAmount, setFaucetAmount] = useState(1000);
+
+  // Helper to get seconds from dropdown value
+  const getSecondsFromDropdown = (daysValue: number) => {
+    switch (daysValue) {
+      case 0: return 10;
+      case 1: return 30;
+      case 2: return 60;
+      case 3: return 2 * 24 * 60 * 60;
+      case 4: return 3 * 24 * 60 * 60;
+      case 5: return 4 * 24 * 60 * 60;
+      case 6: return 5 * 24 * 60 * 60;
+      default: return 10;
+    }
+  };
+
+  // Helper function to convert UI selection to seconds
+  const getFundingDurationInSeconds = (): number => {
+    if (durationOption === 'custom') {
+      return launchConfig.fundingDurationSeconds;
+    }
+    return getSecondsFromDropdown(launchConfig.fundingDurationDays);
+  };
 
   // Helper function to safely get numeric values from BN, string, or number
   const safeToNumber = (value: any): number => {
@@ -114,17 +150,29 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   
   // Default launch configuration (matching tests)
   const defaultConfig: LaunchConfig = {
-    hardCapLamports: 20 * 1e9, // 20 SOL
-    minRaiseLamports: 10 * 1e9, // 10 SOL
+    hardCapLamports: 450 * 1e9, // 20,000 SOL for large tests
+    minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
-    saleAllocation: 1000000,
+    saleAllocation: '459460000000000', // 45.946% of 1B supply with 6 decimals
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
-    numBlocks: 150, // ~1 minute window
+    fundingDurationSeconds: 10, // Default custom seconds
+    numBlocks: 1024, // ~1 minute window
+    rosterShardCap: 250, // Safe size for Solana account limits (250 * 40 bytes = 10,000 bytes)
+    creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
+    creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
+    creatorClaimLockPeriodSec: 2, // 2 seconds for testing
+  };
+
+  // --- New state for simulation config ---
+  const defaultSimConfig: SimulationConfig = {
+    numUsers: 300,
+    maxTicketsPerUser: 3,
   };
   
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
+  const [simConfig, setSimConfig] = useState<SimulationConfig>(defaultSimConfig);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -188,11 +236,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         preflightCommitment: 'confirmed',
       });
       
-      // Load IDL dynamically
+      // Load IDL dynamically with proper error handling
       const idl = await EngineSDK.loadIdl();
       
-      // Import and initialize program using SDK's built-in IDL
-      const program = new Program(idl as any, provider);
+      // Debug: Check IDL structure
+      console.log('IDL structure:', {
+        address: idl.address,
+        instructions: idl.instructions?.length,
+        accounts: idl.accounts?.length,
+        types: idl.types?.length
+      });
+      
+      // Initialize program using standard Anchor approach
+      const program = new Program(idl, provider);
       
       // Create SDK instance
       const sdkInstance = EngineSDK.create(provider, program as any);
@@ -208,6 +264,64 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [publicKey, signTransaction, signAllTransactions, connection, testWallet]);
 
+  const fetchLaunchData = useCallback(async () => {
+    if (!sdk || !launchState) return;
+    
+    try {
+      const data = await sdk.fetchLaunch(launchState);
+      setLaunchData(data);
+      addLog('Launch data refreshed');
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch launch data - ${error}`);
+      
+      // If account doesn't exist yet, wait and retry
+      if (error instanceof Error && error.message.includes('Account does not exist')) {
+        addLog('Account not found, waiting and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        try {
+          const retryData = await sdk.fetchLaunch(launchState);
+          setLaunchData(retryData);
+          addLog('Launch data refreshed after retry');
+        } catch (retryError) {
+          addLog(`ERROR: Retry failed - ${retryError}`);
+        }
+      }
+    }
+  }, [sdk, launchState]);
+
+  const fetchUserData = useCallback(async () => {
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!sdk || !launchState || !activePublicKey) return;
+    
+    try {
+      const data = await sdk.fetchUserContribution(launchState, activePublicKey);
+      setUserContributions(data);
+      addLog('User contribution data refreshed');
+    } catch (error: any) {
+      // User account doesn't exist yet - this is normal before first deposit
+      if (error.message?.includes('Account does not exist')) {
+        setUserContributions(null);
+        addLog('User account not created yet (normal before first deposit)');
+      } else {
+        addLog(`ERROR: Failed to fetch user data - ${error}`);
+      }
+    }
+  }, [sdk, launchState, publicKey, testWallet]);
+
+  
+  const fetchBalance = useCallback(async () => {
+    const activePublicKey = testWallet?.publicKey || publicKey;
+    if (!activePublicKey) return;
+    
+    try {
+      const currentBalance = await connection.getBalance(activePublicKey);
+      setBalance(currentBalance);
+    } catch (error) {
+      addLog(`ERROR: Failed to fetch balance - ${error}`);
+    }
+  }, [publicKey, connection, testWallet]);
+  
   const initLaunch = useCallback(async () => {
     if (!sdk || !program) {
       addLog('ERROR: SDK not initialized');
@@ -224,6 +338,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       // Get mint authority PDA
       const [mintAuth] = sdk.getMintAuthPda(launchPda);
+      const [creatorGrant] = sdk.getCreatorGrantPda(launchPda);
+      const [projectCounter] = sdk.getProjectCounterPda();
 
       console.log('Creating initLaunch transaction with:');
       console.log('saleMint:', saleMintKeypair.publicKey.toString());
@@ -231,6 +347,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       
       // Create the transaction manually to handle signers properly
       const transaction = new Transaction();
+
+      // Add compute unit limit
+      transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
+      );
       
       addLog(`Creating transaction for saleMint: ${saleMintKeypair.publicKey.toString()}`);
       
@@ -263,15 +384,20 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           tauLamports: new BN(launchConfig.tauLamports),
           saleAllocation: new BN(launchConfig.saleAllocation),
           lpAllocation: new BN(launchConfig.lpAllocation),
-          fundingDurationSeconds: launchConfig.fundingDurationDays,
+          fundingDurationSeconds: new BN(getFundingDurationInSeconds()),
           numBlocks: new BN(launchConfig.numBlocks),
+          rosterShardCap: launchConfig.rosterShardCap,
+          creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
+          creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
+          creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
         })
         .accountsStrict({
-          admin: (testWallet?.publicKey || publicKey)!,
-          projectCounter: sdk.getProjectCounterPda()[0],
+          creator: (testWallet?.publicKey || publicKey)!,
+          projectCounter,
           launchState: launchPda,
           saleMint: saleMintKeypair.publicKey,
           escrow: escrowPda,
+          creatorGrant,
           systemProgram: SystemProgram.programId,
         })
         .instruction();
@@ -367,86 +493,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, program, publicKey, launchConfig]);
+  }, [sdk, program, publicKey, launchConfig, fetchLaunchData]);
 
-  const fetchLaunchData = useCallback(async () => {
-    if (!sdk || !launchState) return;
-    
-    try {
-      const data = await sdk.fetchLaunch(launchState);
-      setLaunchData(data);
-      addLog('Launch data refreshed');
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch launch data - ${error}`);
-      
-      // If account doesn't exist yet, wait and retry
-      if (error instanceof Error && error.message.includes('Account does not exist')) {
-        addLog('Account not found, waiting and retrying...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        try {
-          const retryData = await sdk.fetchLaunch(launchState);
-          setLaunchData(retryData);
-          addLog('Launch data refreshed after retry');
-        } catch (retryError) {
-          addLog(`ERROR: Retry failed - ${retryError}`);
-        }
-      }
-    }
-  }, [sdk, launchState]);
-
-  const fetchUserData = useCallback(async () => {
-    const activePublicKey = testWallet?.publicKey || publicKey;
-    if (!sdk || !launchState || !activePublicKey) return;
-    
-    try {
-      const data = await sdk.fetchUserContribution(launchState, activePublicKey);
-      setUserContributions(data);
-      addLog('User contribution data refreshed');
-    } catch (error: any) {
-      // User account doesn't exist yet - this is normal before first deposit
-      if (error.message?.includes('Account does not exist')) {
-        setUserContributions(null);
-        addLog('User account not created yet (normal before first deposit)');
-      } else {
-        addLog(`ERROR: Failed to fetch user data - ${error}`);
-      }
-    }
-  }, [sdk, launchState, publicKey, testWallet]);
-
-  const fetchSelectionData = useCallback(async () => {
-    if (!sdk || !launchState) return;
-    
-    try {
-      const data = await sdk.fetchSelection(launchState);
-      setSelectionData(data);
-      addLog('Selection data refreshed');
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch selection data - ${error}`);
-    }
-  }, [sdk, launchState]);
-
- // Removed function dependencies
-
-  const initRoster = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Initializing roster...');
-      const { rosterPda, signature } = await sdk.initRoster({ launch: launchState });
-      setRoster(rosterPda);
-      addLog(`SUCCESS: Roster initialized - Signature: ${signature}`);
-      addLog(`Roster PDA: ${rosterPda.toString()}`);
-    } catch (error) {
-      addLog(`ERROR: Failed to initialize roster - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]);
 
 
   const setSeed = useCallback(async () => {
@@ -470,68 +518,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchLaunchData]);
 
-  const processBatch = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Processing batch...');
-      const { signature } = await sdk.processBatch({
-        launch: launchState,
-        maxItems: 10,
-      });
-      addLog(`SUCCESS: Batch processed - Signature: ${signature}`);
-      await fetchSelectionData();
-    } catch (error) {
-      addLog(`ERROR: Failed to process batch - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
-
-  const finalizeSelection = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Finalizing selection...');
-      const { signature } = await sdk.finalizeSelection({ launch: launchState });
-      addLog(`SUCCESS: Selection finalized - Signature: ${signature}`);
-      await fetchLaunchData();
-      await fetchSelectionData();
-    } catch (error) {
-      addLog(`ERROR: Failed to finalize selection - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
-
-  const openClaims = useCallback(async () => {
-    if (!sdk || !launchState) {
-      addLog('ERROR: Launch not initialized');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      addLog('Opening claims...');
-      const { signature } = await sdk.openClaims({ launch: launchState });
-      addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
-      await fetchLaunchData();
-    } catch (error) {
-      addLog(`ERROR: Failed to open claims - ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [sdk, launchState]); // Removed function dependencies
 
   const deposit = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -557,7 +545,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchBalance, fetchLaunchData, fetchUserData]);
 
   const withdraw = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -582,7 +570,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchBalance, fetchLaunchData, fetchUserData]);
 
   const claimRefund = useCallback(async () => {
     if (!sdk || !launchState) {
@@ -601,7 +589,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState]); // Removed function dependencies
+  }, [sdk, launchState, fetchUserData]);
 
   const claimTokens = useCallback(async () => {
     if (!sdk || !launchState || !saleMint) {
@@ -625,19 +613,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, saleMint]); // Removed function dependencies
-
-  const fetchBalance = useCallback(async () => {
-    const activePublicKey = testWallet?.publicKey || publicKey;
-    if (!activePublicKey) return;
-    
-    try {
-      const currentBalance = await connection.getBalance(activePublicKey);
-      setBalance(currentBalance);
-    } catch (error) {
-      addLog(`ERROR: Failed to fetch balance - ${error}`);
-    }
-  }, [publicKey, connection, testWallet]);
+  }, [sdk, launchState, saleMint, fetchUserData]);
 
   const requestFaucet = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
@@ -648,13 +624,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     try {
       setIsLoading(true);
-      addLog('Requesting 10 SOL from faucet...');
+      addLog(`Requesting ${faucetAmount} SOL from faucet...`);
       addLog(`Requesting for address: ${activePublicKey.toString()}`);
       
       // Request airdrop from faucet
       const signature = await connection.requestAirdrop(
         activePublicKey,
-        10 * 1e9 // 10 SOL in lamports
+        faucetAmount * 1e9 // 10 SOL in lamports
       );
       
       addLog(`Airdrop signature: ${signature}`);
@@ -679,11 +655,25 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, connection, testWallet, fetchBalance]);
+  }, [publicKey, connection, testWallet, fetchBalance, faucetAmount]);
 
   const clearLogs = () => {
     setLogs([]);
     addLog('Logs cleared');
+  };
+
+  const downloadLogs = () => {
+    const logContent = logs.join('\n');
+    const blob = new Blob([logContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flow-runner-logs.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addLog('Logs downloaded as flow-runner-logs.txt');
   };
 
   const resetState = () => {
@@ -694,7 +684,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setSelection(null);
     setLaunchData(null);
     setUserContributions(null);
-    setSelectionData(null);
     setCurrentProjectId(null);
     addLog('State reset');
   };
@@ -779,7 +768,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           setUserContributions(restoredUserContributions);
         }
         
-        setSelectionData(project.selectionData);
         setCurrentProjectId(project.id);
       } catch (error) {
         addLog(`ERROR: Failed to restore data - ${error}`);
@@ -952,14 +940,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         addLog(`ERROR: Failed to refresh data after state change - ${error}`);
       }
     }
-  }, [launchState, sdk]); // Removed function dependencies to prevent infinite loops
+  }, [launchState, sdk, fetchLaunchData, fetchUserData]);
 
   // Auto-fetch balance when wallet connects or test wallet changes
   useEffect(() => {
     if (publicKey || testWallet) {
       fetchBalance();
     }
-  }, [publicKey, testWallet]); // Removed fetchBalance dependency to prevent infinite loops
+  }, [publicKey, testWallet, fetchBalance]);
 
   useEffect(() => {
     if (autoScroll && logContainerRef.current) {
@@ -975,17 +963,33 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
+    addLog(`[DEBUG] Passing saleAllocation to flowRunner: ${launchConfig.saleAllocation}`);
     
-    const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog);
-
-    if (result.success) {
-      addLog('--- ✅ FULL TEST FLOW COMPLETED SUCCESSFULLY ---');
-    } else {
-      addLog(`--- ❌ FULL TEST FLOW FAILED: ${result.message} ---`);
+    try {
+      const result = await runFullFlow(
+        sdk,
+        program,
+        sdk.program.provider,
+        launchConfig,
+        addLog,
+        simConfig
+      );
+      if (result.success) {
+        addLog(`--- ✅ FULL TEST FLOW SUCCEEDED ---`);
+      } else {
+        addLog(`--- ❌ FULL TEST FLOW FAILED: ${result.message} ---`);
+      }
+    } catch (error: any) {
+      console.error("Error in handleRunFlow:", error);
+      let errorMessage = "An unexpected error occurred in the UI.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      addLog(`--- ❌ FULL TEST FLOW FAILED: ${errorMessage} ---`);
+    } finally {
+      setIsFlowRunning(false);
     }
-
-    setIsFlowRunning(false);
-  }, [sdk, program, launchConfig, addLog]);
+  }, [sdk, program, launchConfig, addLog, simConfig]);
 
   return (
     <ErrorBoundary>
@@ -1002,12 +1006,18 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <span className="text-xs terminal-output">
                 Balance: <span className="terminal-success">{(balance / 1e9).toFixed(2)} SOL</span>
               </span>
+              <input
+                type="number"
+                value={faucetAmount}
+                onChange={(e) => setFaucetAmount(Number(e.target.value))}
+                className="terminal-input w-24"
+                />
               <button 
                 onClick={requestFaucet} 
                 className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
                 disabled={(!publicKey && !testWallet) || isLoading}
               >
-                💧 Request 10 SOL
+                💧 Request SOL
               </button>
             </div>
             <label className="flex items-center space-x-2 text-xs">
@@ -1038,6 +1048,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         
         {showLaunchForm && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 bg-black bg-opacity-30 rounded border">
+            {/* --- Launch Parameters --- */}
+            <div className="col-span-full">
+              <h3 className="text-sm font-bold terminal-glow mb-2">Launch Parameters</h3>
+            </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Hard Cap (SOL)</label>
               <input
@@ -1073,17 +1087,21 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <input
                 type="number"
                 value={launchConfig.tauLamports / 1e9}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, tauLamports: parseFloat(e.target.value) * 1e9 }))}
+                onChange={(e) =>
+                  setLaunchConfig({
+                    ...launchConfig,
+                    tauLamports: Math.round(parseFloat(e.target.value) * 1e9),
+                  })
+                }
                 className="terminal-input w-full"
-                step="0.1"
               />
             </div>
             <div>
-              <label className="block text-xs terminal-output mb-1">Sale Allocation</label>
+              <label className="block text-xs terminal-output mb-1">Sale Allocation (atomic)</label>
               <input
-                type="number"
+                type="text"
                 value={launchConfig.saleAllocation}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: parseInt(e.target.value) }))}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: e.target.value }))}
                 className="terminal-input w-full"
               />
             </div>
@@ -1098,18 +1116,57 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Funding Duration</label>
-              <select
-                value={launchConfig.fundingDurationDays}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationDays: parseInt(e.target.value) }))}
-                className="terminal-input w-full"
-              >
-                <option value={0}>10 seconds (testing)</option>
-                <option value={1}>30 seconds (testing)</option>
-                <option value={2}>2 days</option>
-                <option value={3}>3 days</option>
-                <option value={4}>4 days</option>
-                <option value={5}>5 days</option>
-              </select>
+              <div className="flex items-center space-x-2">
+                <select
+                  value={durationOption}
+                  onChange={(e) => {
+                    const newOption = e.target.value;
+                    setDurationOption(newOption);
+                    if (newOption === 'dropdown') {
+                      // Reset custom seconds to match dropdown
+                      setLaunchConfig(prev => ({
+                        ...prev,
+                        fundingDurationSeconds: getSecondsFromDropdown(prev.fundingDurationDays)
+                      }));
+                    }
+                  }}
+                  className="terminal-input w-1/3"
+                >
+                  <option value="dropdown">Presets</option>
+                  <option value="custom">Custom (s)</option>
+                </select>
+
+                {durationOption === 'dropdown' ? (
+                  <select
+                    value={launchConfig.fundingDurationDays}
+                    onChange={(e) => {
+                      const daysValue = parseInt(e.target.value);
+                      setLaunchConfig(prev => ({
+                        ...prev,
+                        fundingDurationDays: daysValue,
+                        fundingDurationSeconds: getSecondsFromDropdown(daysValue)
+                      }));
+                    }}
+                    className="terminal-input w-2/3"
+                  >
+                    <option value={0}>10 seconds (testing)</option>
+                    <option value={1}>30 seconds (testing)</option>
+                    <option value={2}>60 seconds (testing)</option>
+                    <option value={3}>2 days</option>
+                    <option value={4}>3 days</option>
+                    <option value={5}>4 days</option>
+                    <option value={6}>5 days</option>
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    value={launchConfig.fundingDurationSeconds}
+                    onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationSeconds: parseInt(e.target.value) || 0 }))}
+                    className="terminal-input w-2/3"
+                    placeholder="Enter seconds"
+                  />
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-xs terminal-output mb-1">Num Blocks (Window)</label>
@@ -1117,6 +1174,66 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 type="number"
                 value={launchConfig.numBlocks}
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, numBlocks: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Initial Deposit (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorInitialDepositLamports / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorInitialDepositLamports: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Daily Limit (SOL)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorDailyLamportsLimit / 1e9}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorDailyLamportsLimit: parseFloat(e.target.value) * 1e9 }))}
+                className="terminal-input w-full"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Creator Claim Lock (s)</label>
+              <input
+                type="number"
+                value={launchConfig.creatorClaimLockPeriodSec}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorClaimLockPeriodSec: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Roster Shard Capacity</label>
+              <input
+                type="number"
+                value={launchConfig.rosterShardCap}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            {/* --- Simulation Parameters --- */}
+            <div className="col-span-full mt-4">
+               <h3 className="text-sm font-bold terminal-glow mb-2">Simulation Parameters</h3>
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Number of Users</label>
+              <input
+                type="number"
+                value={simConfig.numUsers}
+                onChange={(e) => setSimConfig(prev => ({ ...prev, numUsers: parseInt(e.target.value) || 0 }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Max Tickets Per User</label>
+              <input
+                type="number"
+                value={simConfig.maxTicketsPerUser}
+                onChange={(e) => setSimConfig(prev => ({ ...prev, maxTicketsPerUser: parseInt(e.target.value) || 0 }))}
                 className="terminal-input w-full"
               />
             </div>
@@ -1427,11 +1544,26 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <div className="my-2 border-t border-gray-600"></div>
             
             <button 
-              onClick={initRoster}
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Initializing roster shard 0...');
+                  const { signature } = await sdk.initRosterShard({
+                    launch: launchState,
+                    shardId: 0,
+                  });
+                  addLog(`SUCCESS: Roster shard 0 initialized - Signature: ${signature}`);
+                } catch (error) {
+                  addLog(`ERROR: Failed to initialize roster shard - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
               className="terminal-button w-full text-left"
               disabled={!launchState || isLoading || isFlowRunning}
             >
-              <span className="terminal-prompt">$</span> Init Roster
+              <span className="terminal-prompt">$</span> Init Roster Shard
             </button>
             
             
@@ -1444,29 +1576,52 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </button>
             
             <button 
-              onClick={processBatch}
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Finalizing roster shard 0...');
+                  const { signature } = await sdk.finalizeRosterShard({
+                    launch: launchState,
+                    shardId: 0,
+                  });
+                  addLog(`SUCCESS: Roster shard 0 finalized - Signature: ${signature}`);
+                } catch (error) {
+                  addLog(`ERROR: Failed to finalize roster shard - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
               className="terminal-button w-full text-left"
               disabled={!launchState || isLoading || isFlowRunning}
             >
-              <span className="terminal-prompt">$</span> Process Batch
+              <span className="terminal-prompt">$</span> Finalize Roster Shard
             </button>
             
             <button 
-              onClick={finalizeSelection}
-              className="terminal-button w-full text-left"
-              disabled={!launchState || isLoading || isFlowRunning}
-            >
-              <span className="terminal-prompt">$</span> Finalize Selection
-            </button>
-            
-            <button 
-              onClick={openClaims}
+              onClick={async () => {
+                if (!sdk || !launchState) return;
+                try {
+                  setIsLoading(true);
+                  addLog('Opening claims...');
+                  const { signature } = await sdk.openClaims({
+                    launch: launchState,
+                  });
+                  addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
+                  await fetchLaunchData();
+                } catch (error) {
+                  addLog(`ERROR: Failed to open claims - ${error}`);
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
               className="terminal-button w-full text-left"
               disabled={!launchState || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Open Claims
             </button>
-
+            
+            
             <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
 
             <button 
@@ -1547,22 +1702,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
           )}
 
-          {/* Selection Data Display */}
-          {selectionData && (
-            <div className="mt-4 pt-4 border-t border-gray-600">
-              <div className="terminal-prompt mb-2 text-xs">Selection Data:</div>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="terminal-output">Processed:</span>
-                  <span className="terminal-success">{selectionData.processed || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="terminal-output">Heap Length:</span>
-                  <span className="terminal-success">{selectionData.heap?.length || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1575,15 +1714,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         <div className="text-xs terminal-output space-y-1">
           <div><span className="terminal-success">1.</span> Initialize SDK</div>
           <div><span className="terminal-success">2.</span> Init Launch</div>
-          <div><span className="terminal-success">3.</span> Open Funding</div>
-          <div><span className="terminal-success">4.</span> Init Roster <span className="terminal-error">(Required before deposits!)</span></div>
-          <div><span className="terminal-success">5.</span> Deposit SOL</div>
-          <div><span className="terminal-success">6.</span> Close Deposits</div>
-          <div><span className="terminal-success">7.</span> Set VRF Seed</div>
-          <div><span className="terminal-success">8.</span> Process Batch</div>
-          <div><span className="terminal-success">9.</span> Finalize Selection</div>
-          <div><span className="terminal-success">10.</span> Open Claims</div>
-          <div><span className="terminal-success">11.</span> Claim Tokens/Refund</div>
+          <div><span className="terminal-success">3.</span> Init Roster Shard <span className="terminal-error">(Required before deposits!)</span></div>
+          <div><span className="terminal-success">4.</span> Deposit SOL (Wait for funding period to start)</div>
+          <div><span className="terminal-success">5.</span> Wait for Funding Period to End</div>
+          <div><span className="terminal-success">6.</span> Set VRF Seed</div>
+          <div><span className="terminal-success">7.</span> Finalize Roster Shard</div>
+          <div><span className="terminal-success">8.</span> Open Claims</div>
+          <div><span className="terminal-success">9.</span> Claim Tokens/Refund</div>
         </div>
       </div>
 
@@ -1604,6 +1741,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               />
               <span className="terminal-output">Auto-scroll</span>
             </label>
+            <button onClick={downloadLogs} className="terminal-button text-xs">
+              Download Logs
+            </button>
             <button onClick={clearLogs} className="terminal-button text-xs">
               Clear Logs
             </button>

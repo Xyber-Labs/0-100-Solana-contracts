@@ -14,6 +14,200 @@ export type Engine = {
   },
   "instructions": [
     {
+      "name": "claimCreatorRefund",
+      "docs": [
+        "Claim creator refund for failed launches"
+      ],
+      "discriminator": [
+        168,
+        92,
+        198,
+        50,
+        65,
+        220,
+        247,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState"
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimCreatorTokens",
+      "docs": [
+        "Claim creator tokens with daily limits"
+      ],
+      "discriminator": [
+        126,
+        208,
+        113,
+        43,
+        222,
+        70,
+        91,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState"
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "saleMint",
+          "writable": true
+        },
+        {
+          "name": "mintAuth",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorAta",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimRefund",
       "docs": [
         "Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ)."
@@ -80,8 +274,7 @@ export type Engine = {
           }
         },
         {
-          "name": "selectionState",
-          "writable": true
+          "name": "rosterShard"
         },
         {
           "name": "escrow",
@@ -112,8 +305,7 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState",
-          "writable": true
+          "name": "launchState"
         },
         {
           "name": "userContribution",
@@ -158,8 +350,7 @@ export type Engine = {
           }
         },
         {
-          "name": "selectionState",
-          "writable": true
+          "name": "rosterShard"
         },
         {
           "name": "saleMint",
@@ -224,8 +415,7 @@ export type Engine = {
     {
       "name": "createPool",
       "docs": [
-        "Create pool with blockhash verification",
-        "Checks if any of the last 10 blockhashes meets the probability threshold"
+        "Create AMM pool"
       ],
       "discriminator": [
         233,
@@ -244,8 +434,7 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState",
-          "writable": true
+          "name": "launchState"
         },
         {
           "name": "poolState",
@@ -284,10 +473,6 @@ export type Engine = {
               }
             ]
           }
-        },
-        {
-          "name": "projectCounter",
-          "writable": true
         },
         {
           "name": "slotHashes",
@@ -368,7 +553,7 @@ export type Engine = {
           }
         },
         {
-          "name": "roster",
+          "name": "rosterShard",
           "writable": true
         },
         {
@@ -379,10 +564,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
+          "name": "launch"
         },
         {
           "name": "systemProgram",
@@ -393,6 +575,89 @@ export type Engine = {
         {
           "name": "amount",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "finalizeRosterShard",
+      "docs": [
+        "Finalize roster shard (compute prefix, set shard_base, bump totals)"
+      ],
+      "discriminator": [
+        124,
+        151,
+        200,
+        25,
+        61,
+        233,
+        114,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "rosterShard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              },
+              {
+                "kind": "arg",
+                "path": "shardId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "shardId",
+          "type": "u16"
         }
       ]
     },
@@ -556,6 +821,50 @@ export type Engine = {
           }
         },
         {
+          "name": "creatorGrant",
+          "docs": [
+            "Creator grant account (PDA off launch_state)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -644,6 +953,162 @@ export type Engine = {
       "args": []
     },
     {
+      "name": "initRosterShard",
+      "docs": [
+        "Initialize roster shard account"
+      ],
+      "discriminator": [
+        251,
+        25,
+        110,
+        80,
+        137,
+        49,
+        197,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "rosterShard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              },
+              {
+                "kind": "arg",
+                "path": "shardId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "shardId",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "openClaims",
+      "docs": [
+        "Open claims after all shards finalized"
+      ],
+      "discriminator": [
+        111,
+        108,
+        90,
+        115,
+        178,
+        90,
+        24,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "processBatch",
       "docs": [
         "Permissionless crank: process up to max_items tickets (t = processed ..)."
@@ -658,20 +1123,7 @@ export type Engine = {
         206,
         67
       ],
-      "accounts": [
-        {
-          "name": "selectionState",
-          "writable": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true
-        }
-      ],
+      "accounts": [],
       "args": [
         {
           "name": "maxItems",
@@ -703,49 +1155,6 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
-        },
-        {
-          "name": "selectionState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  115,
-                  101,
-                  108,
-                  101,
-                  99,
-                  116,
-                  105,
-                  111,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
         },
         {
           "name": "slotHashes",
@@ -826,7 +1235,7 @@ export type Engine = {
           }
         },
         {
-          "name": "roster",
+          "name": "rosterShard",
           "writable": true
         },
         {
@@ -837,10 +1246,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "launch",
-          "relations": [
-            "roster"
-          ]
+          "name": "launch"
         },
         {
           "name": "systemProgram",
@@ -856,6 +1262,19 @@ export type Engine = {
     }
   ],
   "accounts": [
+    {
+      "name": "creatorGrant",
+      "discriminator": [
+        80,
+        101,
+        45,
+        193,
+        223,
+        50,
+        10,
+        157
+      ]
+    },
     {
       "name": "escrowAccount",
       "discriminator": [
@@ -922,16 +1341,16 @@ export type Engine = {
       ]
     },
     {
-      "name": "selectionState",
+      "name": "rosterShard",
       "discriminator": [
-        235,
-        126,
-        97,
         31,
-        31,
-        163,
-        172,
-        135
+        213,
+        128,
+        164,
+        233,
+        238,
+        137,
+        178
       ]
     },
     {
@@ -960,6 +1379,45 @@ export type Engine = {
         11,
         127,
         180
+      ]
+    },
+    {
+      "name": "claimsOpened",
+      "discriminator": [
+        126,
+        92,
+        24,
+        148,
+        242,
+        66,
+        8,
+        28
+      ]
+    },
+    {
+      "name": "creatorClaimed",
+      "discriminator": [
+        118,
+        206,
+        30,
+        219,
+        62,
+        164,
+        54,
+        200
+      ]
+    },
+    {
+      "name": "creatorGranted",
+      "discriminator": [
+        139,
+        253,
+        204,
+        61,
+        77,
+        195,
+        247,
+        170
       ]
     },
     {
@@ -1051,6 +1509,32 @@ export type Engine = {
         158,
         188,
         249
+      ]
+    },
+    {
+      "name": "rosterShardFinalized",
+      "discriminator": [
+        136,
+        212,
+        55,
+        122,
+        118,
+        122,
+        150,
+        85
+      ]
+    },
+    {
+      "name": "rosterShardInitialized",
+      "discriminator": [
+        110,
+        2,
+        21,
+        250,
+        126,
+        114,
+        61,
+        90
       ]
     },
     {
@@ -1194,8 +1678,8 @@ export type Engine = {
     },
     {
       "code": 6017,
-      "name": "notFullyProcessed",
-      "msg": "Not fully processed"
+      "name": "invalidDivisor",
+      "msg": "Divisor must be greater than zero"
     },
     {
       "code": 6018,
@@ -1249,8 +1733,118 @@ export type Engine = {
     },
     {
       "code": 6028,
+      "name": "invalidSlotHashesData",
+      "msg": "Invalid slot hashes data"
+    },
+    {
+      "code": 6029,
+      "name": "rosterFull",
+      "msg": "Roster is full"
+    },
+    {
+      "code": 6030,
+      "name": "heapCapacityExceeded",
+      "msg": "Heap capacity exceeded"
+    },
+    {
+      "code": 6031,
       "name": "arithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
+    },
+    {
+      "code": 6032,
+      "name": "u64ConversionOverflow",
+      "msg": "u64 to u32 conversion overflow"
+    },
+    {
+      "code": 6033,
+      "name": "reservedExceedsCapacity",
+      "msg": "Creator reserved tickets exceed capacity"
+    },
+    {
+      "code": 6034,
+      "name": "nothingToClaim",
+      "msg": "Nothing to claim"
+    },
+    {
+      "code": 6035,
+      "name": "invalidCreatorDeposit",
+      "msg": "Creator initial deposit must be multiple of tau"
+    },
+    {
+      "code": 6036,
+      "name": "creatorRefundAlreadyClaimed",
+      "msg": "Creator refund already claimed"
+    },
+    {
+      "code": 6037,
+      "name": "invalidMint",
+      "msg": "Invalid mint for ATA"
+    },
+    {
+      "code": 6038,
+      "name": "invalidOwner",
+      "msg": "Invalid owner for ATA"
+    },
+    {
+      "code": 6039,
+      "name": "invalidHardCap",
+      "msg": "Hard cap must be > 0"
+    },
+    {
+      "code": 6040,
+      "name": "invalidMinRaise",
+      "msg": "Min raise must be > 0"
+    },
+    {
+      "code": 6041,
+      "name": "hardCapNotDivisibleByTau",
+      "msg": "Hard cap must be divisible by tau"
+    },
+    {
+      "code": 6042,
+      "name": "perWalletCapTooSmall",
+      "msg": "Per-wallet cap must be >= tau"
+    },
+    {
+      "code": 6043,
+      "name": "minRaiseTooHigh",
+      "msg": "Min raise must be <= hard cap"
+    },
+    {
+      "code": 6044,
+      "name": "invalidClaimLockPeriod",
+      "msg": "Creator claim lock period must be > 0"
+    },
+    {
+      "code": 6045,
+      "name": "notSupported",
+      "msg": "Operation not supported in current version"
+    },
+    {
+      "code": 6046,
+      "name": "rosterShardFull",
+      "msg": "Roster shard is full"
+    },
+    {
+      "code": 6047,
+      "name": "invalidFinalizeOrder",
+      "msg": "Roster finalization order violated"
+    },
+    {
+      "code": 6048,
+      "name": "shardNotFinalized",
+      "msg": "Roster shard not finalized"
+    },
+    {
+      "code": 6049,
+      "name": "shardsNotFullyFinalized",
+      "msg": "Claims cannot be opened before all shards finalized"
+    },
+    {
+      "code": 6050,
+      "name": "noTokensToClaim",
+      "msg": "User has no tokens to claim"
     }
   ],
   "types": [
@@ -1274,6 +1868,126 @@ export type Engine = {
           {
             "name": "heapLen",
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "claimsOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "openedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "ticketsClaimed",
+            "type": "u32"
+          },
+          {
+            "name": "lamportsEquiv",
+            "type": "u64"
+          },
+          {
+            "name": "tokensMinted",
+            "type": "u64"
+          },
+          {
+            "name": "dayIndex",
+            "type": "i64"
+          },
+          {
+            "name": "remainingTickets",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorGrant",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "lockedLamports",
+            "type": "u64"
+          },
+          {
+            "name": "reservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "dailyLamportsLimit",
+            "type": "u64"
+          },
+          {
+            "name": "dailyTicketCap",
+            "type": "u32"
+          },
+          {
+            "name": "claimedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "refunded",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "creatorGranted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "lockedLamports",
+            "type": "u64"
+          },
+          {
+            "name": "reservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "dailyLamportsLimit",
+            "type": "u64"
           }
         ]
       }
@@ -1347,26 +2061,6 @@ export type Engine = {
       }
     },
     {
-      "name": "heapEntry",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "score",
-            "type": "u128"
-          },
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "localJ",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "initLaunchParams",
       "type": {
         "kind": "struct",
@@ -1402,6 +2096,22 @@ export type Engine = {
           {
             "name": "numBlocks",
             "type": "u64"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "creatorInitialDepositLamports",
+            "type": "u64"
+          },
+          {
+            "name": "creatorDailyLamportsLimit",
+            "type": "u64"
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
           }
         ]
       }
@@ -1496,6 +2206,10 @@ export type Engine = {
             "type": "u64"
           },
           {
+            "name": "totalLaunchAllocation",
+            "type": "u64"
+          },
+          {
             "name": "lpAllocation",
             "type": "u64"
           },
@@ -1541,6 +2255,18 @@ export type Engine = {
             }
           },
           {
+            "name": "rosterShards",
+            "type": "u16"
+          },
+          {
+            "name": "rosterFinalizedUpTo",
+            "type": "i32"
+          },
+          {
+            "name": "publicTotalTickets",
+            "type": "u32"
+          },
+          {
             "name": "claimsOpen",
             "type": "bool"
           },
@@ -1549,6 +2275,32 @@ export type Engine = {
             "type": {
               "option": "u64"
             }
+          },
+          {
+            "name": "creatorReservedTickets",
+            "type": "u32"
+          },
+          {
+            "name": "creatorGrantPresent",
+            "type": "bool"
+          },
+          {
+            "name": "claimsOpenedAt",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "creatorInitialDeposit",
+            "type": "u64"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
           }
         ]
       }
@@ -1683,10 +2435,6 @@ export type Engine = {
           {
             "name": "lastProjectId",
             "type": "u64"
-          },
-          {
-            "name": "lastPoolId",
-            "type": "u64"
           }
         ]
       }
@@ -1710,6 +2458,10 @@ export type Engine = {
           },
           {
             "name": "yApproved",
+            "docs": [
+              "Number of tickets that were approved for token allocation.",
+              "If the min raise was not met, this will be 0."
+            ],
             "type": "u32"
           }
         ]
@@ -1766,6 +2518,88 @@ export type Engine = {
       }
     },
     {
+      "name": "rosterShard",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "wallets",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "counts",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "prefix",
+            "type": {
+              "vec": "u32"
+            }
+          },
+          {
+            "name": "totalInShard",
+            "type": "u32"
+          },
+          {
+            "name": "shardBase",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rosterShardFinalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "totalInShard",
+            "type": "u32"
+          },
+          {
+            "name": "shardBase",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rosterShardInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "seedSet",
       "type": {
         "kind": "struct",
@@ -1796,57 +2630,8 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "threshold",
-            "type": "u128"
-          },
-          {
             "name": "kCapacity",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "selectionState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "vrfSeed",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "processed",
-            "type": "u32"
-          },
-          {
-            "name": "finalized",
-            "type": "bool"
-          },
-          {
-            "name": "threshold",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "heap",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "heapEntry"
-                }
-              }
-            }
           }
         ]
       }
@@ -1870,6 +2655,9 @@ export type Engine = {
           },
           {
             "name": "yApproved",
+            "docs": [
+              "Number of winning tickets."
+            ],
             "type": "u32"
           }
         ]
@@ -1903,6 +2691,14 @@ export type Engine = {
           {
             "name": "claimedTokens",
             "type": "bool"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "idxInShard",
+            "type": "u32"
           }
         ]
       }
@@ -1949,6 +2745,11 @@ export type Engine = {
       "name": "seedRoot",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
+    },
+    {
+      "name": "seedVrf",
+      "type": "bytes",
+      "value": "[118, 114, 102, 45, 115, 101, 101, 100]"
     }
   ]
 };
