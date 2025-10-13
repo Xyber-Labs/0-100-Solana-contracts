@@ -50,13 +50,16 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash -s - v${SOLANA_VERSION}
-
+          curl --proto '=https' --tlsv1.2 -sSfL https://solana-install.solana.workers.dev | bash -s - v${{ env.SOLANA_VERSION }}
+      
       - name: Add Solana to PATH
         shell: bash
-        run: |
-          echo "/home/runner/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-          solana --version
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      
+      - name: Verify Solana
+        shell: bash
+        run: solana --version
+
 
       - name: Install AVM and Anchor
         shell: bash
