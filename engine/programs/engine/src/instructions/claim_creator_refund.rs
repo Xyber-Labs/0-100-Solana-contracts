@@ -29,23 +29,23 @@ pub struct ClaimCreatorRefund<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
-    let cg = &mut ctx.accounts.creator_grant;
+    let launch_state = &ctx.accounts.launch_state;
+    let creator_grant = &mut ctx.accounts.creator_grant;
     
-    require!(!cg.refunded, EngineErrorCode::CreatorRefundAlreadyClaimed);
+    require!(!creator_grant.refunded, EngineErrorCode::CreatorRefundAlreadyClaimed);
 
     // Check if funding period has ended and min raise was not met
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= st.funding_period_end,
+        current_time >= launch_state.funding_period_end,
         EngineErrorCode::FundingPeriodNotEnded
     );
     require!(
-        st.total_deposited < st.min_raise_lamports,
+        launch_state.total_deposited < launch_state.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
 
-    let refund = cg.locked_lamports;
+    let refund = creator_grant.locked_lamports;
     if refund > 0 {
         **ctx
             .accounts
@@ -59,10 +59,10 @@ pub fn handler(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
             .try_borrow_mut_lamports()? += refund;
     }
     
-    cg.refunded = true;
+    creator_grant.refunded = true;
 
     emit!(RefundClaimed {
-        launch: st.key(),
+        launch: launch_state.key(),
         user: ctx.accounts.creator.key(),
         refunded_lamports: refund,
         y_approved: 0,
