@@ -1637,166 +1637,171 @@ export type Engine = {
     },
     {
       "code": 6017,
+      "name": "invalidDivisor",
+      "msg": "Divisor must be greater than zero"
+    },
+    {
+      "code": 6018,
       "name": "heapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "userNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "tOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "mappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "alreadyClaimedRefund",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "alreadyClaimedTokens",
       "msg": "Already claimed tokens"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "noRecentBlockhashes",
       "msg": "No recent blockhashes found in SlotHashes sysvar"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "poolAlreadyCreated",
       "msg": "Pool already created"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "noValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "invalidNumBlocks",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "invalidSlotHashesData",
       "msg": "Invalid slot hashes data"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "rosterFull",
       "msg": "Roster is full"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "heapCapacityExceeded",
       "msg": "Heap capacity exceeded"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "arithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "u64ConversionOverflow",
       "msg": "u64 to u32 conversion overflow"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "reservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "invalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "creatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "invalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "invalidOwner",
       "msg": "Invalid owner for ATA"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "invalidHardCap",
       "msg": "Hard cap must be > 0"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "invalidMinRaise",
       "msg": "Min raise must be > 0"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "hardCapNotDivisibleByTau",
       "msg": "Hard cap must be divisible by tau"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "perWalletCapTooSmall",
       "msg": "Per-wallet cap must be >= tau"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "minRaiseTooHigh",
       "msg": "Min raise must be <= hard cap"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "invalidClaimLockPeriod",
       "msg": "Creator claim lock period must be > 0"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "notSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "rosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "invalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "shardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "shardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "noTokensToClaim",
       "msg": "User has no tokens to claim"
     }
@@ -2157,6 +2162,10 @@ export type Engine = {
           },
           {
             "name": "saleAllocation",
+            "type": "u64"
+          },
+          {
+            "name": "totalLaunchAllocation",
             "type": "u64"
           },
           {

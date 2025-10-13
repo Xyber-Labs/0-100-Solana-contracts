@@ -35,10 +35,14 @@ pub fn handler(ctx: Context<OpenClaims>) -> Result<()> {
 
     // Compute tokens per ticket over K capacity
     require!(launch_state.k_capacity > 0, EngineErrorCode::InvalidK);
+    let divisor = launch_state
+        .public_total_tickets
+        .min(launch_state.k_capacity);
+    require!(divisor > 0, EngineErrorCode::InvalidDivisor);
     launch_state.tokens_per_ticket = Some(
         launch_state
-            .sale_allocation
-            .checked_div(launch_state.k_capacity as u64)
+            .total_launch_allocation
+            .checked_div(divisor as u64)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?,
     );
     launch_state.selection_finalized = true;

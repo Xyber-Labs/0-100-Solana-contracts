@@ -36,6 +36,8 @@ pub enum ErrorCode {
     InvalidTau,
     #[msg("Invalid K")]
     InvalidK,
+    #[msg("Divisor must be greater than zero")]
+    InvalidDivisor,
     #[msg("Heap not full")]
     HeapNotFull,
     #[msg("User not found in roster")]

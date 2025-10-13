@@ -12,7 +12,7 @@ interface LaunchConfig {
   minRaiseLamports: number;
   perWalletCap: number;
   tauLamports: number;
-  saleAllocation: number;
+  saleAllocation: string;
   lpAllocation: number;
   fundingDurationDays: number; // Represents dropdown selection
   fundingDurationSeconds: number; // Represents custom input
@@ -104,6 +104,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   // --- New state for the full flow runner ---
   const [isFlowRunning, setIsFlowRunning] = useState(false);
+  const [faucetAmount, setFaucetAmount] = useState(1000);
 
   // Helper to get seconds from dropdown value
   const getSecondsFromDropdown = (daysValue: number) => {
@@ -152,7 +153,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     minRaiseLamports: 10 * 1e9, // 10 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
-    saleAllocation: 1000000,
+    saleAllocation: '459460000000000', // 45.946% of 1B supply with 6 decimals
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 10, // Default custom seconds
@@ -621,13 +622,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     try {
       setIsLoading(true);
-      addLog('Requesting 1000 SOL from faucet...');
+      addLog(`Requesting ${faucetAmount} SOL from faucet...`);
       addLog(`Requesting for address: ${activePublicKey.toString()}`);
       
       // Request airdrop from faucet
       const signature = await connection.requestAirdrop(
         activePublicKey,
-        1000 * 1e9 // 10 SOL in lamports
+        faucetAmount * 1e9 // 10 SOL in lamports
       );
       
       addLog(`Airdrop signature: ${signature}`);
@@ -652,7 +653,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, connection, testWallet, fetchBalance]);
+  }, [publicKey, connection, testWallet, fetchBalance, faucetAmount]);
 
   const clearLogs = () => {
     setLogs([]);
@@ -946,6 +947,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
+    addLog(`[DEBUG] Passing saleAllocation to flowRunner: ${launchConfig.saleAllocation}`);
     
     const result = await runFullFlow(sdk, program, sdk.program.provider, launchConfig, addLog, simConfig);
 
@@ -973,12 +975,18 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <span className="text-xs terminal-output">
                 Balance: <span className="terminal-success">{(balance / 1e9).toFixed(2)} SOL</span>
               </span>
+              <input
+                type="number"
+                value={faucetAmount}
+                onChange={(e) => setFaucetAmount(Number(e.target.value))}
+                className="terminal-input w-24"
+                />
               <button 
                 onClick={requestFaucet} 
                 className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
                 disabled={(!publicKey && !testWallet) || isLoading}
               >
-                💧 Request 1000 SOL
+                💧 Request SOL
               </button>
             </div>
             <label className="flex items-center space-x-2 text-xs">
@@ -1054,11 +1062,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               />
             </div>
             <div>
-              <label className="block text-xs terminal-output mb-1">Sale Allocation</label>
+              <label className="block text-xs terminal-output mb-1">Sale Allocation (atomic)</label>
               <input
-                type="number"
+                type="text"
                 value={launchConfig.saleAllocation}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: parseInt(e.target.value) }))}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: e.target.value }))}
                 className="terminal-input w-full"
               />
             </div>

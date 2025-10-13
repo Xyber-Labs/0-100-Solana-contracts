@@ -16,7 +16,7 @@ interface LaunchConfig {
   minRaiseLamports: number;
   perWalletCap: number;
   tauLamports: number;
-  saleAllocation: number;
+  saleAllocation: string;
   lpAllocation: number;
   fundingDurationSeconds: number; // New field for direct seconds
   numBlocks: number;
@@ -52,9 +52,9 @@ export async function runFullFlow(
   const SALE_PERCENTAGE = 0.45946; // 45.946%
   const TOKEN_DECIMALS = 6;
   
-  // Calculate sale_allocation based on simulation parameters
-  const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
-  config.saleAllocation = saleAllocation;
+  // // Calculate sale_allocation based on simulation parameters
+  // const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
+  // config.saleAllocation = saleAllocation;
 
   // Override creator deposit for this specific test
   const LAMPORTS_PER_SOL = 1_000_000_000;

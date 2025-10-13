@@ -230,6 +230,21 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.creator_reserved_tickets = reserved_tickets;
     state.creator_grant_present = amount > 0;
 
+    // Total project tokens = sale allocation + creator's allocation
+    let creator_allocation = if reserved_tickets > 0 && state.k_capacity > 0 {
+        (params.sale_allocation as u128)
+            .checked_mul(reserved_tickets as u128)
+            .and_then(|val| val.checked_div(state.k_capacity as u128))
+            .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64
+    } else {
+        0
+    };
+
+    state.total_launch_allocation = params
+        .sale_allocation
+        .checked_add(creator_allocation)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
     // Initialize creator grant
     let launch_key = state.key();
     let creator_key = ctx.accounts.creator.key();

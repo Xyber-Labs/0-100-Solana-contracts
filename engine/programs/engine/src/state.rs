@@ -23,6 +23,7 @@ pub struct LaunchState {
     // Sale/LP (MVP)
     pub sale_mint: Pubkey,
     pub sale_allocation: u64,
+    pub total_launch_allocation: u64, // sale_allocation + creator allocation
     pub lp_allocation: u64,
 
     // Funding
