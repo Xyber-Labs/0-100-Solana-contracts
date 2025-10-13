@@ -115,7 +115,7 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     if is_first_deposit {
         // first deposit path: assign shard and index
         require!(
-            shard.wallets.len() < crate::constants::ROSTER_SHARD_CAP,
+            shard.wallets.len() < launch_state.roster_shard_cap as usize,
             EngineErrorCode::RosterShardFull
         );
         user.shard_id = shard.shard_id;

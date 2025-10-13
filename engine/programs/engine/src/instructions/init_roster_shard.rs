@@ -1,4 +1,4 @@
-use crate::constants::{ROSTER_SHARD_CAP, SEED_ROOT};
+use crate::constants::SEED_ROOT;
 use crate::events::RosterShardInitialized;
 use crate::state::{LaunchState, RosterShard};
 use anchor_lang::prelude::*;
@@ -13,10 +13,17 @@ pub struct InitRosterShard<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + RosterShard::INIT_SPACE
-                + (32 * ROSTER_SHARD_CAP)
-                + (4 * ROSTER_SHARD_CAP)
-                + (4 * ROSTER_SHARD_CAP),
+        space = 8 // discriminator
+                + 32 // launch
+                + 2 // shard_id
+                + 4 // wallets vec length
+                + 4 // counts vec length
+                + 4 // prefix vec length
+                + 4 // total_in_shard
+                + 4 // shard_base
+                + (32 * launch_state.roster_shard_cap as usize) // wallets
+                + (4 * launch_state.roster_shard_cap as usize) // counts
+                + (4 * launch_state.roster_shard_cap as usize), // prefix
         seeds = [SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &shard_id.to_le_bytes()],
         bump,
     )]

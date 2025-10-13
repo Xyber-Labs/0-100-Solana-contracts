@@ -32,6 +32,7 @@ interface LaunchConfig {
   lpAllocation: number;
   fundingDurationDays: number;
   numBlocks: number;
+  rosterShardCap: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
   creatorClaimLockPeriodSec: number;
@@ -278,6 +279,7 @@ export async function runFullFlow(
         lpAllocation: new BN(config.lpAllocation),
         fundingDurationSeconds: new BN(getFundingDurationInSeconds(config.fundingDurationDays)),
         numBlocks: new BN(config.numBlocks),
+        rosterShardCap: config.rosterShardCap,
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
         creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
@@ -431,15 +433,9 @@ export async function runFullFlow(
                 // This shard is full, try initializing the next one.
                 const nextShardId = attemptShardId + 1;
                 try {
-                  const newProvider = new AnchorProvider(
-                    provider.connection,
-                    provider.wallet, // admin wallet
-                    AnchorProvider.defaultOptions()
-                  );
                   await sdk.initRosterShard({
                     launch: testLaunchState,
                     shardId: nextShardId,
-                    provider: newProvider,
                   });
                 } catch (initError: any) {
                   // error 0x0 is 'AccountInUse', which is fine. It means another promise created it.

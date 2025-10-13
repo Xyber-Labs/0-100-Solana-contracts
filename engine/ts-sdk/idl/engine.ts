@@ -2052,6 +2052,10 @@ export type Engine = {
             "type": "u64"
           },
           {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
             "name": "creatorInitialDepositLamports",
             "type": "u64"
           },
@@ -2239,6 +2243,10 @@ export type Engine = {
           {
             "name": "creatorClaimLockPeriodSec",
             "type": "i64"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
           }
         ]
       }
@@ -2683,6 +2691,11 @@ export type Engine = {
       "name": "seedRoot",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
+    },
+    {
+      "name": "seedVrf",
+      "type": "bytes",
+      "value": "[118, 114, 102, 45, 115, 101, 101, 100]"
     }
   ]
 };

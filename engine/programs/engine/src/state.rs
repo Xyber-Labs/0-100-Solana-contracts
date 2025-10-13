@@ -1,4 +1,3 @@
-use crate::constants::ROSTER_SHARD_CAP;
 use anchor_lang::prelude::*;
 
 // -------------------------------
@@ -52,6 +51,7 @@ pub struct LaunchState {
     pub creator_grant_present: bool,
     pub claims_opened_at: Option<i64>,
     pub creator_claim_lock_period_sec: i64,
+    pub roster_shard_cap: u16,
 }
 
 impl LaunchState {
@@ -118,15 +118,11 @@ pub struct Roster {
 
 // New sharded roster account
 #[account]
-#[derive(InitSpace)]
 pub struct RosterShard {
     pub launch: Pubkey,
     pub shard_id: u16,
-    #[max_len(ROSTER_SHARD_CAP)]
     pub wallets: Vec<Pubkey>,
-    #[max_len(ROSTER_SHARD_CAP)]
     pub counts: Vec<u32>,
-    #[max_len(ROSTER_SHARD_CAP)]
     pub prefix: Vec<u32>,
     pub total_in_shard: u32,
     pub shard_base: u32,

@@ -29,9 +29,12 @@ describe("engine litesvm", () => {
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const SALE_ALLOCATION = new anchor.BN(1000000);
   const LP_ALLOCATION = new anchor.BN(500000);
+  const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
-    client = fromWorkspace("./");
+    client = fromWorkspace("./", {
+      maxAccountDataSize: 8192 * 8,
+    });
     provider = new LiteSVMProvider(client);
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
@@ -56,6 +59,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -120,6 +124,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -157,6 +162,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -225,6 +231,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -319,6 +326,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -351,6 +359,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -383,6 +392,7 @@ describe("engine litesvm", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -557,6 +567,7 @@ describe("engine litesvm", () => {
         lpAllocation: LP_ALLOCATION,
         fundingDurationSeconds: new anchor.BN(10),
         numBlocks: new anchor.BN(1000),
+        rosterShardCap: ROSTER_SHARD_CAP,
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
         creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -633,6 +644,7 @@ describe("engine litesvm", () => {
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: new anchor.BN(11),
       numBlocks: 1000,
+      rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
       creatorClaimLockPeriodSec: new anchor.BN(2),

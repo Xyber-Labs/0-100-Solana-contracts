@@ -68,6 +68,7 @@ pub struct InitLaunchParams {
     pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
     pub funding_duration_seconds: i64,
     pub num_blocks: u64, // N value for hash range calculation
+    pub roster_shard_cap: u16,
 
     // Creator grant parameters
     pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
@@ -137,6 +138,7 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.sale_allocation = params.sale_allocation;
     state.lp_allocation = params.lp_allocation;
     state.num_blocks = n;
+    state.roster_shard_cap = params.roster_shard_cap;
 
     // Set funding period end time (current time + duration)
     let current_time = Clock::get()?.unix_timestamp;
@@ -229,9 +231,11 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     state.creator_grant_present = amount > 0;
 
     // Initialize creator grant
+    let launch_key = state.key();
+    let creator_key = ctx.accounts.creator.key();
     let creator_grant = &mut ctx.accounts.creator_grant;
-    creator_grant.launch = creator_grant.key();
-    creator_grant.creator = ctx.accounts.creator.key();
+    creator_grant.launch = launch_key;
+    creator_grant.creator = creator_key;
     creator_grant.locked_lamports = amount;
     creator_grant.reserved_tickets = reserved_tickets;
     creator_grant.daily_lamports_limit = params.creator_daily_lamports_limit;

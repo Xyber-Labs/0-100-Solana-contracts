@@ -135,6 +135,7 @@ export default {
       lpAllocation: BN;
       fundingDurationSeconds: number;
       numBlocks?: number;
+      rosterShardCap: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
       creatorClaimLockPeriodSec: BN;
@@ -160,6 +161,7 @@ export default {
           lpAllocation: args.lpAllocation,
           fundingDurationSeconds: args.fundingDurationSeconds,
           numBlocks: args.numBlocks ?? 0,
+          rosterShardCap: args.rosterShardCap,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
           creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,

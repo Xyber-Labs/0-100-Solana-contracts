@@ -16,6 +16,7 @@ interface LaunchConfig {
   lpAllocation: number;
   fundingDurationDays: number; // 0-5 (0=10s, 1=30s for testing, 2-5=days)
   numBlocks: number;
+  rosterShardCap: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
   creatorClaimLockPeriodSec: number;
@@ -142,6 +143,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     numBlocks: 1024, // ~1 minute window
+    rosterShardCap: 100,
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
@@ -367,6 +369,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           lpAllocation: new BN(launchConfig.lpAllocation),
           fundingDurationSeconds: new BN(getFundingDurationInSeconds(launchConfig.fundingDurationDays)),
           numBlocks: new BN(launchConfig.numBlocks),
+          rosterShardCap: launchConfig.rosterShardCap,
           creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
           creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
           creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
@@ -1105,6 +1108,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 type="number"
                 value={launchConfig.creatorClaimLockPeriodSec}
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorClaimLockPeriodSec: parseInt(e.target.value) }))}
+                className="terminal-input w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Roster Shard Capacity</label>
+              <input
+                type="number"
+                value={launchConfig.rosterShardCap}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
               />
             </div>

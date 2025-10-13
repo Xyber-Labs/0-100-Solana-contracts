@@ -61,6 +61,7 @@ export class TxBuilder {
     lpAllocation: BN;
     fundingDurationSeconds: number;
     numBlocks: number;
+    rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
@@ -86,6 +87,7 @@ export class TxBuilder {
         lpAllocation: params.lpAllocation,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
         numBlocks: new BN(params.numBlocks),
+        rosterShardCap: params.rosterShardCap,
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
         creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
@@ -119,6 +121,8 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
+    fundingDurationSeconds: number;
+    rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
@@ -161,6 +165,7 @@ export class TxBuilder {
       lpAllocation: params.lpAllocation,
       fundingDurationSeconds: 15, // Default to 30 seconds for tx builder
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
+      rosterShardCap: params.rosterShardCap,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
@@ -206,6 +211,24 @@ export class TxBuilder {
     const { instruction, rosterPda } = await this.initRosterIx(params);
     const transaction = new Transaction().add(instruction);
     return { transaction, rosterPda };
+  }
+
+  async initRosterShardIx(params: {
+    launch: PublicKey;
+    payer: PublicKey;
+    shardId: number;
+  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
+    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    const instruction = await (this.program.methods as any)
+      .initRosterShard(params.shardId)
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        rosterShard,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .instruction();
+    return { instruction, rosterShard };
   }
 
   async setSeedIx(params: { launch: PublicKey; payer: PublicKey }): Promise<{
@@ -491,24 +514,6 @@ export class TxBuilder {
     return this.program.account.roster.fetch(pda);
   }
 
-
-  async initRosterShardIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-    shardId: number;
-  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    const instruction = await (this.program.methods as any)
-      .initRosterShard(params.shardId)
-      .accounts({
-        payer: params.payer,
-        launchState: params.launch,
-        rosterShard,
-        systemProgram: SystemProgram.programId,
-      } as any)
-      .instruction();
-    return { instruction, rosterShard };
-  }
 
   async finalizeRosterShardIx(params: {
     launch: PublicKey;

@@ -66,7 +66,9 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let total_unlocked = unlocked_ceiling.min(creator_grant.reserved_tickets);
 
     // The amount to claim now is the difference between what's unlocked and what's already been claimed.
-    let to_claim = total_unlocked.saturating_sub(creator_grant.claimed_tickets);
+    let to_claim = total_unlocked
+        .checked_sub(creator_grant.claimed_tickets)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     // If there's nothing to claim, exit.
     require!(to_claim > 0, EngineErrorCode::NothingToClaim);
