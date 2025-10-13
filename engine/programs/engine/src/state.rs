@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::constants::ROSTER_SHARD_CAP;
+use anchor_lang::prelude::*;
 
 // -------------------------------
 // Account Structures
@@ -39,9 +39,9 @@ pub struct LaunchState {
     pub threshold_score: Option<u128>,
 
     // Sharded roster and permutation-based selection fields
-    pub roster_shards: u16,              // number of roster shards allocated for this launch
-    pub roster_finalized_up_to: i32,     // -1 until finalization starts; then last finalized shard_id
-    pub public_total_tickets: u32,       // sum of total_in_shard over finalized shards
+    pub roster_shards: u16, // number of roster shards allocated for this launch
+    pub roster_finalized_up_to: i32, // -1 until finalization starts; then last finalized shard_id
+    pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
 
     // Claims
     pub claims_open: bool,
@@ -58,17 +58,25 @@ impl LaunchState {
     pub fn mint_auth_seeds<'a>(&'a self, launch_key: &'a Pubkey) -> [&'a [u8]; 2] {
         [b"mint_auth", launch_key.as_ref()]
     }
-    
+
     pub fn mint_auth_bump(&self) -> u8 {
         // Get the canonical bump for the mint authority PDA
         // We need to derive the launch state key first
         let launch_key = Pubkey::find_program_address(
-            &[crate::constants::SEED_ROOT, b"launch", self.sale_mint.as_ref()],
+            &[
+                crate::constants::SEED_ROOT,
+                b"launch",
+                self.sale_mint.as_ref(),
+            ],
             &crate::ID,
         )
         .0;
         let (_, bump) = Pubkey::find_program_address(
-            &[crate::constants::SEED_ROOT, b"mint_auth", launch_key.as_ref()],
+            &[
+                crate::constants::SEED_ROOT,
+                b"mint_auth",
+                launch_key.as_ref(),
+            ],
             &crate::ID,
         );
         bump

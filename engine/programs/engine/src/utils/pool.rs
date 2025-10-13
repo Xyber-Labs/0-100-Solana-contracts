@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use super::U256;
+use anchor_lang::prelude::*;
 
 /// Calculate escrow address for a launch
 pub fn escrow_address(launch: Pubkey) -> Pubkey {
@@ -68,9 +68,9 @@ mod tests {
     fn test_is_blockhash_in_project_range() {
         let project_id = 20;
         let num_blocks = 81000;
-        
+
         let (start, end) = calculate_project_range(project_id, num_blocks);
-        
+
         let mut hash_inside_bytes = [0u8; 32];
         start.to_big_endian(&mut hash_inside_bytes);
 
@@ -82,10 +82,22 @@ mod tests {
             (start - U256::one()).to_big_endian(&mut hash_before_bytes);
         }
 
-        assert!(is_blockhash_in_project_range(&hash_inside_bytes, project_id, num_blocks));
-        assert!(!is_blockhash_in_project_range(&hash_outside_bytes, project_id, num_blocks));
+        assert!(is_blockhash_in_project_range(
+            &hash_inside_bytes,
+            project_id,
+            num_blocks
+        ));
+        assert!(!is_blockhash_in_project_range(
+            &hash_outside_bytes,
+            project_id,
+            num_blocks
+        ));
         if start > U256::zero() {
-            assert!(!is_blockhash_in_project_range(&hash_before_bytes, project_id, num_blocks));
+            assert!(!is_blockhash_in_project_range(
+                &hash_before_bytes,
+                project_id,
+                num_blocks
+            ));
         }
     }
 }

@@ -1,9 +1,9 @@
+use crate::events::SeedSet;
+use crate::state::LaunchState;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::{self, Sysvar};
-use crate::events::SeedSet;
-use crate::state::LaunchState;
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
@@ -31,7 +31,10 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
         crate::errors::ErrorCode::MinRaiseNotMet
     );
 
-    require!(launch_state.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
+    require!(
+        launch_state.vrf_seed.is_none(),
+        crate::errors::ErrorCode::SeedAlreadySet
+    );
 
     // Get the most recent blockhash from the SlotHashes sysvar
     let slot_hashes = &ctx.accounts.slot_hashes;
@@ -44,7 +47,10 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
             .try_into()
             .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
     );
-    require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
+    require!(
+        num_hashes > 0,
+        crate::errors::ErrorCode::NoRecentBlockhashes
+    );
 
     let num_hashes_u64 = num_hashes;
     let one = 1_u64;

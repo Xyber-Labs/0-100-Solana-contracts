@@ -1,8 +1,8 @@
-use anchor_lang::prelude::*;
 use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::RosterShardFinalized;
 use crate::state::{LaunchState, RosterShard};
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(shard_id: u16)]
@@ -26,7 +26,10 @@ pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
 
     // Preconditions: funding ended
     let now = Clock::get()?.unix_timestamp;
-    require!(now >= launch_state.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
+    require!(
+        now >= launch_state.funding_period_end,
+        EngineErrorCode::FundingPeriodNotEnded
+    );
 
     // Enforce sequential finalization
     let expected = launch_state
@@ -49,7 +52,9 @@ pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
     shard.prefix.reserve(counts.len());
     for &c in counts.iter() {
         shard.prefix.push(run);
-        run = run.checked_add(c).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        run = run
+            .checked_add(c)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     shard.total_in_shard = run;
 
@@ -71,5 +76,3 @@ pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
 
     Ok(())
 }
-
-

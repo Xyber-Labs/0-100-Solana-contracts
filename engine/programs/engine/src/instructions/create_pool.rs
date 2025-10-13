@@ -1,10 +1,10 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar;
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::PoolCreated;
 use crate::state::{LaunchState, PoolState};
-use crate::constants::SEED_ROOT;
 use crate::utils::pool;
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -34,7 +34,10 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
-    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
+    require!(
+        launch_state.selection_finalized,
+        EngineErrorCode::NotFinalized
+    );
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
@@ -70,8 +73,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
             data[slot_pos as usize
                 ..(slot_pos
                     .checked_add(8)
-                    .ok_or(EngineErrorCode::ArithmeticOverflow)?)
-                    as usize]
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
                 .try_into()
                 .unwrap(),
         );
@@ -85,7 +87,11 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
         // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
         // Check if this blockhash is within the project's personal range
-        if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, launch_state.num_blocks) {
+        if pool::is_blockhash_in_project_range(
+            &blockhash,
+            launch_state.project_id,
+            launch_state.num_blocks,
+        ) {
             found_valid_hash = true;
             valid_slot = slot;
             valid_hash = blockhash;
@@ -97,7 +103,8 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
     // Calculate and store the project's range
-    let (range_start, range_end) = pool::calculate_project_range(launch_state.project_id, launch_state.num_blocks);
+    let (range_start, range_end) =
+        pool::calculate_project_range(launch_state.project_id, launch_state.num_blocks);
     let mut range_start_bytes = [0u8; 32];
     range_start.to_big_endian(&mut range_start_bytes);
     let mut range_end_bytes = [0u8; 32];

@@ -1,9 +1,9 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::Withdrawn;
 use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
-use crate::constants::SEED_ROOT;
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -71,9 +71,14 @@ pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
 
     // Sharded roster decrement
     let shard = &mut ctx.accounts.roster_shard;
-    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
+    require!(
+        user.shard_id == shard.shard_id,
+        EngineErrorCode::Unauthorized
+    );
     let u = user.idx_in_shard as usize;
-    if shard.counts.len() <= u { shard.counts.resize(u+1, 0); }
+    if shard.counts.len() <= u {
+        shard.counts.resize(u + 1, 0);
+    }
     shard.counts[u] = shard.counts[u]
         .checked_sub(lost)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;

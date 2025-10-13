@@ -1,7 +1,7 @@
-use anchor_lang::prelude::*;
-use crate::constants::{SEED_ROOT, ROSTER_SHARD_CAP};
+use crate::constants::{ROSTER_SHARD_CAP, SEED_ROOT};
 use crate::events::RosterShardInitialized;
 use crate::state::{LaunchState, RosterShard};
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(shard_id: u16)]
@@ -42,5 +42,3 @@ pub fn handler(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
     });
     Ok(())
 }
-
-

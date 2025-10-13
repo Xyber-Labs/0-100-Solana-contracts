@@ -1,10 +1,10 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
-use solana_program::sysvar::clock::Clock;
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::DepositMade;
 use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
-use crate::constants::SEED_ROOT;
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program;
+use solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
@@ -100,7 +100,10 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         .deposited
         .checked_div(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(new_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    require!(
+        new_tickets_u64 <= u32::MAX as u64,
+        EngineErrorCode::U64ConversionOverflow
+    );
     let new_tickets = new_tickets_u64 as u32;
     let delta = new_tickets
         .checked_sub(old_tickets)
@@ -111,7 +114,10 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let shard = &mut ctx.accounts.roster_shard;
     if is_first_deposit {
         // first deposit path: assign shard and index
-        require!(shard.wallets.len() < crate::constants::ROSTER_SHARD_CAP, EngineErrorCode::RosterShardFull);
+        require!(
+            shard.wallets.len() < crate::constants::ROSTER_SHARD_CAP,
+            EngineErrorCode::RosterShardFull
+        );
         user.shard_id = shard.shard_id;
         user.idx_in_shard = shard.wallets.len() as u32;
         shard.wallets.push(ctx.accounts.user.key());
@@ -119,11 +125,18 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         shard.prefix.clear(); // invalidate prefix if already built
     } else {
         // must stay in the same shard
-        require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
+        require!(
+            user.shard_id == shard.shard_id,
+            EngineErrorCode::Unauthorized
+        );
     }
     let u = user.idx_in_shard as usize;
-    if shard.counts.len() <= u { shard.counts.resize(u+1, 0); }
-    shard.counts[u] = shard.counts[u].checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    if shard.counts.len() <= u {
+        shard.counts.resize(u + 1, 0);
+    }
+    shard.counts[u] = shard.counts[u]
+        .checked_add(delta)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     shard.prefix.clear(); // will be recomputed at finalize
     shard.total_in_shard = 0; // prevent stale reads pre-finalization
 

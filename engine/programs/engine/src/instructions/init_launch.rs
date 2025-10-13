@@ -1,11 +1,11 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token::Mint;
+use crate::constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT};
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized};
-use crate::state::{EscrowAccount, LaunchState, ProjectCounter, CreatorGrant};
-use crate::constants::{SEED_ROOT, DEFAULT_N, MIN_N, MAX_N};
+use crate::state::{CreatorGrant, EscrowAccount, LaunchState, ProjectCounter};
+use anchor_lang::prelude::*;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::Sysvar;
+use anchor_spl::token::Mint;
 
 #[derive(Accounts)]
 pub struct InitLaunch<'info> {
@@ -68,17 +68,22 @@ pub struct InitLaunchParams {
     pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
     pub funding_duration_seconds: i64,
     pub num_blocks: u64, // N value for hash range calculation
-    
+
     // Creator grant parameters
     pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
     pub creator_daily_lamports_limit: u64,     // usually 1 * LAMPORTS_PER_SOL
     pub creator_claim_lock_period_sec: i64,
 }
 
-
 pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
-    require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
-    require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
+    require!(
+        params.hard_cap_lamports > 0,
+        EngineErrorCode::InvalidHardCap
+    );
+    require!(
+        params.min_raise_lamports > 0,
+        EngineErrorCode::InvalidMinRaise
+    );
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
     require!(
         params.hard_cap_lamports % params.tau_lamports == 0,
@@ -92,12 +97,14 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         params.min_raise_lamports <= params.hard_cap_lamports,
         EngineErrorCode::MinRaiseTooHigh
     );
-    require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
+    require!(
+        params.creator_claim_lock_period_sec > 0,
+        EngineErrorCode::InvalidClaimLockPeriod
+    );
 
     // Max duration: 7 days
     require!(
-        params.funding_duration_seconds > 0
-            && params.funding_duration_seconds <= 60 * 60 * 24 * 7,
+        params.funding_duration_seconds > 0 && params.funding_duration_seconds <= 60 * 60 * 24 * 7,
         EngineErrorCode::InvalidFundingDuration
     );
 
@@ -138,9 +145,15 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     state.total_deposited = 0;
     state.total_tickets = 0;
-    
-    let k_cap_u64 = params.hard_cap_lamports.checked_div(params.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(k_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+
+    let k_cap_u64 = params
+        .hard_cap_lamports
+        .checked_div(params.tau_lamports)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(
+        k_cap_u64 <= u32::MAX as u64,
+        EngineErrorCode::U64ConversionOverflow
+    );
     state.k_capacity = k_cap_u64 as u32;
 
     state.selection_finalized = false;
@@ -169,7 +182,9 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
         require!(state.tau_lamports > 0, EngineErrorCode::InvalidTau);
-        let remainder = amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let remainder = amount
+            .checked_rem(state.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
 
         // Transfer creator deposit to escrow using system program
@@ -198,11 +213,16 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
 
     // Always initialize creator grant (even with 0 deposit)
     let reserved_tickets_u64 = if amount > 0 {
-        amount.checked_div(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?
+        amount
+            .checked_div(state.tau_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?
     } else {
         0
     };
-    require!(reserved_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    require!(
+        reserved_tickets_u64 <= u32::MAX as u64,
+        EngineErrorCode::U64ConversionOverflow
+    );
     let reserved_tickets = reserved_tickets_u64 as u32;
 
     state.creator_reserved_tickets = reserved_tickets;
@@ -215,8 +235,14 @@ pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()>
     creator_grant.locked_lamports = amount;
     creator_grant.reserved_tickets = reserved_tickets;
     creator_grant.daily_lamports_limit = params.creator_daily_lamports_limit;
-    let daily_ticket_cap_u64 = params.creator_daily_lamports_limit.checked_div(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
+    let daily_ticket_cap_u64 = params
+        .creator_daily_lamports_limit
+        .checked_div(state.tau_lamports)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(
+        daily_ticket_cap_u64 <= u32::MAX as u64,
+        EngineErrorCode::U64ConversionOverflow
+    );
     creator_grant.daily_ticket_cap = daily_ticket_cap_u64 as u32;
     creator_grant.claimed_tickets = 0;
     creator_grant.refunded = false;

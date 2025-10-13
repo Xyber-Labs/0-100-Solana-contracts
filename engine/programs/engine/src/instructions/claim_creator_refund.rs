@@ -1,9 +1,9 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::RefundClaimed;
-use crate::state::{EscrowAccount, LaunchState, CreatorGrant};
-use crate::constants::SEED_ROOT;
+use crate::state::{CreatorGrant, EscrowAccount, LaunchState};
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
 pub struct ClaimCreatorRefund<'info> {
@@ -31,8 +31,11 @@ pub struct ClaimCreatorRefund<'info> {
 pub fn handler(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let creator_grant = &mut ctx.accounts.creator_grant;
-    
-    require!(!creator_grant.refunded, EngineErrorCode::CreatorRefundAlreadyClaimed);
+
+    require!(
+        !creator_grant.refunded,
+        EngineErrorCode::CreatorRefundAlreadyClaimed
+    );
 
     // Check if funding period has ended and min raise was not met
     let current_time = Clock::get()?.unix_timestamp;
@@ -58,7 +61,7 @@ pub fn handler(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
             .to_account_info()
             .try_borrow_mut_lamports()? += refund;
     }
-    
+
     creator_grant.refunded = true;
 
     emit!(RefundClaimed {

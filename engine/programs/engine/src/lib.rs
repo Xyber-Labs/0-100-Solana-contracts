@@ -15,10 +15,10 @@ use instructions::claim_refund::*;
 use instructions::claim_tokens::*;
 use instructions::create_pool::*;
 use instructions::deposit::*;
+use instructions::finalize_roster_shard::*;
 use instructions::init_launch::*;
 use instructions::init_roster::*;
 use instructions::init_roster_shard::*;
-use instructions::finalize_roster_shard::*;
 use instructions::open_claims::*;
 use instructions::process_batch::*;
 use instructions::set_seed::*;
@@ -37,10 +37,7 @@ pub mod engine {
     use crate::instructions::*;
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
-    pub fn init_launch(
-        ctx: Context<InitLaunch>,
-        params: InitLaunchParams,
-    ) -> Result<()> {
+    pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
         init_launch::handler(ctx, params)
     }
 
@@ -113,4 +110,3 @@ pub mod engine {
         claim_creator_refund::handler(ctx)
     }
 }
-
