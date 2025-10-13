@@ -305,8 +305,7 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState",
-          "writable": true
+          "name": "launchState"
         },
         {
           "name": "userContribution",
@@ -435,8 +434,7 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState",
-          "writable": true
+          "name": "launchState"
         },
         {
           "name": "poolState",

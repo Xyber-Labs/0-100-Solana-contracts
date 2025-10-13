@@ -299,8 +299,7 @@
           "signer": true
         },
         {
-          "name": "launch_state",
-          "writable": true
+          "name": "launch_state"
         },
         {
           "name": "user_contribution",
@@ -429,8 +428,7 @@
           "signer": true
         },
         {
-          "name": "launch_state",
-          "writable": true
+          "name": "launch_state"
         },
         {
           "name": "pool_state",

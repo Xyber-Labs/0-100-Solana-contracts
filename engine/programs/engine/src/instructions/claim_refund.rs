@@ -22,7 +22,7 @@ pub struct ClaimRefund<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimRefund>) -> Result<()> {
-    let launch_state = &mut ctx.accounts.launch_state;
+    let launch_state = &ctx.accounts.launch_state;
     let user = &mut ctx.accounts.user_contribution;
     require!(!user.claimed_refund, EngineErrorCode::AlreadyClaimedRefund);
 

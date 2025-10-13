@@ -10,7 +10,6 @@ use crate::constants::SEED_ROOT;
 pub struct ClaimTokens<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
@@ -35,7 +34,7 @@ pub struct ClaimTokens<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
-    let launch_state = &mut ctx.accounts.launch_state;
+    let launch_state = &ctx.accounts.launch_state;
     require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     let per = launch_state

@@ -11,7 +11,6 @@ pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -31,7 +30,7 @@ pub struct CreatePool<'info> {
 }
 
 pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
-    let launch_state = &mut ctx.accounts.launch_state;
+    let launch_state = &ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
