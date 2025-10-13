@@ -107,8 +107,7 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState",
-          "writable": true
+          "name": "launchState"
         },
         {
           "name": "creatorGrant",
@@ -2399,6 +2398,10 @@ export type Engine = {
           },
           {
             "name": "yApproved",
+            "docs": [
+              "Number of tickets that were approved for token allocation.",
+              "If the min raise was not met, this will be 0."
+            ],
             "type": "u32"
           }
         ]
@@ -2592,6 +2595,9 @@ export type Engine = {
           },
           {
             "name": "yApproved",
+            "docs": [
+              "Number of winning tickets."
+            ],
             "type": "u32"
           }
         ]

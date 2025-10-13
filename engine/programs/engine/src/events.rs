@@ -72,6 +72,8 @@ pub struct RefundClaimed {
     pub launch: Pubkey,
     pub user: Pubkey,
     pub refunded_lamports: u64,
+    /// Number of tickets that were approved for token allocation.
+    /// If the min raise was not met, this will be 0.
     pub y_approved: u32,
 }
 
@@ -80,6 +82,7 @@ pub struct TokensClaimed {
     pub launch: Pubkey,
     pub user: Pubkey,
     pub amount: u64,
+    /// Number of winning tickets.
     pub y_approved: u32,
 }
 

@@ -10,7 +10,6 @@ pub struct ClaimCreatorTokens<'info> {
     #[account(mut, address = launch_state.creator)]
     pub creator: Signer<'info>,
 
-    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -38,19 +37,19 @@ pub struct ClaimCreatorTokens<'info> {
 }
 
 pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
-    require!(ctx.accounts.sale_mint.key() == st.sale_mint, EngineErrorCode::Unauthorized);
-    require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
+    let launch_state = &ctx.accounts.launch_state;
+    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
+    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
 
-    let per = st.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
+    let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let cg = &mut ctx.accounts.creator_grant;
 
     // Calculate how many tokens have vested/accrued over time.
     let now = Clock::get()?.unix_timestamp;
-    let start = st.claims_opened_at.unwrap_or(now);
+    let start = launch_state.claims_opened_at.unwrap_or(now);
 
     // How many full periods have passed since claiming opened.
-    let periods_passed = (now - start).div_euclid(st.creator_claim_lock_period_sec);
+    let periods_passed = (now - start).div_euclid(launch_state.creator_claim_lock_period_sec);
 
     // Calculate the ceiling of claimable tickets based on periods passed.
     // We add 1 to include the current, partially-elapsed period.
@@ -73,8 +72,8 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"mint_auth",
-        &st.key().to_bytes(),
-        &[st.mint_auth_bump()],
+        &launch_state.key().to_bytes(),
+        &[launch_state.mint_auth_bump()],
     ];
     let signer_seeds = &[seeds];
     let cpi_accounts = MintTo {
@@ -92,10 +91,10 @@ pub fn handler(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     cg.claimed_tickets = cg.claimed_tickets.checked_add(to_claim).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(CreatorClaimed {
-        launch: st.key(),
+        launch: launch_state.key(),
         creator: ctx.accounts.creator.key(),
         tickets_claimed: to_claim,
-        lamports_equiv: (to_claim as u64).checked_mul(st.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?,
+        lamports_equiv: (to_claim as u64).checked_mul(launch_state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
         day_index: periods_passed, // Using periods_passed for logging
         remaining_tickets: cg.reserved_tickets - cg.claimed_tickets,

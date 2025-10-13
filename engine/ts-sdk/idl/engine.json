@@ -101,8 +101,7 @@
           "signer": true
         },
         {
-          "name": "launch_state",
-          "writable": true
+          "name": "launch_state"
         },
         {
           "name": "creator_grant",
@@ -2393,6 +2392,10 @@
           },
           {
             "name": "y_approved",
+            "docs": [
+              "Number of tickets that were approved for token allocation.",
+              "If the min raise was not met, this will be 0."
+            ],
             "type": "u32"
           }
         ]
@@ -2586,6 +2589,9 @@
           },
           {
             "name": "y_approved",
+            "docs": [
+              "Number of winning tickets."
+            ],
             "type": "u32"
           }
         ]
