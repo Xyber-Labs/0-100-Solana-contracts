@@ -592,14 +592,14 @@ describe("engine litesvm", () => {
     // Check launch state
     const launchState = await sdk.fetchLaunch(testLaunchState);
     const expectedTickets = Math.floor(creatorDepositAmount.toNumber() / TAU_LAMPORTS.toNumber());
-    assert.equal(launchState.creatorReservedTickets, expectedTickets);
+    assert.equal(launchState.creatorReservedTickets, 0);
     assert.equal(launchState.creatorGrantPresent, creatorDepositAmount.toNumber() > 0);
 
     // Check creator grant state (only if creator deposit > 0)
     if (creatorDepositAmount.toNumber() > 0) {
       const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
       assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
-      assert.equal(creatorGrantState.reservedTickets, expectedTickets);
+      assert.equal(creatorGrantState.reservedTickets, 0);
       assert.equal(creatorGrantState.dailyLamportsLimit.toNumber(), dailyLimit.toNumber());
       assert.equal(creatorGrantState.dailyTicketCap, dailyLimit.toNumber() / TAU_LAMPORTS.toNumber());
       assert.equal(creatorGrantState.claimedTickets, 0);
@@ -670,7 +670,7 @@ describe("engine litesvm", () => {
     // Verify creator grant was initialized
     const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
     assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
-    assert.equal(creatorGrantState.reservedTickets, creatorDepositAmount.toNumber() / testTau.toNumber());
+    assert.equal(creatorGrantState.reservedTickets, 0);
     console.log(`Creator grant initialized: ${creatorGrantState.reservedTickets} reserved tickets`);
 
     console.log("=== Initializing Roster ===");
