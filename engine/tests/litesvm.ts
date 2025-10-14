@@ -4,7 +4,6 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID, unpackAccount } from "@solana/spl-token";
 import { assert } from "chai";
-import { Keypair, Transaction } from "@solana/web3.js";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
@@ -19,7 +18,7 @@ describe("engine litesvm", () => {
   let program: Program<Engine>;
   let admin: anchor.Wallet;
   let sdk: any;
-  let adminKeypair: Keypair;
+  let adminKeypair: anchor.web3.Keypair;
 
   let saleMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
@@ -97,7 +96,7 @@ describe("engine litesvm", () => {
   it.skip("Sets the VRF seed", async () => {
     // This test is flaky due to litesvm's time simulation.
     // The functionality is fully covered in the "Complete flow" test.
-    // TODO (@wotory): to get this test properly alive
+    // TODO (@wotory, @xykeeper): to get this test properly alive
   });
 
   it("Allows deposits", async () => {
@@ -528,7 +527,7 @@ describe("engine litesvm", () => {
       .instruction();
 
     // Send transaction
-    const tx = new Transaction().add(createMintIx, initMintIx, initLaunchIx);
+    const tx = new anchor.web3.Transaction().add(createMintIx, initMintIx, initLaunchIx);
     const signature = await provider.sendAndConfirm(tx, [testSaleMint]);
 
     console.log("Launch with creator deposit initialized. Signature:", signature);
@@ -748,7 +747,7 @@ describe("Full flow", () => {
   let program: Program<Engine>;
   let admin: anchor.Wallet;
   let sdk: any;
-  let adminKeypair: Keypair;
+  let adminKeypair: anchor.web3.Keypair;
 
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
@@ -920,7 +919,7 @@ describe("Full flow", () => {
         mint: testSaleMint.publicKey,
       }).ix;
 
-      await provider.sendAndConfirm(new Transaction().add(createAtaIx), []);
+      await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
 
       const claimResult = await sdk.claimCreatorTokens({
         launch: testLaunchState,
