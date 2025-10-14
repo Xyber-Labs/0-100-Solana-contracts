@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "22"
+  NODE_VERSION: "24.10.0"
   SOLANA_VERSION: "2.1.0"
   ANCHOR_VERSION: "0.31.1"
 
@@ -135,4 +135,4 @@ jobs:
         run: anchor run litesvm-basic
 
       - name: Run litesvm raydium tests (with retry)
-        run: for i in {1..20}; do yarn test:litesvm:raydium && break; done
+        run: anchor run litesvm-raydium
