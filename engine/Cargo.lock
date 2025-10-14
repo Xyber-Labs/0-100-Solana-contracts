@@ -633,20 +633,8 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
- "engine-macros",
  "raydium-amm-v3",
  "uint 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "engine-macros"
-version = "0.1.0"
-dependencies = [
- "bs58",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn 2.0.106",
 ]
 
 [[package]]

@@ -1,14 +1,10 @@
 use super::U256;
 use anchor_lang::prelude::*;
 
-use crate::SEED_ROOT;
-
 /// Calculate escrow address for a launch
 pub fn escrow_address(launch: Pubkey) -> Pubkey {
-    let (address, _) = Pubkey::find_program_address(
-        &[SEED_ROOT, b"escrow", launch.as_ref()],
-        &crate::ID,
-    );
+    let (address, _) =
+        Pubkey::find_program_address(&[crate::SEED_ROOT, b"escrow", launch.as_ref()], &crate::ID);
     address
 }
 

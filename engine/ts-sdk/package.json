@@ -1,6 +1,7 @@
 {
     "name": "zero-hundred-engine-sdk",
     "version": "0.1.0",
+    "type": "module",
     "main": "dist/src/engine.js",
     "types": "dist/src/engine.d.ts",
     "scripts": {

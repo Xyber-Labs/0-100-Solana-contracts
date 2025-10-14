@@ -1,22 +1,8 @@
-import * as anchor from "@coral-xyz/anchor";
-import {
-  Transaction,
-  TransactionInstruction,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-} from "@solana/web3.js";
-import { Engine as EngineIDL } from "../idl/engine";
-import {
-  TOKEN_PROGRAM_ID,
-  createInitializeMintInstruction,
-  createAssociatedTokenAccountInstruction,
-} from "@solana/spl-token";
-import { BN, Program } from "@coral-xyz/anchor";
-import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
+import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { Engine as EngineIDL } from "../idl/engine";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
   createInitializeMintInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_2022_PROGRAM_ID,
@@ -24,20 +10,18 @@ import {
 } from "@solana/spl-token";
 import { getConstant } from "./utils";
 
-const METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-import { getConstant } from "./utils";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
 
-  constructor(program: Program<EngineIDL>, admin?: Keypair) {
+  constructor(program: Program<EngineIDL>, admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
 
-  getPda(seeds: (string | Buffer | PublicKey)[]): [PublicKey, number] {
+  getPda(seeds: (string | Buffer | web3.PublicKey)[]): [web3.PublicKey, number] {
     const seedBuffers = [
       this.seedRoot,
       ...seeds.map((seed) => {
@@ -51,20 +35,20 @@ export class TxBuilder {
       }),
     ];
 
-    return PublicKey.findProgramAddressSync(
+    return web3.PublicKey.findProgramAddressSync(
       seedBuffers,
       this.program.programId
     );
   }
 
-  getRosterShardPda(launch: PublicKey, shardId: number): [PublicKey, number] {
+  getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
     const le = Buffer.from(Uint8Array.of(shardId & 0xff, (shardId >> 8) & 0xff));
     return this.getPda(["roster_shard", launch, le]);
   }
 
   async initLaunchIx(params: {
-    creator: PublicKey;
-    saleMint: PublicKey;
+    creator: web3.PublicKey;
+    saleMint: web3.PublicKey;
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -78,11 +62,11 @@ export class TxBuilder {
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
   }): Promise<{
-    instruction: TransactionInstruction;
-    launchState: PublicKey;
-    escrow: PublicKey;
-    projectCounter: PublicKey;
-    creatorGrant: PublicKey;
+    instruction: web3.TransactionInstruction;
+    launchState: web3.PublicKey;
+    escrow: web3.PublicKey;
+    projectCounter: web3.PublicKey;
+    creatorGrant: web3.PublicKey;
   }> {
     const [launchState] = this.getPda(["launch", params.saleMint]);
     const [escrow] = this.getPda(["escrow", launchState]);
@@ -111,7 +95,7 @@ export class TxBuilder {
         escrow: escrow,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
-        systemProgram: SystemProgram.programId,
+        systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
 
@@ -125,8 +109,8 @@ export class TxBuilder {
   }
 
   async initLaunchTx(params: {
-    creator: PublicKey;
-    saleMint: Keypair;
+    creator: web3.PublicKey;
+    saleMint: web3.Keypair;
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -140,13 +124,13 @@ export class TxBuilder {
     creatorClaimLockPeriodSec: BN;
     provider: any;
   }): Promise<{
-    initLaunchTx: Transaction;
-    launchState: PublicKey;
-    escrow: PublicKey;
-    creatorGrant: PublicKey;
-    signers: Keypair[];
+    initLaunchTx: web3.Transaction;
+    launchState: web3.PublicKey;
+    escrow: web3.PublicKey;
+    creatorGrant: web3.PublicKey;
+    signers: web3.Keypair[];
   }> {
-    const createMintAccountIx = SystemProgram.createAccount({
+    const createMintAccountIx = web3.SystemProgram.createAccount({
       fromPubkey: params.creator,
       newAccountPubkey: params.saleMint.publicKey,
       space: 82,
@@ -183,7 +167,7 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
     });
 
-    const initLaunchTx = new Transaction()
+    const initLaunchTx = new web3.Transaction()
       .add(createMintAccountIx)
       .add(initializeMintIx)
       .add(initLaunchIx);
@@ -198,9 +182,9 @@ export class TxBuilder {
   }
 
   async initRosterIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-  }): Promise<{ instruction: TransactionInstruction; rosterPda: PublicKey }> {
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
+  }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
     const [rosterPda] = this.getPda(["roster", params.launch]);
 
     const instruction = await this.program.methods
@@ -209,7 +193,7 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         roster: rosterPda,
-        systemProgram: SystemProgram.programId,
+        systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
 
@@ -217,19 +201,19 @@ export class TxBuilder {
   }
 
   async initRosterTx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-  }): Promise<{ transaction: Transaction; rosterPda: PublicKey }> {
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; rosterPda: web3.PublicKey }> {
     const { instruction, rosterPda } = await this.initRosterIx(params);
-    const transaction = new Transaction().add(instruction);
+    const transaction = new web3.Transaction().add(instruction);
     return { transaction, rosterPda };
   }
 
   async initRosterShardIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
     shardId: number;
-  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
+  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
     const instruction = await (this.program.methods as any)
       .initRosterShard(params.shardId)
@@ -237,15 +221,15 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
-        systemProgram: SystemProgram.programId,
+        systemProgram: web3.SystemProgram.programId,
       } as any)
       .instruction();
     return { instruction, rosterShard };
   }
 
-  async setSeedIx(params: { launch: PublicKey; payer: PublicKey }): Promise<{
-    instruction: TransactionInstruction;
-    selectionPda: PublicKey;
+  async setSeedIx(params: { launch: web3.PublicKey; payer: web3.PublicKey }): Promise<{
+    instruction: web3.TransactionInstruction;
+    selectionPda: web3.PublicKey;
   }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
 
@@ -254,8 +238,8 @@ export class TxBuilder {
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
-        slotHashes: anchor.web3.SYSVAR_SLOT_HASHES_PUBKEY,
-        systemProgram: SystemProgram.programId,
+        slotHashes: web3.SYSVAR_SLOT_HASHES_PUBKEY,
+        systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
 
@@ -263,25 +247,25 @@ export class TxBuilder {
   }
 
   async setSeedTx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-  }): Promise<{ transaction: Transaction; selectionPda: PublicKey }> {
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; selectionPda: web3.PublicKey }> {
     const { instruction, selectionPda } = await this.setSeedIx(params);
-    const transaction = new Transaction().add(instruction);
+    const transaction = new web3.Transaction().add(instruction);
     return { transaction, selectionPda };
   }
 
   async depositIx(params: {
-    launch: PublicKey;
-    user: PublicKey;
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
     amount: BN;
-    roster?: PublicKey;
-    rosterShard?: PublicKey;
+    roster?: web3.PublicKey;
+    rosterShard?: web3.PublicKey;
     shardId?: number; // if rosterShard not provided
-    escrow?: PublicKey;
+    escrow?: web3.PublicKey;
   }): Promise<{
-    instruction: TransactionInstruction;
-    userContribution: PublicKey;
+    instruction: web3.TransactionInstruction;
+    userContribution: web3.PublicKey;
   }> {
     const [userContribution] = this.getPda([
       "user",
@@ -304,7 +288,7 @@ export class TxBuilder {
         rosterShard,
         escrow: escrow,
         launch: params.launch,
-        systemProgram: SystemProgram.programId,
+        systemProgram: web3.SystemProgram.programId,
       } as any)
       .instruction();
 
@@ -312,28 +296,28 @@ export class TxBuilder {
   }
 
   async depositTx(params: {
-    launch: PublicKey;
-    user: PublicKey;
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
     amount: BN;
-    roster?: PublicKey;
-    escrow?: PublicKey;
-  }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+    roster?: web3.PublicKey;
+    escrow?: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
     const { instruction, userContribution } = await this.depositIx(params);
-    const transaction = new Transaction().add(instruction);
+    const transaction = new web3.Transaction().add(instruction);
     return { transaction, userContribution };
   }
 
   async withdrawIx(params: {
-    launch: PublicKey;
-    user: PublicKey;
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
     amount: BN;
-    roster?: PublicKey;
-    rosterShard?: PublicKey;
+    roster?: web3.PublicKey;
+    rosterShard?: web3.PublicKey;
     shardId?: number;
-    escrow?: PublicKey;
+    escrow?: web3.PublicKey;
   }): Promise<{
-    instruction: TransactionInstruction;
-    userContribution: PublicKey;
+    instruction: web3.TransactionInstruction;
+    userContribution: web3.PublicKey;
   }> {
     const [userContribution] = this.getPda([
       "user",
@@ -356,7 +340,7 @@ export class TxBuilder {
         rosterShard,
         escrow: escrow,
         launch: params.launch,
-        systemProgram: SystemProgram.programId,
+        systemProgram: web3.SystemProgram.programId,
       } as any)
       .instruction();
 
@@ -364,26 +348,26 @@ export class TxBuilder {
   }
 
   async withdrawTx(params: {
-    launch: PublicKey;
-    user: PublicKey;
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
     amount: BN;
-    roster?: PublicKey;
-    escrow?: PublicKey;
-  }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+    roster?: web3.PublicKey;
+    escrow?: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
     const { instruction, userContribution } = await this.withdrawIx(params);
-    const transaction = new Transaction().add(instruction);
+    const transaction = new web3.Transaction().add(instruction);
     return { transaction, userContribution };
   }
 
   async claimRefundIx(params: {
-    launch: PublicKey;
-    user: PublicKey;
-    rosterShard?: PublicKey;
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
+    rosterShard?: web3.PublicKey;
     shardId?: number;
-    escrow?: PublicKey;
+    escrow?: web3.PublicKey;
   }): Promise<{
-    instruction: TransactionInstruction;
-    userContribution: PublicKey;
+    instruction: web3.TransactionInstruction;
+    userContribution: web3.PublicKey;
   }> {
     const [userContribution] = this.getPda([
       "user",
@@ -412,26 +396,26 @@ export class TxBuilder {
   }
 
   async claimRefundTx(params: {
-    launch: PublicKey;
-    user: PublicKey;
-    selection?: PublicKey;
-    escrow?: PublicKey;
-  }): Promise<{ transaction: Transaction; userContribution: PublicKey }> {
+    launch: web3.PublicKey;
+    user: web3.PublicKey;
+    selection?: web3.PublicKey;
+    escrow?: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
     const { instruction, userContribution } = await this.claimRefundIx(params);
-    const transaction = new Transaction().add(instruction);
+    const transaction = new web3.Transaction().add(instruction);
     return { transaction, userContribution };
   }
 
   async claimTokensIx(params: {
-    launch: PublicKey;
-    saleMint: PublicKey;
-    user: PublicKey;
-    rosterShard?: PublicKey;
+    launch: web3.PublicKey;
+    saleMint: web3.PublicKey;
+    user: web3.PublicKey;
+    rosterShard?: web3.PublicKey;
     shardId?: number;
-    userAta?: PublicKey;
+    userAta?: web3.PublicKey;
     createAtaIfMissing?: boolean;
-    payer: PublicKey;
-  }): Promise<{ instructions: TransactionInstruction[]; userAta: PublicKey }> {
+    payer: web3.PublicKey;
+  }): Promise<{ instructions: web3.TransactionInstruction[]; userAta: web3.PublicKey }> {
     const [userContribution] = this.getPda([
       "user",
       params.launch,
@@ -447,7 +431,7 @@ export class TxBuilder {
       params.userAta ??
       getAssociatedTokenAddressSync(params.saleMint, params.user, true);
 
-    const instructions: TransactionInstruction[] = [];
+    const instructions: web3.TransactionInstruction[] = [];
 
     if (params.createAtaIfMissing) {
       // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
@@ -498,16 +482,16 @@ export class TxBuilder {
   }
 
   async claimTokensTx(params: {
-    launch: PublicKey;
-    saleMint: PublicKey;
-    user: PublicKey;
-    selection?: PublicKey;
-    userAta?: PublicKey;
+    launch: web3.PublicKey;
+    saleMint: web3.PublicKey;
+    user: web3.PublicKey;
+    selection?: web3.PublicKey;
+    userAta?: web3.PublicKey;
     createAtaIfMissing?: boolean;
-    payer: PublicKey;
-  }): Promise<{ transaction: Transaction; userAta: PublicKey }> {
+    payer: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; userAta: web3.PublicKey }> {
     const { instructions, userAta } = await this.claimTokensIx(params);
-    const transaction = new Transaction().add(...instructions);
+    const transaction = new web3.Transaction().add(...instructions);
     return { transaction, userAta };
   }
 
@@ -517,21 +501,21 @@ export class TxBuilder {
     return buf;
   }
 
-  async fetchLaunch(launch: PublicKey) {
+  async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
   }
 
-  async fetchRoster(launch: PublicKey) {
+  async fetchRoster(launch: web3.PublicKey) {
     const [pda] = this.getPda(["roster", launch]);
     return this.program.account.roster.fetch(pda);
   }
 
 
   async finalizeRosterShardIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
     shardId: number;
-  }): Promise<{ instruction: TransactionInstruction; rosterShard: PublicKey }> {
+  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
     const instruction = await (this.program.methods as any)
       .finalizeRosterShard(params.shardId)
@@ -545,9 +529,9 @@ export class TxBuilder {
   }
 
   async openClaimsIx(params: {
-    launch: PublicKey;
-    payer: PublicKey;
-  }): Promise<TransactionInstruction> {
+    launch: web3.PublicKey;
+    payer: web3.PublicKey;
+  }): Promise<web3.TransactionInstruction> {
     const [creatorGrant] = this.getPda(["creator", params.launch]);
     return (this.program.methods as any)
       .openClaims()
@@ -559,7 +543,7 @@ export class TxBuilder {
       .instruction();
   }
 
-  async fetchUserContribution(launch: PublicKey, user: PublicKey) {
+  async fetchUserContribution(launch: web3.PublicKey, user: web3.PublicKey) {
     const [pda] = this.getPda(["user", launch, user]);
     return this.program.account.userContribution.fetch(pda);
   }
@@ -570,20 +554,20 @@ export class TxBuilder {
   }
 
   async claimCreatorTokensTx(params: {
-    launch: PublicKey;
-    saleMint: PublicKey;
-    creator: PublicKey;
-    creatorAta?: PublicKey;
+    launch: web3.PublicKey;
+    saleMint: web3.PublicKey;
+    creator: web3.PublicKey;
+    creatorAta?: web3.PublicKey;
     createAtaIfMissing?: boolean;
-    payer: PublicKey;
-  }): Promise<{ transaction: Transaction; creatorAta: PublicKey }> {
+    payer: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; creatorAta: web3.PublicKey }> {
     const [creatorGrant] = this.getPda(["creator", params.launch]);
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
     const creatorAta =
       params.creatorAta ??
       getAssociatedTokenAddressSync(params.saleMint, params.creator, true);
 
-    const transaction = new Transaction();
+    const transaction = new web3.Transaction();
 
     if (params.createAtaIfMissing) {
       // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
@@ -633,13 +617,13 @@ export class TxBuilder {
   }
 
   async claimCreatorRefundTx(params: {
-    launch: PublicKey;
-    creator: PublicKey;
-  }): Promise<{ transaction: Transaction }> {
+    launch: web3.PublicKey;
+    creator: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction }> {
     const [creatorGrant] = this.getPda(["creator", params.launch]);
     const [escrow] = this.getPda(["escrow", params.launch]);
 
-    const transaction = new Transaction();
+    const transaction = new web3.Transaction();
 
     const claimIx = await this.program.methods
       .claimCreatorRefund()
@@ -656,7 +640,7 @@ export class TxBuilder {
     return { transaction };
   }
 
-  async fetchCreatorGrant(launch: PublicKey) {
+  async fetchCreatorGrant(launch: web3.PublicKey) {
     const [creatorGrantPda] = this.getPda(["creator", launch]);
     return this.program.account.creatorGrant.fetch(creatorGrantPda);
   }
@@ -664,22 +648,22 @@ export class TxBuilder {
 
 
   async createClmmPoolTx(params: {
-    payer: PublicKey;
-    launch: PublicKey;
-    quoteMint: PublicKey;
-    baseMint: Keypair;
-    ammConfig: PublicKey;
-    clmmProgram: PublicKey;
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    baseMint: web3.Keypair;
+    ammConfig: web3.PublicKey;
+    clmmProgram: web3.PublicKey;
     provider: any;
   }): Promise<{
-    transaction: Transaction;
-    signers: Keypair[];
-    baseMint: PublicKey;
-    baseTokenAta: PublicKey;
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
 
-    const [poolState] = PublicKey.findProgramAddressSync(
+    const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
@@ -689,12 +673,12 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [observationState] = PublicKey.findProgramAddressSync(
+    const [observationState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("observation"), poolState.toBuffer()],
       params.clmmProgram
     );
 
-    const [quoteVault] = PublicKey.findProgramAddressSync(
+    const [quoteVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
@@ -703,7 +687,7 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [baseVault] = PublicKey.findProgramAddressSync(
+    const [baseVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
@@ -712,7 +696,7 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [tickArrayBitmap] = PublicKey.findProgramAddressSync(
+    const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_tick_array_bitmap_extension"),
         poolState.toBuffer(),
@@ -746,12 +730,12 @@ export class TxBuilder {
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: web3.SystemProgram.programId,
+        rent: web3.SYSVAR_RENT_PUBKEY,
       })
       .instruction();
 
-    const transaction = new Transaction()
+    const transaction = new web3.Transaction()
       .add(createClmmPoolIx);
 
     return {
@@ -763,21 +747,21 @@ export class TxBuilder {
   }
 
   async addClmmLiquidityTx(params: {
-    payer: PublicKey;
-    launch: PublicKey;
-    quoteMint: PublicKey;
-    baseMint: PublicKey;
-    baseTokenAta: PublicKey;
-    ammConfig: PublicKey;
-    clmmProgram: PublicKey;
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    clmmProgram: web3.PublicKey;
     provider: any;
   }): Promise<{
-    transaction: Transaction;
-    signers: Keypair[];
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
 
-    const [poolState] = PublicKey.findProgramAddressSync(
+    const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
@@ -787,7 +771,7 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [quoteVault] = PublicKey.findProgramAddressSync(
+    const [quoteVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
@@ -796,7 +780,7 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [baseVault] = PublicKey.findProgramAddressSync(
+    const [baseVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
@@ -810,13 +794,13 @@ export class TxBuilder {
       params.payer
     );
 
-    const positionNftMint = anchor.web3.Keypair.generate();
+    const positionNftMint = web3.Keypair.generate();
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
       params.payer
     );
 
-    const [metadataAccount] = PublicKey.findProgramAddressSync(
+    const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("metadata"),
         METADATA_PROGRAM_ID.toBuffer(),
@@ -825,7 +809,7 @@ export class TxBuilder {
       METADATA_PROGRAM_ID
     );
 
-    const [personalPosition] = PublicKey.findProgramAddressSync(
+    const [personalPosition] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("position"),
         positionNftMint.publicKey.toBuffer(),
@@ -843,7 +827,7 @@ export class TxBuilder {
     const tickUpperBuffer = Buffer.alloc(4);
     tickUpperBuffer.writeInt32BE(tickUpperIndex, 0);
 
-    const [protocolPosition] = PublicKey.findProgramAddressSync(
+    const [protocolPosition] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("protocol_position"),
         poolState.toBuffer(),
@@ -863,7 +847,7 @@ export class TxBuilder {
     const tickArrayUpperBuffer = Buffer.alloc(4);
     tickArrayUpperBuffer.writeInt32BE(tickArrayUpperStartIndex, 0);
 
-    const [tickArrayLower] = PublicKey.findProgramAddressSync(
+    const [tickArrayLower] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("tick_array"),
         poolState.toBuffer(),
@@ -872,7 +856,7 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const [tickArrayUpper] = PublicKey.findProgramAddressSync(
+    const [tickArrayUpper] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("tick_array"),
         poolState.toBuffer(),
@@ -907,16 +891,16 @@ export class TxBuilder {
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: web3.SystemProgram.programId,
+        rent: web3.SYSVAR_RENT_PUBKEY,
       })
       .instruction();
 
-    const computeBudgetIx = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
       units: 400_000,
     });
 
-    const transaction = new Transaction()
+    const transaction = new web3.Transaction()
       .add(computeBudgetIx)
       .add(addLiquidityIx);
 

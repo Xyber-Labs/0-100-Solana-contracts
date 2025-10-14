@@ -31,4 +31,3 @@ pub mod open_claims;
 pub mod process_batch;
 pub mod set_seed;
 pub mod withdraw;
-
