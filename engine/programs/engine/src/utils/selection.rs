@@ -1,7 +1,8 @@
+use crate::errors::ErrorCode;
+use crate::types::HeapEntry;
+use crate::state::Roster;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
-use crate::{Roster, HeapEntry};
-use crate::errors::ErrorCode;
 
 /// Domain separation for score hashing (fix this constant).
 const SCORE_DOMAIN: &[u8] = b"0-100/selection/v1";
@@ -14,14 +15,17 @@ pub fn ticket_at(t: u32, roster: &Account<Roster>) -> Result<(Pubkey, u32)> {
         Ok(i) => i, // exact boundary = start of some user's block
         Err(i) => {
             // i = index of first prefix > t, so user = i - 1
-            i.saturating_sub(1)
+            i.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)?
         }
     };
     let start = roster.prefix[idx];
     let c = roster.counts[idx];
-    require!(t < start + c, ErrorCode::MappingError);
+    require!(
+        t < start.checked_add(c).ok_or(ErrorCode::ArithmeticOverflow)?,
+        ErrorCode::MappingError
+    );
     let wallet = roster.wallets[idx];
-    let local_j = t - start;
+    let local_j = t.checked_sub(start).ok_or(ErrorCode::ArithmeticOverflow)?;
     Ok((wallet, local_j))
 }
 

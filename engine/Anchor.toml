@@ -6,10 +6,11 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-engine = "5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH"
+engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 
 [programs.devnet]
-engine = "5W13VU4NkJbNHEX1CNFfjCzKGA7WeKqLzQoUDoLsoKjH"
+engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+
 
 # [programs.remote]
 # engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
@@ -26,13 +27,7 @@ litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
 litesvm-basic = "yarn run test:litesvm:basic"
 litesvm-raydium = "yarn run test:litesvm:raydium"
 litesvm-full = "yarn run test:litesvm:full"
-farm-sol = "ts-node scripts/farm-sol.ts"
-sync-id = "node scripts/sync-program-id.js"
 init-launch = "ts-node scripts/init-launch.ts"
-init-launch-litesvm = "ts-node scripts/init-launch-litesvm.ts"
 init-roster = "ts-node scripts/init-roster.ts"
 deposit = "ts-node scripts/deposit.ts"
 create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"
-debug-amm-config = "ts-node scripts/debug-amm-config.ts"
-list-amm-configs = "ts-node scripts/list-amm-configs.ts"
-check-idl = "ts-node scripts/check-idl.ts"

@@ -47,7 +47,7 @@ check_validator() {
 
 # Function to check if program is deployed
 check_program() {
-    if ! solana program show HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb > /dev/null 2>&1; then
+    if ! solana program show DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 > /dev/null 2>&1; then
         print_warning "Program not deployed. Building and deploying..."
         anchor build
         anchor deploy

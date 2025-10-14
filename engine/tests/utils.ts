@@ -6,13 +6,15 @@ export async function advanceTime(
   { slots = 0n, seconds = 0n }: { slots?: bigint; seconds?: bigint } = {}
 ) {
   const currentClock = client.getClock();
-  client.setClock(new Clock(
-    currentClock.slot + slots,
-    currentClock.epochStartTimestamp,
-    currentClock.epoch,
-    currentClock.leaderScheduleEpoch,
-    currentClock.unixTimestamp + seconds
-  ));
+  client.setClock(
+    new Clock(
+      currentClock.slot + slots,
+      currentClock.epochStartTimestamp,
+      currentClock.epoch,
+      currentClock.leaderScheduleEpoch,
+      currentClock.unixTimestamp + seconds
+    )
+  );
 }
 
 export async function createAndFundAccount(
