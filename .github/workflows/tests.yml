@@ -114,7 +114,7 @@ jobs:
         id: engine-restore
         uses: actions/cache/restore@v4
         with:
-          path: target
+          path: engine/target
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
 
       - name: anchor build
@@ -125,7 +125,7 @@ jobs:
         if: steps.engine-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: target
+          path: engine/target
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
 
       - name: Install deps
