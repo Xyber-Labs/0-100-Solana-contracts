@@ -134,5 +134,8 @@ jobs:
       - name: Run litesvm basic tests
         run: anchor run litesvm-basic
 
-      - name: Run litesvm raydium tests (with retry)
+      - name: Run litesvm raydium tests
         run: anchor run litesvm-raydium
+
+      - name: Run complete flow  tests
+        run: anchor run litesvm-full
