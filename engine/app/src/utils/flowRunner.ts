@@ -10,32 +10,68 @@ import {
   TOKEN_PROGRAM_ID,
   createInitializeMintInstruction,
 } from "@solana/spl-token";
+
 interface LaunchConfig {
   hardCapLamports: number;
   minRaiseLamports: number;
   perWalletCap: number;
   tauLamports: number;
-  saleAllocation: number;
+  saleAllocation: string;
   lpAllocation: number;
-  fundingDurationDays: number;
+  fundingDurationSeconds: number; // New field for direct seconds
   numBlocks: number;
+  rosterShardCap: number;
+  creatorInitialDepositLamports: number;
+  creatorDailyLamportsLimit: number;
+  creatorClaimLockPeriodSec: number;
 }
 
 // A simplified SDK type, as we don't have the full type in this context
 type Sdk = any;
+
+interface SimulationConfig {
+  numUsers: number;
+  maxTicketsPerUser: number;
+}
 
 export async function runFullFlow(
   sdk: Sdk,
   program: Program,
   provider: any,
   config: LaunchConfig,
-  addLog: (log: string) => void
+  addLog: (log: string) => void,
+  simConfig: SimulationConfig
 ): Promise<{ success: boolean; message: string }> {
   const admin = provider.wallet;
+  const adminInitialBalance = await provider.connection.getBalance(admin.publicKey);
+  let userFundingCost = 0;
+
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
 
   let testLaunchState: PublicKey;
+
+  // --- Simulation Parameters ---
+  const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
+  const SALE_PERCENTAGE = 0.45946; // 45.946%
+  const TOKEN_DECIMALS = 6;
+  
+  // // Calculate sale_allocation based on simulation parameters
+  // const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
+  // config.saleAllocation = saleAllocation;
+
+  // Override creator deposit for this specific test
+  const LAMPORTS_PER_SOL = 1_000_000_000;
+  config.creatorInitialDepositLamports = 8 * LAMPORTS_PER_SOL;
+  config.creatorDailyLamportsLimit = 2 * LAMPORTS_PER_SOL; // Set to 2 SOL to make daily_ticket_cap = 2
+  
+  addLog(`\n--- Using Simulation Parameters ---`);
+  addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
+  addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
+  addLog(`   -> Calculated Sale Allocation (atomic units): ${config.saleAllocation.toLocaleString()}`);
+  addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
+  addLog(`------------------------------------`);
+  // --- End Simulation Parameters ---
 
   try {
     // Helper to wait
@@ -59,13 +95,81 @@ export async function runFullFlow(
       }
     }
 
+    let adminBalance: number;
+    try {
+      adminBalance = await provider.connection.getBalance(admin.publicKey);
+    } catch (error) {
+      // Fallback for LiteSVM - assume 10 SOL balance
+      adminBalance = 10 * 1e9;
+      addLog(`Using fallback admin balance: ${adminBalance / 1e9} SOL`);
+    }
+
+    const MIN_BALANCE_FOR_FEES = 500000000; // 0.5 SOL
+
+    if (adminBalance < MIN_BALANCE_FOR_FEES) {
+      const errorMessage = `Admin wallet balance is too low (${(
+        adminBalance / 1e9
+      ).toFixed(
+        2
+      )} SOL). Please fund it with at least ${
+        MIN_BALANCE_FOR_FEES / 1e9
+      } SOL to cover transaction fees.`;
+      addLog(errorMessage);
+      return { success: false, message: errorMessage };
+    }
+
+    const availableForCreatorDeposit = adminBalance - MIN_BALANCE_FOR_FEES;
+    const adjustedCreatorDeposit = Math.min(
+      config.creatorInitialDepositLamports,
+      availableForCreatorDeposit
+    );
+    userFundingCost += config.creatorInitialDepositLamports - adjustedCreatorDeposit;
+
+
+    if (adjustedCreatorDeposit < config.creatorInitialDepositLamports) {
+      addLog(`Admin balance: ${(adminBalance / 1e9).toFixed(2)} SOL`);
+      addLog(
+        `Reducing creator deposit from ${(
+          config.creatorInitialDepositLamports / 1e9
+        ).toFixed(2)} SOL to ${(adjustedCreatorDeposit / 1e9).toFixed(2)} SOL`
+      );
+    }
+    config.creatorInitialDepositLamports = adjustedCreatorDeposit;
+
+    // Helper to get token balance
+    async function getTokenBalance(ata: PublicKey): Promise<number> {
+      try {
+        const balance = await provider.connection.getTokenAccountBalance(ata);
+        return parseFloat(balance.value.uiAmountString || "0");
+      } catch (error) {
+        // If ATA doesn't exist, balance is 0
+        return 0;
+      }
+    }
+
+    const MINT_RENT = 2039280; // Fixed rent exemption for 82 bytes
+
     // 1. Initialize Launch
-    addLog(`[1/8] Initializing Launch...`);
+    addLog(`[1/10] Initializing Launch...`);
+    
+    const balanceBeforeLaunch = await provider.connection.getBalance(admin.publicKey);
+
+    // Debug: Check available methods
+    addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
+    
     const testSaleMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
+    
+    // Check if getCreatorGrantPda exists before calling it
+    let creatorGrant: PublicKey;
+    if (typeof sdk.getCreatorGrantPda === 'function') {
+      [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
+    } else {
+      throw new Error(`getCreatorGrantPda method not found on SDK. Available methods: ${Object.keys(sdk).join(', ')}`);
+    }
 
     const tx = new Transaction();
 
@@ -80,9 +184,7 @@ export async function runFullFlow(
         fromPubkey: admin.publicKey,
         newAccountPubkey: testSaleMint.publicKey,
         space: 82,
-        lamports: await provider.connection.getMinimumBalanceForRentExemption(
-          82
-        ),
+        lamports: 2039280, // Fixed rent exemption for 82 bytes
         programId: TOKEN_PROGRAM_ID,
       })
     );
@@ -104,8 +206,12 @@ export async function runFullFlow(
         tauLamports: new BN(config.tauLamports),
         saleAllocation: new BN(config.saleAllocation),
         lpAllocation: new BN(config.lpAllocation),
-        fundingDurationSeconds: new BN(5), // Use 30 seconds for testing
+        fundingDurationSeconds: new BN(config.fundingDurationSeconds),
         numBlocks: new BN(config.numBlocks),
+        rosterShardCap: config.rosterShardCap,
+        creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
+        creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
+        creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       })
       .accountsStrict({
         creator: admin.publicKey,
@@ -113,6 +219,7 @@ export async function runFullFlow(
         launchState: testLaunchState,
         saleMint: testSaleMint.publicKey,
         escrow,
+        creatorGrant,
         systemProgram: SystemProgram.programId,
       })
       .instruction();
@@ -125,151 +232,205 @@ export async function runFullFlow(
       await provider.connection.getLatestBlockhash()
     ).blockhash;
 
-    // Explicitly sign with the keypairs we created
-    tx.partialSign(testSaleMint);
+    // Send transaction using provider's sendAndConfirm method
+    const signature = await provider.sendAndConfirm(tx, [testSaleMint]);
 
-    // Ask the provider's wallet to sign the transaction
-    const signedTx = await provider.wallet.signTransaction(tx);
+    const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
+    const grossLaunchCost = balanceBeforeLaunch - balanceAfterLaunch;
+    const launchTxFees = grossLaunchCost - config.creatorInitialDepositLamports - MINT_RENT;
 
-    // Send the fully signed transaction
-    const rawTx = signedTx.serialize();
-    const signature = await provider.connection.sendRawTransaction(rawTx);
-
-    // Manually confirm the transaction
-    const latestBlockhash = await provider.connection.getLatestBlockhash();
-    await provider.connection.confirmTransaction({
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-      signature: signature,
-    });
 
     addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
-    // 2. Initialize Roster
-    addLog(`\n[2/8] Initializing Roster...`);
-    await sdk.initRoster({ launch: testLaunchState });
-    addLog("   -> Roster initialized.");
+    // 2. Pre-initialize all necessary roster shards
+    const numShards = Math.ceil(simConfig.numUsers / config.rosterShardCap);
+    addLog(
+      `\n[2/10] Calculated ${numShards} shards needed for ${simConfig.numUsers} users with a capacity of ${config.rosterShardCap}. Initializing...`
+    );
+    const balanceBeforeShards = await provider.connection.getBalance(admin.publicKey);
+    for (let i = 0; i < numShards; i++) {
+      try {
+        await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
+        addLog(`   -> Shard ${i} initialized.`);
+      } catch (error: any) {
+        // This might happen if another process initialized it, which is fine.
+        if (error.message && error.message.includes("custom program error: 0x0")) {
+            addLog(`   -> Shard ${i} was already initialized.`);
+        } else {
+            throw error;
+        }
+      }
+    }
 
-    // 3. Simulate deposits to create a ~2x overflow
-    const k_capacity = config.hardCapLamports / config.tauLamports;
-    let numUsersToSimulate = Math.floor(k_capacity * 2);
-    const depositAmount = new BN(config.tauLamports); // 1 ticket per user
+    const balanceAfterShards = await provider.connection.getBalance(admin.publicKey);
+    const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
-    addLog(`\n[3/8] Simulating deposits for a ~2x overflow...`);
-    addLog(`   -> Capacity (k): ${k_capacity}`);
-    addLog(`   -> Target users for 2x overflow: ${numUsersToSimulate}`);
+    // 3. Simulate deposits for 1000 users with various amounts
+    const TARGET_USERS = simConfig.numUsers;
+    const MAX_TICKETS_PER_USER = simConfig.maxTicketsPerUser; // Use value from simConfig
+    const usersWithDeposits = new Map<
+      string,
+      { keypair: Keypair; tickets: number; shardId: number }
+    >();
 
-    if (numUsersToSimulate > 50) {
+    addLog(`\n[3/10] Simulating deposits for up to ${TARGET_USERS} users...`);
+    addLog(
+      `   -> Each user will deposit for a random amount of tickets (1-${MAX_TICKETS_PER_USER}).`
+    );
+
+    // Step 1: Generate all potential user keypairs and their desired deposits
+    let users = Array.from({ length: TARGET_USERS }, (_, i) => {
+      const keypair = Keypair.generate();
+      const tickets = Math.floor(Math.random() * MAX_TICKETS_PER_USER) + 1;
+      const depositAmount = new BN(config.tauLamports * tickets);
+      const shardId = Math.floor(i / config.rosterShardCap);
+      return { keypair, tickets, depositAmount, shardId };
+    });
+
+    // Step 2: Check admin balance and filter users we can afford to fund
+    let currentAdminBalance: number;
+    try {
+      currentAdminBalance = await provider.connection.getBalance(admin.publicKey);
+    } catch (error) {
+      currentAdminBalance = 500000000; // Fallback: assume 0.5 SOL remaining
+    }
+
+    const feeBufferPerUser = 5000000; // ~0.005 SOL buffer for fees
+    const affordableUsers = [];
+    let cumulativeCost = 0;
+
+    for (const user of users) {
+      const costForThisUser = user.depositAmount.toNumber() + feeBufferPerUser;
+      if (cumulativeCost + costForThisUser <= currentAdminBalance) {
+        cumulativeCost += costForThisUser;
+        affordableUsers.push(user);
+      } else {
+        break; // Stop when we can't afford the next user
+      }
+    }
+    userFundingCost += cumulativeCost;
+
+    if (users.length !== affordableUsers.length) {
       addLog(
-        `   -> Capping simulation at 50 users to keep test runtime reasonable.`
+        `   -> Admin balance can only fund ${affordableUsers.length} out of ${TARGET_USERS} users.`
       );
-      numUsersToSimulate = 50;
+      if (affordableUsers.length === 0) {
+        throw new Error(
+          "Insufficient admin balance to fund any users for the simulation."
+        );
+      }
+      users = affordableUsers;
     }
-    if (numUsersToSimulate === 0) {
-      addLog(`   -> At least one user will be simulated.`);
-      numUsersToSimulate = 1;
+
+    const numUsersToSimulate = users.length;
+    addLog(
+      `   -> Total cost to fund ${numUsersToSimulate} users: ${(
+        cumulativeCost / LAMPORTS_PER_SOL
+      ).toFixed(4)} SOL`
+    );
+
+    // Step 3: Fund users
+    addLog(
+      `   -> Funding ${numUsersToSimulate} users with transfers from admin...`
+    );
+    const FUNDING_BATCH_SIZE = 50; // Process 50 users at a time
+    for (let i = 0; i < users.length; i += FUNDING_BATCH_SIZE) {
+      const batch = users.slice(i, i + FUNDING_BATCH_SIZE);
+      addLog(`   -> Funding batch ${Math.floor(i / FUNDING_BATCH_SIZE) + 1}...`);
+      await Promise.all(
+        batch.map(async (user) => {
+          const fundingAmount = user.depositAmount.toNumber() + feeBufferPerUser;
+          const transferIx = SystemProgram.transfer({
+            fromPubkey: admin.publicKey,
+            toPubkey: user.keypair.publicKey,
+            lamports: fundingAmount,
+          });
+          const tx = new Transaction().add(transferIx);
+          tx.feePayer = admin.publicKey;
+          tx.recentBlockhash = (
+            await provider.connection.getLatestBlockhash()
+          ).blockhash;
+          await provider.sendAndConfirm(tx, []);
+        })
+      );
     }
+    addLog("   -> All users funded.");
 
+    // Step 4: Deposit from all users, using pre-calculated shard IDs
     addLog(
-      `   -> Simulating ${numUsersToSimulate} users, each depositing for 1 ticket.`
+      `   -> Sending ${numUsersToSimulate} deposit transactions in batches of 50...`
     );
+    const BATCH_SIZE = 50;
 
-    // Step 1: Generate all user keypairs
-    const users = Array.from({ length: numUsersToSimulate }, () =>
-      Keypair.generate()
-    );
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      addLog(`   -> Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`);
 
-    // Step 2: Airdrop to all users in parallel
-    addLog(
-      `   -> Airdropping SOL to ${numUsersToSimulate} users in parallel...`
-    );
-    const airdropSigs = await Promise.all(
-      users.map((user) =>
-        provider.connection.requestAirdrop(user.publicKey, 5 * 1e9)
-      )
-    );
+      const depositPromises = batch.map((user) =>
+        (async () => {
+          try {
+            await sdk.deposit({
+              launch: testLaunchState,
+              amountLamports: user.depositAmount,
+              userKeypair: user.keypair,
+              shardId: user.shardId, // Use pre-calculated shard ID
+            });
+            usersWithDeposits.set(user.keypair.publicKey.toBase58(), {
+              keypair: user.keypair,
+              tickets: user.tickets,
+              shardId: user.shardId,
+            });
+          } catch (error: any) {
+            addLog(
+              `   -> ❌ Deposit failed for user in shard ${user.shardId}: ${error.message}`
+            );
+            // Stop the simulation on failure to prevent cascading issues.
+            throw new Error(
+              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${
+                user.shardId
+              }: ${error.message}`
+            );
+          }
+        })()
+      );
 
-    // Step 3: Confirm all airdrops in parallel
-    addLog("   -> Confirming airdrops...");
-    const airdropBlockhash = await provider.connection.getLatestBlockhash();
-    await Promise.all(
-      airdropSigs.map((sig) =>
-        provider.connection.confirmTransaction({
-          signature: sig,
-          blockhash: airdropBlockhash.blockhash,
-          lastValidBlockHeight: airdropBlockhash.lastValidBlockHeight,
-        })
-      )
-    );
-    addLog("   -> Airdrops confirmed.");
-
-    // Step 4: Deposit from all users in parallel
-    addLog(
-      `   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`
-    );
-    await Promise.all(
-      users.map((user) =>
-        sdk.deposit({
-          launch: testLaunchState,
-          amountLamports: depositAmount,
-          userKeypair: user,
-        })
-      )
-    );
+      // Wait for all deposits in the current batch to complete
+      await Promise.all(depositPromises);
+    }
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End
-    addLog(`\n[4/8] Waiting for funding period to end...`);
+    addLog(`\n[4/10] Waiting for funding period to end...`);
     await waitForFundingPeriodEnd(testLaunchState);
     addLog("   -> Funding period closed.");
 
+    const balanceBeforeCranking = await provider.connection.getBalance(admin.publicKey);
+
     // 5. Set VRF Seed
-    addLog(`\n[5/8] Setting VRF Seed...`);
+    addLog(`\n[5/10] Setting VRF Seed...`);
     await sdk.setSeed({ launch: testLaunchState });
     addLog("   -> VRF seed set.");
 
-    // 6. Process Batches
-    addLog(`\n[6/8] Processing batches (cranking)...`);
-    const state = await sdk.fetchLaunch(testLaunchState);
-    const totalTicketsToProcess = state.totalTickets;
-    let processed = 0;
-    let crankTxCount = 0;
-    const balanceBeforeCrank = await provider.connection.getBalance(
-      admin.publicKey
-    );
-
-    while (processed < totalTicketsToProcess) {
-      await sdk.processBatch({ launch: testLaunchState, maxItems: 10 });
-      const selectionAccount = await sdk.fetchSelection(testLaunchState);
-      processed = selectionAccount.processed;
-      crankTxCount++;
-      addLog(`   -> Processed ${processed}/${totalTicketsToProcess} tickets`);
+    // 6. Finalize shard(s)
+    addLog(`\n[6/10] Finalizing roster shards...`);
+    for (let i = 0; i < numShards; i++) {
+      await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
+      addLog(`   -> Shard ${i} finalized.`);
     }
 
-    const balanceAfterCrank = await provider.connection.getBalance(
-      admin.publicKey
-    );
-    const crankCostLamports = balanceBeforeCrank - balanceAfterCrank;
-    const crankCostSol = crankCostLamports / 1e9;
-
-    addLog(`   -> Crank finished.`);
-    addLog(`   -> Total transactions: ${crankTxCount}`);
-    addLog(`   -> Total cost: ${crankCostSol.toFixed(6)} SOL`);
-
-    // 7. Finalize & Open Claims (now automatic)
-    addLog(`\n[7/8] Verifying automatic finalization...`);
-    const finalState = await sdk.fetchLaunch(testLaunchState);
-    if (finalState.selectionFinalized && finalState.claimsOpen) {
-      addLog("   -> Verified: Selection is finalized and claims are open.");
+    // 7. Open Claims
+    addLog(`\n[7/10] Opening claims...`);
+    await sdk.openClaims({ launch: testLaunchState });
+    const finalLaunchState = await sdk.fetchLaunch(testLaunchState);
+    if (finalLaunchState.claimsOpen) {
+      addLog("   -> Claims are open.");
     } else {
-      throw new Error(
-        "Verification failed: Selection not finalized or claims not open."
-      );
+      throw new Error("Verification failed: Claims not open.");
     }
 
     // 8. Create Pool
-    addLog(`\n[8/8] Creating Pool...`);
+    addLog(`\n[8/10] Creating Pool...`);
     try {
       await sdk.createPool({ launch: testLaunchState });
       addLog("   -> Pool created successfully!");
@@ -286,6 +447,319 @@ export async function runFullFlow(
         throw error;
       }
     }
+
+    const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
+    const crankingCost = balanceBeforeCranking - balanceAfterCranking;
+
+    // 9. Test User Token & Refund Claiming
+    addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
+
+    const allUsersData = Array.from(usersWithDeposits.values());
+
+    addLog(`   -> Claiming for ${allUsersData.length} users in batches of 50...`);
+    const CLAIM_BATCH_SIZE = 50;
+    let allResults = [];
+
+    for (let i = 0; i < allUsersData.length; i += CLAIM_BATCH_SIZE) {
+      const batch = allUsersData.slice(i, i + CLAIM_BATCH_SIZE);
+      addLog(`   -> Processing claim batch ${Math.floor(i / CLAIM_BATCH_SIZE) + 1}...`);
+      
+      const claimPromises = batch.map(async (userData) => {
+        try {
+          // Attempt to claim tokens for every user
+          const userAta = sdk.getUserAta(
+            testSaleMint.publicKey,
+            userData.keypair.publicKey
+          );
+          const initialBalance = await getTokenBalance(userAta);
+
+          await sdk.claimTokens({
+            launch: testLaunchState,
+            saleMint: testSaleMint.publicKey,
+            userKeypair: userData.keypair,
+            createAtaIfMissing: true,
+            shardId: userData.shardId,
+            computeUnits: 2_000_000,
+          });
+
+          const finalBalance = await getTokenBalance(userAta);
+          return {
+            status: "winner",
+            tokensClaimed: finalBalance - initialBalance,
+            tickets: userData.tickets,
+          };
+        } catch (error: any) {
+          // If it fails with "NoTokensToClaim", they are a loser, so claim refund
+          if (error.message && error.message.includes("NoTokensToClaim")) {
+            try {
+              await sdk.claimRefund({
+                launch: testLaunchState,
+                userKeypair: userData.keypair,
+                shardId: userData.shardId,
+              });
+              return { status: "loser", tickets: userData.tickets };
+            } catch (refundError: any) {
+              return {
+                status: "failed",
+                type: "refund",
+                error: refundError,
+                publicKey: userData.keypair.publicKey,
+              };
+            }
+          } else {
+            // If it's another error, log it
+            return {
+              status: "failed",
+              type: "token",
+              error: error,
+              publicKey: userData.keypair.publicKey,
+            };
+          }
+        }
+      });
+
+      const batchResults = await Promise.all(claimPromises);
+      allResults.push(...batchResults);
+    }
+
+    let successfulTokenClaims = 0;
+    let successfulRefundClaims = 0;
+    let tokensClaimed = 0;
+    let failedClaims = 0;
+    let winningTickets = 0;
+    let losingTickets = 0;
+
+    for (const result of allResults) {
+      switch (result.status) {
+        case "winner":
+          successfulTokenClaims++;
+          tokensClaimed += result.tokensClaimed || 0;
+          winningTickets += result.tickets || 0;
+          break;
+        case "loser":
+          successfulRefundClaims++;
+          losingTickets += result.tickets || 0;
+          break;
+        case "failed":
+          failedClaims++;
+          if (result.publicKey && result.error) {
+            addLog(
+              `   -> ❌ ${
+                result.type
+              } claim failed for ${result.publicKey.toBase58()}: ${
+                result.error.message
+              }`
+            );
+          }
+          break;
+      }
+    }
+
+    const totalTicketsInSystem = winningTickets + losingTickets;
+    const actualWinRate = totalTicketsInSystem > 0 ? (winningTickets / totalTicketsInSystem) * 100 : 0;
+
+    addLog(`   -> Winners (successful token claims): ${successfulTokenClaims} users (${winningTickets} winning tickets)`);
+    addLog(`   -> Losers (successful refund claims): ${successfulRefundClaims} users (${losingTickets} losing tickets)`);
+    if (failedClaims > 0) {
+      addLog(`   -> Failed claims (token or refund): ${failedClaims}`);
+    }
+    addLog(
+      `   -> Total tokens claimed by winners: ${tokensClaimed.toFixed(6)}`
+    );
+    addLog(`   -> Win rate: ${actualWinRate.toFixed(2)}% of tickets won`);
+
+    // --- Winning Algorithm Debug ---
+    const launchStateForDebug = await sdk.fetchLaunch(testLaunchState);
+    const n = launchStateForDebug.totalTickets;
+    const k = launchStateForDebug.kCapacity;
+    const creatorGrantForDebug = await sdk.fetchCreatorGrant(testLaunchState);
+    const reservedTickets = creatorGrantForDebug.reservedTickets;
+    const k_pub = k - reservedTickets;
+    const expectedWinProbability = n > 0 ? (k_pub / n) * 100 : 0;
+    const tokensPerTicket = launchStateForDebug.saleAllocation.div(new BN(k)).toNumber();
+    const expectedTotalTokens = tokensPerTicket * k_pub;
+
+    addLog(`\n--- WINNING ALGORITHM DEBUG ---`);
+    addLog(`   -> Total tickets in system: ${totalTicketsInSystem}`);
+    addLog(`   -> Public total tickets (n): ${n}`);
+    addLog(`   -> K capacity: ${k}`);
+    addLog(`   -> Reserved tickets (creator): ${reservedTickets}`);
+    addLog(`   -> K public (k_pub): ${k_pub}`);
+    addLog(`   -> Expected win probability: ${expectedWinProbability.toFixed(4)}%`);
+    addLog(`   -> Actual win rate: ${actualWinRate.toFixed(4)}%`);
+    addLog(`   -> Tokens per ticket: ${(tokensPerTicket / (10 ** TOKEN_DECIMALS)).toFixed(6)}`);
+    addLog(`   -> Expected total tokens: ${(expectedTotalTokens / (10 ** TOKEN_DECIMALS)).toFixed(6)}`);
+    addLog(`   -> Actual total tokens: ${tokensClaimed.toFixed(6)}`);
+    addLog(`   -> Difference: ${(expectedTotalTokens / (10 ** TOKEN_DECIMALS) - tokensClaimed).toFixed(6)}`);
+    addLog(`------------------------------------`);
+
+
+    // Final check for any remaining errors
+    if (failedClaims > 0) {
+      throw new Error(
+        `${failedClaims} users failed to claim either tokens or a refund.`
+      );
+    }
+
+    let totalTokensClaimedByCreator = 0;
+    let creatorClaimCost = 0;
+    // 10. Test Creator Token Claiming (if creator deposit was made)
+    if (config.creatorInitialDepositLamports > 0) {
+      const balanceBeforeCreatorClaims = await provider.connection.getBalance(admin.publicKey);
+      addLog(
+        `\n[10/10] Testing Creator Token Claiming (Accrued Vesting)...`
+      );
+      addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
+      addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);
+
+      const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
+
+      addLog(`\n   --- Firing 3 rapid claims to test initial lock ---`);
+      let initialSuccess = 0;
+      let initialFailures = 0;
+      for (let i = 0; i < 3; i++) {
+        addLog(`   -> Attempt ${i + 1}/3...`);
+        try {
+          const initialBalance = await getTokenBalance(creatorAta);
+          await sdk.claimCreatorTokens({
+            launch: testLaunchState,
+            saleMint: testSaleMint.publicKey,
+            creatorAta: creatorAta,
+            createAtaIfMissing: true,
+            computeUnits: 2_000_000,
+          });
+          const finalBalance = await getTokenBalance(creatorAta);
+          const claimedAmount = finalBalance - initialBalance;
+          addLog(`      -> ✅ SUCCESS: Claim succeeded. Tokens claimed: ${claimedAmount.toFixed(6)}`);
+          totalTokensClaimedByCreator += claimedAmount;
+          initialSuccess++;
+        } catch (error: any) {
+          if (error.message.includes("NothingToClaim")) {
+            addLog(`      -> ❌ FAILURE (EXPECTED): Claim failed as expected.`);
+            initialFailures++;
+          } else {
+            addLog(`      -> ❌ FAILURE (UNEXPECTED): ${error.message}`);
+            throw error;
+          }
+        }
+        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay between rapid attempts
+      }
+
+      if (initialSuccess === 1 && initialFailures === 2) {
+        addLog(`   -> ✅ VERIFICATION PASSED: Initial rapid claims behaved as expected (1 success, 2 failures).`);
+      } else {
+        addLog(`   -> ❌ VERIFICATION FAILED: Expected 1 success and 2 failures, but got ${initialSuccess} and ${initialFailures}.`);
+      }
+
+      const waitTime = 3; // seconds (2 needed for 1 period of 2s with cap=2, +1s buffer)
+      addLog(`\n   --- Waiting ${waitTime} seconds for all remaining tokens to accrue... ---`);
+      await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+
+      addLog(`\n   --- Attempting to claim all remaining accrued tokens at once ---`);
+      
+      // Debug: Check creator grant state before final claim
+      const creatorGrantBeforeFinal = await sdk.fetchCreatorGrant(testLaunchState);
+      addLog(`   -> Creator grant before final claim: reserved=${creatorGrantBeforeFinal.reservedTickets}, claimed=${creatorGrantBeforeFinal.claimedTickets}`);
+      
+      try {
+        const initialBalance = await getTokenBalance(creatorAta);
+        await sdk.claimCreatorTokens({
+          launch: testLaunchState,
+          saleMint: testSaleMint.publicKey,
+          creatorAta: creatorAta,
+        });
+        const finalBalance = await getTokenBalance(creatorAta);
+        const claimedAmount = finalBalance - initialBalance;
+        addLog(`   -> ✅ SUCCESS: Claimed all remaining tokens. Tokens claimed: ${claimedAmount.toFixed(6)}`);
+        totalTokensClaimedByCreator += claimedAmount;
+      } catch (error: any) {
+        // Debug: Check if all tokens were already claimed
+        const creatorGrantAfterError = await sdk.fetchCreatorGrant(testLaunchState);
+        addLog(`   -> Creator grant after error: reserved=${creatorGrantAfterError.reservedTickets}, claimed=${creatorGrantAfterError.claimedTickets}`);
+        
+        if (creatorGrantAfterError.claimedTickets === creatorGrantAfterError.reservedTickets) {
+          addLog(`   -> ✅ SUCCESS: All tokens were already claimed in previous attempts. This is expected behavior.`);
+        } else if (error.message.includes("NothingToClaim")) {
+          addLog(`   -> ✅ SUCCESS: NothingToClaim error is expected when all tokens are already claimed.`);
+        } else {
+          addLog(`   -> ❌ FAILURE (UNEXPECTED): Claiming all tokens failed: ${error.message}`);
+          throw error;
+        }
+      }
+      
+      addLog(`\n   --- Final check: Attempting to claim again (should fail) ---`);
+      try {
+        await sdk.claimCreatorTokens({
+          launch: testLaunchState,
+          saleMint: testSaleMint.publicKey,
+          creatorAta: creatorAta,
+        });
+        addLog(`   -> ❌ VERIFICATION FAILED: Final claim succeeded when it should have failed.`);
+      } catch (error: any) {
+        if (error.message.includes("NothingToClaim")) {
+          addLog(`   -> ✅ VERIFICATION PASSED: Final claim failed as expected (NothingToClaim).`);
+        } else {
+          addLog(`   -> ❌ VERIFICATION FAILED: Final claim failed with an unexpected error: ${error.message}`);
+        }
+      }
+
+      const finalGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+      addLog(`\n--- Final State ---`);
+      if (finalGrantState.claimedTickets === finalGrantState.reservedTickets) {
+        addLog(`   -> ✅ VERIFICATION PASSED: All reserved tickets have been claimed (${finalGrantState.claimedTickets}/${finalGrantState.reservedTickets}).`);
+      } else {
+        addLog(`   -> ❌ VERIFICATION FAILED: Not all tickets were claimed (${finalGrantState.claimedTickets}/${finalGrantState.reservedTickets}).`);
+      }
+      const balanceAfterCreatorClaims = await provider.connection.getBalance(admin.publicKey);
+      creatorClaimCost = balanceBeforeCreatorClaims - balanceAfterCreatorClaims;
+    }
+
+    const adminFinalBalance = await provider.connection.getBalance(admin.publicKey);
+    const totalSpentByAdmin = adminInitialBalance - adminFinalBalance;
+    const totalSOLCollected = finalLaunchState.totalDeposited.toNumber();
+    const netFundingCost = userFundingCost - totalSOLCollected;
+
+    const trueOperationalCost = launchTxFees + shardCreationCost + crankingCost + creatorClaimCost;
+    const totalFeesPaid = totalSpentByAdmin - netFundingCost - config.creatorInitialDepositLamports - MINT_RENT;
+    const simulationTxFees = totalFeesPaid - trueOperationalCost;
+
+
+    addLog(`\n--- COST ANALYSIS ---`);
+    addLog(`   Admin balance before test: ${adminInitialBalance / LAMPORTS_PER_SOL} SOL`);
+    addLog(`   Admin balance after test: ${adminFinalBalance / LAMPORTS_PER_SOL} SOL`);
+    addLog(`   Total SOL spent by admin: ${(totalSpentByAdmin / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+
+    addLog(`\n   --- True Operational Cost (Production Estimate) ---`);
+    addLog(`     -> Initial launch (tx fees): ${(launchTxFees / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+    addLog(`     -> Roster shard creation:    ${(shardCreationCost / LAMPORTS_PER_SOL).toFixed(6)} SOL (includes recoverable rent)`);
+    addLog(`     -> Cranking operations:      ${(crankingCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+    addLog(`     -> Creator claims:           ${(creatorClaimCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+    addLog(`     --------------------------------------------------`);
+    addLog(`     -> TOTAL OPERATIONAL COST:   ${(trueOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+
+    addLog(`\n   --- Simulation-Specific Items ---`);
+    addLog(`     -> User funding tx fees:     ${(simulationTxFees / LAMPORTS_PER_SOL).toFixed(6)} SOL (approx)`);
+    addLog(`     -> Net simulation funding:   ${(netFundingCost / LAMPORTS_PER_SOL).toFixed(6)} SOL (capital movement)`);
+
+    addLog(`\n   --- Other Capital Movements ---`);
+    addLog(`     -> Creator initial deposit:  ${(config.creatorInitialDepositLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+    addLog(`     -> Sale mint rent:           ${(MINT_RENT / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+
+    addLog(`\n   --- Fundraising Analysis ---`);
+    const totalUserDeposits = finalLaunchState.totalDeposited.toNumber();
+    addLog(`     -> Total user deposits:    ${totalUserDeposits / LAMPORTS_PER_SOL} SOL`);
+    const crankCostPerSOL = totalUserDeposits > 0 ? crankingCost / totalUserDeposits : 0;
+    addLog(`     -> Crank cost per SOL raised: ${crankCostPerSOL.toFixed(12)} SOL`);
+    addLog(`--- END COST ANALYSIS ---`);
+
+    addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);
+    addLog(`   Total SOL collected:      ${(totalSOLCollected / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
+    addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);
+    addLog(`   Total claimed by creator: ${totalTokensClaimedByCreator.toFixed(6)}`);
+    addLog(`   ------------------------------------`);
+    const totalDistributed = tokensClaimed + totalTokensClaimedByCreator;
+    addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);
+    addLog(`--- END SUMMARY ---\n`);
 
     addLog("\n✅ Full flow finished successfully!");
     return { success: true, message: "Flow completed successfully" };

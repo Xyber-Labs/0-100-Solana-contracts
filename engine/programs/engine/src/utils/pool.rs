@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use super::U256;
+use anchor_lang::prelude::*;
 
 use crate::SEED_ROOT;
 
@@ -86,10 +86,22 @@ mod tests {
             (start - U256::one()).to_big_endian(&mut hash_before_bytes);
         }
 
-        assert!(is_blockhash_in_project_range(&hash_inside_bytes, project_id, num_blocks));
-        assert!(!is_blockhash_in_project_range(&hash_outside_bytes, project_id, num_blocks));
+        assert!(is_blockhash_in_project_range(
+            &hash_inside_bytes,
+            project_id,
+            num_blocks
+        ));
+        assert!(!is_blockhash_in_project_range(
+            &hash_outside_bytes,
+            project_id,
+            num_blocks
+        ));
         if start > U256::zero() {
-            assert!(!is_blockhash_in_project_range(&hash_before_bytes, project_id, num_blocks));
+            assert!(!is_blockhash_in_project_range(
+                &hash_before_bytes,
+                project_id,
+                num_blocks
+            ));
         }
     }
 }

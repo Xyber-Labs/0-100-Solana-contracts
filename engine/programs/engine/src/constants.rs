@@ -7,9 +7,12 @@ use anchor_lang::prelude::*;
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
+#[constant]
+pub const SEED_VRF: &[u8] = b"vrf-seed";
+
 // -------------------------------
 // Configuration Constants
 // -------------------------------
-pub const MIN_N: u64 = 100;
-pub const MAX_N: u64 = 500_000;
-pub const DEFAULT_N: u64 = 81_000;
+pub const MIN_N: u64 = 1; // Min value for N (hash range calculation)
+pub const MAX_N: u64 = 2000; // Max value for N
+pub const DEFAULT_N: u64 = 100; // Default value for N

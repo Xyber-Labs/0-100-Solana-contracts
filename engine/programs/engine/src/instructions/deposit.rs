@@ -1,11 +1,10 @@
+use crate::constants::SEED_ROOT;
+use crate::errors::ErrorCode as EngineErrorCode;
+use crate::events::DepositMade;
+use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use solana_program::sysvar::clock::Clock;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::DepositMade;
-use crate::utils::roster::roster_add_or_incr;
-use crate::state::{EscrowAccount, LaunchState, Roster, UserContribution};
-use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
@@ -21,10 +20,12 @@ pub struct Deposit<'info> {
         bump
     )]
     pub user_contribution: Account<'info, UserContribution>,
-    #[account(mut, has_one = launch)]
-    pub roster: Account<'info, Roster>,
+    // Legacy roster removed from new flow to reduce account size and confusion
+    // Sharded roster account, required for new flow
+    #[account(mut, constraint = roster_shard.launch == launch_state.key())]
+    pub roster_shard: Account<'info, RosterShard>,
     /// Escrow account (PDA off launch_state)
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
+    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: This is the launch account referenced by the roster
@@ -34,16 +35,16 @@ pub struct Deposit<'info> {
 }
 
 pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time < st.funding_period_end,
+        current_time < launch_state.funding_period_end,
         EngineErrorCode::FundingPeriodEnded
     );
     require!(
-        amount > 0 && amount % st.tau_lamports == 0,
+        amount > 0 && amount % launch_state.tau_lamports == 0,
         EngineErrorCode::AmountNotMultipleTau
     );
 
@@ -53,7 +54,7 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         current
             .checked_add(amount)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
-            <= st.per_wallet_cap,
+            <= launch_state.per_wallet_cap,
         EngineErrorCode::PerWalletCapExceeded
     );
 
@@ -72,7 +73,6 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         ],
     )?;
 
-    // Update escrow balance
     ctx.accounts.escrow.balance = ctx
         .accounts
         .escrow
@@ -82,10 +82,11 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     // update user
     let user = &mut ctx.accounts.user_contribution;
+    let is_first_deposit = user.wallet == Pubkey::default();
 
     // Initialize wallet field if this is the first deposit
-    if user.wallet == Pubkey::default() {
-        user.launch = st.key();
+    if is_first_deposit {
+        user.launch = launch_state.key();
         user.wallet = ctx.accounts.user.key();
         user.claimed_refund = false;
         user.claimed_tokens = false;
@@ -95,42 +96,68 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     user.deposited = current
         .checked_add(amount)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let new_tickets = (user
+    let new_tickets_u64 = user
         .deposited
-        .checked_div(st.tau_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
+        .checked_div(launch_state.tau_lamports)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(
+        new_tickets_u64 <= u32::MAX as u64,
+        EngineErrorCode::U64ConversionOverflow
+    );
+    let new_tickets = new_tickets_u64 as u32;
     let delta = new_tickets
         .checked_sub(old_tickets)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     user.ticket_count = new_tickets;
 
-    // roster update (append or incr)
-    let roster = &mut ctx.accounts.roster;
-    roster_add_or_incr(
-        roster,
-        user.wallet,
-        delta,
-        &ctx.accounts.user,
-        &ctx.accounts.system_program,
-    )?;
+    // Sharded roster update: assign on first deposit, then O(1) by index
+    let shard = &mut ctx.accounts.roster_shard;
+    if is_first_deposit {
+        // first deposit path: assign shard and index
+        require!(
+            shard.wallets.len() < launch_state.roster_shard_cap as usize,
+            EngineErrorCode::RosterShardFull
+        );
+        user.shard_id = shard.shard_id;
+        user.idx_in_shard = shard.wallets.len() as u32;
+        shard.wallets.push(ctx.accounts.user.key());
+        // Start counts at 0 for first deposit; we'll add the delta below.
+        shard.counts.push(0);
+        shard.prefix.clear(); // invalidate prefix if already built
+    } else {
+        // must stay in the same shard
+        require!(
+            user.shard_id == shard.shard_id,
+            EngineErrorCode::Unauthorized
+        );
+    }
+    let u = user.idx_in_shard as usize;
+    if shard.counts.len() <= u {
+        shard.counts.resize(u + 1, 0);
+    }
+    shard.counts[u] = shard.counts[u]
+        .checked_add(delta)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    shard.prefix.clear(); // will be recomputed at finalize
+    shard.total_in_shard = 0; // prevent stale reads pre-finalization
 
-    st.total_deposited = st
+    launch_state.total_deposited = launch_state
         .total_deposited
         .checked_add(amount)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    st.total_tickets = st
+    launch_state.total_tickets = launch_state
         .total_tickets
         .checked_add(delta)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(DepositMade {
-        launch: st.key(),
+        launch: launch_state.key(),
         user: ctx.accounts.user.key(),
         amount,
         tickets_before: old_tickets,
         tickets_after: new_tickets,
-        total_deposited: st.total_deposited,
-        total_tickets: st.total_tickets,
+        total_deposited: launch_state.total_deposited,
+        total_tickets: launch_state.total_tickets,
     });
 
     Ok(())

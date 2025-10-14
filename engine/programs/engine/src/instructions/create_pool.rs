@@ -1,17 +1,16 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar;
+use crate::constants::SEED_ROOT;
 use crate::errors::ErrorCode as EngineErrorCode;
 use crate::events::PoolCreated;
-use crate::state::{LaunchState, PoolState, ProjectCounter};
-use crate::constants::SEED_ROOT;
+use crate::state::{LaunchState, PoolState};
 use crate::utils::pool;
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -23,9 +22,6 @@ pub struct CreatePool<'info> {
     )]
     pub pool_state: Account<'info, PoolState>,
 
-    #[account(mut)]
-    pub project_counter: Account<'info, ProjectCounter>,
-
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -34,12 +30,15 @@ pub struct CreatePool<'info> {
 }
 
 pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
-    require!(st.selection_finalized, EngineErrorCode::NotFinalized);
-    require!(st.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(
+        launch_state.selection_finalized,
+        EngineErrorCode::NotFinalized
+    );
+    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     // Get the SlotHashes sysvar
@@ -55,8 +54,10 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     let mut valid_slot = 0u64;
     let mut valid_hash = [0u8; 32];
 
+    // The SlotHashes sysvar is a LIFO queue. The most recent hash is at index 0.
+    // We iterate forwards, from most recent to oldelaunch_state.
     for i in 0..hashes_to_check {
-        // Calculate position: 8 bytes for num_hashes + (num_hashes - 1 - i) * 40 bytes per entry
+        // Position is calculated as: 8 bytes (for num_hashes) + i * 40 bytes (size of each SlotHash entry)
         let hash_pos = 8u64
             .checked_add(
                 i.checked_mul(40)
@@ -72,8 +73,7 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
             data[slot_pos as usize
                 ..(slot_pos
                     .checked_add(8)
-                    .ok_or(EngineErrorCode::ArithmeticOverflow)?)
-                    as usize]
+                    .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
                 .try_into()
                 .unwrap(),
         );
@@ -87,7 +87,11 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
         // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
         // Check if this blockhash is within the project's personal range
-        if pool::is_blockhash_in_project_range(&blockhash, st.project_id, st.num_blocks) {
+        if pool::is_blockhash_in_project_range(
+            &blockhash,
+            launch_state.project_id,
+            launch_state.num_blocks,
+        ) {
             found_valid_hash = true;
             valid_slot = slot;
             valid_hash = blockhash;
@@ -98,25 +102,18 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
-    // Get pool ID from project counter
-    let counter = &mut ctx.accounts.project_counter;
-    let pool_id = counter
-        .last_pool_id
-        .checked_add(1)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    counter.last_pool_id = pool_id;
-
     // Calculate and store the project's range
-    let (range_start, range_end) = pool::calculate_project_range(st.project_id, st.num_blocks);
+    let (range_start, range_end) =
+        pool::calculate_project_range(launch_state.project_id, launch_state.num_blocks);
     let mut range_start_bytes = [0u8; 32];
     range_start.to_big_endian(&mut range_start_bytes);
     let mut range_end_bytes = [0u8; 32];
     range_end.to_big_endian(&mut range_end_bytes);
 
     // Initialize pool state
-    pool_state.launch = st.key();
-    pool_state.pool_id = pool_id;
-    pool_state.project_id = st.project_id;
+    pool_state.launch = launch_state.key();
+    pool_state.pool_id = launch_state.project_id; // Use project_id as pool_id for 1-to-1 mapping
+    pool_state.project_id = launch_state.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
     pool_state.range_start = range_start_bytes;
@@ -126,9 +123,9 @@ pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
     // TODO: Add CPI call to Raydium here
 
     emit!(PoolCreated {
-        launch: st.key(),
-        pool_id,
-        project_id: st.project_id,
+        launch: launch_state.key(),
+        pool_id: launch_state.project_id,
+        project_id: launch_state.project_id,
         blockhash: valid_hash,
         slot: valid_slot,
         range_start: range_start_bytes,

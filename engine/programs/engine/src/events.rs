@@ -64,7 +64,6 @@ pub struct BatchProcessed {
 #[event]
 pub struct SelectionFinalized {
     pub launch: Pubkey,
-    pub threshold: u128,
     pub k_capacity: u32,
 }
 
@@ -73,6 +72,8 @@ pub struct RefundClaimed {
     pub launch: Pubkey,
     pub user: Pubkey,
     pub refunded_lamports: u64,
+    /// Number of tickets that were approved for token allocation.
+    /// If the min raise was not met, this will be 0.
     pub y_approved: u32,
 }
 
@@ -81,6 +82,7 @@ pub struct TokensClaimed {
     pub launch: Pubkey,
     pub user: Pubkey,
     pub amount: u64,
+    /// Number of winning tickets.
     pub y_approved: u32,
 }
 
@@ -99,4 +101,44 @@ pub struct PoolCreated {
 pub struct NumBlocksUpdated {
     pub launch: Pubkey,
     pub new_num_blocks: u64,
+}
+
+#[event]
+pub struct CreatorGranted {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub locked_lamports: u64,
+    pub reserved_tickets: u32,
+    pub daily_lamports_limit: u64,
+}
+
+#[event]
+pub struct CreatorClaimed {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub tickets_claimed: u32,
+    pub lamports_equiv: u64,
+    pub tokens_minted: u64,
+    pub day_index: i64,
+    pub remaining_tickets: u32,
+}
+
+#[event]
+pub struct ClaimsOpened {
+    pub launch: Pubkey,
+    pub opened_at: i64,
+}
+
+#[event]
+pub struct RosterShardInitialized {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+}
+
+#[event]
+pub struct RosterShardFinalized {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub total_in_shard: u32,
+    pub shard_base: u32,
 }

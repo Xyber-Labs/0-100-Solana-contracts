@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use anchor_lang::prelude::borsh::BorshSchema;
+use anchor_lang::prelude::*;
 
 // -------------------------------
 // Helper Types and Structures
@@ -16,12 +16,4 @@ pub struct HeapEntry {
 // Instruction Context Structures
 // -------------------------------
 
-#[derive(Accounts)]
-pub struct ProcessBatch<'info> {
-    #[account(mut)]
-    pub selection_state: Account<'info, crate::state::SelectionState>,
-    #[account(mut)]
-    pub launch_state: Account<'info, crate::state::LaunchState>,
-    #[account(mut)]
-    pub roster: Account<'info, crate::state::Roster>,
-}
+// Deprecated: ProcessBatch accounts removed in permutation-based flow

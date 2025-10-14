@@ -170,7 +170,7 @@ impl StakingCalculator {
     }
 
     fn get_sqrt_price(&self) -> u128 {
-        let price = (self.sale_allocation as u128 << 64) / self.raised_lamports as u128;
+        let price = ((self.sale_allocation as u128) << 64) / self.raised_lamports as u128;
         Self::integer_sqrt(price)
     }
 

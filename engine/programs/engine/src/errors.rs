@@ -36,8 +36,8 @@ pub enum ErrorCode {
     InvalidTau,
     #[msg("Invalid K")]
     InvalidK,
-    #[msg("Not fully processed")]
-    NotFullyProcessed,
+    #[msg("Divisor must be greater than zero")]
+    InvalidDivisor,
     #[msg("Heap not full")]
     HeapNotFull,
     #[msg("User not found in roster")]
@@ -58,8 +58,55 @@ pub enum ErrorCode {
     NoValidBlockhash,
     #[msg("Invalid N value for hash range calculation (must be between MIN_N and MAX_N)")]
     InvalidNumBlocks,
+    #[msg("Invalid slot hashes data")]
+    InvalidSlotHashesData,
+    #[msg("Roster is full")]
+    RosterFull,
+    #[msg("Heap capacity exceeded")]
+    HeapCapacityExceeded,
     #[msg("Mint already exists")]
     MintAlreadyExists,
     #[msg("An arithmetic operation overflowed")]
     ArithmeticOverflow,
+    #[msg("u64 to u32 conversion overflow")]
+    U64ConversionOverflow,
+    #[msg("Creator reserved tickets exceed capacity")]
+    ReservedExceedsCapacity,
+    #[msg("Nothing to claim")]
+    NothingToClaim,
+    #[msg("Creator initial deposit must be multiple of tau")]
+    InvalidCreatorDeposit,
+    #[msg("Creator refund already claimed")]
+    CreatorRefundAlreadyClaimed,
+    #[msg("Invalid mint for ATA")]
+    InvalidMint,
+    #[msg("Invalid owner for ATA")]
+    InvalidOwner,
+
+    #[msg("Hard cap must be > 0")]
+    InvalidHardCap,
+    #[msg("Min raise must be > 0")]
+    InvalidMinRaise,
+    #[msg("Hard cap must be divisible by tau")]
+    HardCapNotDivisibleByTau,
+    #[msg("Per-wallet cap must be >= tau")]
+    PerWalletCapTooSmall,
+    #[msg("Min raise must be <= hard cap")]
+    MinRaiseTooHigh,
+    #[msg("Creator claim lock period must be > 0")]
+    InvalidClaimLockPeriod,
+
+    // New errors for sharded roster / new flow
+    #[msg("Operation not supported in current version")]
+    NotSupported,
+    #[msg("Roster shard is full")]
+    RosterShardFull,
+    #[msg("Roster finalization order violated")]
+    InvalidFinalizeOrder,
+    #[msg("Roster shard not finalized")]
+    ShardNotFinalized,
+    #[msg("Claims cannot be opened before all shards finalized")]
+    ShardsNotFullyFinalized,
+    #[msg("User has no tokens to claim")]
+    NoTokensToClaim,
 }

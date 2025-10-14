@@ -1,10 +1,9 @@
+use crate::events::SeedSet;
+use crate::state::LaunchState;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 use anchor_lang::solana_program::sysvar::clock::Clock;
 use anchor_lang::solana_program::sysvar::{self, Sysvar};
-use crate::events::SeedSet;
-use crate::state::{LaunchState, SelectionState};
-use crate::constants::SEED_ROOT;
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
@@ -12,14 +11,6 @@ pub struct SetSeed<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + SelectionState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"selection", launch_state.key().as_ref()],
-        bump
-    )]
-    pub selection_state: Account<'info, SelectionState>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -27,20 +18,23 @@ pub struct SetSeed<'info> {
 }
 
 pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
-    let st = &mut ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period has ended
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= st.funding_period_end,
+        current_time >= launch_state.funding_period_end,
         crate::errors::ErrorCode::FundingPeriodNotEnded
     );
     require!(
-        st.total_deposited >= st.min_raise_lamports,
+        launch_state.total_deposited >= launch_state.min_raise_lamports,
         crate::errors::ErrorCode::MinRaiseNotMet
     );
 
-    require!(st.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
+    require!(
+        launch_state.vrf_seed.is_none(),
+        crate::errors::ErrorCode::SeedAlreadySet
+    );
 
     // Get the most recent blockhash from the SlotHashes sysvar
     let slot_hashes = &ctx.accounts.slot_hashes;
@@ -48,8 +42,15 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
 
     // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
     // We take the most recent one.
-    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
-    require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
+    let num_hashes = u64::from_le_bytes(
+        data[0..8]
+            .try_into()
+            .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
+    );
+    require!(
+        num_hashes > 0,
+        crate::errors::ErrorCode::NoRecentBlockhashes
+    );
 
     let num_hashes_u64 = num_hashes;
     let one = 1_u64;
@@ -74,18 +75,11 @@ pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
         .checked_add(32)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
 
-    let seed: [u8; 32] = data[start..end].try_into().unwrap();
+    let seed: [u8; 32] = data[start..end]
+        .try_into()
+        .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
 
-    // Initialize SelectionState
-    let sel = &mut ctx.accounts.selection_state;
-    sel.launch = st.key();
-    sel.vrf_seed = seed;
-    sel.processed = 0;
-    sel.finalized = false;
-    sel.threshold = None;
-    sel.heap = Vec::new();
-
-    st.vrf_seed = Some(seed);
+    launch_state.vrf_seed = Some(seed);
 
     // Hash the seed for security (don't expose raw seed)
     let seed_hash = keccak::hash(&seed);

@@ -38,6 +38,7 @@ REMOTE_SOLANA_URL := http://10.186.0.84:8899
 .PHONY: test
 test: validator-bg build-all deploy
 	@echo "Running tests..."
+	cargo fmt
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
 
 .PHONY: test-quick
@@ -225,6 +226,9 @@ create-program-id:
 
 get-program-id:
 	solana-keygen pubkey ./deploy-keypair.json
+
+logs:
+	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
 # Default target
 .DEFAULT_GOAL := help
