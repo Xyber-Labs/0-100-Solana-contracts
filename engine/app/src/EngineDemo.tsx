@@ -246,7 +246,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         accounts: idl.accounts?.length,
         types: idl.types?.length
       });
-
+      
       // Initialize program using standard Anchor approach
       const program = new Program(idl, provider);
       
@@ -266,19 +266,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   const fetchLaunchData = useCallback(async () => {
     if (!sdk || !launchState) return;
-
+    
     try {
       const data = await sdk.fetchLaunch(launchState);
       setLaunchData(data);
       addLog('Launch data refreshed');
     } catch (error) {
       addLog(`ERROR: Failed to fetch launch data - ${error}`);
-
+      
       // If account doesn't exist yet, wait and retry
       if (error instanceof Error && error.message.includes('Account does not exist')) {
         addLog('Account not found, waiting and retrying...');
         await new Promise(resolve => setTimeout(resolve, 3000));
-
+        
         try {
           const retryData = await sdk.fetchLaunch(launchState);
           setLaunchData(retryData);
@@ -293,7 +293,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const fetchUserData = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
     if (!sdk || !launchState || !activePublicKey) return;
-
+    
     try {
       const data = await sdk.fetchUserContribution(launchState, activePublicKey);
       setUserContributions(data);
@@ -309,11 +309,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [sdk, launchState, publicKey, testWallet]);
 
-
+  
   const fetchBalance = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
     if (!activePublicKey) return;
-
+    
     try {
       const currentBalance = await connection.getBalance(activePublicKey);
       setBalance(currentBalance);
@@ -321,7 +321,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       addLog(`ERROR: Failed to fetch balance - ${error}`);
     }
   }, [publicKey, connection, testWallet]);
-
+  
   const initLaunch = useCallback(async () => {
     if (!sdk || !program) {
       addLog('ERROR: SDK not initialized');
@@ -352,7 +352,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       transaction.add(
         ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
       );
-
+      
       addLog(`Creating transaction for saleMint: ${saleMintKeypair.publicKey.toString()}`);
       
       // Add pre-instructions
@@ -767,7 +767,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           const restoredUserContributions = convertToBN(project.userContributions);
           setUserContributions(restoredUserContributions);
         }
-
+        
         setCurrentProjectId(project.id);
       } catch (error) {
         addLog(`ERROR: Failed to restore data - ${error}`);
@@ -964,7 +964,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
     addLog(`[DEBUG] Passing saleAllocation to flowRunner: ${launchConfig.saleAllocation}`);
-
+    
     try {
       const result = await runFullFlow(
         sdk,
@@ -1012,7 +1012,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 onChange={(e) => setFaucetAmount(Number(e.target.value))}
                 className="terminal-input w-24"
                 />
-              <button
+              <button 
                 onClick={requestFaucet} 
                 className="terminal-button text-xs bg-yellow-600 hover:bg-yellow-500"
                 disabled={(!publicKey && !testWallet) || isLoading}
@@ -1620,8 +1620,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             >
               <span className="terminal-prompt">$</span> Open Claims
             </button>
-
-
+            
+            
             <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
 
             <button 
