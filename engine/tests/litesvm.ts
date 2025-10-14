@@ -1,7 +1,7 @@
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
-import { BN, Program } from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
 import { createInitializeMintInstruction, TOKEN_PROGRAM_ID, unpackAccount } from "@solana/spl-token";
 import { assert } from "chai";
 import { Keypair, Transaction } from "@solana/web3.js";
@@ -120,7 +120,8 @@ describe("engine litesvm", () => {
       provider,
     });
 
-    await provider.sendAndConfirm(transaction, [admin.payer, ...signers]);
+    await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
+
     const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
     const initRosterShardTx = await program.methods
       .initRosterShard(0)
@@ -188,17 +189,6 @@ describe("engine litesvm", () => {
       launch: testLaunchState,
       payerKeypair: adminKeypair,
     });
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(0)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
 
     const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
     const initRosterShardTx = await program.methods
@@ -211,69 +201,45 @@ describe("engine litesvm", () => {
       } as any)
       .transaction();
     await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
-
-
-    const initRosterShardTx = await program.methods
-      .initRosterShard(0)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
-
 
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    await sdk.deposit({ launch: testLaunchState, amountLamports: depositAmount, userKeypair: depositor });
-
-    // TODO (@keeper) check nothing has been broken
-    // await program.methods
-    //   .deposit(depositAmount)
-    //   .accounts({
-    //     user: depositor.publicKey,
-    //     launchState: testLaunchState,
-    //     userContribution: sdk.getUserContributionPda(
-    //       testLaunchState,
-    //       depositor.publicKey
-    //     )[0],
-    //     rosterShard,
-    //     escrow: sdk.getEscrowPda(testLaunchState)[0],
-    //     launch: testLaunchState,
-    //     systemProgram: anchor.web3.SystemProgram.programId,
-    //   } as any)
-    //   .signers([depositor])
-    //   .rpc();
+    await program.methods
+      .deposit(depositAmount)
+      .accounts({
+        user: depositor.publicKey,
+        launchState: testLaunchState,
+        userContribution: sdk.getUserContributionPda(
+          testLaunchState,
+          depositor.publicKey
+        )[0],
+        rosterShard,
+        escrow: sdk.getEscrowPda(testLaunchState)[0],
+        launch: testLaunchState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .signers([depositor])
+      .rpc();
 
     const initialBalance = client.getBalance(depositor.publicKey);
 
-    const { transaction: withdrawTx } = await sdk.withdrawTx({
-      launch: testLaunchState,
-      amountLamports: depositAmount,
-      userPubkey: depositor.publicKey,
-    });
-    const withdrawSig = await provider.sendAndConfirm(withdrawTx, [depositor]);
-
-    // TODO (@keeper) check nothing has been broken
-    // const withdrawSig = await program.methods
-    //   .withdraw(depositAmount)
-    //   .accounts({
-    //     user: depositor.publicKey,
-    //     launchState: testLaunchState,
-    //     userContribution: sdk.getUserContributionPda(
-    //       testLaunchState,
-    //       depositor.publicKey
-    //     )[0],
-    //     rosterShard,
-    //     escrow: sdk.getEscrowPda(testLaunchState)[0],
-    //     launch: testLaunchState,
-    //     systemProgram: anchor.web3.SystemProgram.programId,
-    //   } as any)
-    //   .signers([depositor])
-    //   .rpc();
+    const withdrawSig = await program.methods
+      .withdraw(depositAmount)
+      .accounts({
+        user: depositor.publicKey,
+        launchState: testLaunchState,
+        userContribution: sdk.getUserContributionPda(
+          testLaunchState,
+          depositor.publicKey
+        )[0],
+        rosterShard,
+        escrow: sdk.getEscrowPda(testLaunchState)[0],
+        launch: testLaunchState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .signers([depositor])
+      .rpc();
 
     console.log("Withdraw tx signature:", withdrawSig);
 
@@ -604,6 +570,7 @@ describe("engine litesvm - raydium clmm", () => {
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+  const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
     client = fromWorkspace("./");
@@ -627,7 +594,7 @@ describe("engine litesvm - raydium clmm", () => {
     const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
 
     const { initLaunchTx, signers, launchState: clmmLaunchState } = await sdk.initLaunchTx({
-      admin: admin.publicKey,
+      creator: admin.publicKey,
       saleMint: clmmSaleMint,
       hardCapLamports: CLMM_HARD_CAP,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
@@ -636,6 +603,10 @@ describe("engine litesvm - raydium clmm", () => {
       saleAllocation: CLMM_SALE_ALLOCATION,
       lpAllocation: CLMM_LP_ALLOCATION,
       fundingDurationSec: new anchor.BN(3600),
+      rosterShardCap: ROSTER_SHARD_CAP,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
     });
 
@@ -650,6 +621,18 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
     await sdk.initRoster({ launch: clmmLaunchState, signers: [admin.payer] });
+
+    const [rosterShard] = sdk.getRosterShardPda(clmmLaunchState, 0);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(0)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: clmmLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
 
     const targetRaise = 100 + Math.floor(Math.random() * 350);
     console.log(`Target raise: ${targetRaise} SOL`);
@@ -765,12 +748,14 @@ describe("Full flow", () => {
   let program: Program<Engine>;
   let admin: anchor.Wallet;
   let sdk: any;
-  let raydiumProgramId: anchor.web3.PublicKey;
-  let raydiumAmmConfig: anchor.web3.PublicKey;
+  let adminKeypair: Keypair;
 
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+  const SALE_ALLOCATION = new anchor.BN(1000000);
+  const LP_ALLOCATION = new anchor.BN(500000);
+  const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
     client = fromWorkspace("./");
@@ -778,11 +763,9 @@ describe("Full flow", () => {
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
     admin = provider.wallet;
+    adminKeypair = (provider.wallet as any).payer;
+    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
     sdk = EngineSDK.create(provider, program);
-
-    const raydiumSetup = await setupRaydiumCLMM(client);
-    raydiumProgramId = raydiumSetup.raydiumProgramId;
-    raydiumAmmConfig = raydiumSetup.ammConfig;
   });
 
 

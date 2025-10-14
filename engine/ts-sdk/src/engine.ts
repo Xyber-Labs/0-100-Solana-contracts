@@ -1,21 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
+import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, } from "@solana/web3.js";
 import {
-  PublicKey,
-  SystemProgram,
-  Keypair,
-  TransactionInstruction,
-  Transaction,
-} from "@solana/web3.js";
-import {
-  TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
 // ---- IDL ----
 import type { Engine as EngineIDL } from "../idl/engine";
+import { TxBuilder } from "./txBuilder";
 
 // Import IDL as a dynamic import to avoid require
 let idl: any;
@@ -26,8 +21,6 @@ const loadIdl = async () => {
   }
   return idl;
 };
-
-import { TxBuilder } from "./txBuilder";
 
 // Program ID from declare_id! in Rust
 export const ENGINE_PROGRAM_ID = new PublicKey(
@@ -438,8 +431,8 @@ export default {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
       const [poolState] = getPoolPda(args.launch);
 
-            // SlotHashes sysvar
-            const SLOT_HASHES_SYSVAR = new PublicKey("SysvarS1otHashes111111111111111111111111111");
+      // SlotHashes sysvar
+      const SLOT_HASHES_SYSVAR = new PublicKey("SysvarS1otHashes111111111111111111111111111");
 
       // For now, always use createPool since createPoolTest is only available with test feature
       const rpc = program.methods.createPool().accountsStrict({
@@ -453,67 +446,41 @@ export default {
       return { signature: await rpc.rpc() };
     }
 
-        async function createClmmPool(args: {
-            launch: PublicKey;
-            quoteMint: PublicKey;
-            baseMint?: Keypair;
-            ammConfig: PublicKey;
-            clmmProgram: PublicKey;
-        }): Promise<{
-            signature: string;
-            baseMint: PublicKey;
-            baseTokenAta: PublicKey;
-        }> {
-            const baseMint = args.baseMint ?? Keypair.generate();
+    async function createClmmPool(args: {
+      launch: PublicKey;
+      quoteMint: PublicKey;
+      baseMint?: Keypair;
+      ammConfig: PublicKey;
+      clmmProgram: PublicKey;
+    }): Promise<{
+      signature: string;
+      baseMint: PublicKey;
+      baseTokenAta: PublicKey;
+    }> {
+      const baseMint = args.baseMint ?? Keypair.generate();
 
-            const result = await txBuilder.createClmmPoolTx({
-                payer,
-                launch: args.launch,
-                quoteMint: args.quoteMint,
-                baseMint,
-                ammConfig: args.ammConfig,
-                clmmProgram: args.clmmProgram,
-                provider,
-            });
+      const result = await txBuilder.createClmmPoolTx({
+        payer,
+        launch: args.launch,
+        quoteMint: args.quoteMint,
+        baseMint,
+        ammConfig: args.ammConfig,
+        clmmProgram: args.clmmProgram,
+        provider,
+      });
 
-            if (!provider.sendAndConfirm) {
-                throw new Error("Provider does not support sendAndConfirm");
-            }
-            // Note: observationKeypair is NOT a signer, it's just a writable account
-            const signature = await provider.sendAndConfirm(result.transaction, result.signers);
-            return {
-                signature,
-                baseMint: result.baseMint,
-                baseTokenAta: result.baseTokenAta,
-            };
-        }
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      // Note: observationKeypair is NOT a signer, it's just a writable account
+      const signature = await provider.sendAndConfirm(result.transaction, result.signers);
+      return {
+        signature,
+        baseMint: result.baseMint,
+        baseTokenAta: result.baseTokenAta,
+      };
+    }
 
-        async function claimTokens(args: {
-            launch: PublicKey;
-            saleMint: PublicKey;
-            userKeypair?: Keypair;
-            selection?: PublicKey;
-            userAta?: PublicKey;
-            createAtaIfMissing?: boolean;
-        }): Promise<{ signature: string; userAta: PublicKey }> {
-            const userPubkey = args.userKeypair?.publicKey ?? payer;
-            const [userPda] = getUserContributionPda(args.launch, userPubkey);
-            const selection = args.selection ?? getSelectionPda(args.launch)[0];
-            const [mintAuth] = getMintAuthPda(args.launch);
-            const userAta = args.userAta ?? getUserAta(args.saleMint, userPubkey);
-
-            const call = program.methods
-                .claimTokens()
-                .accountsStrict({
-                    user: userPubkey,
-                    launchState: args.launch,
-                    userContribution: userPda,
-                    selectionState: selection,
-                    saleMint: args.saleMint,
-                    mintAuth,
-                    userAta,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                });
     async function claimTokens(args: {
       launch: PublicKey;
       saleMint: PublicKey;
@@ -568,7 +535,10 @@ export default {
       } as any);
     }
 
-    async function initRosterShard(args: { launch: PublicKey; shardId: number }): Promise<{ rosterShard: PublicKey; signature: string }> {
+    async function initRosterShard(args: { launch: PublicKey; shardId: number }): Promise<{
+      rosterShard: PublicKey;
+      signature: string
+    }> {
       const { instruction, rosterShard } = await txBuilder.initRosterShardIx({
         launch: args.launch,
         payer,
