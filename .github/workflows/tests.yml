@@ -110,16 +110,15 @@ jobs:
           corepack enable
           corepack prepare yarn@1.22.22 --activate
 
-
       - name: Restore engine program cache
-        id: avm-restore
+        id: engine-restore
         uses: actions/cache/restore@v4
         with:
           path: target
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
 
-
       - name: anchor build
+        if: steps.engine-restore.outputs.cache-hit != 'true'
         run: anchor build --skip-lint
 
       - name: Save engine program cache
