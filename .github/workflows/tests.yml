@@ -71,40 +71,6 @@ jobs:
         shell: bash
         run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
-      - name: Restore AVM/Anchor cache
-        id: avm-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            /home/runner/.cargo/bin/avm
-            /home/runner/.avm
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}
-
-      - name: Install AVM + Anchor (if cache miss)
-        if: steps.avm-restore.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
-          avm install ${ANCHOR_VERSION}
-          avm use ${ANCHOR_VERSION}
-          anchor --version
-
-      - name: Verify Anchor
-        shell: bash
-        run: |
-          avm use ${ANCHOR_VERSION}
-          anchor --version
-
-      - name: Save AVM/Anchor cache
-        if: steps.avm-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /home/runner/.cargo/bin/avm
-            /home/runner/.avm
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}
-
       - name: Enable Yarn
         run: |
           corepack enable
