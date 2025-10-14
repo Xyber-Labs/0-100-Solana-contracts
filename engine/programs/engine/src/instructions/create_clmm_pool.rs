@@ -42,7 +42,10 @@ pub struct CreateClmmPool<'info> {
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
 
-    #[account(mint::token_program = quote_token_program)]
+    #[account(
+        mint::token_program = quote_token_program,
+        address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112")
+    )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
