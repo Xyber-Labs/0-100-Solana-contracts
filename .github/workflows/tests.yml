@@ -115,18 +115,16 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: engine/target
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
-      - name: anchor build
-        if: steps.engine-restore.outputs.cache-hit != 'true'
-        run: anchor build --skip-lint
+      - name: yarn build
+        run: yarn build
 
       - name: Save engine program cache
-        if: steps.engine-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: engine/target
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
       - name: Install deps
         run: yarn install --frozen-lockfile
@@ -157,3 +155,5 @@ jobs:
 
       - name: Run complete flow  tests
         run: anchor run litesvm-full
+
+# test cache

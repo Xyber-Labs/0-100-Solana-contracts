@@ -1,10 +1,13 @@
-use crate::constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT};
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized};
-use crate::state::{CreatorGrant, EscrowAccount, LaunchState, ProjectCounter};
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
-use anchor_lang::solana_program::sysvar::Sysvar;
+use crate::{
+    constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT},
+    errors::ErrorCode as EngineErrorCode,
+    events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
+    state::{CreatorGrant, EscrowAccount, LaunchState, ProjectCounter},
+};
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{clock::Clock, Sysvar},
+};
 use anchor_spl::token::Mint;
 
 #[derive(Accounts)]
@@ -77,31 +80,19 @@ pub struct InitLaunchParams {
 }
 
 pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
-    require!(
-        params.hard_cap_lamports > 0,
-        EngineErrorCode::InvalidHardCap
-    );
-    require!(
-        params.min_raise_lamports > 0,
-        EngineErrorCode::InvalidMinRaise
-    );
+    require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
+    require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
     require!(
         params.hard_cap_lamports % params.tau_lamports == 0,
         EngineErrorCode::HardCapNotDivisibleByTau
     );
-    require!(
-        params.per_wallet_cap >= params.tau_lamports,
-        EngineErrorCode::PerWalletCapTooSmall
-    );
+    require!(params.per_wallet_cap >= params.tau_lamports, EngineErrorCode::PerWalletCapTooSmall);
     require!(
         params.min_raise_lamports <= params.hard_cap_lamports,
         EngineErrorCode::MinRaiseTooHigh
     );
-    require!(
-        params.creator_claim_lock_period_sec > 0,
-        EngineErrorCode::InvalidClaimLockPeriod
-    );
+    require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
 
     // Max duration: 7 days
     require!(
@@ -114,18 +105,13 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     } else {
         params.num_blocks
     };
-    require!(
-        (MIN_N..=MAX_N).contains(&n),
-        EngineErrorCode::InvalidNumBlocks
-    );
+    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumBlocks);
 
     let launch_key = ctx.accounts.launch_state.key();
 
     let counter = &mut ctx.accounts.project_counter;
-    let project_id = counter
-        .last_project_id
-        .checked_add(1)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let project_id =
+        counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     counter.last_project_id = project_id;
 
     let state = &mut ctx.accounts.launch_state;
@@ -152,10 +138,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         .hard_cap_lamports
         .checked_div(params.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(
-        k_cap_u64 <= u32::MAX as u64,
-        EngineErrorCode::U64ConversionOverflow
-    );
+    require!(k_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
     state.k_capacity = k_cap_u64 as u32;
 
     state.selection_finalized = false;
@@ -184,9 +167,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
         require!(state.tau_lamports > 0, EngineErrorCode::InvalidTau);
-        let remainder = amount
-            .checked_rem(state.tau_lamports)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let remainder =
+            amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
 
         // Transfer creator deposit to escrow using system program
@@ -236,10 +218,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         .creator_daily_lamports_limit
         .checked_div(state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(
-        daily_ticket_cap_u64 <= u32::MAX as u64,
-        EngineErrorCode::U64ConversionOverflow
-    );
+    require!(daily_ticket_cap_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
     creator_grant.daily_ticket_cap = daily_ticket_cap_u64 as u32;
     creator_grant.claimed_tickets = 0;
     creator_grant.refunded = false;

@@ -1,6 +1,8 @@
-use crate::constants::SEED_ROOT;
-use crate::events::RosterShardInitialized;
-use crate::state::{LaunchState, RosterShard};
+use crate::{
+    constants::SEED_ROOT,
+    events::RosterShardInitialized,
+    state::{LaunchState, RosterShard},
+};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]

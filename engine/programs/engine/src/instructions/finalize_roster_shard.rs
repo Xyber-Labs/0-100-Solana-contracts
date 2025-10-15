@@ -1,7 +1,9 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::RosterShardFinalized;
-use crate::state::{LaunchState, RosterShard};
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::RosterShardFinalized,
+    state::{LaunchState, RosterShard},
+};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
@@ -26,10 +28,7 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
 
     // Preconditions: funding ended
     let now = Clock::get()?.unix_timestamp;
-    require!(
-        now >= launch_state.funding_period_end,
-        EngineErrorCode::FundingPeriodNotEnded
-    );
+    require!(now >= launch_state.funding_period_end, EngineErrorCode::FundingPeriodNotEnded);
 
     // Enforce sequential finalization
     let expected = launch_state
@@ -40,28 +39,23 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
 
     // Ensure lengths are consistent before building prefix
-    require!(
-        shard.wallets.len() == shard.counts.len(),
-        EngineErrorCode::MappingError
-    );
+    require!(shard.wallets.len() == shard.counts.len(), EngineErrorCode::MappingError);
 
     // Build prefix and totals
     let mut run = 0u32;
     shard.prefix.clear();
     let counts = shard.counts.clone();
     shard.prefix.reserve(counts.len());
-    
+
     // Debug logging
     msg!("DEBUG: Shard {} has {} users with counts: {:?}", shard_id, counts.len(), counts);
-    
+
     for &c in counts.iter() {
         shard.prefix.push(run);
-        run = run
-            .checked_add(c)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        run = run.checked_add(c).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     shard.total_in_shard = run;
-    
+
     // Debug logging
     msg!("DEBUG: Shard {} calculated total_in_shard={}", shard_id, shard.total_in_shard);
 
@@ -71,10 +65,15 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
         .public_total_tickets
         .checked_add(shard.total_in_shard)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    
+
     // Debug logging (remove in production)
-    msg!("DEBUG: Shard {} finalized: shard_base={}, total_in_shard={}, public_total_tickets={}", 
-         shard_id, shard.shard_base, shard.total_in_shard, launch_state.public_total_tickets);
+    msg!(
+        "DEBUG: Shard {} finalized: shard_base={}, total_in_shard={}, public_total_tickets={}",
+        shard_id,
+        shard.shard_base,
+        shard.total_in_shard,
+        launch_state.public_total_tickets
+    );
 
     launch_state.roster_finalized_up_to = shard_id as i32;
 

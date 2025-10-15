@@ -1,7 +1,9 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::CreatorClaimed;
-use crate::state::{CreatorGrant, LaunchState};
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::CreatorClaimed,
+    state::{CreatorGrant, LaunchState},
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
@@ -38,15 +40,10 @@ pub struct ClaimCreatorTokens<'info> {
 
 pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(
-        ctx.accounts.sale_mint.key() == launch_state.sale_mint,
-        EngineErrorCode::Unauthorized
-    );
+    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
 
-    let per = launch_state
-        .tokens_per_ticket
-        .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
+    let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let creator_grant = &mut ctx.accounts.creator_grant;
 
     // Calculate how many tokens have vested/accrued over time.
@@ -58,9 +55,8 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
 
     // Calculate the ceiling of claimable tickets based on periods passed.
     // We add 1 to include the current, partially-elapsed period.
-    let unlocked_ceiling = (periods_passed as u32)
-        .saturating_add(1)
-        .saturating_mul(creator_grant.daily_ticket_cap);
+    let unlocked_ceiling =
+        (periods_passed as u32).saturating_add(1).saturating_mul(creator_grant.daily_ticket_cap);
 
     // The total unlocked amount cannot exceed the total reserved tickets.
     let total_unlocked = unlocked_ceiling.min(creator_grant.reserved_tickets);
@@ -77,7 +73,7 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         .checked_mul(to_claim as u128)
         .and_then(|val| val.checked_div(1_000_000))
         .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
-    
+
     // Debug logging
     msg!("DEBUG: Creator claim - per={}, to_claim={}, amount={}", per, to_claim, amount);
 

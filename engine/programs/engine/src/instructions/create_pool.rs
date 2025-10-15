@@ -1,10 +1,11 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::PoolCreated;
-use crate::state::{LaunchState, PoolState};
-use crate::utils::pool;
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar;
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::PoolCreated,
+    state::{LaunchState, PoolState},
+    utils::pool,
+};
+use anchor_lang::{prelude::*, solana_program::sysvar};
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -34,10 +35,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
-    require!(
-        launch_state.selection_finalized,
-        EngineErrorCode::NotFinalized
-    );
+    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
@@ -59,28 +57,19 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     for i in 0..hashes_to_check {
         // Position is calculated as: 8 bytes (for num_hashes) + i * 40 bytes (size of each SlotHash entry)
         let hash_pos = 8u64
-            .checked_add(
-                i.checked_mul(40)
-                    .ok_or(EngineErrorCode::ArithmeticOverflow)?,
-            )
+            .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         let slot_pos = hash_pos;
-        let blockhash_pos = hash_pos
-            .checked_add(8)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
+        let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
 
         let slot = u64::from_le_bytes(
             data[slot_pos as usize
-                ..(slot_pos
-                    .checked_add(8)
-                    .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
                 .try_into()
                 .unwrap(),
         );
         let blockhash: [u8; 32] = data[blockhash_pos as usize
-            ..(blockhash_pos
-                .checked_add(32)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
             .try_into()
             .unwrap();
 

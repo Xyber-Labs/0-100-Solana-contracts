@@ -1,11 +1,13 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::Token;
-use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint as InterfaceMint, TokenInterface};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::Token,
+    token_2022::Token2022,
+    token_interface::{Mint as InterfaceMint, TokenInterface},
+};
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -235,7 +237,11 @@ impl StakingCalculator {
         let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
 
         let base_volume = self.lp_allocation;
-        let quote_volume = self.lp_allocation * self.raised_lamports / self.sale_allocation;
+        let quote_volume = u128::from(self.lp_allocation)
+            .checked_mul(u128::from(self.raised_lamports))
+            .and_then(|v| v.checked_div(u128::from(self.sale_allocation)))
+            .and_then(|v| u64::try_from(v).ok())
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
         Ok(RaydiumPoolParams {
             tick_lower_index,

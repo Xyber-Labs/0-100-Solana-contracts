@@ -1,6 +1,8 @@
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::{ClaimsOpened, SelectionFinalized};
-use crate::state::{CreatorGrant, LaunchState};
+use crate::{
+    errors::ErrorCode as EngineErrorCode,
+    events::{ClaimsOpened, SelectionFinalized},
+    state::{CreatorGrant, LaunchState},
+};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
@@ -22,18 +24,12 @@ pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
     let creator_grant = &mut ctx.accounts.creator_grant;
 
     // Preconditions
-    require!(
-        launch_state.vrf_seed.is_some(),
-        EngineErrorCode::SeedMissing
-    );
+    require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
     require!(
         launch_state.total_deposited >= launch_state.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
-    require!(
-        launch_state.roster_shards > 0,
-        EngineErrorCode::ShardsNotFullyFinalized
-    );
+    require!(launch_state.roster_shards > 0, EngineErrorCode::ShardsNotFullyFinalized);
     let shards_total = launch_state.roster_shards as i32;
     require!(
         launch_state.roster_finalized_up_to + 1 == shards_total,
@@ -42,10 +38,7 @@ pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
 
     // --- New Proportional Creator Allocation Logic ---
     if launch_state.creator_grant_present {
-        require!(
-            launch_state.hard_cap_lamports > 0,
-            EngineErrorCode::InvalidDivisor
-        );
+        require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
         // Calculate creator's share of the total pot as a percentage
         let creator_share_of_total = (launch_state.creator_initial_deposit as u128)
@@ -74,7 +67,6 @@ pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
     launch_state.total_launch_allocation = launch_state.sale_allocation;
     // --- End New Logic ---
 
-
     // --- Compute tokens per ticket ---
     // The number of "winning" tickets is the lesser of the total tickets sold (public + creator) and the hard cap.
     let grand_total_tickets = (launch_state.public_total_tickets as u64)
@@ -83,18 +75,18 @@ pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
 
     let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
-    
+
     // Debug logging
     msg!("DEBUG: sale_allocation={}, k_capacity={}, public_tickets={}, creator_tickets={}, divisor={}", 
          launch_state.sale_allocation, launch_state.k_capacity, launch_state.public_total_tickets, launch_state.creator_reserved_tickets, divisor);
-    
+
     let tokens_per_ticket = (launch_state.sale_allocation as u128)
         .checked_mul(1_000_000) // Precision factor
         .and_then(|val| val.checked_div(divisor as u128))
         .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
-    
+
     msg!("DEBUG: calculated tokens_per_ticket={}", tokens_per_ticket);
-    
+
     launch_state.tokens_per_ticket = Some(tokens_per_ticket);
     launch_state.selection_finalized = true;
 

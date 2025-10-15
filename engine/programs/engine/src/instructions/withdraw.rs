@@ -1,9 +1,10 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::Withdrawn;
-use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::Withdrawn,
+    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+};
+use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
@@ -32,62 +33,38 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
 
     // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
-    require!(
-        current_time < launch_state.funding_period_end,
-        EngineErrorCode::FundingPeriodEnded
-    );
+    require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
     let user = &mut ctx.accounts.user_contribution;
-    require!(
-        user.deposited >= amount,
-        EngineErrorCode::InsufficientDeposit
-    );
+    require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
 
     // return lamports from escrow to user
-    **ctx
-        .accounts
-        .escrow
-        .to_account_info()
-        .try_borrow_mut_lamports()? -= amount;
-    **ctx
-        .accounts
-        .user
-        .to_account_info()
-        .try_borrow_mut_lamports()? += amount;
+    **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
+    **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += amount;
 
     // recompute tickets
     let old_tickets = user.ticket_count;
-    user.deposited = user
-        .deposited
-        .checked_sub(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    user.deposited =
+        user.deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let new_tickets = (user
         .deposited
         .checked_div(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
-    let lost = old_tickets
-        .checked_sub(new_tickets)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let lost = old_tickets.checked_sub(new_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     user.ticket_count = new_tickets;
 
     // Sharded roster decrement
     let shard = &mut ctx.accounts.roster_shard;
-    require!(
-        user.shard_id == shard.shard_id,
-        EngineErrorCode::Unauthorized
-    );
+    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
     let u = user.idx_in_shard as usize;
     if shard.counts.len() <= u {
         shard.counts.resize(u + 1, 0);
     }
-    shard.counts[u] = shard.counts[u]
-        .checked_sub(lost)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    shard.counts[u] =
+        shard.counts[u].checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     shard.prefix.clear();
     shard.total_in_shard = 0; // prevent stale reads pre-finalization
-    launch_state.total_tickets = launch_state
-        .total_tickets
-        .checked_sub(lost)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    launch_state.total_tickets =
+        launch_state.total_tickets.checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     launch_state.total_deposited = launch_state
         .total_deposited
         .checked_sub(amount)

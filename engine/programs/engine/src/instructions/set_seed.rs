@@ -1,9 +1,11 @@
-use crate::events::SeedSet;
-use crate::state::LaunchState;
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::keccak;
-use anchor_lang::solana_program::sysvar::clock::Clock;
-use anchor_lang::solana_program::sysvar::{self, Sysvar};
+use crate::{events::SeedSet, state::LaunchState};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{
+        keccak,
+        sysvar::{self, clock::Clock, Sysvar},
+    },
+};
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
@@ -31,10 +33,7 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         crate::errors::ErrorCode::MinRaiseNotMet
     );
 
-    require!(
-        launch_state.vrf_seed.is_none(),
-        crate::errors::ErrorCode::SeedAlreadySet
-    );
+    require!(launch_state.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
 
     // Get the most recent blockhash from the SlotHashes sysvar
     let slot_hashes = &ctx.accounts.slot_hashes;
@@ -43,22 +42,16 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
     // We take the most recent one.
     let num_hashes = u64::from_le_bytes(
-        data[0..8]
-            .try_into()
-            .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
+        data[0..8].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
     );
-    require!(
-        num_hashes > 0,
-        crate::errors::ErrorCode::NoRecentBlockhashes
-    );
+    require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
 
     let num_hashes_u64 = num_hashes;
     let one = 1_u64;
     let forty = 40_u64;
 
-    let num_hashes_minus_1 = num_hashes_u64
-        .checked_sub(one)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+    let num_hashes_minus_1 =
+        num_hashes_u64.checked_sub(one).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
     let offset = num_hashes_minus_1
         .checked_mul(forty)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
@@ -71,13 +64,11 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?; // 8 for slot
 
     let start = last_hash_pos as usize;
-    let end = last_hash_pos
-        .checked_add(32)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
+    let end =
+        last_hash_pos.checked_add(32).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
 
-    let seed: [u8; 32] = data[start..end]
-        .try_into()
-        .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
+    let seed: [u8; 32] =
+        data[start..end].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
 
     launch_state.vrf_seed = Some(seed);
 
