@@ -114,7 +114,10 @@ jobs:
         id: engine-restore
         uses: actions/cache/restore@v4
         with:
-          path: engine/target
+          path: |
+            engine/target
+            ~/.cargo/registry
+            ~/.cargo/git
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
       - name: yarn build
@@ -123,7 +126,10 @@ jobs:
       - name: Save engine program cache
         uses: actions/cache/save@v4
         with:
-          path: engine/target
+          path: |
+            engine/target
+            ~/.cargo/registry
+            ~/.cargo/git
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
       - name: Install deps
