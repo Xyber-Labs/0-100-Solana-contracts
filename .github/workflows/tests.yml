@@ -119,7 +119,7 @@ jobs:
 
       - name: anchor build
         if: steps.engine-restore.outputs.cache-hit != 'true'
-        run: anchor build --skip-lint
+        run: yarn build
 
       - name: Save engine program cache
         if: steps.engine-restore.outputs.cache-hit != 'true'
