@@ -95,10 +95,12 @@ pub mod engine {
         instructions::claim_creator_refund(ctx)
     }
 
+    /// Create Orca CLMM pool
     pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         instructions::create_clmm_pool(ctx)
     }
 
+    /// Add liquidity to Orca CLMM pool
     pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
     }

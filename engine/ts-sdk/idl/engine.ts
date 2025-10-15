@@ -15,6 +15,9 @@ export type Engine = {
   "instructions": [
     {
       "name": "addClmmLiquidity",
+      "docs": [
+        "Add liquidity to Orca CLMM pool"
+      ],
       "discriminator": [
         95,
         43,
@@ -583,6 +586,9 @@ export type Engine = {
     },
     {
       "name": "createClmmPool",
+      "docs": [
+        "Create Orca CLMM pool"
+      ],
       "discriminator": [
         181,
         223,
@@ -746,7 +752,8 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState"
+          "name": "launchState",
+          "writable": true
         },
         {
           "name": "poolState",
@@ -2175,6 +2182,16 @@ export type Engine = {
       "code": 6051,
       "name": "noTokensToClaim",
       "msg": "User has no tokens to claim"
+    },
+    {
+      "code": 6052,
+      "name": "poolNotCreated",
+      "msg": "Pool not created"
+    },
+    {
+      "code": 6053,
+      "name": "poolNotAllowed",
+      "msg": "Pool not allowed"
     }
   ],
   "types": [
@@ -2708,6 +2725,20 @@ export type Engine = {
           },
           {
             "name": "clmmBaseMint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "allowCreatePool",
+            "type": "bool"
+          },
+          {
+            "name": "allowClaim",
+            "type": "bool"
+          },
+          {
+            "name": "clmmPool",
             "type": {
               "option": "pubkey"
             }

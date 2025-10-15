@@ -9,6 +9,9 @@
   "instructions": [
     {
       "name": "add_clmm_liquidity",
+      "docs": [
+        "Add liquidity to Orca CLMM pool"
+      ],
       "discriminator": [
         95,
         43,
@@ -577,6 +580,9 @@
     },
     {
       "name": "create_clmm_pool",
+      "docs": [
+        "Create Orca CLMM pool"
+      ],
       "discriminator": [
         181,
         223,
@@ -740,7 +746,8 @@
           "signer": true
         },
         {
-          "name": "launch_state"
+          "name": "launch_state",
+          "writable": true
         },
         {
           "name": "pool_state",
@@ -2169,6 +2176,16 @@
       "code": 6051,
       "name": "NoTokensToClaim",
       "msg": "User has no tokens to claim"
+    },
+    {
+      "code": 6052,
+      "name": "PoolNotCreated",
+      "msg": "Pool not created"
+    },
+    {
+      "code": 6053,
+      "name": "PoolNotAllowed",
+      "msg": "Pool not allowed"
     }
   ],
   "types": [
@@ -2702,6 +2719,20 @@
           },
           {
             "name": "clmm_base_mint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "allow_create_pool",
+            "type": "bool"
+          },
+          {
+            "name": "allow_claim",
+            "type": "bool"
+          },
+          {
+            "name": "clmm_pool",
             "type": {
               "option": "pubkey"
             }

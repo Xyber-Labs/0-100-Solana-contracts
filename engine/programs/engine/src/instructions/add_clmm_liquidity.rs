@@ -16,7 +16,10 @@ pub struct AddClmmLiquidity<'info> {
 
     pub raydium_program: Program<'info, AmmV3>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.clmm_pool.is_some() @ ErrorCode::PoolNotCreated,
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -98,6 +101,7 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
     create_quote_token_ata(&ctx)?;
     add_initial_liquidity(&ctx)?;
+    ctx.accounts.launch_state.allow_claim = true;
     Ok(())
 }
 

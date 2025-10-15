@@ -109,4 +109,8 @@ pub enum ErrorCode {
     ShardsNotFullyFinalized,
     #[msg("User has no tokens to claim")]
     NoTokensToClaim,
+    #[msg("Pool not created")]
+    PoolNotCreated,
+    #[msg("Pool not allowed")]
+    PoolNotAllowed,
 }

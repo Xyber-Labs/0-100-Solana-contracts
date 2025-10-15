@@ -18,7 +18,8 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
+        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated,
+        constraint = launch_state.allow_create_pool @ crate::errors::ErrorCode::PoolNotAllowed,
     )]
     pub launch_state: Account<'info, LaunchState>,
 
@@ -79,6 +80,8 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     mint_base_tokens(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
+    ctx.accounts.launch_state.clmm_pool = Some(ctx.accounts.raydium_pool_state.key());
+    ctx.accounts.launch_state.allow_create_pool = false;
     Ok(())
 }
 

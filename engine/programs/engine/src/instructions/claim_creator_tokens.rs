@@ -42,6 +42,7 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(launch_state.allow_claim, EngineErrorCode::ClaimsNotOpen);
 
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let creator_grant = &mut ctx.accounts.creator_grant;

@@ -12,6 +12,7 @@ pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -31,13 +32,11 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
-    let launch_state = &ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check if selection is finalized and claims are open
-    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
-    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
-    require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
+    require!(!launch_state.allow_create_pool, EngineErrorCode::PoolAlreadyCreated);
 
     // Get the SlotHashes sysvar
     let slot_hashes = &ctx.accounts.slot_hashes;
@@ -108,6 +107,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     pool_state.range_start = range_start_bytes;
     pool_state.range_end = range_end_bytes;
     pool_state.created = true;
+    launch_state.allow_create_pool = true;
 
     // TODO: Add CPI call to Raydium here
 

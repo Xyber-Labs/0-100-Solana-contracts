@@ -55,6 +55,9 @@ pub struct LaunchState {
     pub creator_initial_deposit: u64,
     pub roster_shard_cap: u16,
     pub clmm_base_mint: Option<Pubkey>,
+    pub allow_create_pool: bool,
+    pub allow_claim: bool,
+    pub clmm_pool: Option<Pubkey>,
 }
 
 impl LaunchState {
