@@ -116,8 +116,8 @@ jobs:
         with:
           path: |
             engine/target
-            ~/.cargo/registry
-            ~/.cargo/git
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
       - name: yarn build
@@ -128,8 +128,8 @@ jobs:
         with:
           path: |
             engine/target
-            ~/.cargo/registry
-            ~/.cargo/git
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.ref_name }}
 
       - name: Install deps
