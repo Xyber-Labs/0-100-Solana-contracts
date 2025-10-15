@@ -134,6 +134,24 @@ jobs:
       - name: Run litesvm basic tests
         run: anchor run litesvm-basic
 
+      - name: Restore Raydium programs cache
+        id: raydium-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: engine/tests/resources
+          key: raydium-programs-${{ runner.os }}-v1
+
+      - name: Dump Raydium programs (if cache miss)
+        if: steps.raydium-restore.outputs.cache-hit != 'true'
+        run: yarn dump:raydium
+
+      - name: Save Raydium programs cache
+        if: steps.raydium-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: engine/tests/resources
+          key: raydium-programs-${{ runner.os }}-v1
+
       - name: Run litesvm raydium tests
         run: anchor run litesvm-raydium
 

@@ -30,12 +30,12 @@ export async function setupRaydiumCLMM(client: LiteSVM) {
   console.log('✅ WSOL mint created');
 
   console.log('Loading Raydium CLMM program...');
-  const raydiumBinary = fs.readFileSync('./raydium_clmm.so');
+  const raydiumBinary = fs.readFileSync('tests/resources/raydium_clmm.so');
   client.addProgram(RAYDIUM_CLMM_ID, raydiumBinary);
   console.log('✅ Raydium CLMM program loaded');
 
   console.log('Loading Metaplex Token Metadata program...');
-  const metaplexBinary = fs.readFileSync('./metaplex_metadata.so');
+  const metaplexBinary = fs.readFileSync('tests/resources/metaplex_metadata.so');
   client.addProgram(METADATA_PROGRAM_ID, metaplexBinary);
   console.log('✅ Metaplex Token Metadata program loaded');
 
