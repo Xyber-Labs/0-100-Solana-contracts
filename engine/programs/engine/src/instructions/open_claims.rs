@@ -17,7 +17,7 @@ pub struct OpenClaims<'info> {
     pub creator_grant: Account<'info, CreatorGrant>,
 }
 
-pub fn handler(ctx: Context<OpenClaims>) -> Result<()> {
+pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let creator_grant = &mut ctx.accounts.creator_grant;
 

@@ -27,7 +27,7 @@ pub struct Withdraw<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period is still active

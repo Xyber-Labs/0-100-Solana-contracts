@@ -64,6 +64,8 @@ pub enum ErrorCode {
     RosterFull,
     #[msg("Heap capacity exceeded")]
     HeapCapacityExceeded,
+    #[msg("Mint already exists")]
+    MintAlreadyExists,
     #[msg("An arithmetic operation overflowed")]
     ArithmeticOverflow,
     #[msg("u64 to u32 conversion overflow")]

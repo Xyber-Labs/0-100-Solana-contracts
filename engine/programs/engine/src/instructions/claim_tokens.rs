@@ -33,7 +33,7 @@ pub struct ClaimTokens<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn handler(ctx: Context<ClaimTokens>) -> Result<()> {
+pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     require!(
         ctx.accounts.sale_mint.key() == launch_state.sale_mint,

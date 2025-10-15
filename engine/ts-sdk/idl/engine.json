@@ -8,6 +8,175 @@
   },
   "instructions": [
     {
+      "name": "add_clmm_liquidity",
+      "discriminator": [
+        95,
+        43,
+        52,
+        162,
+        180,
+        14,
+        143,
+        59
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "raydium_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "escrow",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_escrow_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "base_token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associated_token_program"
+            }
+          }
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "raydium_pool_state",
+          "writable": true
+        },
+        {
+          "name": "raydium_quote_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_base_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_position_nft_mint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "raydium_position_nft_account",
+          "writable": true
+        },
+        {
+          "name": "raydium_metadata_account",
+          "writable": true
+        },
+        {
+          "name": "raydium_personal_position",
+          "writable": true
+        },
+        {
+          "name": "raydium_protocol_position",
+          "writable": true
+        },
+        {
+          "name": "raydium_tick_array_lower",
+          "writable": true
+        },
+        {
+          "name": "raydium_tick_array_upper",
+          "writable": true
+        },
+        {
+          "name": "quote_token_account",
+          "writable": true
+        },
+        {
+          "name": "metadata_program"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "base_token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_creator_refund",
       "docs": [
         "Claim creator refund for failed launches"
@@ -402,6 +571,149 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_clmm_pool",
+      "discriminator": [
+        181,
+        223,
+        6,
+        178,
+        60,
+        61,
+        34,
+        9
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "base_escrow_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow"
+              },
+              {
+                "kind": "account",
+                "path": "base_token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associated_token_program"
+            }
+          }
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "raydium_amm_config"
+        },
+        {
+          "name": "raydium_pool_state",
+          "writable": true
+        },
+        {
+          "name": "raydium_base_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_quote_vault",
+          "writable": true
+        },
+        {
+          "name": "raydium_observation_state",
+          "writable": true
+        },
+        {
+          "name": "raydium_tick_array_bitmap",
+          "writable": true
+        },
+        {
+          "name": "raydium_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
+          "name": "quote_token_program"
+        },
+        {
+          "name": "base_token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1257,6 +1569,19 @@
   ],
   "accounts": [
     {
+      "name": "AmmConfig",
+      "discriminator": [
+        218,
+        244,
+        33,
+        104,
+        203,
+        203,
+        43,
+        111
+      ]
+    },
+    {
       "name": "CreatorGrant",
       "discriminator": [
         80,
@@ -1742,106 +2067,185 @@
     },
     {
       "code": 6031,
+      "name": "MintAlreadyExists",
+      "msg": "Mint already exists"
+    },
+    {
+      "code": 6032,
       "name": "ArithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "U64ConversionOverflow",
       "msg": "u64 to u32 conversion overflow"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "ReservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "InvalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "CreatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "InvalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "InvalidOwner",
       "msg": "Invalid owner for ATA"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "InvalidHardCap",
       "msg": "Hard cap must be > 0"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "InvalidMinRaise",
       "msg": "Min raise must be > 0"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "HardCapNotDivisibleByTau",
       "msg": "Hard cap must be divisible by tau"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "PerWalletCapTooSmall",
       "msg": "Per-wallet cap must be >= tau"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "MinRaiseTooHigh",
       "msg": "Min raise must be <= hard cap"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "InvalidClaimLockPeriod",
       "msg": "Creator claim lock period must be > 0"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "NotSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "RosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "InvalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "ShardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "ShardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "NoTokensToClaim",
       "msg": "User has no tokens to claim"
     }
   ],
   "types": [
+    {
+      "name": "AmmConfig",
+      "docs": [
+        "Holds the current owner of the factory"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump to identify PDA"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "index",
+            "type": "u16"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Address of the protocol owner"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_fee_rate",
+            "docs": [
+              "The protocol fee"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "trade_fee_rate",
+            "docs": [
+              "The trade fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "tick_spacing",
+            "docs": [
+              "The tick spacing"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "fund_fee_rate",
+            "docs": [
+              "The fund fee, denominated in hundredths of a bip (10^-6)"
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "padding_u32",
+            "type": "u32"
+          },
+          {
+            "name": "fund_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "name": "BatchProcessed",
       "type": {
@@ -2295,6 +2699,12 @@
           {
             "name": "roster_shard_cap",
             "type": "u16"
+          },
+          {
+            "name": "clmm_base_mint",
+            "type": {
+              "option": "pubkey"
+            }
           }
         ]
       }
@@ -2739,11 +3149,6 @@
       "name": "SEED_ROOT",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
-    },
-    {
-      "name": "SEED_VRF",
-      "type": "bytes",
-      "value": "[118, 114, 102, 45, 115, 101, 101, 100]"
     }
   ]
 }

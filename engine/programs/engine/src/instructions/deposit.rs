@@ -34,7 +34,7 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period is still active

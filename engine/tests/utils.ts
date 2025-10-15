@@ -22,9 +22,6 @@ export async function createAndFundAccount(
   solAmount: number
 ): Promise<anchor.web3.Keypair> {
   const account = anchor.web3.Keypair.generate();
-  client.airdrop(
-    account.publicKey,
-    BigInt(solAmount * anchor.web3.LAMPORTS_PER_SOL)
-  );
+  client.airdrop(account.publicKey, BigInt(Math.floor(solAmount * anchor.web3.LAMPORTS_PER_SOL)));
   return account;
 }

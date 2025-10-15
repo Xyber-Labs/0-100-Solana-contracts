@@ -31,7 +31,7 @@ pub struct InitRosterShard<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
+pub fn init_roster_shard(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
     shard.launch = launch_state.key();

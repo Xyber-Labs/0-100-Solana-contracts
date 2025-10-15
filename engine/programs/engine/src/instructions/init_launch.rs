@@ -76,7 +76,7 @@ pub struct InitLaunchParams {
     pub creator_claim_lock_period_sec: i64,
 }
 
-pub fn handler(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
+pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
     require!(
         params.hard_cap_lamports > 0,
         EngineErrorCode::InvalidHardCap

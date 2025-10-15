@@ -8,6 +8,10 @@ skip-lint = false
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 
+[programs.devnet]
+engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+
+
 # [programs.remote]
 # engine = "HMVJWXWhpxEWWGhvLHYnTvkmYJcA819jAxw3EgdNYiYb"
 
@@ -20,3 +24,10 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
+litesvm-basic = "yarn run test:litesvm:basic"
+litesvm-raydium = "yarn run test:litesvm:raydium"
+litesvm-full = "yarn run test:litesvm:full"
+init-launch = "ts-node scripts/init-launch.ts"
+init-roster = "ts-node scripts/init-roster.ts"
+deposit = "ts-node scripts/deposit.ts"
+create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"
