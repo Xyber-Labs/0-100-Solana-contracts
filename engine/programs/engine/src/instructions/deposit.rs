@@ -1,9 +1,10 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::DepositMade;
-use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::DepositMade,
+    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+};
+use anchor_lang::{prelude::*, solana_program};
 use solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
@@ -39,10 +40,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
-    require!(
-        current_time < launch_state.funding_period_end,
-        EngineErrorCode::FundingPeriodEnded
-    );
+    require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
     require!(
         amount > 0 && amount % launch_state.tau_lamports == 0,
         EngineErrorCode::AmountNotMultipleTau
@@ -51,9 +49,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     // per-wallet cap check
     let current = ctx.accounts.user_contribution.deposited;
     require!(
-        current
-            .checked_add(amount)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?
+        current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?
             <= launch_state.per_wallet_cap,
         EngineErrorCode::PerWalletCapExceeded
     );
@@ -93,21 +89,14 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     }
 
     let old_tickets = user.ticket_count;
-    user.deposited = current
-        .checked_add(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    user.deposited = current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let new_tickets_u64 = user
         .deposited
         .checked_div(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(
-        new_tickets_u64 <= u32::MAX as u64,
-        EngineErrorCode::U64ConversionOverflow
-    );
+    require!(new_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
     let new_tickets = new_tickets_u64 as u32;
-    let delta = new_tickets
-        .checked_sub(old_tickets)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let delta = new_tickets.checked_sub(old_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     user.ticket_count = new_tickets;
 
     // Sharded roster update: assign on first deposit, then O(1) by index
@@ -126,18 +115,14 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         shard.prefix.clear(); // invalidate prefix if already built
     } else {
         // must stay in the same shard
-        require!(
-            user.shard_id == shard.shard_id,
-            EngineErrorCode::Unauthorized
-        );
+        require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
     }
     let u = user.idx_in_shard as usize;
     if shard.counts.len() <= u {
         shard.counts.resize(u + 1, 0);
     }
-    shard.counts[u] = shard.counts[u]
-        .checked_add(delta)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    shard.counts[u] =
+        shard.counts[u].checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     shard.prefix.clear(); // will be recomputed at finalize
     shard.total_in_shard = 0; // prevent stale reads pre-finalization
 
@@ -145,10 +130,8 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         .total_deposited
         .checked_add(amount)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    launch_state.total_tickets = launch_state
-        .total_tickets
-        .checked_add(delta)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    launch_state.total_tickets =
+        launch_state.total_tickets.checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(DepositMade {
         launch: launch_state.key(),

@@ -1,5 +1,4 @@
-use anchor_lang::prelude::borsh::BorshSchema;
-use anchor_lang::prelude::*;
+use anchor_lang::prelude::{borsh::BorshSchema, *};
 
 // -------------------------------
 // Helper Types and Structures

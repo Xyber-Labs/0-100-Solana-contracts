@@ -64,21 +64,14 @@ mod tests {
             assert_eq!(permute_u32(seed, 0, 0), 0);
             return;
         }
-        let mut outputs = (0..n)
-            .map(|i| permute_u32(seed, n, i))
-            .collect::<Vec<u32>>();
+        let mut outputs = (0..n).map(|i| permute_u32(seed, n, i)).collect::<Vec<u32>>();
         outputs.sort_unstable();
         let expected: Vec<u32> = (0..n).collect();
         assert_eq!(outputs, expected, "Permutation check failed for n = {}", n);
 
         // Also check for uniqueness explicitly
         let unique_outputs: HashSet<u32> = outputs.into_iter().collect();
-        assert_eq!(
-            unique_outputs.len(),
-            n as usize,
-            "Uniqueness check failed for n = {}",
-            n
-        );
+        assert_eq!(unique_outputs.len(), n as usize, "Uniqueness check failed for n = {}", n);
     }
 
     #[test]

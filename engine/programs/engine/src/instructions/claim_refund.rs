@@ -1,10 +1,11 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::RefundClaimed;
-use crate::state::{EscrowAccount, LaunchState, RosterShard, UserContribution};
-use crate::utils::selection::permute_u32;
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::RefundClaimed,
+    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+    utils::selection::permute_u32,
+};
+use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
 #[derive(Accounts)]
 pub struct ClaimRefund<'info> {
@@ -33,22 +34,12 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     {
         let refund = user.deposited;
         if refund > 0 {
-            **ctx
-                .accounts
-                .escrow
-                .to_account_info()
-                .try_borrow_mut_lamports()? -= refund;
-            **ctx
-                .accounts
-                .user
-                .to_account_info()
-                .try_borrow_mut_lamports()? += refund;
+            **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
+            **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
 
             let escrow = &mut ctx.accounts.escrow;
-            escrow.balance = escrow
-                .balance
-                .checked_sub(refund)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            escrow.balance =
+                escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
         user.claimed_refund = true;
 
@@ -63,19 +54,12 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     }
 
     // Otherwise, proceed with permutation path
-    require!(
-        launch_state.selection_finalized,
-        EngineErrorCode::NotFinalized
-    );
+    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
-    let reserved = launch_state
-        .creator_reserved_tickets
-        .min(launch_state.k_capacity);
-    let k_pub = launch_state
-        .k_capacity
-        .checked_sub(reserved)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let reserved = launch_state.creator_reserved_tickets.min(launch_state.k_capacity);
+    let k_pub =
+        launch_state.k_capacity.checked_sub(reserved).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let n = launch_state.public_total_tickets;
     let shard = &ctx.accounts.roster_shard;
     // Ensure shard is finalized and consistent
@@ -87,10 +71,7 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
         EngineErrorCode::ShardNotFinalized
     );
-    require!(
-        user.shard_id == shard.shard_id,
-        EngineErrorCode::Unauthorized
-    );
+    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
     let u = user.idx_in_shard as usize;
     let base = shard
         .shard_base
@@ -104,21 +85,11 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
             .checked_sub(approved_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if refund > 0 {
-            **ctx
-                .accounts
-                .escrow
-                .to_account_info()
-                .try_borrow_mut_lamports()? -= refund;
-            **ctx
-                .accounts
-                .user
-                .to_account_info()
-                .try_borrow_mut_lamports()? += refund;
+            **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
+            **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
             let escrow = &mut ctx.accounts.escrow;
-            escrow.balance = escrow
-                .balance
-                .checked_sub(refund)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            escrow.balance =
+                escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
         user.claimed_refund = true;
         emit!(RefundClaimed {
@@ -132,40 +103,24 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
 
     let mut y = 0u32;
     for j in 0..user.ticket_count {
-        let t = base
-            .checked_add(j)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let t = base.checked_add(j).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if permute_u32(&seed, n, t) < k_pub {
-            y = y
-                .checked_add(1)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
     }
 
     let approved_lamports = (y as u64)
         .checked_mul(launch_state.tau_lamports)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let refund = user
-        .deposited
-        .checked_sub(approved_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let refund =
+        user.deposited.checked_sub(approved_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     if refund > 0 {
-        **ctx
-            .accounts
-            .escrow
-            .to_account_info()
-            .try_borrow_mut_lamports()? -= refund;
-        **ctx
-            .accounts
-            .user
-            .to_account_info()
-            .try_borrow_mut_lamports()? += refund;
+        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
+        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
 
         let escrow = &mut ctx.accounts.escrow;
-        escrow.balance = escrow
-            .balance
-            .checked_sub(refund)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        escrow.balance =
+            escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     user.claimed_refund = true;
 

@@ -32,15 +32,9 @@ pub fn calculate_project_range(project_id: u64, num_blocks: u64) -> (U256, U256)
 
     let project_id_u256 = U256::from(project_id);
     let range_start = range_width
-        .checked_mul(
-            project_id_u256
-                .checked_sub(U256::one())
-                .expect("project_id must be > 0"),
-        )
+        .checked_mul(project_id_u256.checked_sub(U256::one()).expect("project_id must be > 0"))
         .expect("range start calculation failed");
-    let range_end = range_start
-        .checked_add(range_width)
-        .expect("range end calculation failed");
+    let range_end = range_start.checked_add(range_width).expect("range end calculation failed");
 
     (range_start, range_end)
 }
@@ -82,22 +76,10 @@ mod tests {
             (start - U256::one()).to_big_endian(&mut hash_before_bytes);
         }
 
-        assert!(is_blockhash_in_project_range(
-            &hash_inside_bytes,
-            project_id,
-            num_blocks
-        ));
-        assert!(!is_blockhash_in_project_range(
-            &hash_outside_bytes,
-            project_id,
-            num_blocks
-        ));
+        assert!(is_blockhash_in_project_range(&hash_inside_bytes, project_id, num_blocks));
+        assert!(!is_blockhash_in_project_range(&hash_outside_bytes, project_id, num_blocks));
         if start > U256::zero() {
-            assert!(!is_blockhash_in_project_range(
-                &hash_before_bytes,
-                project_id,
-                num_blocks
-            ));
+            assert!(!is_blockhash_in_project_range(&hash_before_bytes, project_id, num_blocks));
         }
     }
 }

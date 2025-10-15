@@ -1,8 +1,10 @@
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::Token;
-use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint as InterfaceMint, TokenInterface};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::Token,
+    token_2022::Token2022,
+    token_interface::{Mint as InterfaceMint, TokenInterface},
+};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{EscrowAccount, LaunchState, SEED_ROOT};

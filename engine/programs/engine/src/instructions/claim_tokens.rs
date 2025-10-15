@@ -1,8 +1,10 @@
-use crate::constants::SEED_ROOT;
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::events::TokensClaimed;
-use crate::state::{LaunchState, RosterShard, UserContribution};
-use crate::utils::selection::permute_u32;
+use crate::{
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::TokensClaimed,
+    state::{LaunchState, RosterShard, UserContribution},
+    utils::selection::permute_u32,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
@@ -35,14 +37,9 @@ pub struct ClaimTokens<'info> {
 
 pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(
-        ctx.accounts.sale_mint.key() == launch_state.sale_mint,
-        EngineErrorCode::Unauthorized
-    );
+    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
     require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
-    let per = launch_state
-        .tokens_per_ticket
-        .ok_or(EngineErrorCode::TokensPerTicketMissing)?;
+    let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
     // Tokens are claimed only if the raise was successful
     require!(
@@ -56,13 +53,9 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     require!(!user.claimed_tokens, EngineErrorCode::AlreadyClaimedTokens);
 
     // recompute y_i using permutation condition
-    let reserved = launch_state
-        .creator_reserved_tickets
-        .min(launch_state.k_capacity);
-    let k_pub = launch_state
-        .k_capacity
-        .checked_sub(reserved)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let reserved = launch_state.creator_reserved_tickets.min(launch_state.k_capacity);
+    let k_pub =
+        launch_state.k_capacity.checked_sub(reserved).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let n = launch_state.public_total_tickets;
     let shard = &ctx.accounts.roster_shard;
     // Ensure shard is finalized and consistent
@@ -74,20 +67,21 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
         EngineErrorCode::ShardNotFinalized
     );
-    require!(
-        user.shard_id == shard.shard_id,
-        EngineErrorCode::Unauthorized
-    );
+    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
     let u = user.idx_in_shard as usize;
     let prefix_value = *shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?;
-    let base = shard
-        .shard_base
-        .checked_add(prefix_value)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    
+    let base =
+        shard.shard_base.checked_add(prefix_value).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
     // Debug logging (remove in production)
-    msg!("DEBUG: User {} in shard {}, idx {}, prefix {}, base {}", 
-         ctx.accounts.user.key(), shard.shard_id, u, prefix_value, base);
+    msg!(
+        "DEBUG: User {} in shard {}, idx {}, prefix {}, base {}",
+        ctx.accounts.user.key(),
+        shard.shard_id,
+        u,
+        prefix_value,
+        base
+    );
 
     // Early exit to avoid permute on n==0 and when no public winners are possible
     if k_pub == 0 || n == 0 {
@@ -97,13 +91,9 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
 
     let mut y = 0u32;
     for j in 0..user.ticket_count {
-        let t = base
-            .checked_add(j)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let t = base.checked_add(j).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if permute_u32(&seed, n, t) < k_pub {
-            y = y
-                .checked_add(1)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }
     }
     require!(y > 0, EngineErrorCode::NoTokensToClaim);

@@ -1,8 +1,9 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Mint, MintTo, Token};
-use anchor_spl::token_interface::{Mint as InterfaceMint, TokenInterface};
+use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{self, Mint, MintTo, Token},
+    token_interface::{Mint as InterfaceMint, TokenInterface},
+};
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
@@ -82,26 +83,29 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    anchor_spl::associated_token::create(
-        CpiContext::new(
-            ctx.accounts.associated_token_program.to_account_info(),
-            anchor_spl::associated_token::Create {
-                payer: ctx.accounts.payer.to_account_info(),
-                associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
-                authority: ctx.accounts.escrow.to_account_info(),
-                mint: ctx.accounts.base_mint.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-                token_program: ctx.accounts.base_token_program.to_account_info(),
-            },
-        )
-    )?;
+    anchor_spl::associated_token::create(CpiContext::new(
+        ctx.accounts.associated_token_program.to_account_info(),
+        anchor_spl::associated_token::Create {
+            payer: ctx.accounts.payer.to_account_info(),
+            associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
+            authority: ctx.accounts.escrow.to_account_info(),
+            mint: ctx.accounts.base_mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.base_token_program.to_account_info(),
+        },
+    ))?;
 
     Ok(())
 }
 
 fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let launch_key = ctx.accounts.launch_state.key();
-    let seeds = &[SEED_ROOT, b"escrow", launch_key.as_ref(), &[ctx.bumps.escrow]];
+    let seeds = &[
+        SEED_ROOT,
+        b"escrow",
+        launch_key.as_ref(),
+        &[ctx.bumps.escrow],
+    ];
     let seeds_binding = [&seeds[..]];
     let mint_accounts = MintTo {
         mint: ctx.accounts.base_mint.to_account_info(),
@@ -126,7 +130,8 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
     );
 
     let sqrt_price_x64 = calculator.get_sqrt_price();
-    let open_time = Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
+    let open_time =
+        Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -158,7 +163,6 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
 
     Ok(())
 }
-
 
 struct StakingCalculator {
     raised_lamports: u64,
@@ -241,7 +245,6 @@ impl<'info> TokenOrderForPool<'info> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,50 +254,74 @@ mod tests {
 
     #[test]
     fn test_sqrt_price_small_raise() {
-        let calc = StakingCalculator::new(
-            1_000_000_000,
-            500_000_000,
-            500_000_000,
-        );
+        let calc = StakingCalculator::new(1_000_000_000, 500_000_000, 500_000_000);
         let sqrt_price = calc.get_sqrt_price();
-        assert!(sqrt_price >= MIN_SQRT_PRICE_X64, "sqrt_price {} < MIN {}", sqrt_price, MIN_SQRT_PRICE_X64);
-        assert!(sqrt_price <= MAX_SQRT_PRICE_X64, "sqrt_price {} > MAX {}", sqrt_price, MAX_SQRT_PRICE_X64);
+        assert!(
+            sqrt_price >= MIN_SQRT_PRICE_X64,
+            "sqrt_price {} < MIN {}",
+            sqrt_price,
+            MIN_SQRT_PRICE_X64
+        );
+        assert!(
+            sqrt_price <= MAX_SQRT_PRICE_X64,
+            "sqrt_price {} > MAX {}",
+            sqrt_price,
+            MAX_SQRT_PRICE_X64
+        );
     }
 
     #[test]
     fn test_sqrt_price_medium_raise() {
-        let calc = StakingCalculator::new(
-            191_000_000_000,
-            540_540_000,
-            459_460_000,
-        );
+        let calc = StakingCalculator::new(191_000_000_000, 540_540_000, 459_460_000);
         let sqrt_price = calc.get_sqrt_price();
-        assert!(sqrt_price >= MIN_SQRT_PRICE_X64, "sqrt_price {} < MIN {}", sqrt_price, MIN_SQRT_PRICE_X64);
-        assert!(sqrt_price <= MAX_SQRT_PRICE_X64, "sqrt_price {} > MAX {}", sqrt_price, MAX_SQRT_PRICE_X64);
+        assert!(
+            sqrt_price >= MIN_SQRT_PRICE_X64,
+            "sqrt_price {} < MIN {}",
+            sqrt_price,
+            MIN_SQRT_PRICE_X64
+        );
+        assert!(
+            sqrt_price <= MAX_SQRT_PRICE_X64,
+            "sqrt_price {} > MAX {}",
+            sqrt_price,
+            MAX_SQRT_PRICE_X64
+        );
     }
 
     #[test]
     fn test_sqrt_price_large_raise() {
-        let calc = StakingCalculator::new(
-            500_000_000_000,
-            1_000_000_000,
-            1_000_000_000,
-        );
+        let calc = StakingCalculator::new(500_000_000_000, 1_000_000_000, 1_000_000_000);
         let sqrt_price = calc.get_sqrt_price();
-        assert!(sqrt_price >= MIN_SQRT_PRICE_X64, "sqrt_price {} < MIN {}", sqrt_price, MIN_SQRT_PRICE_X64);
-        assert!(sqrt_price <= MAX_SQRT_PRICE_X64, "sqrt_price {} > MAX {}", sqrt_price, MAX_SQRT_PRICE_X64);
+        assert!(
+            sqrt_price >= MIN_SQRT_PRICE_X64,
+            "sqrt_price {} < MIN {}",
+            sqrt_price,
+            MIN_SQRT_PRICE_X64
+        );
+        assert!(
+            sqrt_price <= MAX_SQRT_PRICE_X64,
+            "sqrt_price {} > MAX {}",
+            sqrt_price,
+            MAX_SQRT_PRICE_X64
+        );
     }
 
     #[test]
     fn test_sqrt_price_max_hardcap() {
-        let calc = StakingCalculator::new(
-            1_000 * 1_000_000_000,
-            10_000_000_000,
-            10_000_000_000,
-        );
+        let calc = StakingCalculator::new(1_000 * 1_000_000_000, 10_000_000_000, 10_000_000_000);
         let sqrt_price = calc.get_sqrt_price();
-        assert!(sqrt_price >= MIN_SQRT_PRICE_X64, "sqrt_price {} < MIN {}", sqrt_price, MIN_SQRT_PRICE_X64);
-        assert!(sqrt_price <= MAX_SQRT_PRICE_X64, "sqrt_price {} > MAX {}", sqrt_price, MAX_SQRT_PRICE_X64);
+        assert!(
+            sqrt_price >= MIN_SQRT_PRICE_X64,
+            "sqrt_price {} < MIN {}",
+            sqrt_price,
+            MIN_SQRT_PRICE_X64
+        );
+        assert!(
+            sqrt_price <= MAX_SQRT_PRICE_X64,
+            "sqrt_price {} > MAX {}",
+            sqrt_price,
+            MAX_SQRT_PRICE_X64
+        );
     }
 
     #[test]
