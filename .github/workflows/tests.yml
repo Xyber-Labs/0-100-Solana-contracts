@@ -130,7 +130,7 @@ jobs:
             engine/target
             /home/runner/.cargo/registry
             /home/runner/.cargo/git
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.head_ref || github.ref_name }} 
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.head_ref || github.ref_name }}
 
       - name: Install deps
         run: yarn install --frozen-lockfile
