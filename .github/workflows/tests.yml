@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: engine/target
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/programs/**/*.rs') }}
 
       - name: anchor build
         if: steps.engine-restore.outputs.cache-hit != 'true'
@@ -126,7 +126,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: engine/target
-          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/Cargo.lock') }}
+          key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ hashFiles('engine/**/Cargo.toml', 'engine/**/Cargo.lock', 'engine/programs/**/*.rs') }}
 
       - name: Install deps
         run: yarn install --frozen-lockfile
