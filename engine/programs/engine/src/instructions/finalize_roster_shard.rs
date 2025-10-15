@@ -20,7 +20,7 @@ pub struct FinalizeRosterShard<'info> {
     pub roster_shard: Account<'info, RosterShard>,
 }
 
-pub fn handler(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
+pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
 

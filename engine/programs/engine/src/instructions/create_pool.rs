@@ -29,7 +29,7 @@ pub struct CreatePool<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<CreatePool>) -> Result<()> {
+pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 

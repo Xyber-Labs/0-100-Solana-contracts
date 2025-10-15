@@ -7,9 +7,6 @@ use anchor_lang::prelude::*;
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
-#[constant]
-pub const SEED_VRF: &[u8] = b"vrf-seed";
-
 // -------------------------------
 // Configuration Constants
 // -------------------------------

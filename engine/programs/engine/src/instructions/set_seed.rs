@@ -17,7 +17,7 @@ pub struct SetSeed<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<SetSeed>) -> Result<()> {
+pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
 
     // Check if funding period has ended

@@ -23,7 +23,7 @@ pub struct InitRoster<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<InitRoster>) -> Result<()> {
+pub fn init_roster(ctx: Context<InitRoster>) -> Result<()> {
     let roster = &mut ctx.accounts.roster;
     roster.launch = ctx.accounts.launch_state.key();
     roster.wallets = Vec::new();
