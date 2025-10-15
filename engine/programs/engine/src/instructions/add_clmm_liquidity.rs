@@ -37,7 +37,7 @@ pub struct AddClmmLiquidity<'info> {
 
     #[account(
         mint::token_program = quote_token_program,
-        address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112")
+        address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
@@ -100,19 +100,17 @@ pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
 }
 
 fn create_quote_token_ata(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
-    anchor_spl::associated_token::create(
-        CpiContext::new(
-            ctx.accounts.associated_token_program.to_account_info(),
-            anchor_spl::associated_token::Create {
-                payer: ctx.accounts.creator.to_account_info(),
-                associated_token: ctx.accounts.quote_token_account.to_account_info(),
-                authority: ctx.accounts.creator.to_account_info(),
-                mint: ctx.accounts.quote_mint.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-                token_program: ctx.accounts.quote_token_program.to_account_info(),
-            },
-        )
-    )?;
+    anchor_spl::associated_token::create(CpiContext::new(
+        ctx.accounts.associated_token_program.to_account_info(),
+        anchor_spl::associated_token::Create {
+            payer: ctx.accounts.creator.to_account_info(),
+            associated_token: ctx.accounts.quote_token_account.to_account_info(),
+            authority: ctx.accounts.creator.to_account_info(),
+            mint: ctx.accounts.quote_mint.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            token_program: ctx.accounts.quote_token_program.to_account_info(),
+        },
+    ))?;
 
     Ok(())
 }
@@ -122,7 +120,8 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         ctx.accounts.launch_state.total_deposited,
         ctx.accounts.launch_state.sale_allocation,
         ctx.accounts.launch_state.lp_allocation,
-    ).get_pool_params();
+    )
+    .get_pool_params()?;
 
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -131,8 +130,8 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_account.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
-        params.quote_volume as u64,
-        params.base_volume as u64,
+        params.quote_volume,
+        params.base_volume,
     );
 
     let liquidity = params.quote_volume / 10;
@@ -145,7 +144,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
                 to: ctx.accounts.quote_token_account.to_account_info(),
             },
         ),
-        params.quote_volume as u64,
+        params.quote_volume,
     )?;
 
     anchor_lang::solana_program::program::invoke(
@@ -189,7 +188,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         params.tick_upper_index,
         params.tick_array_lower_start_index,
         params.tick_array_upper_start_index,
-        liquidity,
+        u128::from(liquidity),
         order.amount_0,
         order.amount_1,
         false,
@@ -211,8 +210,8 @@ struct RaydiumPoolParams {
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    base_volume: u128,
-    quote_volume: u128,
+    base_volume: u64,
+    quote_volume: u64,
 }
 
 impl StakingCalculator {
@@ -224,7 +223,7 @@ impl StakingCalculator {
         }
     }
 
-    fn get_pool_params(&self) -> RaydiumPoolParams {
+    fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
         let tick_lower_index = 0i32;
         let tick_upper_index = 443580i32;
 
@@ -235,17 +234,17 @@ impl StakingCalculator {
         let tick_array_lower_start_index = (tick_lower_index / ticks_in_array) * ticks_in_array;
         let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
 
-        let base_volume = self.lp_allocation as u128;
-        let quote_volume = (self.lp_allocation as u128 * self.raised_lamports as u128) / self.sale_allocation as u128;
+        let base_volume = self.lp_allocation;
+        let quote_volume = self.lp_allocation * self.raised_lamports / self.sale_allocation;
 
-        RaydiumPoolParams {
+        Ok(RaydiumPoolParams {
             tick_lower_index,
             tick_upper_index,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
             base_volume,
             quote_volume,
-        }
+        })
     }
 }
 

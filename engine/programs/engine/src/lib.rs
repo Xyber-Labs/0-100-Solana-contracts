@@ -8,7 +8,7 @@ use state::*;
 use crate::instructions::*;
 
 mod constants;
-mod errors;
+pub mod errors;
 mod events;
 mod instructions;
 mod state;
