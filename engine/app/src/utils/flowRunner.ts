@@ -55,7 +55,7 @@ export async function runFullFlow(
   const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
   const SALE_PERCENTAGE = 0.45946; // 45.946%
   const TOKEN_DECIMALS = 6;
-  
+
   // // Calculate sale_allocation based on simulation parameters
   // const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
   // config.saleAllocation = saleAllocation;
@@ -64,12 +64,13 @@ export async function runFullFlow(
   const LAMPORTS_PER_SOL = 1_000_000_000;
   config.creatorInitialDepositLamports = 8 * LAMPORTS_PER_SOL;
   config.creatorDailyLamportsLimit = 2 * LAMPORTS_PER_SOL; // Set to 2 SOL to make daily_ticket_cap = 2
-  
+
   addLog(`\n--- Using Simulation Parameters ---`);
   addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
   addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
   addLog(`   -> Calculated Sale Allocation (atomic units): ${config.saleAllocation.toLocaleString()}`);
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
+  addLog(`   -> Roster Shard Cap: ${config.rosterShardCap}`);
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
 
@@ -80,6 +81,10 @@ export async function runFullFlow(
       const state = await sdk.fetchLaunch(launchPda);
       const currentTime = Math.floor(Date.now() / 1000);
       const fundingEndTime = state.fundingPeriodEnd.toNumber();
+      
+      addLog(`[DEBUG] Current JS time: ${currentTime}`);
+      addLog(`[DEBUG] Funding end time: ${fundingEndTime}`);
+      addLog(`[DEBUG] Time difference: ${currentTime - fundingEndTime} seconds`);
 
       if (currentTime >= fundingEndTime) {
         addLog("Funding period has already ended.");
@@ -88,9 +93,9 @@ export async function runFullFlow(
 
       const waitTime = fundingEndTime - currentTime;
       if (waitTime > 0) {
-        addLog(`Waiting ${waitTime + 2} seconds for funding period to end...`);
+        addLog(`Waiting ${waitTime + 5} seconds for funding period to end...`);
         await new Promise((resolve) =>
-          setTimeout(resolve, (waitTime + 2) * 1000)
+          setTimeout(resolve, (waitTime + 5) * 1000)
         );
       }
     }
@@ -111,9 +116,8 @@ export async function runFullFlow(
         adminBalance / 1e9
       ).toFixed(
         2
-      )} SOL). Please fund it with at least ${
-        MIN_BALANCE_FOR_FEES / 1e9
-      } SOL to cover transaction fees.`;
+      )} SOL). Please fund it with at least ${MIN_BALANCE_FOR_FEES / 1e9
+        } SOL to cover transaction fees.`;
       addLog(errorMessage);
       return { success: false, message: errorMessage };
     }
@@ -151,18 +155,18 @@ export async function runFullFlow(
 
     // 1. Initialize Launch
     addLog(`[1/10] Initializing Launch...`);
-    
+
     const balanceBeforeLaunch = await provider.connection.getBalance(admin.publicKey);
 
     // Debug: Check available methods
     addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
-    
+
     const testSaleMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
-    
+
     // Check if getCreatorGrantPda exists before calling it
     let creatorGrant: PublicKey;
     if (typeof sdk.getCreatorGrantPda === 'function') {
@@ -256,9 +260,9 @@ export async function runFullFlow(
       } catch (error: any) {
         // This might happen if another process initialized it, which is fine.
         if (error.message && error.message.includes("custom program error: 0x0")) {
-            addLog(`   -> Shard ${i} was already initialized.`);
+          addLog(`   -> Shard ${i} was already initialized.`);
         } else {
-            throw error;
+          throw error;
         }
       }
     }
@@ -280,11 +284,15 @@ export async function runFullFlow(
     );
 
     // Step 1: Generate all potential user keypairs and their desired deposits
+    addLog(`[DEBUG] Creating users with rosterShardCap: ${config.rosterShardCap}`);
     let users = Array.from({ length: TARGET_USERS }, (_, i) => {
       const keypair = Keypair.generate();
       const tickets = Math.floor(Math.random() * MAX_TICKETS_PER_USER) + 1;
       const depositAmount = new BN(config.tauLamports * tickets);
       const shardId = Math.floor(i / config.rosterShardCap);
+      if (i < 5) { // Debug first 5 users
+        addLog(`[DEBUG] User ${i}: shardId=${shardId}, tickets=${tickets}, depositAmount=${depositAmount.toString()}`);
+      }
       return { keypair, tickets, depositAmount, shardId };
     });
 
@@ -370,6 +378,7 @@ export async function runFullFlow(
       const depositPromises = batch.map((user) =>
         (async () => {
           try {
+            addLog(`[DEBUG] Depositing for user ${user.keypair.publicKey.toBase58()}: shardId=${user.shardId}, amount=${user.depositAmount.toString()}`);
             await sdk.deposit({
               launch: testLaunchState,
               amountLamports: user.depositAmount,
@@ -387,8 +396,7 @@ export async function runFullFlow(
             );
             // Stop the simulation on failure to prevent cascading issues.
             throw new Error(
-              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${
-                user.shardId
+              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${user.shardId
               }: ${error.message}`
             );
           }
@@ -409,8 +417,56 @@ export async function runFullFlow(
 
     // 5. Set VRF Seed
     addLog(`\n[5/10] Setting VRF Seed...`);
-    await sdk.setSeed({ launch: testLaunchState });
-    addLog("   -> VRF seed set.");
+    let seedSetSuccessfully = false;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (!seedSetSuccessfully && retryCount < maxRetries) {
+      try {
+        addLog(`[DEBUG] Attempt ${retryCount + 1} - Before set_seed - fetching launch state...`);
+        const stateBeforeSeed = await sdk.fetchLaunch(testLaunchState);
+        const currentTimeBeforeSeed = Math.floor(Date.now() / 1000);
+        const fundingEndTimeBeforeSeed = stateBeforeSeed.fundingPeriodEnd.toNumber();
+        
+        addLog(`[DEBUG] Attempt ${retryCount + 1} - Current JS time: ${currentTimeBeforeSeed}`);
+        addLog(`[DEBUG] Attempt ${retryCount + 1} - Funding end time: ${fundingEndTimeBeforeSeed}`);
+        addLog(`[DEBUG] Attempt ${retryCount + 1} - Time difference: ${currentTimeBeforeSeed - fundingEndTimeBeforeSeed} seconds`);
+        
+        // Add extra buffer time to ensure Solana clock has caught up
+        if (currentTimeBeforeSeed - fundingEndTimeBeforeSeed < 10) {
+          addLog(`[DEBUG] Adding extra 10 second buffer for Solana clock sync...`);
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          
+          // Re-check after waiting
+          const stateAfterWait = await sdk.fetchLaunch(testLaunchState);
+          const currentTimeAfterWait = Math.floor(Date.now() / 1000);
+          const fundingEndTimeAfterWait = stateAfterWait.fundingPeriodEnd.toNumber();
+          
+          addLog(`[DEBUG] After wait - Current JS time: ${currentTimeAfterWait}`);
+          addLog(`[DEBUG] After wait - Funding end time: ${fundingEndTimeAfterWait}`);
+          addLog(`[DEBUG] After wait - Time difference: ${currentTimeAfterWait - fundingEndTimeAfterWait} seconds`);
+        }
+        
+        await sdk.setSeed({ launch: testLaunchState });
+        addLog("   -> VRF seed set.");
+        seedSetSuccessfully = true;
+      } catch (error: any) {
+        retryCount++;
+        if (error.message && error.message.includes("FundingPeriodNotEnded")) {
+          addLog(`   -> ❌ Attempt ${retryCount} failed: Funding period not ended yet. Waiting 5 more seconds...`);
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+        } else {
+          addLog(`   -> ❌ Failed to set VRF seed: ${error.message}`);
+          throw error;
+        }
+      }
+    }
+    
+    if (!seedSetSuccessfully) {
+      throw new Error(`Failed to set VRF seed after ${maxRetries} attempts`);
+    }
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
@@ -431,11 +487,13 @@ export async function runFullFlow(
 
     // 8. Create Pool
     addLog(`\n[8/10] Creating Pool...`);
+    let poolCreated = false;
     try {
       await sdk.createPool({ launch: testLaunchState });
-      addLog("   -> Pool created successfully!");
+      addLog("   -> 🎸 Pool created successfully!");
       const poolState = await sdk.fetchPoolState(testLaunchState);
       addLog(`      - Pool ID: ${poolState.poolId.toString()}`);
+      poolCreated = true;
     } catch (error: any) {
       if (error.message && error.message.includes("NoValidBlockhash")) {
         addLog(
@@ -444,6 +502,41 @@ export async function runFullFlow(
         addLog("   -> This is the correct and expected behavior.");
       } else {
         // Re-throw if it's a different error
+        throw error;
+      }
+    }
+
+    // 8.1. Create CLMM Pool and Add Liquidity (only if pool was created)
+    if (poolCreated) {
+      addLog(`\n[8.1/10] Creating CLMM Pool and Adding Liquidity...`);
+      const raydiumProgramId = new PublicKey(
+        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      ); // Raydium CLMM program ID
+      const solMint = new PublicKey("So11111111111111111111111111111111111111112"); // wSOL mint
+      const ammConfig = new PublicKey(
+        "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv"
+      ); // Correct Raydium AMM config account
+
+      try {
+        const { baseMint, baseTokenAta } = await sdk.createClmmPool({
+          launch: testLaunchState,
+          quoteMint: solMint,
+          ammConfig,
+          clmmProgram: raydiumProgramId,
+        });
+        addLog(`   -> CLMM pool created successfully! Base mint: ${baseMint.toBase58()}`);
+
+        await sdk.addClmmLiquidity({
+          launch: testLaunchState,
+          quoteMint: solMint,
+          baseMint,
+          baseTokenAta,
+          ammConfig,
+          clmmProgram: raydiumProgramId,
+        });
+        addLog("   -> Liquidity added successfully!");
+      } catch (error: any) {
+        addLog(`   -> ❌ CLMM pool creation or liquidity addition failed: ${error.message}`);
         throw error;
       }
     }
@@ -463,7 +556,7 @@ export async function runFullFlow(
     for (let i = 0; i < allUsersData.length; i += CLAIM_BATCH_SIZE) {
       const batch = allUsersData.slice(i, i + CLAIM_BATCH_SIZE);
       addLog(`   -> Processing claim batch ${Math.floor(i / CLAIM_BATCH_SIZE) + 1}...`);
-      
+
       const claimPromises = batch.map(async (userData) => {
         try {
           // Attempt to claim tokens for every user
@@ -544,10 +637,8 @@ export async function runFullFlow(
           failedClaims++;
           if (result.publicKey && result.error) {
             addLog(
-              `   -> ❌ ${
-                result.type
-              } claim failed for ${result.publicKey.toBase58()}: ${
-                result.error.message
+              `   -> ❌ ${result.type
+              } claim failed for ${result.publicKey.toBase58()}: ${result.error.message
               }`
             );
           }
@@ -656,11 +747,11 @@ export async function runFullFlow(
       await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
 
       addLog(`\n   --- Attempting to claim all remaining accrued tokens at once ---`);
-      
+
       // Debug: Check creator grant state before final claim
       const creatorGrantBeforeFinal = await sdk.fetchCreatorGrant(testLaunchState);
       addLog(`   -> Creator grant before final claim: reserved=${creatorGrantBeforeFinal.reservedTickets}, claimed=${creatorGrantBeforeFinal.claimedTickets}`);
-      
+
       try {
         const initialBalance = await getTokenBalance(creatorAta);
         await sdk.claimCreatorTokens({
@@ -676,7 +767,7 @@ export async function runFullFlow(
         // Debug: Check if all tokens were already claimed
         const creatorGrantAfterError = await sdk.fetchCreatorGrant(testLaunchState);
         addLog(`   -> Creator grant after error: reserved=${creatorGrantAfterError.reservedTickets}, claimed=${creatorGrantAfterError.claimedTickets}`);
-        
+
         if (creatorGrantAfterError.claimedTickets === creatorGrantAfterError.reservedTickets) {
           addLog(`   -> ✅ SUCCESS: All tokens were already claimed in previous attempts. This is expected behavior.`);
         } else if (error.message.includes("NothingToClaim")) {
@@ -686,7 +777,7 @@ export async function runFullFlow(
           throw error;
         }
       }
-      
+
       addLog(`\n   --- Final check: Attempting to claim again (should fail) ---`);
       try {
         await sdk.claimCreatorTokens({

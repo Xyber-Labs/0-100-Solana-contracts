@@ -72,6 +72,9 @@ build:
 	@echo "Building program..."
 	anchor build
 
+build-test:
+	anchor build -- --features test
+
 .PHONY: sync-idl
 sync-idl:
 	@echo "Syncing IDL files to SDK..."
@@ -110,6 +113,11 @@ build-deploy-local: build deploy-local sync-idl build-sdk
 validator:
 	@echo "Starting local validator..."
 	solana-test-validator --reset
+
+.PHONY: validator
+validator-amm:
+	@echo "Starting local validator..."
+	solana-test-validator --reset --bpf-program CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK ./tests/resources/raydium_clmm.so \
 
 .PHONY: validator-stop
 validator-stop:
@@ -229,6 +237,9 @@ get-program-id:
 
 logs:
 	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
+
+get-pool-conf:
+	mkdir -p tmp && solana account CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK --output json --output-file ./tmp/raydium_amm_config.json
 
 # Default target
 .DEFAULT_GOAL := help

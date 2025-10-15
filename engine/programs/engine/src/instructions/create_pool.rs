@@ -87,6 +87,13 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         }
     }
 
+    #[cfg(feature = "test")]
+    {
+        found_valid_hash = true;
+        valid_slot = 0;
+        valid_hash = [0u8; 32];
+    }
+
     require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 

@@ -475,6 +475,39 @@ export default {
       };
     }
 
+    async function addClmmLiquidity(args: {
+      launch: anchor.web3.PublicKey;
+      quoteMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      baseTokenAta: anchor.web3.PublicKey;
+      ammConfig: anchor.web3.PublicKey;
+      clmmProgram: anchor.web3.PublicKey;
+    }): Promise<{
+      signature: string;
+    }> {
+      const result = await txBuilder.addClmmLiquidityTx({
+        payer,
+        launch: args.launch,
+        quoteMint: args.quoteMint,
+        baseMint: args.baseMint,
+        baseTokenAta: args.baseTokenAta,
+        ammConfig: args.ammConfig,
+        clmmProgram: args.clmmProgram,
+        provider,
+      });
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(
+        result.transaction,
+        result.signers
+      );
+      return {
+        signature,
+      };
+    }
+
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
       saleMint: anchor.web3.PublicKey;
@@ -796,6 +829,7 @@ export default {
       claimCreatorRefundTx,
       createPool,
       createClmmPool,
+      addClmmLiquidity,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),

@@ -9,3 +9,5 @@ ts-sdk/dist
 deploy-keypair.json
 .venv
 log*.txt
+tmp
+test-ledger

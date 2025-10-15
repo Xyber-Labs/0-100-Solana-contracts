@@ -158,7 +158,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 10, // Default custom seconds
-    numBlocks: 1024, // ~1 minute window
+    numBlocks: 100, // ~0.1 minute window
     rosterShardCap: 250, // Safe size for Solana account limits (250 * 40 bytes = 10,000 bytes)
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
