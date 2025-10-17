@@ -109,4 +109,10 @@ pub enum ErrorCode {
     ShardsNotFullyFinalized,
     #[msg("User has no tokens to claim")]
     NoTokensToClaim,
+    #[msg("No distribution rules found for market cap")]
+    NoDistributionRules,
+    #[msg("Recipient not found in distribution")]
+    RecipientNotFound,
+    #[msg("Sum of shares in tier must equal 10000 basis points")]
+    InvalidShareSum,
 }
