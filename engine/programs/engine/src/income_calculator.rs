@@ -72,6 +72,9 @@ impl IncomeCalculator {
     const BASIS_POINTS: u128 = 10_000;
 
     pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Self {
+        if base_decimals > 18 {
+            panic!("Base token decimals above 18 are not supported");
+        }
         Self {
             price_in_quote,
             base_decimals,
@@ -124,6 +127,7 @@ impl IncomeCalculator {
         let start = self.rules.partition_point(|r| r.market_cap < max_applicable_cap_value);
 
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
+
         let base_in_quote = base_token_volume
             .checked_mul(self.price_in_quote)
             .ok_or(ErrorCode::ArithmeticOverflow)?
