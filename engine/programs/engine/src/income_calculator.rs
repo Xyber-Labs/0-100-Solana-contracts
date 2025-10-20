@@ -71,15 +71,13 @@ impl Distribution {
 impl IncomeCalculator {
     const BASIS_POINTS: u128 = 10_000;
 
-    pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Self {
-        if base_decimals > 18 {
-            panic!("Base token decimals above 18 are not supported");
-        }
-        Self {
+    pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Result<Self> {
+        require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
+        Ok(Self {
             price_in_quote,
             base_decimals,
-            rules: Vec::new(),
-        }
+            rules: Vec::default(),
+        })
     }
 
     pub(super) fn add_rule(mut self, rule: DistributionRule) -> Self {
@@ -329,6 +327,7 @@ mod tests {
         let creator = Pubkey::new_unique();
 
         let calculator = IncomeCalculator::new(price_in_quote, base_decimals)
+            .expect("Expected to be created well")
             .add_rule(DistributionRule::new(0, platform, 6000, 1))
             .add_rule(DistributionRule::new(0, creator, 2500, 2))
             .add_rule(DistributionRule::new(0, community, 1500, 3))

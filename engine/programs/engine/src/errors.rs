@@ -115,4 +115,6 @@ pub enum ErrorCode {
     RecipientNotFound,
     #[msg("Sum of shares in tier must equal 10000 basis points")]
     InvalidShareSum,
+    #[msg("Base token decimals must be less than 18")]
+    InvalidBaseDecimals,
 }
