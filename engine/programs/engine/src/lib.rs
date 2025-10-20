@@ -101,7 +101,9 @@ pub mod engine {
     }
 
     /// Add liquidity to Orca CLMM pool
-    pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
+    pub fn add_clmm_liquidity<'info>(
+        ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    ) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
     }
 }

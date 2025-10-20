@@ -1,18 +1,18 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::Token,
+    token::{spl_token, Token},
     token_2022::Token2022,
-    token_interface::{Mint as InterfaceMint, TokenInterface},
+    token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use mpl_token_metadata::ID as TOKEN_METADATA_PROGRAM_ID;
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
-    pub creator: Signer<'info>,
+    pub payer: Signer<'info>,
 
     /// CHECK: Executable account for the Raydium program
     #[account(executable)]
@@ -30,7 +30,7 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    #[account(seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
+    #[account(mut, seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: Escrow ATA for base token (ATA of escrow for base_mint)
@@ -48,48 +48,16 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    /// CHECK: Pool state PDA (created by Raydium)
-    #[account(mut)]
-    pub raydium_pool_state: UncheckedAccount<'info>,
-    /// CHECK: Quote vault (created by Raydium)
-    #[account(mut)]
-    pub raydium_quote_vault: UncheckedAccount<'info>,
-    /// CHECK: Base vault (created by Raydium)
-    #[account(mut)]
-    pub raydium_base_vault: UncheckedAccount<'info>,
-    /// CHECK: Escrow ATA for base token
-    /// CHECK: Position NFT mint
-    #[account(mut)]
-    pub raydium_position_nft_mint: Signer<'info>,
-    /// CHECK: Position NFT account
-    #[account(mut)]
-    pub raydium_position_nft_account: UncheckedAccount<'info>,
-    /// CHECK: Position metadata account
-    #[account(mut)]
-    pub raydium_metadata_account: UncheckedAccount<'info>,
-    /// CHECK: Personal position state
-    #[account(mut)]
-    pub raydium_personal_position: UncheckedAccount<'info>,
-    /// CHECK: Protocol position state
-    #[account(mut)]
-    pub raydium_protocol_position: UncheckedAccount<'info>,
-    /// CHECK: Tick array lower
-    #[account(mut)]
-    pub raydium_tick_array_lower: UncheckedAccount<'info>,
-    /// CHECK: Tick array upper
-    #[account(mut)]
-    pub raydium_tick_array_upper: UncheckedAccount<'info>,
-
-    /// CHECK: Quote token account
-    #[account(mut)]
-    pub quote_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: Metadata program, using hardcoded ID
-    #[account(address = TOKEN_METADATA_PROGRAM_ID)]
-    pub metadata_program: UncheckedAccount<'info>,
+    #[account(
+        init_if_needed,
+        payer = payer,
+        associated_token::mint = quote_mint,
+        associated_token::authority = escrow,
+        associated_token::token_program = quote_token_program
+    )]
+    pub wsol_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_2022_program: Program<'info, Token2022>,
-
     pub quote_token_program: Interface<'info, TokenInterface>,
     pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -101,13 +69,9 @@ pub struct AddClmmLiquidity<'info> {
 ///
 /// Requires 400,000-600,000 compute units due to complex CPI operations with Raydium.
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
-pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-    add_initial_liquidity(&ctx)?;
-    ctx.accounts.launch_state.allow_claim = true;
-    Ok(())
-}
-
-fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
+pub fn add_clmm_liquidity<'info>(
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+) -> Result<()> {
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
         ctx.accounts.launch_state.sale_allocation,
@@ -115,12 +79,78 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     )
     .get_pool_params()?;
 
+    let launch_key = ctx.accounts.launch_state.key();
+    let bump_binding = [ctx.bumps.escrow];
+    let signer_seeds = &[&[
+        SEED_ROOT,
+        b"escrow",
+        launch_key.as_ref(),
+        &bump_binding,
+    ][..]];
+
+    // Transfer SOL from escrow to wSOL ATA for wrapping
+    invoke_signed(
+        &system_instruction::transfer(
+            &ctx.accounts.escrow.key(),
+            &ctx.accounts.wsol_escrow_ata.key(),
+            params.quote_volume,
+        ),
+        &[
+            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.wsol_escrow_ata.to_account_info(),
+        ],
+        signer_seeds,
+    )?;
+
+    // Sync the wSOL account to reflect the new balance
+    anchor_lang::solana_program::program::invoke(
+        &spl_token::instruction::sync_native(
+            &ctx.accounts.quote_token_program.key(),
+            &ctx.accounts.wsol_escrow_ata.key(),
+        )?,
+        &[ctx.accounts.wsol_escrow_ata.to_account_info()],
+    )?;
+
+    invoke_raydium_cpi(&ctx, params, signer_seeds)?;
+
+    // Close the wSOL ATA and return the rent to the escrow PDA
+    anchor_spl::token::close_account(CpiContext::new_with_signer(
+        ctx.accounts.quote_token_program.to_account_info(),
+        anchor_spl::token::CloseAccount {
+            account: ctx.accounts.wsol_escrow_ata.to_account_info(),
+            destination: ctx.accounts.escrow.to_account_info(),
+            authority: ctx.accounts.escrow.to_account_info(),
+        },
+        signer_seeds,
+    ))?;
+
+    Ok(())
+}
+
+fn invoke_raydium_cpi<'info>(
+    ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    params: RaydiumPoolParams,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let rem_accounts = &mut ctx.remaining_accounts.iter();
+    let raydium_pool_state = next_account_info(rem_accounts)?;
+    let raydium_quote_vault = next_account_info(rem_accounts)?;
+    let raydium_base_vault = next_account_info(rem_accounts)?;
+    let raydium_position_nft_mint = next_account_info(rem_accounts)?;
+    let raydium_position_nft_account = next_account_info(rem_accounts)?;
+    let raydium_metadata_account = next_account_info(rem_accounts)?;
+    let raydium_personal_position = next_account_info(rem_accounts)?;
+    let raydium_protocol_position = next_account_info(rem_accounts)?;
+    let raydium_tick_array_lower = next_account_info(rem_accounts)?;
+    let raydium_tick_array_upper = next_account_info(rem_accounts)?;
+    let metadata_program = next_account_info(rem_accounts)?;
+
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
-        &ctx.accounts.raydium_quote_vault.to_account_info(),
-        &ctx.accounts.raydium_base_vault.to_account_info(),
-        &ctx.accounts.quote_token_account.to_account_info(),
+        raydium_quote_vault,
+        raydium_base_vault,
+        &ctx.accounts.wsol_escrow_ata.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
         params.quote_volume,
         params.base_volume,
@@ -128,36 +158,17 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
 
     let liquidity = params.quote_volume / 10;
 
-    anchor_lang::system_program::transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.creator.to_account_info(),
-                to: ctx.accounts.quote_token_account.to_account_info(),
-            },
-        ),
-        params.quote_volume,
-    )?;
-
-    anchor_lang::solana_program::program::invoke(
-        &anchor_spl::token::spl_token::instruction::sync_native(
-            &ctx.accounts.quote_token_program.key(),
-            &ctx.accounts.quote_token_account.key(),
-        )?,
-        &[ctx.accounts.quote_token_account.to_account_info()],
-    )?;
-
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
-        payer: ctx.accounts.creator.to_account_info(),
-        position_nft_owner: ctx.accounts.creator.to_account_info(),
-        position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
-        position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
-        metadata_account: ctx.accounts.raydium_metadata_account.to_account_info(),
-        pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
-        protocol_position: ctx.accounts.raydium_protocol_position.to_account_info(),
-        tick_array_lower: ctx.accounts.raydium_tick_array_lower.to_account_info(),
-        tick_array_upper: ctx.accounts.raydium_tick_array_upper.to_account_info(),
-        personal_position: ctx.accounts.raydium_personal_position.to_account_info(),
+        payer: ctx.accounts.payer.to_account_info(),
+        position_nft_owner: ctx.accounts.escrow.to_account_info(),
+        position_nft_mint: raydium_position_nft_mint.clone(),
+        position_nft_account: raydium_position_nft_account.clone(),
+        metadata_account: raydium_metadata_account.clone(),
+        pool_state: raydium_pool_state.clone(),
+        protocol_position: raydium_protocol_position.clone(),
+        tick_array_lower: raydium_tick_array_lower.clone(),
+        tick_array_upper: raydium_tick_array_upper.clone(),
+        personal_position: raydium_personal_position.clone(),
         token_account_0: order.token_account_0,
         token_account_1: order.token_account_1,
         token_vault_0: order.token_vault_0,
@@ -166,13 +177,17 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         system_program: ctx.accounts.system_program.to_account_info(),
         token_program: ctx.accounts.base_token_program.to_account_info(),
         associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        metadata_program: ctx.accounts.metadata_program.to_account_info(),
+        metadata_program: metadata_program.clone(),
         token_program_2022: ctx.accounts.token_2022_program.to_account_info(),
         vault_0_mint: order.token_mint_0,
         vault_1_mint: order.token_mint_1,
     };
 
-    let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
+    let cpi_context = CpiContext::new_with_signer(
+        ctx.accounts.raydium_program.to_account_info(),
+        cpi_accounts,
+        signer_seeds,
+    );
 
     raydium_amm_v3::cpi::open_position_v2(
         cpi_context,
@@ -186,7 +201,6 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         false,
         None,
     )?;
-
     Ok(())
 }
 
