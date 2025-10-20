@@ -3,6 +3,13 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::errors::ErrorCode;
 
+#[derive(BorshSerialize, BorshDeserialize)]
+struct IncomeCalculator {
+    price_in_quote: u128,
+    base_decimals: u8,
+    rules: Vec<DistributionRule>,
+}
+
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
 struct DistributionRule {
     market_cap: u128,
@@ -20,13 +27,6 @@ impl DistributionRule {
             priority,
         }
     }
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-struct IncomeCalculator {
-    price_in_quote: u128,
-    base_decimals: u8,
-    rules: Vec<DistributionRule>,
 }
 
 #[derive(Default, Clone)]
