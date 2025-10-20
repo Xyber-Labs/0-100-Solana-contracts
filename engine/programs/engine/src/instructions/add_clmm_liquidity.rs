@@ -102,25 +102,8 @@ pub struct AddClmmLiquidity<'info> {
 /// Requires 400,000-600,000 compute units due to complex CPI operations with Raydium.
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
 pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-    create_quote_token_ata(&ctx)?;
     add_initial_liquidity(&ctx)?;
     ctx.accounts.launch_state.allow_claim = true;
-    Ok(())
-}
-
-fn create_quote_token_ata(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
-    anchor_spl::associated_token::create(CpiContext::new(
-        ctx.accounts.associated_token_program.to_account_info(),
-        anchor_spl::associated_token::Create {
-            payer: ctx.accounts.creator.to_account_info(),
-            associated_token: ctx.accounts.quote_token_account.to_account_info(),
-            authority: ctx.accounts.creator.to_account_info(),
-            mint: ctx.accounts.quote_mint.to_account_info(),
-            system_program: ctx.accounts.system_program.to_account_info(),
-            token_program: ctx.accounts.quote_token_program.to_account_info(),
-        },
-    ))?;
-
     Ok(())
 }
 

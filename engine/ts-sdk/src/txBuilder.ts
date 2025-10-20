@@ -2,6 +2,7 @@ import { BN, Program, web3 } from "@coral-xyz/anchor";
 import { Engine as EngineIDL } from "../idl/engine";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
   createAssociatedTokenAccountInstruction,
   createInitializeMintInstruction,
   getAssociatedTokenAddressSync,
@@ -902,6 +903,14 @@ export class TxBuilder {
 
     const transaction = new web3.Transaction()
       .add(computeBudgetIx)
+      .add(
+        createAssociatedTokenAccountIdempotentInstruction(
+          params.payer,
+          quoteTokenAccount,
+          params.payer,
+          params.quoteMint
+        )
+      )
       .add(addLiquidityIx);
 
     return {
