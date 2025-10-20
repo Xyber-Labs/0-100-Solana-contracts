@@ -4,7 +4,8 @@ use anchor_spl::{
     token::{self, Mint, MintTo, Token},
     token_interface::{Mint as InterfaceMint, TokenInterface},
 };
-use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
+use primitive_types::U256;
+use raydium_amm_v3::cpi;
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
 
@@ -50,7 +51,9 @@ pub struct CreateClmmPool<'info> {
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
+    /// CHECK: We validate the owner through the constraint below
+    #[account(owner = raydium_program.key())]
+    pub raydium_amm_config: UncheckedAccount<'info>,
     /// CHECK: Pool state PDA
     #[account(mut)]
     pub raydium_pool_state: UncheckedAccount<'info>,
@@ -67,7 +70,9 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub raydium_tick_array_bitmap: UncheckedAccount<'info>,
 
-    pub raydium_program: Program<'info, AmmV3>,
+    /// CHECK: Executable account for the Raydium program
+    #[account(executable)]
+    pub raydium_program: UncheckedAccount<'info>,
     pub quote_token_program: Interface<'info, TokenInterface>,
     pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -132,9 +137,11 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
         ctx.accounts.launch_state.lp_allocation,
     );
 
-    let sqrt_price_x64 = calculator.get_sqrt_price();
-    let open_time =
-        Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
+    let sqrt_price_x64 = calculator.get_sqrt_price_base_in_quote();
+    let open_time = Clock::get()?
+        .unix_timestamp
+        .checked_sub(1)
+        .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -180,9 +187,21 @@ impl StakingCalculator {
         }
     }
 
-    fn get_sqrt_price(&self) -> u128 {
-        let price = ((self.raised_lamports as u128) << 64) / self.sale_allocation as u128;
-        Self::integer_sqrt(price)
+    fn get_sqrt_price_base_in_quote(&self) -> u128 {
+        // Calculates sqrt(price_base_in_quote) * 2^64
+        // price_base_in_quote = lamports_raised / sale_token_allocation
+        // Assuming base and quote mints have same decimals (9), no decimal adjustment is needed.
+        // To compute sqrt(A/B) * 2^64 with integer math, we use:
+        // (integer_sqrt(A) * 2^64) / integer_sqrt(B)
+        if self.sale_allocation == 0 {
+            return u128::MAX; // Avoid division by zero, represent as max price
+        }
+        let numerator = Self::integer_sqrt(self.raised_lamports as u128) << 64;
+        let denominator = Self::integer_sqrt(self.sale_allocation as u128);
+        if denominator == 0 {
+            return u128::MAX;
+        }
+        numerator / denominator
     }
 
     fn integer_sqrt(n: u128) -> u128 {
@@ -217,9 +236,11 @@ impl<'info> TokenOrderForPool<'info> {
         base_vault: &AccountInfo<'info>,
         quote_program: &AccountInfo<'info>,
         base_program: &AccountInfo<'info>,
-        sqrt_price_x64: u128,
+        sqrt_price_x64_base_in_quote: u128,
     ) -> Result<Self> {
         if quote_mint.key() < base_mint.key() {
+            // Order is QUOTE/BASE, so token0=quote, token1=base.
+            // Price needed is price_base_in_quote, which is what we calculated.
             Ok(Self {
                 token_mint_0: quote_mint.clone(),
                 token_mint_1: base_mint.clone(),
@@ -227,14 +248,21 @@ impl<'info> TokenOrderForPool<'info> {
                 token_vault_1: base_vault.clone(),
                 token_program_0: quote_program.clone(),
                 token_program_1: base_program.clone(),
-                sqrt_price: sqrt_price_x64,
+                sqrt_price: sqrt_price_x64_base_in_quote,
             })
         } else {
-            let inverted_sqrt_price = (1u128 << 64)
-                .checked_mul(1u128 << 64)
-                .and_then(|v| v.checked_div(sqrt_price_x64))
-                .and_then(|v| v.checked_shr(64))
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            // Order is BASE/QUOTE, so token0=base, token1=quote.
+            // Price needed is price_quote_in_base, which is the inverse.
+            // inverted_sqrt_price = 1 / sqrt_price
+            // Using U256 for (2^128 / sqrt_price_x64) to avoid overflow.
+            let inverted_sqrt_price = if sqrt_price_x64_base_in_quote == 0 {
+                u128::MAX
+            } else {
+                let numerator = U256::from(1u128) << 128;
+                let denominator = U256::from(sqrt_price_x64_base_in_quote);
+                (numerator / denominator).as_u128()
+            };
+
             Ok(Self {
                 token_mint_0: base_mint.clone(),
                 token_mint_1: quote_mint.clone(),
@@ -258,7 +286,7 @@ mod tests {
     #[test]
     fn test_sqrt_price_small_raise() {
         let calc = StakingCalculator::new(1_000_000_000, 500_000_000, 500_000_000);
-        let sqrt_price = calc.get_sqrt_price();
+        let sqrt_price = calc.get_sqrt_price_base_in_quote();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
             "sqrt_price {} < MIN {}",
@@ -276,7 +304,7 @@ mod tests {
     #[test]
     fn test_sqrt_price_medium_raise() {
         let calc = StakingCalculator::new(191_000_000_000, 540_540_000, 459_460_000);
-        let sqrt_price = calc.get_sqrt_price();
+        let sqrt_price = calc.get_sqrt_price_base_in_quote();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
             "sqrt_price {} < MIN {}",
@@ -294,7 +322,7 @@ mod tests {
     #[test]
     fn test_sqrt_price_large_raise() {
         let calc = StakingCalculator::new(500_000_000_000, 1_000_000_000, 1_000_000_000);
-        let sqrt_price = calc.get_sqrt_price();
+        let sqrt_price = calc.get_sqrt_price_base_in_quote();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
             "sqrt_price {} < MIN {}",
@@ -312,7 +340,7 @@ mod tests {
     #[test]
     fn test_sqrt_price_max_hardcap() {
         let calc = StakingCalculator::new(1_000 * 1_000_000_000, 10_000_000_000, 10_000_000_000);
-        let sqrt_price = calc.get_sqrt_price();
+        let sqrt_price = calc.get_sqrt_price_base_in_quote();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
             "sqrt_price {} < MIN {}",

@@ -5,7 +5,7 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenInterface},
 };
-use raydium_amm_v3::program::AmmV3;
+use mpl_token_metadata::ID as TOKEN_METADATA_PROGRAM_ID;
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
 
@@ -14,7 +14,9 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
-    pub raydium_program: Program<'info, AmmV3>,
+    /// CHECK: Executable account for the Raydium program
+    #[account(executable)]
+    pub raydium_program: UncheckedAccount<'info>,
 
     #[account(
         mut,
@@ -82,7 +84,8 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub quote_token_account: UncheckedAccount<'info>,
 
-    /// CHECK: Metadata program
+    /// CHECK: Metadata program, using hardcoded ID
+    #[account(address = TOKEN_METADATA_PROGRAM_ID)]
     pub metadata_program: UncheckedAccount<'info>,
 
     pub token_2022_program: Program<'info, Token2022>,
