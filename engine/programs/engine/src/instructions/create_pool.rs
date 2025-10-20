@@ -88,6 +88,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     }
 
     #[cfg(feature = "test")]
+    #[allow(dead_code)]
     {
         found_valid_hash = true;
         valid_slot = 0;

@@ -509,13 +509,14 @@ export async function runFullFlow(
     // 8.1. Create CLMM Pool and Add Liquidity (only if pool was created)
     if (poolCreated) {
       addLog(`\n[8.1/10] Creating CLMM Pool and Adding Liquidity...`);
+      // Use devnet addresses for local testing
       const raydiumProgramId = new PublicKey(
-        "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-      ); // Raydium CLMM program ID
+        "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+      ); // Raydium CLMM program ID (devnet)
       const solMint = new PublicKey("So11111111111111111111111111111111111111112"); // wSOL mint
       const ammConfig = new PublicKey(
-        "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv"
-      ); // Correct Raydium AMM config account
+        "CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu"
+      ); // Raydium AMM config account (devnet)
 
       try {
         const { baseMint, baseTokenAta } = await sdk.createClmmPool({

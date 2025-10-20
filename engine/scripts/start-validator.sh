@@ -1,15 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Script to start local validator with all required accounts
-set -e
+# Script to start local validator with all required on-chain programs
+#
+# By default, it uses devnet program IDs.
+# To use mainnet, run with:
+# NET=mainnet-beta ./scripts/start-validator.sh
 
-echo "🚀 Starting local validator with all required accounts..."
+# Set default network if not provided
+NET=${NET:-devnet}
+
+# Program IDs
+CLMM_ID=$([ "$NET" = "devnet" ] && echo "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" || echo "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK")
+TOKEN_ID=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+ATA_ID=ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
+
+# AmmConfig ID
+AMM_CONFIG_ID=$([ "$NET" = "devnet" ] && echo "CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu" || echo "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv")
+
+# Check if dependencies are downloaded
+if [ ! -f "./tmp/raydium_clmm.so" ] || [ ! -f "./tmp/amm_config.json" ]; then
+    echo "🚨 Program binaries or AmmConfig not found. Please run ./scripts/setup-local-validator.sh first."
+    exit 1
+fi
+
+echo "🚀 Starting local validator with programs from './tmp/'..."
 
 solana-test-validator --reset \
-  --bpf-program CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK ./tmp/raydium_clmm_program.json \
-  --account 2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv ./tmp/raydium_amm_config.json \
-  --account TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA ./tmp/token_program.json \
-  --account ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL ./tmp/associated_token_program.json \
-  --account 11111111111111111111111111111111 ./tmp/system_program.json \
-  --account SysvarRent111111111111111111111111111111111 ./tmp/rent_sysvar.json \
-  --account SysvarS1otHashes111111111111111111111111111 ./tmp/slot_hashes_sysvar.json
+  --bpf-program $CLMM_ID ./tmp/raydium_clmm.so \
+  --bpf-program $TOKEN_ID ./tmp/spl_token.so \
+  --bpf-program $ATA_ID   ./tmp/spl_ata.so \
+  --account $AMM_CONFIG_ID ./tmp/amm_config.json \
+  --rpc-port 8899 --limit-ledger-size

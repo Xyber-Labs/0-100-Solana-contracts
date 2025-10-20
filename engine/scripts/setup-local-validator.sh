@@ -1,52 +1,45 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Script to download required accounts from mainnet and setup local validator
-set -e
+# Script to download required on-chain programs for local testing
+# 
+# By default, it downloads programs from devnet.
+# To download from mainnet, run:
+# NET=mainnet-beta ./scripts/setup-local-validator.sh
 
-echo "🔗 Connecting to mainnet to download required accounts..."
+# Set default network if not provided
+NET=${NET:-devnet}
+
+# Program IDs
+CLMM_ID=$([ "$NET" = "devnet" ] && echo "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" || echo "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK")
+TOKEN_ID=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+ATA_ID=ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
+
+# AmmConfig ID
+AMM_CONFIG_ID=$([ "$NET" = "devnet" ] && echo "CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu" || echo "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv")
 
 # Create tmp directory
 mkdir -p ./tmp
 
-# Switch to mainnet
-solana config set --url https://api.mainnet-beta.solana.com
+echo "🔗 Connecting to $NET to download required programs..."
 
+# 1) Download .so files directly from the network
 echo "📥 Downloading Raydium CLMM program..."
-solana account CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK --output json --output-file ./tmp/raydium_clmm_program.json
-
-echo "📥 Downloading Raydium AMM config..."
-solana account 2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv --output json --output-file ./tmp/raydium_amm_config.json
+solana program dump -u $NET $CLMM_ID ./tmp/raydium_clmm.so
 
 echo "📥 Downloading Token Program..."
-solana account TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA --output json --output-file ./tmp/token_program.json
+solana program dump -u $NET $TOKEN_ID ./tmp/spl_token.so
 
 echo "📥 Downloading Associated Token Program..."
-solana account ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL --output json --output-file ./tmp/associated_token_program.json
+solana program dump -u $NET $ATA_ID   ./tmp/spl_ata.so
 
-echo "📥 Downloading System Program..."
-solana account 11111111111111111111111111111111 --output json --output-file ./tmp/system_program.json
+# 2) Download AmmConfig account
+echo "📥 Downloading Raydium AMM config..."
+solana account -u $NET $AMM_CONFIG_ID --output json > ./tmp/amm_config.json
 
-echo "📥 Downloading Rent Sysvar..."
-solana account SysvarRent111111111111111111111111111111111 --output json --output-file ./tmp/rent_sysvar.json
-
-echo "📥 Downloading SlotHashes Sysvar..."
-solana account SysvarS1otHashes111111111111111111111111111 --output json --output-file ./tmp/slot_hashes_sysvar.json
-
-echo "✅ All accounts downloaded to ./tmp/"
-echo "📋 Downloaded accounts:"
+echo "✅ All programs downloaded to ./tmp/"
+echo "📋 Downloaded programs:"
 ls -la ./tmp/
 
 echo ""
-echo "🔄 Switching back to localnet..."
-solana config set --url http://127.0.0.1:8899
-
-echo ""
-echo "🚀 Ready to start local validator with:"
-echo "solana-test-validator --reset \\"
-echo "  --bpf-program CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK ./tmp/raydium_clmm_program.json \\"
-echo "  --account 2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv ./tmp/raydium_amm_config.json \\"
-echo "  --account TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA ./tmp/token_program.json \\"
-echo "  --account ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL ./tmp/associated_token_program.json \\"
-echo "  --account 11111111111111111111111111111111 ./tmp/system_program.json \\"
-echo "  --account SysvarRent111111111111111111111111111111111 ./tmp/rent_sysvar.json \\"
-# echo "  --account SysvarS1otHashes111111111111111111111111111 ./tmp/slot_hashes_sysvar.json"
+echo "🚀 Ready to start local validator!"
