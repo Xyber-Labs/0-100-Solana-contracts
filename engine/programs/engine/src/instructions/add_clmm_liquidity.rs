@@ -164,6 +164,16 @@ pub fn add_clmm_liquidity<'info>(
         ErrorCode::PositionMintMismatch
     );
     state.clmm_position_mint = Some(position_nft_mint);
+    // Set tokens_per_ticket if missing so claims can proceed
+    if state.tokens_per_ticket.is_none() {
+        require!(state.k_capacity > 0, ErrorCode::InvalidDivisor);
+        let per = state
+            .sale_allocation
+            .checked_div(state.k_capacity as u64)
+            .ok_or(ErrorCode::InvalidDivisor)?;
+        require!(per > 0, ErrorCode::InvalidDivisor);
+        state.tokens_per_ticket = Some(per);
+    }
     state.claims_open = true;
     state.claims_opened_at = Some(Clock::get()?.unix_timestamp);
 
