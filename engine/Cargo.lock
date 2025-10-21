@@ -765,6 +765,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "income-dispatcher"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
 name = "indexmap"
 version = "2.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
