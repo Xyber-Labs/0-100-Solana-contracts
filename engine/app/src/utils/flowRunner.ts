@@ -544,12 +544,12 @@ export async function runFullFlow(
         addLog(`      - Payer: ${admin.publicKey.toBase58()}`);
         addLog(`      - Raydium Program: ${raydiumProgramId.toBase58()}`);
 
-        // Use Raydium pool PDA stored in launch_state.clmm_pool
-        const launchAcc = await sdk.fetchLaunch(testLaunchState);
-        const raydiumPoolState: PublicKey | null = launchAcc.clmmPool ?? null;
-        if (!raydiumPoolState) {
-          throw new Error("Raydium CLMM pool PDA is missing in launch_state.clmm_pool");
-        }
+        // Derive Raydium pool PDA deterministically (avoid decoding LaunchState to dodge IDL drift)
+        const [mintA, mintB] = [solMint, baseMint].sort((a, b) => a.toBuffer().compare(b.toBuffer()));
+        const raydiumPoolState = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), ammConfig.toBuffer(), mintA.toBuffer(), mintB.toBuffer()],
+          raydiumProgramId
+        )[0];
 
         const quoteVault = PublicKey.findProgramAddressSync(
           [Buffer.from("pool_vault"), raydiumPoolState.toBuffer(), solMint.toBuffer()],
@@ -562,9 +562,9 @@ export async function runFullFlow(
         )[0];
 
         const tickSpacing = 60;
-        const tickLowerIndex = 0;
+        const tickLowerIndex = -443580;
         const tickUpperIndex = 443580;
-        const TICK_ARRAY_SIZE = 60;
+        const TICK_ARRAY_SIZE = 88;
         const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
         const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
 
@@ -572,7 +572,7 @@ export async function runFullFlow(
           [
             Buffer.from("tick_array"),
             raydiumPoolState.toBuffer(),
-            Buffer.from(new Int32Array([tickArrayLowerStartIndex]).buffer),
+            Buffer.from(new Int32Array([tickArrayLowerStartIndex]).buffer), // Node uses LE; Raydium may expect BE; use explicit BE buffer below if still mismatch
           ],
           raydiumProgramId
         )[0];
@@ -586,8 +586,8 @@ export async function runFullFlow(
           raydiumProgramId
         )[0];
 
-        const tickLowerBuf = Buffer.alloc(4); tickLowerBuf.writeInt32BE(tickLowerIndex, 0);
-        const tickUpperBuf = Buffer.alloc(4); tickUpperBuf.writeInt32BE(tickUpperIndex, 0);
+        const tickLowerBuf = Buffer.alloc(4); tickLowerBuf.writeInt32LE(tickLowerIndex, 0);
+        const tickUpperBuf = Buffer.alloc(4); tickUpperBuf.writeInt32LE(tickUpperIndex, 0);
         const protocolPosition = PublicKey.findProgramAddressSync(
           [Buffer.from("protocol_position"), raydiumPoolState.toBuffer(), tickLowerBuf, tickUpperBuf],
           raydiumProgramId

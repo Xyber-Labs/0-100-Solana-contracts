@@ -445,7 +445,6 @@ export default {
         const wrapIx = await txBuilder.wrapEscrowWsolIx({
           payer,
           launch: args.launch,
-          amount: args.wrapLamportsBefore,
         });
         const tx = new anchor.web3.Transaction().add(wrapIx);
         await provider.sendAndConfirm!(tx);
@@ -490,7 +489,6 @@ export default {
         const wrapIx = await txBuilder.wrapEscrowWsolIx({
           payer,
           launch: args.launch,
-          amount: args.wrapLamportsBefore,
         });
         const tx = new anchor.web3.Transaction().add(wrapIx);
         await provider.sendAndConfirm!(tx);
@@ -534,7 +532,6 @@ export default {
       const wrapIx = await txBuilder.wrapEscrowWsolIx({
         payer,
         launch: args.launch,
-        amount: args.amount,
       });
       const tx = new anchor.web3.Transaction().add(wrapIx);
       

@@ -24,15 +24,16 @@ export class TxBuilder {
   async wrapEscrowWsolIx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
-    amount: BN | number;
+    amount?: BN | number; // unused if on-chain method takes no args
   }): Promise<web3.TransactionInstruction> {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
     const quoteMint = new web3.PublicKey("So11111111111111111111111111111111111111112");
-    const wsolEscrowAta = getAssociatedTokenAddressSync(quoteMint, escrow, false, TOKEN_PROGRAM_ID);
+    // Derive ATA for a PDA owner: allowOwnerOffCurve must be true
+    const wsolEscrowAta = getAssociatedTokenAddressSync(quoteMint, escrow, true);
     
     const ix = await (this.program.methods as any)
-      .wrapEscrowWsol(new BN(params.amount as any))
+      .wrapEscrowWsol()
       .accounts({
         payer: params.payer,
         launchState: params.launch,
@@ -876,7 +877,7 @@ export class TxBuilder {
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
-        params.quoteMint.toBuffer(),
+        mintA.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -885,7 +886,7 @@ export class TxBuilder {
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
-        params.baseMint.toBuffer(),
+        mintB.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -900,26 +901,24 @@ export class TxBuilder {
     // Fee payer PDA for system operations
     const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
 
-    // Fee payer PDA's wSOL ATA
-    const wsolFeePayerAta = getAssociatedTokenAddressSync(
+    // Derive payer user ATAs used during Raydium CPI
+    const wsolUserAta = getAssociatedTokenAddressSync(
       params.quoteMint,
-      feePayerPda,
+      params.payer,
       true
     );
-
-    // Fee payer PDA's base token ATA
-    const baseFeePayerAta = getAssociatedTokenAddressSync(
+    const baseUserAta = getAssociatedTokenAddressSync(
       params.baseMint,
-      feePayerPda,
+      params.payer,
       true
     );
 
     const positionNftMint = web3.Keypair.generate();
-    // Position NFT owner is escrow on-chain; derive escrow's ATA for the NFT mint
+    // Position NFT owner is PAYER on-chain; derive ATA for payer under Tokenkeg
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
-      escrow,
-      true
+      params.payer,
+      false
     );
 
     const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
@@ -940,7 +939,7 @@ export class TxBuilder {
     );
 
     const tickSpacing = 60;
-    const tickLowerIndex = 0;
+    const tickLowerIndex = -443580;
     const tickUpperIndex = 443580;
 
     const tickLowerBuffer = Buffer.alloc(4);
@@ -997,10 +996,10 @@ export class TxBuilder {
         escrow: escrow,
         feePayerPda: feePayerPda,
         baseEscrowAta: params.baseTokenAta,
-        wsolFeePayerAta: wsolFeePayerAta,
-        baseFeePayerAta: baseFeePayerAta,
         quoteMint: params.quoteMint,
         wsolEscrowAta: wsolEscrowAta,
+        baseUserAta,
+        wsolUserAta,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,

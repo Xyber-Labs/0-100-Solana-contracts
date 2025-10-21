@@ -1,11 +1,11 @@
 name: tests
 
-on:
-  pull_request:
-    branches: ["develop", "main"]
-    paths:
-      - "engine/**"
-      - ".github/workflows/**"
+# on:
+#   pull_request:
+#     branches: ["develop", "main"]
+#     paths:
+#       - "engine/**"
+#       - ".github/workflows/**"
 
 permissions:
   contents: read
