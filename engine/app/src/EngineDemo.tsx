@@ -167,7 +167,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   // --- New state for simulation config ---
   const defaultSimConfig: SimulationConfig = {
-    numUsers: 300,
+    numUsers: 100,
     maxTicketsPerUser: 3,
   };
   

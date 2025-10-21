@@ -498,7 +498,6 @@ export async function runFullFlow(
     }
 
     // Create CLMM Pool and Add Liquidity (only if pool was created)
-    addLog(`[CUSTOM DEBUG] CHECKING IF CODE IS UPDATED. poolCreated: ${poolCreated}, poolState exists: ${!!poolState}`);
     if (poolCreated && poolState) {
       addLog(`\n[7.1/9] Creating CLMM Pool and Adding Liquidity...`);
       // Use devnet addresses for local testing
@@ -545,17 +544,6 @@ export async function runFullFlow(
         addLog(`      - Payer: ${admin.publicKey.toBase58()}`);
         addLog(`      - Raydium Program: ${raydiumProgramId.toBase58()}`);
 
-        // Get remaining accounts for liquidity add
-        const { remainingAccounts } = await sdk.getAddLiquidityRemainingAccounts({
-          launch: testLaunchState,
-          quoteMint: solMint,
-          baseMint,
-          baseTokenAta: baseEscrowAta,
-          ammConfig,
-          clmmProgram: raydiumProgramId,
-        });
-
-        const payer = admin.publicKey;
         const quoteVault = PublicKey.findProgramAddressSync(
           [Buffer.from("pool_vault"), poolState.poolId.toBuffer(), solMint.toBuffer()],
           raydiumProgramId
@@ -652,11 +640,11 @@ export async function runFullFlow(
         
         addLog("   -> SOL wrapped to wSOL successfully!");
 
-        await sdk.addClmmLiquidity({
+		await sdk.addClmmLiquidity({
           launch: testLaunchState,
           quoteMint: solMint,
           baseMint,
-          baseTokenAta: baseEscrowAta, // Use escrow's base ATA
+		  baseTokenAta, // Use escrow's base ATA returned by createClmmPool
           ammConfig,
           clmmProgram: raydiumProgramId,
         });
