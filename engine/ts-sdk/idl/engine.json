@@ -699,9 +699,7 @@
           }
         },
         {
-          "name": "base_mint",
-          "writable": true,
-          "signer": true
+          "name": "base_mint"
         },
         {
           "name": "base_escrow_ata",

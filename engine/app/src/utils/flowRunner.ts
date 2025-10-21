@@ -544,13 +544,20 @@ export async function runFullFlow(
         addLog(`      - Payer: ${admin.publicKey.toBase58()}`);
         addLog(`      - Raydium Program: ${raydiumProgramId.toBase58()}`);
 
+        // Use Raydium pool PDA stored in launch_state.clmm_pool
+        const launchAcc = await sdk.fetchLaunch(testLaunchState);
+        const raydiumPoolState: PublicKey | null = launchAcc.clmmPool ?? null;
+        if (!raydiumPoolState) {
+          throw new Error("Raydium CLMM pool PDA is missing in launch_state.clmm_pool");
+        }
+
         const quoteVault = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool_vault"), poolState.poolId.toBuffer(), solMint.toBuffer()],
+          [Buffer.from("pool_vault"), raydiumPoolState.toBuffer(), solMint.toBuffer()],
           raydiumProgramId
         )[0];
 
         const baseVault = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool_vault"), poolState.poolId.toBuffer(), baseMint.toBuffer()],
+          [Buffer.from("pool_vault"), raydiumPoolState.toBuffer(), baseMint.toBuffer()],
           raydiumProgramId
         )[0];
 
@@ -564,7 +571,7 @@ export async function runFullFlow(
         const tickArrayLower = PublicKey.findProgramAddressSync(
           [
             Buffer.from("tick_array"),
-            poolState.poolId.toBuffer(),
+            raydiumPoolState.toBuffer(),
             Buffer.from(new Int32Array([tickArrayLowerStartIndex]).buffer),
           ],
           raydiumProgramId
@@ -573,7 +580,7 @@ export async function runFullFlow(
         const tickArrayUpper = PublicKey.findProgramAddressSync(
           [
             Buffer.from("tick_array"),
-            poolState.poolId.toBuffer(),
+            raydiumPoolState.toBuffer(),
             Buffer.from(new Int32Array([tickArrayUpperStartIndex]).buffer),
           ],
           raydiumProgramId
@@ -582,12 +589,12 @@ export async function runFullFlow(
         const tickLowerBuf = Buffer.alloc(4); tickLowerBuf.writeInt32BE(tickLowerIndex, 0);
         const tickUpperBuf = Buffer.alloc(4); tickUpperBuf.writeInt32BE(tickUpperIndex, 0);
         const protocolPosition = PublicKey.findProgramAddressSync(
-          [Buffer.from("protocol_position"), poolState.poolId.toBuffer(), tickLowerBuf, tickUpperBuf],
+          [Buffer.from("protocol_position"), raydiumPoolState.toBuffer(), tickLowerBuf, tickUpperBuf],
           raydiumProgramId
         )[0];
 
         addLog("      - Remaining accounts (expected order):");
-        addLog(`        1) poolState           = ${poolState.poolId.toBase58()}`);
+        addLog(`        1) poolState           = ${raydiumPoolState.toBase58()}`);
         addLog(`        2) quoteVault          = ${quoteVault.toBase58()}`);
         addLog(`        3) baseVault           = ${baseVault.toBase58()}`);
         addLog("        4) positionNftMint     = <generated in builder>");

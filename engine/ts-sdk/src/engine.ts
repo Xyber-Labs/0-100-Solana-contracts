@@ -432,7 +432,6 @@ export default {
     async function createClmmPool(args: {
       launch: anchor.web3.PublicKey;
       quoteMint: anchor.web3.PublicKey;
-      baseMint?: anchor.web3.Keypair;
       ammConfig: anchor.web3.PublicKey;
       clmmProgram: anchor.web3.PublicKey;
       wrapLamportsBefore?: BN;
@@ -451,7 +450,9 @@ export default {
         const tx = new anchor.web3.Transaction().add(wrapIx);
         await provider.sendAndConfirm!(tx);
       }
-      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
+      // Use the launch's sale mint as CLMM base mint (must already be initialized)
+      const launchState = await txBuilder.fetchLaunch(args.launch);
+      const baseMint = launchState.saleMint as anchor.web3.PublicKey;
 
       const result = await txBuilder.createClmmPoolTx({
         payer,
@@ -466,7 +467,6 @@ export default {
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      // Note: observationKeypair is NOT a signer, it's just a writable account
       const signature = await provider.sendAndConfirm(result.transaction, result.signers);
       return {
         signature,
@@ -509,12 +509,21 @@ export default {
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(
-        result.transaction,
-        result.signers
-      );
+      // Manually assemble, sign (ephemeral first, then wallet), and send
+      const tx = result.transaction;
+      tx.feePayer = payer;
+      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash();
+      // @ts-ignore legacy tx path
+      tx.recentBlockhash = blockhash;
+      for (const kp of result.signers) {
+        // @ts-ignore Keypair type
+        tx.partialSign(kp);
+      }
+      const signed = await (provider as any).wallet.signTransaction(tx);
+      const sig = await provider.connection.sendRawTransaction(signed.serialize());
+      await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
       return {
-        signature,
+        signature: sig,
       };
     }
 

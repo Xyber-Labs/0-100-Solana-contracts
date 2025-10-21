@@ -748,7 +748,7 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.Keypair;
+    baseMint: web3.PublicKey;
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
@@ -760,7 +760,7 @@ export class TxBuilder {
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
     
-    const [mintA, mintB] = [params.quoteMint, params.baseMint.publicKey].sort((a, b) => a.toBuffer().compare(b.toBuffer()));
+    const [mintA, mintB] = [params.quoteMint, params.baseMint].sort((a, b) => a.toBuffer().compare(b.toBuffer()));
 
     const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
@@ -781,7 +781,7 @@ export class TxBuilder {
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
-        params.quoteMint.toBuffer(),
+        mintA.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -790,7 +790,7 @@ export class TxBuilder {
       [
         Buffer.from("pool_vault"),
         poolState.toBuffer(),
-        params.baseMint.publicKey.toBuffer(),
+        mintB.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -804,7 +804,7 @@ export class TxBuilder {
     );
 
     const baseTokenAta = getAssociatedTokenAddressSync(
-      params.baseMint.publicKey,
+      params.baseMint,
       escrow,
       true // allowOwnerOffCurve for PDA
     );
@@ -817,7 +817,7 @@ export class TxBuilder {
         launchState: params.launch,
         escrow: escrow,
         baseEscrowAta: baseTokenAta,
-        baseMint: params.baseMint.publicKey,
+        baseMint: params.baseMint,
         quoteMint: params.quoteMint,
         raydiumAmmConfig: params.ammConfig,
         raydiumPoolState: poolState,
@@ -839,8 +839,8 @@ export class TxBuilder {
 
     return {
       transaction,
-      signers: [params.baseMint],
-      baseMint: params.baseMint.publicKey,
+      signers: [],
+      baseMint: params.baseMint,
       baseTokenAta,
     };
   }
@@ -860,12 +860,14 @@ export class TxBuilder {
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
 
+    // Derive Raydium pool PDA using sorted mint order (must match createClmmPoolTx)
+    const [mintA, mintB] = [params.quoteMint, params.baseMint].sort((a, b) => a.toBuffer().compare(b.toBuffer()));
     const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        params.baseMint.toBuffer(),
+        mintA.toBuffer(),
+        mintB.toBuffer(),
       ],
       params.clmmProgram
     );
