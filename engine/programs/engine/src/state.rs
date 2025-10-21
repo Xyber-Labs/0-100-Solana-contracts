@@ -57,6 +57,7 @@ pub struct LaunchState {
     pub clmm_base_mint: Option<Pubkey>,
     pub allow_create_pool: bool,
     pub clmm_pool: Option<Pubkey>,
+    pub clmm_position_mint: Option<Pubkey>,
 }
 
 impl LaunchState {

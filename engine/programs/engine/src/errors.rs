@@ -121,4 +121,6 @@ pub enum ErrorCode {
     AccountHasData,
     #[msg("Invalid seeds")]
     InvalidSeeds,
+    #[msg("Position mint mismatch")]
+    PositionMintMismatch,
 }

@@ -102,9 +102,16 @@ pub fn add_clmm_liquidity<'info>(
     // No token transfers needed - tokens stay in escrow ATAs
     // Raydium CPI will debit from escrow ATAs directly
 
-    invoke_raydium_cpi(&ctx, params, escrow_seeds)?;
+    // Invoke CPI and obtain the position NFT mint that was used/created
+    let position_nft_mint = invoke_raydium_cpi(&ctx, params, escrow_seeds)?;
 
     let state = &mut ctx.accounts.launch_state;
+    // Guard against overwriting with a different mint on re-entry
+    require!(
+        state.clmm_position_mint.is_none() || state.clmm_position_mint == Some(position_nft_mint),
+        ErrorCode::PositionMintMismatch
+    );
+    state.clmm_position_mint = Some(position_nft_mint);
     state.claims_open = true;
     state.claims_opened_at = Some(Clock::get()?.unix_timestamp);
 
@@ -115,7 +122,7 @@ fn invoke_raydium_cpi<'info>(
     ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     params: RaydiumPoolParams,
     escrow_seeds: &[&[u8]],
-) -> Result<()> {
+) -> Result<Pubkey> {
     let rem_accounts = &mut ctx.remaining_accounts.iter();
     let raydium_pool_state = next_account_info(rem_accounts)?; // 0
     let raydium_quote_vault = next_account_info(rem_accounts)?;
@@ -198,7 +205,7 @@ fn invoke_raydium_cpi<'info>(
         false,
         None,
     )?;
-    Ok(())
+    Ok(raydium_position_nft_mint.key())
 }
 
 // TODO (@xykeeper) to be refined within the other issue processing
