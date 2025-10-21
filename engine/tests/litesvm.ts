@@ -615,9 +615,31 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Initializing launch...");
     console.log("Launch state PDA:", clmmLaunchState.toString());
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
-    const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
-    console.log("✅ Launch initialized:", initLaunchSignature);
+    try {
+      const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
+      console.log("✅ Launch initialized:", initLaunchSignature);
+
+      // Check if account was created
+      const accountInfo = client.getAccount(clmmLaunchState);
+      if (accountInfo) {
+        console.log("✅ Launch state account exists, size:", accountInfo.data.length);
+      } else {
+        console.error("❌ Launch state account NOT created!");
+      }
+    } catch (error) {
+      console.error("Failed to initialize launch:", error);
+      throw error;
+    }
     console.log("Fetching launch state...");
+    const launchStateAccountRaw = client.getAccount(clmmLaunchState);
+    console.log("Direct client check - account exists:", !!launchStateAccountRaw);
+
+    const providerClient = (provider.connection as any).client;
+    const providerAccount = providerClient?.getAccount(clmmLaunchState);
+    console.log("Provider client check - account exists:", !!providerAccount);
+    console.log("Same client?", client === providerClient);
+
+    console.log("About to call sdk.fetchLaunch with:", clmmLaunchState.toString());
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
@@ -651,15 +673,6 @@ describe("engine litesvm - raydium clmm", () => {
     }
 
     console.log(`Total raised: ${totalRaised} SOL`);
-
-    const stateData = await sdk.fetchLaunch(clmmLaunchState);
-    const lpAllocationTokens = Number(stateData.lpAllocation) * 1_000_000_000;
-    const saleAllocationTokens = Number(stateData.saleAllocation) * 1_000_000_000;
-    const requiredQuoteForLiquidity = Math.ceil((lpAllocationTokens * Number(stateData.totalDeposited)) / saleAllocationTokens) + 1_000_000_000;
-    const requiredSOL = requiredQuoteForLiquidity / anchor.web3.LAMPORTS_PER_SOL;
-    console.log(`Funding payer with ${requiredSOL} SOL for liquidity`);
-
-    const fundedPayer = await createAndFundAccount(client, requiredSOL + 10);
 
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
@@ -752,11 +765,17 @@ describe("engine litesvm - raydium clmm", () => {
     console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
 
-    console.log("✅ CLMM Pool and Liquidity created successfully!");
-    console.log("Pool Signature:", poolSig);
-    console.log("Liquidity Signature:", liquiditySig);
-    console.log("Base Mint:", createPoolResultTx.baseMint.toString());
-    console.log("Base Token ATA:", createPoolResultTx.baseTokenAta.toString());
+    const quoteTokenAccount = addLiquidityResultTx.quoteTokenAccount;
+    const quoteTokenAccountInfo = client.getAccount(quoteTokenAccount);
+    console.log(`\n=== Quote Token Account (WSOL ATA) ===`);
+    console.log("Quote token account:", quoteTokenAccount.toString());
+    if (quoteTokenAccountInfo && quoteTokenAccountInfo.data.length >= 72) {
+      const dataBuffer = Buffer.from(quoteTokenAccountInfo.data);
+      const amount = dataBuffer.readBigUInt64LE(64);
+      console.log("WSOL token amount:", Number(amount) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
+    } else {
+      console.log("Quote token account data:", quoteTokenAccountInfo ? `${quoteTokenAccountInfo.data.length} bytes` : "not found");
+    }
 
     console.log("\n=== Pool State Details ===");
     console.log("Pool State PDA:", createPoolResultTx.poolState.toString());

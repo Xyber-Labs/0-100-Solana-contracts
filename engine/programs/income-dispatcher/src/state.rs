@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::income_calculator::DistributionRule;
+// use crate::income_calculator::DistributionRule;
 
 #[account]
 #[derive(InitSpace)]
@@ -23,8 +23,8 @@ pub struct ProjectPool {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
 pub struct IncomeCalculator {
     pub price_in_quote: u128,
-    #[max_len(100)]
-    pub rules: Vec<DistributionRule>,
+    // #[max_len(100)]
+    // pub rules: Vec<DistributionRule>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]

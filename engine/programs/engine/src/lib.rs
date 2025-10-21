@@ -10,8 +10,7 @@ use crate::instructions::*;
 mod constants;
 pub mod errors;
 mod events;
-#[cfg(test)]
-mod income_calculator;
+
 mod instructions;
 mod state;
 mod types;

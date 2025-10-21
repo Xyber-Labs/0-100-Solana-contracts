@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 
 pub mod errors;
-pub mod income_calculator;
+#[cfg(test)]
+mod income_calculator;
 pub mod state;
 
 use errors::ErrorCode;
