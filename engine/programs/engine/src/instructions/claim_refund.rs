@@ -53,8 +53,9 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         return Ok(());
     }
 
-    // Otherwise, proceed with permutation path
+    // Otherwise, proceed with successful-raise path: require finalized and claims_open
     require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
+    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
 
     let reserved = launch_state.creator_reserved_tickets.min(launch_state.k_capacity);

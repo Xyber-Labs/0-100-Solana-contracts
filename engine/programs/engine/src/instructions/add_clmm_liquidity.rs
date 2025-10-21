@@ -100,6 +100,43 @@ pub fn add_clmm_liquidity<'info>(
     ];
 
     // No token transfers needed - tokens stay in escrow ATAs
+    // Preconditions before opening claims and moving funds into CLMM
+    let state = &mut ctx.accounts.launch_state;
+    require!(
+        Clock::get()?.unix_timestamp >= state.funding_period_end,
+        ErrorCode::FundingPeriodNotEnded
+    );
+    require!(state.selection_finalized, ErrorCode::NotFinalized);
+
+    // Solvency check for refunds: ensure enough lamports remain in escrow to pay all non-winners
+    let reserved = state.creator_reserved_tickets.min(state.k_capacity);
+    let k_pub = state
+        .k_capacity
+        .checked_sub(reserved)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let n_pub = state.public_total_tickets;
+    let winners_public = core::cmp::min(n_pub, k_pub) as u64;
+    let approved_lamports_total = winners_public
+        .checked_mul(state.tau_lamports)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let refunds_needed = state
+        .total_deposited
+        .checked_sub(approved_lamports_total)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    require!(
+        ctx.accounts.escrow.to_account_info().lamports() >= refunds_needed,
+        ErrorCode::InsufficientFunds
+    );
+
+    // Optionally set tokens_per_ticket if missing so claim_tokens can proceed
+    if state.tokens_per_ticket.is_none() {
+        let per = (state.sale_allocation as u128)
+            .checked_mul(1_000_000u128)
+            .and_then(|x| x.checked_div(state.k_capacity as u128))
+            .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
+        state.tokens_per_ticket = Some(per);
+    }
+
     // Raydium CPI will debit from escrow ATAs directly
 
     // Invoke CPI and obtain the position NFT mint that was used/created

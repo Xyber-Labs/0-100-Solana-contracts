@@ -77,6 +77,16 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
 
     launch_state.roster_finalized_up_to = shard_id as i32;
 
+    // If this was the last shard, flip selection_finalized and emit event
+    let all_finalized = (shard_id as u32 + 1) == launch_state.roster_shards as u32;
+    if all_finalized && !launch_state.selection_finalized {
+        launch_state.selection_finalized = true;
+        emit!(crate::events::SelectionFinalized {
+            launch: launch_state.key(),
+            k_capacity: launch_state.k_capacity,
+        });
+    }
+
     emit!(RosterShardFinalized {
         launch: launch_state.key(),
         shard_id,
