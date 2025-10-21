@@ -80,11 +80,6 @@ pub mod engine {
         instructions::claim_tokens(ctx)
     }
 
-    /// Open claims (permissionless) once selection is finalized and liquidity provided
-    pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
-        instructions::open_claims(ctx)
-    }
-
     /// Claim creator tokens with daily limits
     pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         instructions::claim_creator_tokens(ctx)

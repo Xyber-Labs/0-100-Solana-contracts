@@ -1,5 +1,4 @@
 pub use add_clmm_liquidity::*;
-pub use open_claims::*;
 pub use wrap_escrow_wsol::*;
 pub use top_up_fee_payer::*;
 pub use create_fee_payer_pda::*;
@@ -20,7 +19,6 @@ pub use set_seed::*;
 pub use withdraw::*;
 
 mod add_clmm_liquidity;
-mod open_claims;
 mod wrap_escrow_wsol;
 mod top_up_fee_payer;
 mod create_fee_payer_pda;
