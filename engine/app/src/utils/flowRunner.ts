@@ -631,7 +631,31 @@ export async function runFullFlow(
         });
         addLog(`      -> Fee payer PDA topped up successfully!`);
 
-        // 3. Wrap SOL from the fee_payer_pda into the escrow's wSOL ATA
+        // 3. Mint base tokens into escrow ATA (dev helper) so base side is non-zero
+        const baseMintAmount = new BN(100 * 1_000_000); // 100.000000 base tokens (decimals=6)
+        addLog(`   -> Minting ${baseMintAmount.toString()} base tokens to escrow ATA for LP...`);
+        try {
+          const mintIx = await (program.methods as any)
+            .mintLpBaseToEscrow(baseMintAmount)
+            .accounts({
+              payer: admin.publicKey,
+              launchState: testLaunchState,
+              escrow: escrowPda,
+              saleMint: baseMint,
+              baseEscrowAta: baseEscrowAta,
+              mintAuth: mintAuth,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            })
+            .instruction();
+          const txMint = new Transaction().add(mintIx);
+          await provider.sendAndConfirm!(txMint);
+          addLog("      -> Base tokens minted to escrow.")
+        } catch (e:any) {
+          addLog(`      -> ❌ Mint base to escrow failed: ${e.message}`);
+          throw e;
+        }
+
+        // 4. Wrap SOL from the fee_payer_pda into the escrow's wSOL ATA
         addLog("   -> Wrapping SOL to wSOL in escrow...");
         const escrowBalanceBefore = await provider.connection.getBalance(escrowPda);
         addLog(`      - Escrow SOL balance before wrap: ${escrowBalanceBefore / 1e9} SOL`);

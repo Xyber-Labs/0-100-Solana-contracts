@@ -118,6 +118,11 @@ pub mod engine {
     ) -> Result<()> {
         instructions::unwrap_and_transfer_sol(ctx, amount)
     }
+
+    /// Dev helper: mint base (sale) tokens into escrow ATA for initial LP
+    pub fn mint_lp_base_to_escrow(ctx: Context<MintLpBaseToEscrow>, amount: u64) -> Result<()> {
+        instructions::mint_lp_base_to_escrow(ctx, amount)
+    }
 }
 
 // test cache
