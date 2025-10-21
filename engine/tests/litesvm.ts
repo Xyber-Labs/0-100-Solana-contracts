@@ -765,16 +765,16 @@ describe("engine litesvm - raydium clmm", () => {
     console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
 
-    const quoteTokenAccount = addLiquidityResultTx.quoteTokenAccount;
-    const quoteTokenAccountInfo = client.getAccount(quoteTokenAccount);
-    console.log(`\n=== Quote Token Account (WSOL ATA) ===`);
-    console.log("Quote token account:", quoteTokenAccount.toString());
-    if (quoteTokenAccountInfo && quoteTokenAccountInfo.data.length >= 72) {
-      const dataBuffer = Buffer.from(quoteTokenAccountInfo.data);
+    const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
+    const quoteTokenAtaInfo = client.getAccount(quoteTokenAta);
+    console.log(`\n=== Quote Token ATA (WSOL) ===`);
+    console.log("Quote token ATA:", quoteTokenAta.toString());
+    if (quoteTokenAtaInfo && quoteTokenAtaInfo.data.length >= 72) {
+      const dataBuffer = Buffer.from(quoteTokenAtaInfo.data);
       const amount = dataBuffer.readBigUInt64LE(64);
       console.log("WSOL token amount:", Number(amount) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
     } else {
-      console.log("Quote token account data:", quoteTokenAccountInfo ? `${quoteTokenAccountInfo.data.length} bytes` : "not found");
+      console.log("Quote token ATA data:", quoteTokenAtaInfo ? `${quoteTokenAtaInfo.data.length} bytes` : "not found");
     }
 
     console.log("\n=== Pool State Details ===");
