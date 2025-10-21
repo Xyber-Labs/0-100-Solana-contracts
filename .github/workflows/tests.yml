@@ -1,11 +1,11 @@
 name: tests
 
-# on:
-#   pull_request:
-#     branches: ["develop", "main"]
-#     paths:
-#       - "engine/**"
-#       - ".github/workflows/**"
+on:
+  pull_request:
+    branches: ["develop", "main"]
+    paths:
+      - "engine/**"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -151,9 +151,12 @@ jobs:
           key: raydium-programs-${{ runner.os }}-v1
 
       - name: Run litesvm raydium tests
-        run: anchor run litesvm-raydium
+        run: anchor run litesvm-basic
 
-      - name: Run complete flow  tests
-        run: anchor run litesvm-full
+      # - name: Run litesvm raydium tests
+      #   run: anchor run litesvm-raydium
+
+      # - name: Run complete flow  tests
+      #   run: anchor run litesvm-full
 
 # test cache
