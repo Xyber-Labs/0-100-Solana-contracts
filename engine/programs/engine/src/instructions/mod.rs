@@ -14,7 +14,6 @@ pub use finalize_roster_shard::*;
 pub use init_launch::*;
 pub use init_roster::*;
 pub use init_roster_shard::*;
-pub use process_batch::*;
 pub use set_seed::*;
 pub use withdraw::*;
 
@@ -34,6 +33,5 @@ mod finalize_roster_shard;
 mod init_launch;
 mod init_roster;
 mod init_roster_shard;
-mod process_batch;
 mod set_seed;
 mod withdraw;
