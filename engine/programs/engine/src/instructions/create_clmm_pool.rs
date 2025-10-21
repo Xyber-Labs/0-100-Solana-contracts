@@ -1,16 +1,13 @@
 use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{self, Mint, MintTo, Token},
+    token::{Mint, Token},
     token_interface::{Mint as InterfaceMint, TokenInterface},
 };
 use primitive_types::U256;
 use raydium_amm_v3::cpi;
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
-
-// TODO (@xykeeper): total_supply to the EngineConfig
-const TOTAL_SUPPLY: u64 = 1_000_000_000u64;
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -28,10 +25,7 @@ pub struct CreateClmmPool<'info> {
     pub escrow: Account<'info, EscrowAccount>,
 
     #[account(
-        init,
-        payer = payer,
-        mint::decimals = 9,
-        mint::authority = escrow,
+        constraint = base_mint.key() == launch_state.sale_mint @ crate::errors::ErrorCode::Unauthorized,
         mint::token_program = base_token_program
     )]
     pub base_mint: Box<Account<'info, Mint>>,
@@ -82,7 +76,6 @@ pub struct CreateClmmPool<'info> {
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
-    mint_base_tokens(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_pool = Some(ctx.accounts.raydium_pool_state.key());
@@ -102,30 +95,6 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
             token_program: ctx.accounts.base_token_program.to_account_info(),
         },
     ))?;
-
-    Ok(())
-}
-
-fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let launch_key = ctx.accounts.launch_state.key();
-    let seeds = &[
-        SEED_ROOT,
-        b"escrow",
-        launch_key.as_ref(),
-        &[ctx.bumps.escrow],
-    ];
-    let seeds_binding = [&seeds[..]];
-    let mint_accounts = MintTo {
-        mint: ctx.accounts.base_mint.to_account_info(),
-        to: ctx.accounts.base_escrow_ata.to_account_info(),
-        authority: ctx.accounts.escrow.to_account_info(),
-    };
-    let mint_ctx = CpiContext::new_with_signer(
-        ctx.accounts.base_token_program.to_account_info(),
-        mint_accounts,
-        &seeds_binding,
-    );
-    token::mint_to(mint_ctx, TOTAL_SUPPLY)?;
 
     Ok(())
 }

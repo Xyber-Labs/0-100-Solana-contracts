@@ -50,7 +50,9 @@ pub struct WrapEscrowWsol<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn wrap_escrow_wsol(ctx: Context<WrapEscrowWsol>, amount: u64) -> Result<()> {
+pub fn wrap_escrow_wsol(ctx: Context<WrapEscrowWsol>) -> Result<()> {
+    let available = ctx.accounts.fee_payer_pda.to_account_info().lamports();
+    let amount = available.saturating_mul(45) / 100; // 45% TODO: take from launch state
     require_gt!(amount, 0);
 
     // (1) Transfer lamports from fee_payer_pda -> WSOL ATA via SystemProgram::transfer

@@ -102,9 +102,9 @@ pub mod engine {
         instructions::add_clmm_liquidity(ctx)
     }
 
-    /// Wrap SOL into wSOL on escrow ATA
-    pub fn wrap_escrow_wsol(ctx: Context<WrapEscrowWsol>, amount: u64) -> Result<()> {
-        instructions::wrap_escrow_wsol(ctx, amount)
+    /// Wrap SOL into wSOL on escrow ATA (wraps 45% of available lamports)
+    pub fn wrap_escrow_wsol(ctx: Context<WrapEscrowWsol>) -> Result<()> {
+        instructions::wrap_escrow_wsol(ctx)
     }
 
     pub fn top_up_fee_payer(ctx: Context<TopUpFeePayer>, amount_lamports: u64) -> Result<()> {
