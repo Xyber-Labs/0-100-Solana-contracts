@@ -228,15 +228,25 @@ impl StakingCalculator {
     }
 
     fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
-        let tick_lower_index = 0i32;
-        let tick_upper_index = 443580i32;
+        // Wide range: approximate full protocol range for chosen spacing
+        // Raydium v3 typical extremes are around [-443_580, 443_580] for spacing=60
+        const MIN_TICK: i32 = -443_580;
+        const MAX_TICK: i32 = 443_580;
+
+        let tick_lower_index = MIN_TICK;
+        let tick_upper_index = MAX_TICK;
 
         let tick_spacing = 60i32;
         let tick_array_size = 60i32;
         let ticks_in_array = tick_spacing * tick_array_size;
 
-        let tick_array_lower_start_index = (tick_lower_index / ticks_in_array) * ticks_in_array;
-        let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
+        // floor_div for negatives so arrays align correctly
+        let floor_div = |a: i32, b: i32| -> i32 {
+            if a >= 0 { a / b } else { -(((-a) + b - 1) / b) }
+        };
+
+        let tick_array_lower_start_index = floor_div(tick_lower_index, ticks_in_array) * ticks_in_array;
+        let tick_array_upper_start_index = floor_div(tick_upper_index, ticks_in_array) * ticks_in_array;
 
         let base_volume = self.lp_allocation;
         let quote_volume = u128::from(self.lp_allocation)
