@@ -104,10 +104,7 @@ pub fn add_clmm_liquidity<'info>(
 
     invoke_raydium_cpi(&ctx, params, escrow_seeds)?;
 
-    let launch_state = &mut ctx.accounts.launch_state;
-    launch_state.claims_open = true;
-    let now = Clock::get()?.unix_timestamp;
-    launch_state.claims_opened_at = Some(now);
+    // claims_open is toggled via a separate open_claims instruction
 
     Ok(())
 }
