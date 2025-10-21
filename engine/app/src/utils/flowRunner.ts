@@ -467,24 +467,14 @@ export async function runFullFlow(
     }
 
     // 6. Finalize shard(s)
-    addLog(`\n[6/10] Finalizing roster shards...`);
+    addLog(`\n[6/9] Finalizing roster shards...`);
     for (let i = 0; i < numShards; i++) {
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
       addLog(`   -> Shard ${i} finalized.`);
     }
 
-    // 7. Open Claims
-    addLog(`\n[7/10] Opening claims...`);
-    await sdk.openClaims({ launch: testLaunchState });
-    const finalLaunchState = await sdk.fetchLaunch(testLaunchState);
-    if (finalLaunchState.claimsOpen) {
-      addLog("   -> Claims are open.");
-    } else {
-      throw new Error("Verification failed: Claims not open.");
-    }
-
-    // 8. Create Pool
-    addLog(`\n[8/10] Creating Pool...`);
+    // Create Pool
+    addLog(`\n[7/9] Creating Pool...`);
     let poolCreated = false;
     let poolState: any;
     try {
@@ -507,10 +497,10 @@ export async function runFullFlow(
       }
     }
 
-    // 8.1. Create CLMM Pool and Add Liquidity (only if pool was created)
+    // Create CLMM Pool and Add Liquidity (only if pool was created)
     addLog(`[CUSTOM DEBUG] CHECKING IF CODE IS UPDATED. poolCreated: ${poolCreated}, poolState exists: ${!!poolState}`);
     if (poolCreated && poolState) {
-      addLog(`\n[8.1/10] Creating CLMM Pool and Adding Liquidity...`);
+      addLog(`\n[7.1/9] Creating CLMM Pool and Adding Liquidity...`);
       // Use devnet addresses for local testing
       const raydiumProgramId = new PublicKey(
         "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
@@ -680,8 +670,9 @@ export async function runFullFlow(
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
     const crankingCost = balanceBeforeCranking - balanceAfterCranking;
 
+    const finalLaunchState = await sdk.fetchLaunch(testLaunchState);
     // 9. Test User Token & Refund Claiming
-    addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
+    addLog(`\n[8/9] Testing User Token & Refund Claiming...`);
 
     const allUsersData = Array.from(usersWithDeposits.values());
 
@@ -833,7 +824,7 @@ export async function runFullFlow(
     if (config.creatorInitialDepositLamports > 0) {
       const balanceBeforeCreatorClaims = await provider.connection.getBalance(admin.publicKey);
       addLog(
-        `\n[10/10] Testing Creator Token Claiming (Accrued Vesting)...`
+        `\n[9/9] Testing Creator Token Claiming (Accrued Vesting)...`
       );
       addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
       addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);

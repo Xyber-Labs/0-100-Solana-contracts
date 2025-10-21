@@ -51,11 +51,6 @@ pub mod engine {
         instructions::finalize_roster_shard(ctx, shard_id)
     }
 
-    /// Open claims after all shards finalized
-    pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
-        instructions::open_claims(ctx)
-    }
-
     // -------------------------------
     // User (UI)
     // -------------------------------
