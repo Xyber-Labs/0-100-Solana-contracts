@@ -136,7 +136,10 @@ fn invoke_raydium_cpi<'info>(
     let raydium_tick_array_upper = next_account_info(rem_accounts)?;
     let metadata_program = next_account_info(rem_accounts)?;
 
-    
+    // Use actual escrow ATA balances as amounts going into the pool
+    let quote_amount = ctx.accounts.wsol_escrow_ata.amount;
+    let base_amount = ctx.accounts.base_escrow_ata.amount;
+
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
@@ -144,11 +147,12 @@ fn invoke_raydium_cpi<'info>(
         raydium_base_vault,
         &ctx.accounts.wsol_escrow_ata.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
-        params.quote_volume,
-        params.base_volume,
+        quote_amount,
+        base_amount,
     );
 
-    let liquidity = params.quote_volume / 10;
+    // Placeholder liquidity derived from quote amount; to be refined later
+    let liquidity = quote_amount / 10;
 
     // Debug logs to verify CPI account mapping and keys
     msg!("[AddClmmLiquidity] payer...............: {}", ctx.accounts.payer.key());
