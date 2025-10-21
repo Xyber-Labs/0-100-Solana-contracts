@@ -20,6 +20,8 @@ pub enum ErrorCode {
     PerWalletCapExceeded,
     #[msg("Insufficient deposit")]
     InsufficientDeposit,
+    #[msg("Insufficient funds")]
+    InsufficientFunds,
     #[msg("Seed already set")]
     SeedAlreadySet,
     #[msg("Seed missing")]
@@ -113,4 +115,10 @@ pub enum ErrorCode {
     PoolNotCreated,
     #[msg("Pool not allowed")]
     PoolNotAllowed,
+    #[msg("Invalid account owner")]
+    InvalidAccountOwner,
+    #[msg("Account has data")]
+    AccountHasData,
+    #[msg("Invalid seeds")]
+    InvalidSeeds,
 }

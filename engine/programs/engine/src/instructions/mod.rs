@@ -1,4 +1,8 @@
 pub use add_clmm_liquidity::*;
+pub use wrap_escrow_wsol::*;
+pub use top_up_fee_payer::*;
+pub use create_fee_payer_pda::*;
+pub use unwrap_and_transfer_sol::*;
 pub use claim_creator_refund::*;
 pub use claim_creator_tokens::*;
 pub use claim_refund::*;
@@ -16,6 +20,10 @@ pub use set_seed::*;
 pub use withdraw::*;
 
 mod add_clmm_liquidity;
+mod wrap_escrow_wsol;
+mod top_up_fee_payer;
+mod create_fee_payer_pda;
+mod unwrap_and_transfer_sol;
 mod claim_creator_refund;
 mod claim_creator_tokens;
 mod claim_refund;

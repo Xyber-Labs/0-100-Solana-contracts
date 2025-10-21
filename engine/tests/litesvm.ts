@@ -58,7 +58,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -111,7 +111,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -174,7 +174,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -268,7 +268,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -301,7 +301,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -334,7 +334,7 @@ describe("engine litesvm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
-      fundingDurationSeconds: 10,
+      fundingDurationSeconds: new anchor.BN(10),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -601,7 +601,7 @@ describe("engine litesvm - raydium clmm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: CLMM_SALE_ALLOCATION,
       lpAllocation: CLMM_LP_ALLOCATION,
-      fundingDurationSec: new anchor.BN(3600),
+      fundingDurationSeconds: new anchor.BN(3600),
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -834,17 +834,6 @@ describe("Full flow", () => {
       launch: testLaunchState,
       payerKeypair: adminKeypair,
     });
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(0)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
 
     console.log("=== Simulating User Deposits ===");
     // Simulate multiple users depositing beyond hard cap
@@ -854,22 +843,11 @@ describe("Full flow", () => {
     for (let i = 0; i < 1; i++) {
       const user = await createAndFundAccount(client, 20);
 
-      await program.methods
-        .deposit(depositAmount)
-        .accounts({
-          user: user.publicKey,
-          launchState: testLaunchState,
-          userContribution: sdk.getUserContributionPda(
-            testLaunchState,
-            user.publicKey
-          )[0],
-          rosterShard,
-          escrow: sdk.getEscrowPda(testLaunchState)[0],
-          launch: testLaunchState,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        } as any)
-        .signers([user])
-        .rpc();
+      await sdk.deposit({
+        launch: testLaunchState,
+        amountLamports: depositAmount,
+        userKeypair: user,
+      });
 
       users.push({
         keypair: user,

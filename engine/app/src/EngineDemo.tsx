@@ -257,6 +257,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setProgram(program);
       
       addLog('SUCCESS: SDK initialized successfully');
+      addLog(`SDK Version: ${sdkInstance.version}`);
     } catch (error) {
       addLog(`ERROR: Failed to initialize SDK - ${error}`);
     } finally {

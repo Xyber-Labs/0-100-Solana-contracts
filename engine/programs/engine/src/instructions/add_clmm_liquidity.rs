@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{spl_token, Token},
+    token::Token,
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
@@ -33,14 +32,25 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
     pub escrow: Account<'info, EscrowAccount>,
 
-    /// CHECK: Escrow ATA for base token (ATA of escrow for base_mint)
+    /// CHECK: Fee payer PDA - system-owned account for paying system operations
+    /// This account must be initialized as a system account (space=0, owner=SystemProgram)
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"fee_payer", launch_state.key().as_ref()],
+        bump,
+        constraint = *fee_payer_pda.owner == System::id() @ ErrorCode::InvalidAccountOwner,
+        constraint = fee_payer_pda.data_is_empty() @ ErrorCode::AccountHasData
+    )]
+    pub fee_payer_pda: UncheckedAccount<'info>,
+
     #[account(
         mut,
         seeds = [escrow.key().as_ref(), base_token_program.key().as_ref(), base_mint.key().as_ref()],
         bump,
         seeds::program = associated_token_program.key()
     )]
-    pub base_escrow_ata: UncheckedAccount<'info>,
+    pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+
 
     #[account(
         mint::token_program = quote_token_program,
@@ -80,49 +90,19 @@ pub fn add_clmm_liquidity<'info>(
     .get_pool_params()?;
 
     let launch_key = ctx.accounts.launch_state.key();
-    let bump_binding = [ctx.bumps.escrow];
-    let signer_seeds = &[&[
+    let escrow_bump = ctx.bumps.escrow;
+    
+    let escrow_seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"escrow",
         launch_key.as_ref(),
-        &bump_binding,
-    ][..]];
+        &[escrow_bump],
+    ];
 
-    // Transfer SOL from escrow to wSOL ATA for wrapping
-    invoke_signed(
-        &system_instruction::transfer(
-            &ctx.accounts.escrow.key(),
-            &ctx.accounts.wsol_escrow_ata.key(),
-            params.quote_volume,
-        ),
-        &[
-            ctx.accounts.escrow.to_account_info(),
-            ctx.accounts.wsol_escrow_ata.to_account_info(),
-        ],
-        signer_seeds,
-    )?;
+    // No token transfers needed - tokens stay in escrow ATAs
+    // Raydium CPI will debit from escrow ATAs directly
 
-    // Sync the wSOL account to reflect the new balance
-    anchor_lang::solana_program::program::invoke(
-        &spl_token::instruction::sync_native(
-            &ctx.accounts.quote_token_program.key(),
-            &ctx.accounts.wsol_escrow_ata.key(),
-        )?,
-        &[ctx.accounts.wsol_escrow_ata.to_account_info()],
-    )?;
-
-    invoke_raydium_cpi(&ctx, params, signer_seeds)?;
-
-    // Close the wSOL ATA and return the rent to the escrow PDA
-    anchor_spl::token::close_account(CpiContext::new_with_signer(
-        ctx.accounts.quote_token_program.to_account_info(),
-        anchor_spl::token::CloseAccount {
-            account: ctx.accounts.wsol_escrow_ata.to_account_info(),
-            destination: ctx.accounts.escrow.to_account_info(),
-            authority: ctx.accounts.escrow.to_account_info(),
-        },
-        signer_seeds,
-    ))?;
+    invoke_raydium_cpi(&ctx, params, escrow_seeds)?;
 
     Ok(())
 }
@@ -130,10 +110,10 @@ pub fn add_clmm_liquidity<'info>(
 fn invoke_raydium_cpi<'info>(
     ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     params: RaydiumPoolParams,
-    signer_seeds: &[&[&[u8]]],
+    escrow_seeds: &[&[u8]],
 ) -> Result<()> {
     let rem_accounts = &mut ctx.remaining_accounts.iter();
-    let raydium_pool_state = next_account_info(rem_accounts)?;
+    let raydium_pool_state = next_account_info(rem_accounts)?; // 0
     let raydium_quote_vault = next_account_info(rem_accounts)?;
     let raydium_base_vault = next_account_info(rem_accounts)?;
     let raydium_position_nft_mint = next_account_info(rem_accounts)?;
@@ -145,6 +125,7 @@ fn invoke_raydium_cpi<'info>(
     let raydium_tick_array_upper = next_account_info(rem_accounts)?;
     let metadata_program = next_account_info(rem_accounts)?;
 
+    
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
@@ -158,8 +139,17 @@ fn invoke_raydium_cpi<'info>(
 
     let liquidity = params.quote_volume / 10;
 
+    // Debug logs to verify CPI account mapping and keys
+    msg!("[AddClmmLiquidity] payer...............: {}", ctx.accounts.payer.key());
+    msg!("[AddClmmLiquidity] escrow..............: {}", ctx.accounts.escrow.key());
+    msg!("[AddClmmLiquidity] fee_payer_pda.......: {}", ctx.accounts.fee_payer_pda.key());
+    msg!("[AddClmmLiquidity] wsol_escrow_ata.....: {}", ctx.accounts.wsol_escrow_ata.key());
+    msg!("[AddClmmLiquidity] base_escrow_ata.....: {}", ctx.accounts.base_escrow_ata.key());
+    msg!("[AddClmmLiquidity] position_nft_owner..: {}", ctx.accounts.escrow.key());
+    msg!("[AddClmmLiquidity] CPI payer...........: {}", ctx.accounts.fee_payer_pda.key());
+
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
-        payer: ctx.accounts.payer.to_account_info(),
+        payer: ctx.accounts.escrow.to_account_info(), // Payer is now escrow
         position_nft_owner: ctx.accounts.escrow.to_account_info(),
         position_nft_mint: raydium_position_nft_mint.clone(),
         position_nft_account: raydium_position_nft_account.clone(),
@@ -182,6 +172,9 @@ fn invoke_raydium_cpi<'info>(
         vault_0_mint: order.token_mint_0,
         vault_1_mint: order.token_mint_1,
     };
+
+    // Signer is now only escrow
+    let signer_seeds: &[&[&[u8]]] = &[escrow_seeds];
 
     let cpi_context = CpiContext::new_with_signer(
         ctx.accounts.raydium_program.to_account_info(),

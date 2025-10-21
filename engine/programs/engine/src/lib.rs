@@ -106,6 +106,28 @@ pub mod engine {
     ) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
     }
+
+    /// Wrap SOL into wSOL on escrow ATA
+    pub fn wrap_escrow_wsol(ctx: Context<WrapEscrowWsol>, amount: u64) -> Result<()> {
+        instructions::wrap_escrow_wsol(ctx, amount)
+    }
+
+    pub fn top_up_fee_payer(ctx: Context<TopUpFeePayer>, amount_lamports: u64) -> Result<()> {
+        instructions::top_up_fee_payer(ctx, amount_lamports)
+    }
+
+    /// Create fee payer PDA as system account
+    pub fn create_fee_payer_pda(ctx: Context<CreateFeePayerPda>, lamports: u64) -> Result<()> {
+        instructions::create_fee_payer_pda(ctx, lamports)
+    }
+
+    /// Unwrap wSOL from escrow and transfer SOL to recipient
+    pub fn unwrap_and_transfer_sol(
+        ctx: Context<UnwrapAndTransferSol>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::unwrap_and_transfer_sol(ctx, amount)
+    }
 }
 
 // test cache

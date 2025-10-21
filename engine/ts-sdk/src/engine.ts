@@ -50,6 +50,10 @@ export default {
       return txBuilder.getPda(["escrow", launch]);
     }
 
+    function getFeePayerPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+      return txBuilder.getPda(["fee_payer", launch]);
+    }
+
     function getRosterPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
       return txBuilder.getPda(["roster", launch]);
     }
@@ -120,7 +124,7 @@ export default {
       tauLamports: BN;
       saleAllocation: BN;
       lpAllocation: BN;
-      fundingDurationSeconds: number;
+      fundingDurationSeconds: BN;
       numBlocks?: number;
       rosterShardCap: number;
       creatorInitialDepositLamports: BN;
@@ -216,20 +220,18 @@ export default {
       launch: anchor.web3.PublicKey;
       amountLamports: BN;
       userKeypair?: anchor.web3.Keypair;
-      roster?: anchor.web3.PublicKey;
-      rosterShard?: anchor.web3.PublicKey;
-      shardId?: number;
-      escrow?: anchor.web3.PublicKey;
+      shardId: number; // Add shardId as a required parameter
     }): Promise<{ userPda: anchor.web3.PublicKey; signature: string }> {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
+
+      // Roster shard PDA is now derived directly from shardId
+      const [rosterShardPda] = getRosterShardPda(args.launch, args.shardId);
+
       const { instruction, userContribution } = await txBuilder.depositIx({
         launch: args.launch,
         user: userPubkey,
-        amount: args.amountLamports,
-        roster: args.roster,
-        rosterShard: args.rosterShard,
-        shardId: args.shardId,
-        escrow: args.escrow,
+        amountLamports: args.amountLamports,
+        rosterShard: rosterShardPda,
       });
 
       const tx = new anchor.web3.Transaction().add(instruction);
@@ -254,7 +256,7 @@ export default {
       const { transaction } = await txBuilder.withdrawTx({
         launch: args.launch,
         user: userPubkey,
-        amount: args.amountLamports,
+        amountLamports: args.amountLamports,
         roster: args.roster,
         // @ts-ignore pass-through for updated builder
         rosterShard: args.rosterShard,
@@ -283,7 +285,7 @@ export default {
       return txBuilder.withdrawTx({
         launch: args.launch,
         user,
-        amount: args.amountLamports,
+        amountLamports: args.amountLamports,
         roster: args.roster,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -309,7 +311,7 @@ export default {
       return txBuilder.withdrawIx({
         launch: args.launch,
         user,
-        amount: args.amountLamports,
+        amountLamports: args.amountLamports,
         roster: args.roster,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -323,49 +325,36 @@ export default {
       launch: anchor.web3.PublicKey;
       amountLamports: BN;
       userPubkey?: anchor.web3.PublicKey;
-      roster?: anchor.web3.PublicKey;
-      rosterShard?: anchor.web3.PublicKey;
-      shardId?: number;
-      escrow?: anchor.web3.PublicKey;
+      shardId: number;
     }): Promise<{ transaction: anchor.web3.Transaction; userContribution: anchor.web3.PublicKey }> {
       const user = args.userPubkey ?? payer;
+      const [rosterShardPda] = getRosterShardPda(args.launch, args.shardId);
+
       return txBuilder.depositTx({
         launch: args.launch,
         user,
-        amount: args.amountLamports,
-        roster: args.roster,
-        // @ts-ignore
-        rosterShard: args.rosterShard,
-        // @ts-ignore
-        shardId: args.shardId,
-        escrow: args.escrow,
-      } as any);
+        amountLamports: args.amountLamports,
+        rosterShard: rosterShardPda,
+      });
     }
 
     async function depositIx(args: {
       launch: anchor.web3.PublicKey;
       amountLamports: BN;
       userPubkey?: anchor.web3.PublicKey;
-      roster?: anchor.web3.PublicKey;
-      rosterShard?: anchor.web3.PublicKey;
-      shardId?: number;
-      escrow?: anchor.web3.PublicKey;
+      shardId: number;
     }): Promise<{
       instruction: anchor.web3.TransactionInstruction;
       userContribution: anchor.web3.PublicKey;
     }> {
       const user = args.userPubkey ?? payer;
+      const [rosterShardPda] = getRosterShardPda(args.launch, args.shardId);
       return txBuilder.depositIx({
         launch: args.launch,
         user,
-        amount: args.amountLamports,
-        roster: args.roster,
-        // @ts-ignore
-        rosterShard: args.rosterShard,
-        // @ts-ignore
-        shardId: args.shardId,
-        escrow: args.escrow,
-      } as any);
+        amountLamports: args.amountLamports,
+        rosterShard: rosterShardPda,
+      });
     }
 
     async function claimRefund(args: {
@@ -446,11 +435,22 @@ export default {
       baseMint?: anchor.web3.Keypair;
       ammConfig: anchor.web3.PublicKey;
       clmmProgram: anchor.web3.PublicKey;
+      wrapLamportsBefore?: BN;
     }): Promise<{
       signature: string;
       baseMint: anchor.web3.PublicKey;
       baseTokenAta: anchor.web3.PublicKey;
     }> {
+      // Optional wrap before creating pool
+      if (args.wrapLamportsBefore && args.wrapLamportsBefore.gt(new BN(0))) {
+        const wrapIx = await txBuilder.wrapEscrowWsolIx({
+          payer,
+          launch: args.launch,
+          amount: args.wrapLamportsBefore,
+        });
+        const tx = new anchor.web3.Transaction().add(wrapIx);
+        await provider.sendAndConfirm!(tx);
+      }
       const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
 
       const result = await txBuilder.createClmmPoolTx({
@@ -482,9 +482,19 @@ export default {
       baseTokenAta: anchor.web3.PublicKey;
       ammConfig: anchor.web3.PublicKey;
       clmmProgram: anchor.web3.PublicKey;
+      wrapLamportsBefore?: BN;
     }): Promise<{
       signature: string;
     }> {
+      if (args.wrapLamportsBefore && args.wrapLamportsBefore.gt(new BN(0))) {
+        const wrapIx = await txBuilder.wrapEscrowWsolIx({
+          payer,
+          launch: args.launch,
+          amount: args.wrapLamportsBefore,
+        });
+        const tx = new anchor.web3.Transaction().add(wrapIx);
+        await provider.sendAndConfirm!(tx);
+      }
       const result = await txBuilder.addClmmLiquidityTx({
         payer,
         launch: args.launch,
@@ -508,6 +518,67 @@ export default {
       };
     }
 
+    async function wrapEscrowWsol(args: {
+      launch: anchor.web3.PublicKey;
+      amount: BN;
+    }): Promise<{ signature: string }> {
+      const wrapIx = await txBuilder.wrapEscrowWsolIx({
+        payer,
+        launch: args.launch,
+        amount: args.amount,
+      });
+      const tx = new anchor.web3.Transaction().add(wrapIx);
+      
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx);
+      return {
+        signature,
+      };
+    }
+
+    async function createFeePayerPda(args: {
+      launch: anchor.web3.PublicKey;
+      lamports: BN;
+    }): Promise<{ signature: string }> {
+      const createIx = await txBuilder.createFeePayerPdaIx({
+        payer,
+        launch: args.launch,
+        lamports: args.lamports,
+      });
+      const tx = new anchor.web3.Transaction().add(createIx);
+      
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      
+      const signature = await provider.sendAndConfirm(tx);
+      return {
+        signature,
+      };
+    }
+
+    async function topUpFeePayer(args: {
+      launch: anchor.web3.PublicKey;
+      amount: BN;
+    }): Promise<{ signature: string }> {
+      const topUpIx = await txBuilder.topUpFeePayerIx({
+        payer,
+        launch: args.launch,
+        amountLamports: args.amount,
+      });
+      const tx = new anchor.web3.Transaction().add(topUpIx);
+      
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx);
+      return {
+        signature,
+      };
+    }
+
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
       saleMint: anchor.web3.PublicKey;
@@ -516,6 +587,7 @@ export default {
       shardId?: number;
       userAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
+      computeUnits?: number; // Added computeUnits
     }): Promise<{ signature: string; userAta: anchor.web3.PublicKey }> {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
       const { transaction, userAta } = await txBuilder.claimTokensTx({
@@ -530,6 +602,14 @@ export default {
         createAtaIfMissing: args.createAtaIfMissing,
         payer: payer,
       } as any);
+
+      if (args.computeUnits) {
+        transaction.add(
+          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+            units: args.computeUnits,
+          })
+        );
+      }
 
       const signers = args.userKeypair ? [args.userKeypair] : [];
       if (!provider.sendAndConfirm) {
@@ -617,6 +697,7 @@ export default {
       creatorKeypair?: anchor.web3.Keypair;
       creatorAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
+      computeUnits?: number;
     }): Promise<{ signature: string; creatorAta: anchor.web3.PublicKey }> {
       const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
       const { transaction, creatorAta } = await txBuilder.claimCreatorTokensTx({
@@ -627,6 +708,14 @@ export default {
         createAtaIfMissing: args.createAtaIfMissing,
         payer: payer,
       });
+
+      if (args.computeUnits) {
+        transaction.add(
+          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+            units: args.computeUnits,
+          })
+        );
+      }
 
       const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
       if (!provider.sendAndConfirm) {
@@ -691,6 +780,10 @@ export default {
 
     async function fetchRoster(launch: anchor.web3.PublicKey) {
       return txBuilder.fetchRoster(launch);
+    }
+
+    async function fetchRosterShard(launch: anchor.web3.PublicKey, shardId: number) {
+      return txBuilder.fetchRosterShard(launch, shardId);
     }
 
 
@@ -788,15 +881,97 @@ export default {
       return { launch, escrow, roster, mintAuth, projectCounter };
     }
 
+    function getAddLiquidityRemainingAccounts(args: {
+      clmmProgram: anchor.web3.PublicKey;
+      poolState: anchor.web3.PublicKey;
+      positionNftMint: anchor.web3.PublicKey;
+      quoteMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      escrow: anchor.web3.PublicKey;
+    }): anchor.web3.AccountMeta[] {
+      const { web3 } = anchor;
+      const [quoteVault] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("pool_vault"), args.poolState.toBuffer(), args.quoteMint.toBuffer()],
+        args.clmmProgram
+      );
+      const [baseVault] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("pool_vault"), args.poolState.toBuffer(), args.baseMint.toBuffer()],
+        args.clmmProgram
+      );
+      const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+      const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), args.positionNftMint.toBuffer()],
+        METADATA_PROGRAM_ID
+      );
+      const [personalPosition] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("position"), args.positionNftMint.toBuffer()],
+        args.clmmProgram
+      );
+
+      const tickSpacing = 60;
+      const tickLowerIndex = 0;
+      const tickUpperIndex = 443580;
+
+      const tickLowerBuffer = Buffer.alloc(4);
+      tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
+
+      const tickUpperBuffer = Buffer.alloc(4);
+      tickUpperBuffer.writeInt32BE(tickUpperIndex, 0);
+
+      const [protocolPosition] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("protocol_position"), args.poolState.toBuffer(), tickLowerBuffer, tickUpperBuffer],
+        args.clmmProgram
+      );
+
+      const TICK_ARRAY_SIZE = 60;
+      const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+      const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+
+      const tickArrayLowerBuffer = Buffer.alloc(4);
+      tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
+
+      const tickArrayUpperBuffer = Buffer.alloc(4);
+      tickArrayUpperBuffer.writeInt32BE(tickArrayUpperStartIndex, 0);
+
+      const [tickArrayLower] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("tick_array"), args.poolState.toBuffer(), tickArrayLowerBuffer],
+        args.clmmProgram
+      );
+
+      const [tickArrayUpper] = web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("tick_array"), args.poolState.toBuffer(), tickArrayUpperBuffer],
+        args.clmmProgram
+      );
+
+      return [
+        { pubkey: args.poolState, isSigner: false, isWritable: true },
+        { pubkey: quoteVault, isSigner: false, isWritable: true },
+        { pubkey: baseVault, isSigner: false, isWritable: true },
+        { pubkey: args.positionNftMint, isSigner: true, isWritable: true },
+        { pubkey: getAssociatedTokenAddressSync(args.positionNftMint, args.escrow, true), isSigner: false, isWritable: true },
+        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+        { pubkey: personalPosition, isSigner: false, isWritable: true },
+        { pubkey: protocolPosition, isSigner: false, isWritable: true },
+        { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+        { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+        { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      ];
+    }
+
     // ---- Returned API ----
     return {
+      // Version
+      version: "0.1.1 dev1",
+
       // IDL
       idl,
       program,
+      txBuilder,
 
       // PDAs
       getLaunchPda,
       getEscrowPda,
+      getFeePayerPda,
       getRosterPda,
       getRosterShardPda,
       getUserContributionPda,
@@ -805,6 +980,7 @@ export default {
       getPoolPda,
       getCreatorGrantPda,
       deriveAllPdas,
+      getAddLiquidityRemainingAccounts,
 
       // Utils
       getUserAta,
@@ -830,6 +1006,9 @@ export default {
       createPool,
       createClmmPool,
       addClmmLiquidity,
+      wrapEscrowWsol,
+      topUpFeePayer,
+      createFeePayerPda,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
@@ -846,6 +1025,7 @@ export default {
 
       fetchLaunch,
       fetchRoster,
+      fetchRosterShard,
       fetchUserContribution,
       fetchCreatorGrant,
       fetchProjectCounter,

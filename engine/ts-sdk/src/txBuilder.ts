@@ -21,6 +21,102 @@ export class TxBuilder {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
+  async wrapEscrowWsolIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    amount: BN | number;
+  }): Promise<web3.TransactionInstruction> {
+    const [escrow] = this.getPda(["escrow", params.launch]);
+    const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
+    const quoteMint = new web3.PublicKey("So11111111111111111111111111111111111111112");
+    const wsolEscrowAta = getAssociatedTokenAddressSync(quoteMint, escrow, false, TOKEN_PROGRAM_ID);
+    
+    const ix = await (this.program.methods as any)
+      .wrapEscrowWsol(new BN(params.amount as any))
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrow,
+        quoteMint,
+        wsolEscrowAta,
+        feePayerPda,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        baseTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return ix;
+  }
+
+  async createFeePayerPdaIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    lamports: BN | number;
+  }): Promise<web3.TransactionInstruction> {
+    const [escrow] = this.getPda(["escrow", params.launch]);
+    const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
+    const ix = await (this.program.methods as any)
+      .createFeePayerPda(new BN(params.lamports as any))
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrow,
+        feePayerPda,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return ix;
+  }
+
+  async topUpFeePayerIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    amountLamports: BN | number;
+  }): Promise<web3.TransactionInstruction> {
+    const [escrow] = this.getPda(["escrow", params.launch]);
+    const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
+    const ix = await (this.program.methods as any)
+      .topUpFeePayer(new BN(params.amountLamports as any))
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrow,
+        feePayerPda,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return ix;
+  }
+
+  async unwrapAndTransferSolIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    recipient: web3.PublicKey;
+    amountLamports: BN | number;
+  }): Promise<web3.TransactionInstruction> {
+    const [escrow] = this.getPda(["escrow", params.launch]);
+    const ix = await (this.program.methods as any)
+      .unwrapAndTransferSol(new BN(params.amountLamports as any))
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrow,
+        quoteMint: new web3.PublicKey("So11111111111111111111111111111111111111112"),
+        wsolEscrowAta: getAssociatedTokenAddressSync(
+          new web3.PublicKey("So11111111111111111111111111111111111111112"),
+          escrow,
+          true
+        ),
+        recipientSystem: params.recipient,
+        quoteTokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return ix;
+  }
 
   getPda(seeds: (string | Buffer | web3.PublicKey)[]): [web3.PublicKey, number] {
     const seedBuffers = [
@@ -56,7 +152,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
-    fundingDurationSeconds: number;
+    fundingDurationSeconds: BN;
     numBlocks: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
@@ -82,7 +178,7 @@ export class TxBuilder {
         tauLamports: params.tauLamports,
         saleAllocation: params.saleAllocation,
         lpAllocation: params.lpAllocation,
-        fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+        fundingDurationSeconds: params.fundingDurationSeconds,
         numBlocks: new BN(params.numBlocks),
         rosterShardCap: params.rosterShardCap,
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
@@ -118,7 +214,7 @@ export class TxBuilder {
     tauLamports: BN;
     saleAllocation: BN;
     lpAllocation: BN;
-    fundingDurationSeconds: number;
+    fundingDurationSeconds: BN;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
@@ -160,7 +256,7 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
-      fundingDurationSeconds: 15, // Default to 30 seconds for tx builder
+      fundingDurationSeconds: params.fundingDurationSeconds,
       numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
       rosterShardCap: params.rosterShardCap,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
@@ -259,38 +355,27 @@ export class TxBuilder {
   async depositIx(params: {
     launch: web3.PublicKey;
     user: web3.PublicKey;
-    amount: BN;
-    roster?: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number; // if rosterShard not provided
-    escrow?: web3.PublicKey;
+    amountLamports: BN;
+    rosterShard: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     userContribution: web3.PublicKey;
   }> {
-    const [userContribution] = this.getPda([
-      "user",
-      params.launch,
-      params.user,
-    ]);
-    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
-    const rosterShard =
-      params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
-    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
+    const [userContribution] = this.getPda(["user", params.launch, params.user]);
+    const rosterShard = params.rosterShard;
+    const escrow = this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
-      .deposit(params.amount)
-      .accounts({
+      .deposit(params.amountLamports)
+      .accountsStrict({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
-        roster: roster,
-        rosterShard,
+        rosterShard: rosterShard,
         escrow: escrow,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
 
     return { instruction, userContribution };
@@ -299,9 +384,8 @@ export class TxBuilder {
   async depositTx(params: {
     launch: web3.PublicKey;
     user: web3.PublicKey;
-    amount: BN;
-    roster?: web3.PublicKey;
-    escrow?: web3.PublicKey;
+    amountLamports: BN;
+    rosterShard: web3.PublicKey;
   }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
     const { instruction, userContribution } = await this.depositIx(params);
     const transaction = new web3.Transaction().add(instruction);
@@ -311,11 +395,7 @@ export class TxBuilder {
   async withdrawIx(params: {
     launch: web3.PublicKey;
     user: web3.PublicKey;
-    amount: BN;
-    roster?: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number;
-    escrow?: web3.PublicKey;
+    amountLamports: BN;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     userContribution: web3.PublicKey;
@@ -325,24 +405,20 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
-    const rosterShard =
-      params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
-    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
+    const rosterShard = this.getRosterShardPda(params.launch, 0)[0];
+    const escrow = this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
-      .withdraw(params.amount)
-      .accounts({
+      .withdraw(params.amountLamports)
+      .accountsStrict({
         user: params.user,
         launchState: params.launch,
         userContribution: userContribution,
-        roster: roster,
-        rosterShard,
+        rosterShard: rosterShard,
         escrow: escrow,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
 
     return { instruction, userContribution };
@@ -351,7 +427,7 @@ export class TxBuilder {
   async withdrawTx(params: {
     launch: web3.PublicKey;
     user: web3.PublicKey;
-    amount: BN;
+    amountLamports: BN;
     roster?: web3.PublicKey;
     escrow?: web3.PublicKey;
   }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
@@ -511,6 +587,26 @@ export class TxBuilder {
     return this.program.account.roster.fetch(pda);
   }
 
+  async fetchRosterShard(
+    launch: web3.PublicKey,
+    shardId: number
+  ): Promise<{
+    account: any;
+    pda: web3.PublicKey;
+  } | null> {
+    const [pda] = this.getRosterShardPda(launch, shardId);
+    try {
+      const account = await this.program.account.rosterShard.fetch(pda);
+      return { account, pda };
+    } catch (error) {
+      // @ts-ignore
+      if (error.message.includes("Account does not exist")) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
 
   async finalizeRosterShardIx(params: {
     launch: web3.PublicKey;
@@ -663,13 +759,15 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
+    
+    const [mintA, mintB] = [params.quoteMint, params.baseMint.publicKey].sort((a, b) => a.toBuffer().compare(b.toBuffer()));
 
     const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        params.baseMint.publicKey.toBuffer(),
+        mintA.toBuffer(),
+        mintB.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -790,15 +888,36 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const quoteTokenAccount = getAssociatedTokenAddressSync(
+    // Escrow's wSOL ATA (will be created on-chain if needed)
+    const wsolEscrowAta = getAssociatedTokenAddressSync(
       params.quoteMint,
-      params.payer
+      escrow,
+      true
+    );
+
+    // Fee payer PDA for system operations
+    const [feePayerPda] = this.getPda(["fee_payer", params.launch]);
+
+    // Fee payer PDA's wSOL ATA
+    const wsolFeePayerAta = getAssociatedTokenAddressSync(
+      params.quoteMint,
+      feePayerPda,
+      true
+    );
+
+    // Fee payer PDA's base token ATA
+    const baseFeePayerAta = getAssociatedTokenAddressSync(
+      params.baseMint,
+      feePayerPda,
+      true
     );
 
     const positionNftMint = web3.Keypair.generate();
+    // Position NFT owner is escrow on-chain; derive escrow's ATA for the NFT mint
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
-      params.payer
+      escrow,
+      true
     );
 
     const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
@@ -866,28 +985,20 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const addLiquidityIx = await this.program.methods
+    const addLiquidityIx = await (this.program.methods as any)
       .addClmmLiquidity()
-      .accountsStrict({
-        creator: params.payer,
+      .accounts({
+        payer: params.payer,
         raydiumProgram: params.clmmProgram,
         launchState: params.launch,
         baseMint: params.baseMint,
         escrow: escrow,
+        feePayerPda: feePayerPda,
         baseEscrowAta: params.baseTokenAta,
+        wsolFeePayerAta: wsolFeePayerAta,
+        baseFeePayerAta: baseFeePayerAta,
         quoteMint: params.quoteMint,
-        raydiumPoolState: poolState,
-        raydiumQuoteVault: quoteVault,
-        raydiumBaseVault: baseVault,
-        raydiumPositionNftMint: positionNftMint.publicKey,
-        raydiumPositionNftAccount: positionNftAccount,
-        raydiumMetadataAccount: metadataAccount,
-        raydiumPersonalPosition: personalPosition,
-        raydiumProtocolPosition: protocolPosition,
-        raydiumTickArrayLower: tickArrayLower,
-        raydiumTickArrayUpper: tickArrayUpper,
-        quoteTokenAccount: quoteTokenAccount,
-        metadataProgram: METADATA_PROGRAM_ID,
+        wsolEscrowAta: wsolEscrowAta,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
@@ -895,6 +1006,20 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
       })
+      .remainingAccounts([
+        // Order must match on-chain expectation in invoke_raydium_cpi
+        { pubkey: poolState, isSigner: false, isWritable: true },
+        { pubkey: quoteVault, isSigner: false, isWritable: true },
+        { pubkey: baseVault, isSigner: false, isWritable: true },
+        { pubkey: positionNftMint.publicKey, isSigner: true, isWritable: true },
+        { pubkey: positionNftAccount, isSigner: false, isWritable: true },
+        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+        { pubkey: personalPosition, isSigner: false, isWritable: true },
+        { pubkey: protocolPosition, isSigner: false, isWritable: true },
+        { pubkey: tickArrayLower, isSigner: false, isWritable: true },
+        { pubkey: tickArrayUpper, isSigner: false, isWritable: true },
+        { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+      ])
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
@@ -903,14 +1028,6 @@ export class TxBuilder {
 
     const transaction = new web3.Transaction()
       .add(computeBudgetIx)
-      .add(
-        createAssociatedTokenAccountIdempotentInstruction(
-          params.payer,
-          quoteTokenAccount,
-          params.payer,
-          params.quoteMint
-        )
-      )
       .add(addLiquidityIx);
 
     return {

@@ -6,10 +6,7 @@ import {
   Transaction,
   ComputeBudgetProgram,
 } from "@solana/web3.js";
-import {
-  TOKEN_PROGRAM_ID,
-  createInitializeMintInstruction,
-} from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, createInitializeMintInstruction } from "@solana/spl-token";
 
 interface LaunchConfig {
   hardCapLamports: number;
@@ -48,6 +45,7 @@ export async function runFullFlow(
 
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
+  addLog(`SDK Version: ${sdk.version}`);
 
   let testLaunchState: PublicKey;
 
@@ -488,10 +486,11 @@ export async function runFullFlow(
     // 8. Create Pool
     addLog(`\n[8/10] Creating Pool...`);
     let poolCreated = false;
+    let poolState: any;
     try {
       await sdk.createPool({ launch: testLaunchState });
       addLog("   -> 🎸 Pool created successfully!");
-      const poolState = await sdk.fetchPoolState(testLaunchState);
+      poolState = await sdk.fetchPoolState(testLaunchState);
       addLog(`      - Pool ID: ${poolState.poolId.toString()}`);
       poolCreated = true;
     } catch (error: any) {
@@ -500,6 +499,8 @@ export async function runFullFlow(
           "   -> Pool creation failed as expected: No valid blockhash found."
         );
         addLog("   -> This is the correct and expected behavior.");
+        // Ensure we don't proceed to add liquidity if the pool wasn't created
+        poolCreated = false;
       } else {
         // Re-throw if it's a different error
         throw error;
@@ -507,7 +508,8 @@ export async function runFullFlow(
     }
 
     // 8.1. Create CLMM Pool and Add Liquidity (only if pool was created)
-    if (poolCreated) {
+    addLog(`[CUSTOM DEBUG] CHECKING IF CODE IS UPDATED. poolCreated: ${poolCreated}, poolState exists: ${!!poolState}`);
+    if (poolCreated && poolState) {
       addLog(`\n[8.1/10] Creating CLMM Pool and Adding Liquidity...`);
       // Use devnet addresses for local testing
       const raydiumProgramId = new PublicKey(
@@ -527,11 +529,144 @@ export async function runFullFlow(
         });
         addLog(`   -> CLMM pool created successfully! Base mint: ${baseMint.toBase58()}`);
 
+        // Debug: derive and log escrow-owned token accounts and fee payer PDA
+        const [escrowPda] = sdk.getEscrowPda(testLaunchState);
+        // Temporary workaround: derive fee payer PDA directly until SDK is rebuilt
+        const [feePayerPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("root-0-100-1"), Buffer.from("fee_payer"), testLaunchState.toBuffer()],
+          sdk.program.programId
+        );
+        const wsolEscrowAta = sdk.getUserAta(solMint, escrowPda);
+        const baseEscrowAta = sdk.getUserAta(baseMint, escrowPda);
+        addLog(`      - Escrow PDA: ${escrowPda.toBase58()}`);
+        addLog(`      - Fee Payer PDA: ${feePayerPda.toBase58()}`);
+        addLog(`      - WSOL Escrow ATA: ${wsolEscrowAta.toBase58()}`);
+        addLog(`      - Base Escrow ATA: ${baseEscrowAta.toBase58()}`);
+        try {
+          // Lazy import to avoid top-level import churn
+          const { getAccount } = await import("@solana/spl-token");
+          const wsolInfo = await getAccount(provider.connection as any, wsolEscrowAta);
+          const baseInfo = await getAccount(provider.connection as any, baseEscrowAta);
+          addLog(`      - WSOL owner (token account owner field): ${wsolInfo.owner.toBase58()}`);
+          addLog(`      - Base owner (token account owner field): ${baseInfo.owner.toBase58()}`);
+        } catch (e) {
+          addLog(`      - Unable to fetch token account owners: ${e}`);
+        }
+        addLog(`      - Payer: ${admin.publicKey.toBase58()}`);
+        addLog(`      - Raydium Program: ${raydiumProgramId.toBase58()}`);
+
+        // Get remaining accounts for liquidity add
+        const { remainingAccounts } = await sdk.getAddLiquidityRemainingAccounts({
+          launch: testLaunchState,
+          quoteMint: solMint,
+          baseMint,
+          baseTokenAta: baseEscrowAta,
+          ammConfig,
+          clmmProgram: raydiumProgramId,
+        });
+
+        const payer = admin.publicKey;
+        const quoteVault = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool_vault"), poolState.poolId.toBuffer(), solMint.toBuffer()],
+          raydiumProgramId
+        )[0];
+
+        const baseVault = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool_vault"), poolState.poolId.toBuffer(), baseMint.toBuffer()],
+          raydiumProgramId
+        )[0];
+
+        const tickSpacing = 60;
+        const tickLowerIndex = 0;
+        const tickUpperIndex = 443580;
+        const TICK_ARRAY_SIZE = 60;
+        const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+        const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+
+        const tickArrayLower = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("tick_array"),
+            poolState.poolId.toBuffer(),
+            Buffer.from(new Int32Array([tickArrayLowerStartIndex]).buffer),
+          ],
+          raydiumProgramId
+        )[0];
+
+        const tickArrayUpper = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("tick_array"),
+            poolState.poolId.toBuffer(),
+            Buffer.from(new Int32Array([tickArrayUpperStartIndex]).buffer),
+          ],
+          raydiumProgramId
+        )[0];
+
+        const tickLowerBuf = Buffer.alloc(4); tickLowerBuf.writeInt32BE(tickLowerIndex, 0);
+        const tickUpperBuf = Buffer.alloc(4); tickUpperBuf.writeInt32BE(tickUpperIndex, 0);
+        const protocolPosition = PublicKey.findProgramAddressSync(
+          [Buffer.from("protocol_position"), poolState.poolId.toBuffer(), tickLowerBuf, tickUpperBuf],
+          raydiumProgramId
+        )[0];
+
+        addLog("      - Remaining accounts (expected order):");
+        addLog(`        1) poolState           = ${poolState.poolId.toBase58()}`);
+        addLog(`        2) quoteVault          = ${quoteVault.toBase58()}`);
+        addLog(`        3) baseVault           = ${baseVault.toBase58()}`);
+        addLog("        4) positionNftMint     = <generated in builder>");
+        addLog("        5) positionNftAccount  = <derived in builder>");
+        addLog("        6) metadataAccount     = <derived in builder>");
+        addLog("        7) personalPosition    = <derived in builder>");
+        addLog(`        8) protocolPosition    = ${protocolPosition.toBase58()}`);
+        addLog(`        9) tickArrayLower      = ${tickArrayLower.toBase58()}`);
+        addLog(`        10) tickArrayUpper     = ${tickArrayUpper.toBase58()}`);
+        addLog("        11) metadataProgram    = metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+        
+        // --- Liquidity Addition Flow ---
+        const liquiditySol = 2;
+
+        // 1. Create and fund fee_payer_pda if it doesn't exist
+        addLog(`   -> Checking fee payer PDA...`);
+        const feePayerPdaInfo = await provider.connection.getAccountInfo(feePayerPda);
+        if (!feePayerPdaInfo || feePayerPdaInfo.data.length === 0) {
+          addLog(`      -> Fee payer PDA not found or empty, creating and funding...`);
+          await sdk.createFeePayerPda({
+            launch: testLaunchState,
+            lamports: new BN(0.1 * 1e9), // 0.1 SOL for rent
+          });
+          addLog(`      -> Fee payer PDA created successfully!`);
+        } else {
+          addLog(`      -> Fee payer PDA already exists.`);
+        }
+
+        // 2. Top up the fee_payer_pda from escrow with the amount needed for wrapping
+        addLog(`   -> Topping up fee payer PDA with ${liquiditySol} SOL for wSOL wrap...`);
+        await sdk.topUpFeePayer({
+          launch: testLaunchState,
+          amount: new BN(liquiditySol * 1e9),
+        });
+        addLog(`      -> Fee payer PDA topped up successfully!`);
+
+        // 3. Wrap SOL from the fee_payer_pda into the escrow's wSOL ATA
+        addLog("   -> Wrapping SOL to wSOL in escrow...");
+        const escrowBalanceBefore = await provider.connection.getBalance(escrowPda);
+        addLog(`      - Escrow SOL balance before wrap: ${escrowBalanceBefore / 1e9} SOL`);
+
+        await sdk.wrapEscrowWsol({
+          launch: testLaunchState,
+          amount: new BN(liquiditySol * 1e9), // 2 SOL for liquidity
+        });
+        
+        // Check escrow balance after wrapping
+        const escrowBalanceAfter = await provider.connection.getBalance(escrowPda);
+        addLog(`      - Escrow SOL balance after wrap: ${escrowBalanceAfter / 1e9} SOL`);
+        
+        addLog("   -> SOL wrapped to wSOL successfully!");
+
         await sdk.addClmmLiquidity({
           launch: testLaunchState,
           quoteMint: solMint,
           baseMint,
-          baseTokenAta,
+          baseTokenAta: baseEscrowAta, // Use escrow's base ATA
           ammConfig,
           clmmProgram: raydiumProgramId,
         });
@@ -573,7 +708,6 @@ export async function runFullFlow(
             userKeypair: userData.keypair,
             createAtaIfMissing: true,
             shardId: userData.shardId,
-            computeUnits: 2_000_000,
           });
 
           const finalBalance = await getTokenBalance(userAta);
@@ -718,7 +852,6 @@ export async function runFullFlow(
             saleMint: testSaleMint.publicKey,
             creatorAta: creatorAta,
             createAtaIfMissing: true,
-            computeUnits: 2_000_000,
           });
           const finalBalance = await getTokenBalance(creatorAta);
           const claimedAmount = finalBalance - initialBalance;
