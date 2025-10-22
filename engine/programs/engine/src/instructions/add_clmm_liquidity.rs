@@ -25,7 +25,7 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
+    #[account(seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
     pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
