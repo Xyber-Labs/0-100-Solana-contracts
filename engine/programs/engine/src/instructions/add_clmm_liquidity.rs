@@ -160,7 +160,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
         payer: ctx.accounts.escrow_authority.to_account_info(),
-        position_nft_owner: ctx.accounts.payer.to_account_info(),
+        position_nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
         metadata_account: ctx.accounts.raydium_metadata_account.to_account_info(),
