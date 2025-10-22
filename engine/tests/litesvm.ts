@@ -2,10 +2,7 @@ import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import {
-  createInitializeMintInstruction,
-  TOKEN_PROGRAM_ID,
-  unpackAccount
+import { createInitializeMintInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createSyncNativeInstruction, unpackAccount
 } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -14,6 +11,7 @@ import EngineSDK from "../ts-sdk/src/engine";
 
 import { advanceTime, createAndFundAccount } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
+import { executeTraderSwaps } from "./raydium-swap";
 
 let client: LiteSVM;
 let provider: LiteSVMProvider;
