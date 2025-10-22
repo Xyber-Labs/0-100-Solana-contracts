@@ -44,7 +44,6 @@ export type Engine = {
         },
         {
           "name": "escrow",
-          "writable": true,
           "pda": {
             "seeds": [
               {

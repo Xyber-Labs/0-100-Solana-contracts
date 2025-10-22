@@ -615,7 +615,8 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Initializing launch...");
     console.log("Launch state PDA:", clmmLaunchState.toString());
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
-
+    const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
+    console.log("✅ Launch initialized:", initLaunchSignature);
     console.log("Fetching launch state...");
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
     console.log("Launch state verified:", launchStateData.projectId.toString());
