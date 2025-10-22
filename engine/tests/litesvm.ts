@@ -615,31 +615,8 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Initializing launch...");
     console.log("Launch state PDA:", clmmLaunchState.toString());
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
-    try {
-      const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
-      console.log("✅ Launch initialized:", initLaunchSignature);
-
-      const accountInfo = client.getAccount(clmmLaunchState);
-      if (accountInfo) {
-        console.log("✅ Launch state account exists, size:", accountInfo.data.length);
-      } else {
-        console.error("❌ Launch state account NOT created!");
-      }
-    } catch (error) {
-      console.error("Failed to initialize launch:", error);
-      throw error;
-    }
 
     console.log("Fetching launch state...");
-    const launchStateAccountRaw = client.getAccount(clmmLaunchState);
-    console.log("Direct client check - account exists:", !!launchStateAccountRaw);
-
-    const providerClient = (provider.connection as any).client;
-    const providerAccount = providerClient?.getAccount(clmmLaunchState);
-    console.log("Provider client check - account exists:", !!providerAccount);
-    console.log("Same client?", client === providerClient);
-
-    console.log("About to call sdk.fetchLaunch with:", clmmLaunchState.toString());
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
