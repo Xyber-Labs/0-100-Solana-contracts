@@ -784,9 +784,22 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("\n=== Position NFT ===");
     if (addLiquidityResultTx.positionNftMint) {
       console.log("Position NFT mint:", addLiquidityResultTx.positionNftMint.toString());
-      const nftAccount = client.getAccount(addLiquidityResultTx.positionNftMint);
-      if (nftAccount) {
-        console.log("✅ Position NFT exists");
+      const nftMintAccount = client.getAccount(addLiquidityResultTx.positionNftMint);
+      if (nftMintAccount) {
+        console.log("✅ Position NFT mint exists");
+      }
+
+      const escrowAuthority = sdk.getEscrowAuthorityPda(clmmLaunchState)[0];
+      const positionNftAta = anchor.utils.token.associatedAddress({
+        mint: addLiquidityResultTx.positionNftMint,
+        owner: escrowAuthority,
+      });
+      const nftAtaInfo = client.getAccount(positionNftAta);
+      if (nftAtaInfo) {
+        const nftAccount = unpackAccount(positionNftAta, nftAtaInfo);
+        console.log("Position NFT owner:", nftAccount.owner.toString());
+        assert.ok(nftAccount.owner.equals(escrowAuthority), "Position NFT owned by escrow_authority");
+        console.log("✅ Position NFT owned by escrow_authority");
       }
     }
 

@@ -817,7 +817,8 @@ export class TxBuilder {
     const positionNftMint = web3.Keypair.generate();
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
-      params.payer
+      escrowAuthority,
+      true
     );
 
     const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
