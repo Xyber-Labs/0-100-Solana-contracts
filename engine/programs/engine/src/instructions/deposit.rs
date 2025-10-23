@@ -29,6 +29,10 @@ pub struct Deposit<'info> {
     #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
     pub escrow: Account<'info, EscrowAccount>,
 
+    /// CHECK: Escrow authority PDA without data for SOL storage
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+
     /// CHECK: This is the launch account referenced by the roster
     #[account(address = launch_state.key())]
     pub launch: UncheckedAccount<'info>,
@@ -54,17 +58,17 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         EngineErrorCode::PerWalletCapExceeded
     );
 
-    // transfer to escrow
+    // transfer to escrow_authority
     let ix = solana_program::system_instruction::transfer(
         &ctx.accounts.user.key(),
-        &ctx.accounts.escrow.key(),
+        &ctx.accounts.escrow_authority.key(),
         amount,
     );
     anchor_lang::solana_program::program::invoke(
         &ix,
         &[
             ctx.accounts.user.to_account_info(),
-            ctx.accounts.escrow.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;

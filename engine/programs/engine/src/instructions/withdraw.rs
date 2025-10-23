@@ -21,6 +21,10 @@ pub struct Withdraw<'info> {
     #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
     pub escrow: Account<'info, EscrowAccount>,
 
+    /// CHECK: Escrow authority PDA without data for SOL storage
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+
     /// CHECK: This is the launch account referenced by the roster
     #[account(address = launch_state.key())]
     pub launch: UncheckedAccount<'info>,
@@ -31,15 +35,31 @@ pub struct Withdraw<'info> {
 pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
 
-    // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
     require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
     let user = &mut ctx.accounts.user_contribution;
     require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
 
-    // return lamports from escrow to user
-    **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
-    **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += amount;
+    let launch_key = launch_state.key();
+    let escrow_authority_seeds = &[
+        SEED_ROOT,
+        b"escrow_authority",
+        launch_key.as_ref(),
+        &[ctx.bumps.escrow_authority],
+    ];
+    let signers = &[&escrow_authority_seeds[..]];
+
+    anchor_lang::system_program::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.escrow_authority.to_account_info(),
+                to: ctx.accounts.user.to_account_info(),
+            },
+            signers,
+        ),
+        amount,
+    )?;
 
     // recompute tickets
     let old_tickets = user.ticket_count;

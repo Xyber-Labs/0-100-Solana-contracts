@@ -2,7 +2,11 @@ import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { createInitializeMintInstruction, TOKEN_PROGRAM_ID, unpackAccount } from "@solana/spl-token";
+import {
+  createInitializeMintInstruction,
+  TOKEN_PROGRAM_ID,
+  unpackAccount
+} from "@solana/spl-token";
 import { assert } from "chai";
 
 import { Engine } from "../target/types/engine";
@@ -11,14 +15,14 @@ import EngineSDK from "../ts-sdk/src/engine";
 import { advanceTime, createAndFundAccount } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 
+let client: LiteSVM;
+let provider: LiteSVMProvider;
+let program: Program<Engine>;
+let admin: anchor.Wallet;
+let sdk: any;
+let adminKeypair: anchor.web3.Keypair;
 
 describe("engine litesvm", () => {
-  let client: LiteSVM;
-  let provider: LiteSVMProvider;
-  let program: Program<Engine>;
-  let admin: anchor.Wallet;
-  let sdk: any;
-  let adminKeypair: anchor.web3.Keypair;
 
   let saleMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
@@ -146,6 +150,7 @@ describe("engine litesvm", () => {
         )[0],
         rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
@@ -215,6 +220,7 @@ describe("engine litesvm", () => {
         )[0],
         rosterShard,
         escrow: sdk.getEscrowPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
@@ -558,11 +564,6 @@ describe("engine litesvm", () => {
 });
 
 describe("engine litesvm - raydium clmm", () => {
-  let client: LiteSVM;
-  let provider: LiteSVMProvider;
-  let program: Program<Engine>;
-  let admin: anchor.Wallet;
-  let sdk: any;
   let raydiumProgramId: anchor.web3.PublicKey;
   let raydiumAmmConfig: anchor.web3.PublicKey;
 
@@ -577,7 +578,9 @@ describe("engine litesvm - raydium clmm", () => {
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
     admin = provider.wallet;
-    sdk = EngineSDK.create(provider, program);
+    adminKeypair = (provider.wallet as any).payer;
+    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
+    client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
 
     const raydiumSetup = await setupRaydiumCLMM(client);
     raydiumProgramId = raydiumSetup.raydiumProgramId;
@@ -601,7 +604,7 @@ describe("engine litesvm - raydium clmm", () => {
       tauLamports: TAU_LAMPORTS,
       saleAllocation: CLMM_SALE_ALLOCATION,
       lpAllocation: CLMM_LP_ALLOCATION,
-      fundingDurationSec: new anchor.BN(3600),
+      fundingDurationSeconds: 3600,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -614,7 +617,6 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
     const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
     console.log("✅ Launch initialized:", initLaunchSignature);
-
     console.log("Fetching launch state...");
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
     console.log("Launch state verified:", launchStateData.projectId.toString());
@@ -696,7 +698,7 @@ describe("engine litesvm - raydium clmm", () => {
     } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
 
     const createPoolResultTx = await sdk.createClmmPoolTx({
-      payer: fundedPayer.publicKey,
+      payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair,
@@ -708,12 +710,16 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Creating CLMM pool...");
     const poolSig = await provider.sendAndConfirm(
       createPoolResultTx.transaction,
-      [fundedPayer, ...createPoolResultTx.signers]
+      [admin.payer, ...createPoolResultTx.signers]
     );
     console.log("✅ Pool created:", poolSig);
 
+    const [escrow] = sdk.getEscrowPda(clmmLaunchState);
+    const escrowBalanceBefore = client.getBalance(escrow);
+    console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
     const addLiquidityResultTx = await sdk.addClmmLiquidityTx({
-      payer: fundedPayer.publicKey,
+      payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair.publicKey,
@@ -726,8 +732,25 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Adding liquidity...");
     const liquiditySig = await provider.sendAndConfirm(
       addLiquidityResultTx.transaction,
-      [fundedPayer, ...addLiquidityResultTx.signers]
+      [admin.payer, ...addLiquidityResultTx.signers]
     );
+    console.log("✅ Liquidity added:", liquiditySig);
+
+    const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
+    const quoteTokenAtaInfo = client.getAccount(quoteTokenAta);
+    console.log(`\n=== Quote Token ATA (WSOL) ===`);
+    console.log("Quote token ATA:", quoteTokenAta.toString());
+    if (quoteTokenAtaInfo && quoteTokenAtaInfo.data.length >= 72) {
+      const dataBuffer = Buffer.from(quoteTokenAtaInfo.data);
+      const amount = dataBuffer.readBigUInt64LE(64);
+      console.log("WSOL token amount:", Number(amount) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
+    } else {
+      console.log("Quote token ATA data:", quoteTokenAtaInfo ? `${quoteTokenAtaInfo.data.length} bytes` : "not found");
+    }
+
+    const payerBalanceAfter = client.getBalance(admin.publicKey);
+    console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
 
     console.log("✅ CLMM Pool and Liquidity created successfully!");
     console.log("Pool Signature:", poolSig);
@@ -735,8 +758,56 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Base Mint:", createPoolResultTx.baseMint.toString());
     console.log("Base Token ATA:", createPoolResultTx.baseTokenAta.toString());
 
+    console.log("\n=== Pool State Details ===");
+    console.log("Pool State PDA:", createPoolResultTx.poolState.toString());
+    const poolStateAccount = client.getAccount(createPoolResultTx.poolState);
+    if (poolStateAccount) {
+      console.log("✅ Pool account exists");
+      console.log("Pool data size:", poolStateAccount.data.length, "bytes");
+      console.log("Pool owner:", new anchor.web3.PublicKey(poolStateAccount.owner).toString());
+    }
+
+    console.log("\n=== Quote Vault (WSOL) ===");
+    console.log("Quote vault PDA:", addLiquidityResultTx.quoteVault.toString());
+    const quoteVaultBalance = client.getBalance(addLiquidityResultTx.quoteVault);
+    console.log("Quote vault balance:", Number(quoteVaultBalance) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
+
+    console.log("\n=== Base Vault (Token) ===");
+    console.log("Base vault PDA:", addLiquidityResultTx.baseVault.toString());
+    const baseVaultAccount = client.getAccount(addLiquidityResultTx.baseVault);
+    if (baseVaultAccount && baseVaultAccount.data.length >= 72) {
+      const dataBuffer = Buffer.from(baseVaultAccount.data);
+      const amount = dataBuffer.readBigUInt64LE(64);
+      console.log("Base vault token amount:", Number(amount) / 1_000_000, "tokens");
+    }
+
+    console.log("\n=== Position NFT ===");
+    if (addLiquidityResultTx.positionNftMint) {
+      console.log("Position NFT mint:", addLiquidityResultTx.positionNftMint.toString());
+      const nftMintAccount = client.getAccount(addLiquidityResultTx.positionNftMint);
+      if (nftMintAccount) {
+        console.log("✅ Position NFT mint exists");
+      }
+
+      const escrowAuthority = sdk.getEscrowAuthorityPda(clmmLaunchState)[0];
+      const positionNftAta = anchor.utils.token.associatedAddress({
+        mint: addLiquidityResultTx.positionNftMint,
+        owner: escrowAuthority,
+      });
+      const nftAtaInfo = client.getAccount(positionNftAta);
+      if (nftAtaInfo) {
+        const nftAccount = unpackAccount(positionNftAta, nftAtaInfo);
+        console.log("Position NFT owner:", nftAccount.owner.toString());
+        assert.ok(nftAccount.owner.equals(escrowAuthority), "Position NFT owned by escrow_authority");
+        console.log("✅ Position NFT owned by escrow_authority");
+      }
+    }
+
     assert.ok(createPoolResultTx.baseMint, "Should return base mint");
     assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
+    assert.ok(poolStateAccount, "Pool state should exist");
+    assert.ok(Number(quoteVaultBalance) > 0, "Quote vault should have SOL");
+    assert.ok(baseVaultAccount, "Base vault should exist");
   });
 });
 
@@ -865,6 +936,7 @@ describe("Full flow", () => {
           )[0],
           rosterShard,
           escrow: sdk.getEscrowPda(testLaunchState)[0],
+          escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
           launch: testLaunchState,
           systemProgram: anchor.web3.SystemProgram.programId,
         } as any)
@@ -947,18 +1019,18 @@ describe("Full flow", () => {
     }
 
     console.log("=== Testing Creator Deposit Fix ===");
-    // Verify that the creator deposit fix works by checking escrow balance
-    const escrowBalance = client.getBalance(sdk.getEscrowPda(testLaunchState)[0]);
-    console.log(`Main launch escrow balance: ${Number(escrowBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    // Verify that the creator deposit fix works by checking escrow_authority balance
+    const escrowAuthorityBalance = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
+    console.log(`Main launch escrow_authority balance: ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Creator deposit amount: ${creatorDepositAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-    // The escrow should contain the creator's initial deposit plus user deposits (20 SOL hard cap)
+    // The escrow_authority should contain the creator's initial deposit plus user deposits (20 SOL hard cap)
     // Plus some lamports for account rent
     const userDeposits = testHardCap;
     const expectedMinBalance = creatorDepositAmount.add(userDeposits);
 
-    assert.isTrue(Number(escrowBalance) >= expectedMinBalance.toNumber());
-    console.log(`Escrow balance ${Number(escrowBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    assert.isTrue(Number(escrowAuthorityBalance) >= expectedMinBalance.toNumber());
+    console.log(`Escrow authority balance ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
     if (creatorDepositAmount.toNumber() > 0) {
       console.log("Creator deposit fix verified: escrow contains creator's initial deposit");
@@ -1033,7 +1105,6 @@ describe("Full flow", () => {
       .signers([testUser.keypair])
       .transaction();
 
-    // Add compute budget instruction to increase compute units
     const computeBudgetIx2 = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
       units: 3_000_000,
     });
@@ -1056,7 +1127,7 @@ describe("Full flow", () => {
     );
 
     console.log("=== Testing Creator Grant State ===");
-    // Verify creator grant state after successful launch
+
     const finalCreatorGrant = await sdk.fetchCreatorGrant(testLaunchState);
     console.log(`Final creator grant state:`);
     console.log(`  - Reserved tickets: ${finalCreatorGrant.reservedTickets}`);
@@ -1064,12 +1135,10 @@ describe("Full flow", () => {
     console.log(`  - Daily ticket cap: ${finalCreatorGrant.dailyTicketCap}`);
     console.log(`  - Refunded: ${finalCreatorGrant.refunded}`);
 
-    // Verify that creator can claim more tokens on subsequent days
-    // (This would require time advancement in a real scenario)
     if (creatorDepositAmount.toNumber() > 0) {
-      assert.equal(finalCreatorGrant.claimedTickets, 2); // Only claimed first day's limit
+      assert.equal(finalCreatorGrant.claimedTickets, 2);
     } else {
-      assert.equal(finalCreatorGrant.claimedTickets, 0); // No tokens claimed without deposit
+      assert.equal(finalCreatorGrant.claimedTickets, 0);
     }
     assert.isFalse(finalCreatorGrant.refunded);
 

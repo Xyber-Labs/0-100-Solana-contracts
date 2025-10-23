@@ -50,6 +50,10 @@ export default {
       return txBuilder.getPda(["escrow", launch]);
     }
 
+    function getEscrowAuthorityPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+      return txBuilder.getPda(["escrow_authority", launch]);
+    }
+
     function getRosterPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
       return txBuilder.getPda(["roster", launch]);
     }
@@ -764,6 +768,7 @@ export default {
       // PDAs
       getLaunchPda,
       getEscrowPda,
+      getEscrowAuthorityPda,
       getRosterPda,
       getRosterShardPda,
       getUserContributionPda,

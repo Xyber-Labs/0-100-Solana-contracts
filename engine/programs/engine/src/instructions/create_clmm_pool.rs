@@ -25,19 +25,23 @@ pub struct CreateClmmPool<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
     pub escrow: Account<'info, EscrowAccount>,
 
+    /// CHECK: Escrow authority PDA without data for token ownership
+    #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+
     #[account(
         init,
         payer = payer,
         mint::decimals = 9,
-        mint::authority = escrow,
+        mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
     pub base_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: Escrow ATA for base token (ATA of escrow for base_mint)
+    /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
     #[account(
         mut,
-        seeds = [escrow.key().as_ref(), base_token_program.key().as_ref(), base_mint.key().as_ref()],
+        seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), base_mint.key().as_ref()],
         seeds::program = associated_token_program.key(),
         bump
     )]
@@ -88,7 +92,7 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
         anchor_spl::associated_token::Create {
             payer: ctx.accounts.payer.to_account_info(),
             associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
-            authority: ctx.accounts.escrow.to_account_info(),
+            authority: ctx.accounts.escrow_authority.to_account_info(),
             mint: ctx.accounts.base_mint.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
             token_program: ctx.accounts.base_token_program.to_account_info(),
@@ -102,15 +106,15 @@ fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let launch_key = ctx.accounts.launch_state.key();
     let seeds = &[
         SEED_ROOT,
-        b"escrow",
+        b"escrow_authority",
         launch_key.as_ref(),
-        &[ctx.bumps.escrow],
+        &[ctx.bumps.escrow_authority],
     ];
     let seeds_binding = [&seeds[..]];
     let mint_accounts = MintTo {
         mint: ctx.accounts.base_mint.to_account_info(),
         to: ctx.accounts.base_escrow_ata.to_account_info(),
-        authority: ctx.accounts.escrow.to_account_info(),
+        authority: ctx.accounts.escrow_authority.to_account_info(),
     };
     let mint_ctx = CpiContext::new_with_signer(
         ctx.accounts.base_token_program.to_account_info(),
