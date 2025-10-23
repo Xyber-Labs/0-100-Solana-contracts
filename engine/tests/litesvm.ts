@@ -412,6 +412,26 @@ describe("engine litesvm", () => {
     console.log("\n=== Creating Pool ===");
 
     const existingLaunchPda = sdk.getLaunchPda(saleMint.publicKey)[0];
+    const [earlyPoolState] = sdk.getPoolPda(existingLaunchPda);
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+
+    // Attempt to create pool at the very beginning - should fail (simulate to avoid side effects)
+    try {
+      await program.methods
+        .createPool()
+        .accountsStrict({
+          payer: admin.publicKey,
+          launchState: existingLaunchPda,
+          poolState: earlyPoolState,
+          slotHashes: SLOT_HASHES_SYSVAR,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .simulate();
+      assert.fail("createPool should fail before deposits/claims/blockhash setup");
+    } catch (err) {
+      const msg = (err as any)?.message ?? String(err);
+      console.log("Expected failure (early createPool):", msg);
+    }
 
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
     let launchState = await sdk.fetchLaunch(existingLaunchPda);
@@ -456,6 +476,24 @@ describe("engine litesvm", () => {
         totalDeposited = totalDeposited.add(amount);
       }
 
+      // Attempt to create pool after deposits but before finalization/claims/blockhash - should fail (simulate)
+      try {
+        await program.methods
+          .createPool()
+          .accountsStrict({
+            payer: admin.publicKey,
+            launchState: existingLaunchPda,
+            poolState: earlyPoolState,
+            slotHashes: SLOT_HASHES_SYSVAR,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .simulate();
+        assert.fail("createPool should fail before claims opened/blockhash setup");
+      } catch (err) {
+        const msg = (err as any)?.message ?? String(err);
+        console.log("Expected failure (after deposits):", msg);
+      }
+
       // 3) Advance time beyond funding period
       await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
 
@@ -475,7 +513,6 @@ describe("engine litesvm", () => {
     }
 
     // Configure SlotHashes to include a valid blockhash for this project's range
-    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
     const currentClock = client.getClock();
 
     function bigIntTo32BytesBE(x: bigint): Buffer {
@@ -516,45 +553,30 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    try {
-      const { signature } = await sdk.createPool({
-        launch: existingLaunchPda,
-        useTestMode: false,
-      });
+    const { signature } = await sdk.createPool({
+      launch: existingLaunchPda,
+      useTestMode: false,
+    });
 
-      console.log("Pool created successfully!");
-      console.log("Signature:", signature);
+    console.log("Pool created successfully!");
+    console.log("Signature:", signature);
 
-      const poolState = await sdk.fetchPoolState(existingLaunchPda);
-      console.log("Pool ID:", poolState.poolId.toString());
-      console.log("Project ID:", poolState.projectId.toString());
-      console.log("Created:", poolState.created);
-      console.log("Created Slot:", poolState.createdSlot.toString());
-      console.log(
-        "Created Blockhash:",
-        Buffer.from(poolState.createdBlockhash).toString("hex")
-      );
+    const poolState = await sdk.fetchPoolState(existingLaunchPda);
+    console.log("Pool ID:", poolState.poolId.toString());
+    console.log("Project ID:", poolState.projectId.toString());
+    console.log("Created:", poolState.created);
+    console.log("Created Slot:", poolState.createdSlot.toString());
+    console.log(
+      "Created Blockhash:",
+      Buffer.from(poolState.createdBlockhash).toString("hex")
+    );
 
-      assert.ok(poolState.created, "Pool should be marked as created");
-      assert.ok(
-        poolState.launch.equals(existingLaunchPda),
-        "Pool should reference correct launch"
-      );
-    } catch (error) {
-      console.error("Error creating pool:", error);
+    assert.ok(poolState.created, "Pool should be marked as created");
+    assert.ok(
+      poolState.launch.equals(existingLaunchPda),
+      "Pool should reference correct launch"
+    );
 
-      if (error.message && error.message.includes("NoValidBlockhash")) {
-        console.log(
-          "Pool creation failed as expected - no valid blockhash found"
-        );
-        console.log(
-          "This is normal behavior - blockhash validation is working correctly"
-        );
-        console.log("✅ Blockhash verification is working as intended");
-      } else {
-        throw error;
-      }
-    }
   });
 
   it("Initializes launch with creator deposit", async () => {
@@ -1046,8 +1068,7 @@ describe("Full flow", () => {
     let state = await sdk.fetchLaunch(testLaunchState);
     assert.isAtLeast(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(
-      `Total deposited: ${
-        state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
+      `Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
       } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
     );
 
@@ -1163,9 +1184,8 @@ describe("Full flow", () => {
 
     assert.isTrue(userAccountAfter.claimedRefund);
     console.log(
-      `User refund claimed. Balance change: ${
-        (Number(userFinalBalance) - Number(userInitialBalance)) /
-        anchor.web3.LAMPORTS_PER_SOL
+      `User refund claimed. Balance change: ${(Number(userFinalBalance) - Number(userInitialBalance)) /
+      anchor.web3.LAMPORTS_PER_SOL
       } SOL`
     );
 
@@ -1212,8 +1232,7 @@ describe("Full flow", () => {
 
     assert.isTrue(userAccountFinal.claimedTokens);
     console.log(
-      `User tokens claimed. Token balance: ${
-        Number(userTokenAccount.amount) / 1_000_000
+      `User tokens claimed. Token balance: ${Number(userTokenAccount.amount) / 1_000_000
       }`
     );
 
