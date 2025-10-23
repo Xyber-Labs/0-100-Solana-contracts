@@ -2,7 +2,14 @@ import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { createInitializeMintInstruction, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createSyncNativeInstruction, unpackAccount
+import {
+  createInitializeMintInstruction,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
+  unpackAccount
 } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -761,19 +768,6 @@ describe("engine litesvm - raydium clmm", () => {
 
     const payerBalanceAfter = client.getBalance(admin.publicKey);
     console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-
-    const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
-    const quoteTokenAtaInfo = client.getAccount(quoteTokenAta);
-    console.log(`\n=== Quote Token ATA (WSOL) ===`);
-    console.log("Quote token ATA:", quoteTokenAta.toString());
-    if (quoteTokenAtaInfo && quoteTokenAtaInfo.data.length >= 72) {
-      const dataBuffer = Buffer.from(quoteTokenAtaInfo.data);
-      const amount = dataBuffer.readBigUInt64LE(64);
-      console.log("WSOL token amount:", Number(amount) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
-    } else {
-      console.log("Quote token ATA data:", quoteTokenAtaInfo ? `${quoteTokenAtaInfo.data.length} bytes` : "not found");
-    }
 
     console.log("\n=== Pool State Details ===");
     console.log("Pool State PDA:", createPoolResultTx.poolState.toString());
