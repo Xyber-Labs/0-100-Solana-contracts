@@ -425,6 +425,8 @@ export default {
       launch: anchor.web3.PublicKey;
       payerKeypair?: anchor.web3.Keypair;
       useTestMode?: boolean;
+      computeUnits?: number;
+      computeUnitPriceMicroLamports?: number;
     }): Promise<{ signature: string }> {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
       const [poolState] = getPoolPda(args.launch);
@@ -433,13 +435,27 @@ export default {
       const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
       // For now, always use createPool since createPoolTest is only available with test feature
-      const rpc = program.methods.createPool().accountsStrict({
+      let rpc = program.methods.createPool().accountsStrict({
         payer: payerPubkey,
         launchState: args.launch,
         poolState,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: anchor.web3.SystemProgram.programId,
       });
+      const preIxs: anchor.web3.TransactionInstruction[] = [];
+      if (typeof args.computeUnits === "number") {
+        preIxs.push(
+          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: args.computeUnits })
+        );
+      }
+      if (typeof args.computeUnitPriceMicroLamports === "number") {
+        preIxs.push(
+          anchor.web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: args.computeUnitPriceMicroLamports })
+        );
+      }
+      if (preIxs.length) {
+        rpc = rpc.preInstructions(preIxs);
+      }
       if (args.payerKeypair) rpc.signers([args.payerKeypair]);
       return { signature: await rpc.rpc() };
     }

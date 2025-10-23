@@ -19,7 +19,7 @@ let client: LiteSVM;
 let provider: LiteSVMProvider;
 let program: Program<Engine>;
 let admin: anchor.Wallet;
-let sdk: any;
+let sdk: ReturnType<typeof EngineSDK.create>;
 let adminKeypair: anchor.web3.Keypair;
 
 describe("engine litesvm", () => {
@@ -532,7 +532,41 @@ describe("engine litesvm", () => {
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
 
-    const numHashes = 64;
+    // Write incorrect SlotHashes and simulate createPool (should fail)
+    const invalidNumHashes = 512;
+    const slotHashesDataInvalid = Buffer.alloc(8 + invalidNumHashes * 40);
+    slotHashesDataInvalid.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
+    for (let i = 0; i < invalidNumHashes; i++) {
+      const offset = 8 + i * 40;
+      slotHashesDataInvalid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8);
+    }
+
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesDataInvalid,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
+    });
+
+    try {
+      await program.methods
+        .createPool()
+        .accountsStrict({
+          payer: admin.publicKey,
+          launchState: existingLaunchPda,
+          poolState: earlyPoolState,
+          slotHashes: SLOT_HASHES_SYSVAR,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .simulate();
+      assert.fail("createPool should fail with incorrect slot hashes");
+    } catch (err) {
+      const msg = (err as any)?.message ?? String(err);
+      console.log("Expected failure (invalid SlotHashes):", msg);
+    }
+
+    const numHashes = 512;
     const slotHashesData = Buffer.alloc(8 + numHashes * 40);
     slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
     // Fill 63 invalid hashes and put the valid one at index 63 (64th element)
@@ -556,6 +590,7 @@ describe("engine litesvm", () => {
     const { signature } = await sdk.createPool({
       launch: existingLaunchPda,
       useTestMode: false,
+      computeUnits: 2_000_000
     });
 
     console.log("Pool created successfully!");
