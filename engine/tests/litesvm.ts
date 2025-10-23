@@ -474,6 +474,48 @@ describe("engine litesvm", () => {
       assert.isTrue(launchState.claimsOpen, "Claims should be open");
     }
 
+    // Configure SlotHashes to include a valid blockhash for this project's range
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+    const currentClock = client.getClock();
+
+    function bigIntTo32BytesBE(x: bigint): Buffer {
+      const buf = Buffer.alloc(32);
+      let v = x;
+      for (let i = 31; i >= 0; i--) {
+        buf[i] = Number(v & BigInt(255));
+        v = v >> BigInt(8);
+      }
+      return buf;
+    }
+
+    // Compute project's personal blockhash range and pick range_start (inclusive)
+    const projectId = launchState.projectId.toNumber();
+    const numBlocks = launchState.numBlocks.toNumber();
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+    const rangeStart = width * BigInt(projectId - 1);
+    const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
+
+    const numHashes = 64;
+    const slotHashesData = Buffer.alloc(8 + numHashes * 40);
+    slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
+    // Fill 63 invalid hashes and put the valid one at index 63 (64th element)
+    for (let i = 0; i < numHashes; i++) {
+      const offset = 8 + i * 40;
+      slotHashesData.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      if (i === numHashes - 1) {
+        bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
+      } else {
+        bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
+      }
+    }
+
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesData,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
+    });
+
     try {
       const { signature } = await sdk.createPool({
         launch: existingLaunchPda,
