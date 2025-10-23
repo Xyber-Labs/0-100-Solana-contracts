@@ -413,16 +413,65 @@ describe("engine litesvm", () => {
 
     const existingLaunchPda = sdk.getLaunchPda(saleMint.publicKey)[0];
 
-    const launchState = await sdk.fetchLaunch(existingLaunchPda);
-    console.log(
-      `Launch state - Selection finalized: ${launchState.selectionFinalized}`
-    );
-    console.log(`Launch state - Claims open: ${launchState.claimsOpen}`);
-
+    // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
+    let launchState = await sdk.fetchLaunch(existingLaunchPda);
     if (!launchState.selectionFinalized || !launchState.claimsOpen) {
-      console.log("Skipping pool creation test - prerequisites not met");
-      console.log("(Selection must be finalized and claims must be open)");
-      return;
+      // 1) Init roster and shard 0
+      await sdk.initRoster({ launch: existingLaunchPda, payerKeypair: adminKeypair });
+      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
+      const initRosterShardTx = await program.methods
+        .initRosterShard(0)
+        .accounts({
+          payer: admin.publicKey,
+          launchState: existingLaunchPda,
+          rosterShard,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        } as any)
+        .transaction();
+      await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
+
+      // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
+      let totalDeposited = new anchor.BN(0);
+      while (totalDeposited.lt(MIN_RAISE_LAMPORTS)) {
+        const depositor = await createAndFundAccount(client, 10);
+        const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
+        const amount = remaining.gt(PER_WALLET_CAP) ? PER_WALLET_CAP : remaining;
+        await program.methods
+          .deposit(amount)
+          .accounts({
+            user: depositor.publicKey,
+            launchState: existingLaunchPda,
+            userContribution: sdk.getUserContributionPda(
+              existingLaunchPda,
+              depositor.publicKey
+            )[0],
+            rosterShard,
+            escrow: sdk.getEscrowPda(existingLaunchPda)[0],
+            escrowAuthority: sdk.getEscrowAuthorityPda(existingLaunchPda)[0],
+            launch: existingLaunchPda,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .signers([depositor])
+          .rpc();
+        totalDeposited = totalDeposited.add(amount);
+      }
+
+      // 3) Advance time beyond funding period
+      await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
+
+      // 4) Set VRF seed, finalize shard, open claims
+      await sdk.setSeed({ launch: existingLaunchPda });
+      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      await sdk.openClaims({ launch: existingLaunchPda });
+
+      // Refresh state
+      launchState = await sdk.fetchLaunch(existingLaunchPda);
+      console.log(
+        `Launch state - Selection finalized: ${launchState.selectionFinalized}`
+      );
+      console.log(`Launch state - Claims open: ${launchState.claimsOpen}`);
+      assert.isTrue(launchState.selectionFinalized, "Selection should be finalized");
+      assert.isTrue(launchState.claimsOpen, "Claims should be open");
     }
 
     try {
