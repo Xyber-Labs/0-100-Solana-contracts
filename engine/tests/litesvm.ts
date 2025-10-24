@@ -411,7 +411,7 @@ describe("engine litesvm", () => {
   it("Creates pool with blockhash verification", async () => {
     console.log("\n=== Creating Pool ===");
 
-    const existingLaunchPda = sdk.getLaunchPda(saleMint.publicKey)[0];
+    const existingLaunchPda = launchState;
     const [earlyPoolState] = sdk.getPoolPda(existingLaunchPda);
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
@@ -434,24 +434,15 @@ describe("engine litesvm", () => {
     }
 
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
-    let launchState = await sdk.fetchLaunch(existingLaunchPda);
-    if (!launchState.selectionFinalized || !launchState.claimsOpen) {
+    let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
+    if (!launchAccount.selectionFinalized || !launchAccount.claimsOpen) {
       // 1) Init roster and shard 0
-      await sdk.initRoster({ launch: existingLaunchPda, payerKeypair: adminKeypair });
-      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
-      const initRosterShardTx = await program.methods
-        .initRosterShard(0)
-        .accounts({
-          payer: admin.publicKey,
-          launchState: existingLaunchPda,
-          rosterShard,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        } as any)
-        .transaction();
-      await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
-
+      await sdk.initRoster({ launch: existingLaunchPda });
+      await sdk.initRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      
       // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
       let totalDeposited = new anchor.BN(0);
+      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
       while (totalDeposited.lt(MIN_RAISE_LAMPORTS)) {
         const depositor = await createAndFundAccount(client, 10);
         const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
@@ -503,13 +494,13 @@ describe("engine litesvm", () => {
       await sdk.openClaims({ launch: existingLaunchPda });
 
       // Refresh state
-      launchState = await sdk.fetchLaunch(existingLaunchPda);
+      launchAccount = await sdk.fetchLaunch(existingLaunchPda);
       console.log(
-        `Launch state - Selection finalized: ${launchState.selectionFinalized}`
+        `Launch state - Selection finalized: ${launchAccount.selectionFinalized}`
       );
-      console.log(`Launch state - Claims open: ${launchState.claimsOpen}`);
-      assert.isTrue(launchState.selectionFinalized, "Selection should be finalized");
-      assert.isTrue(launchState.claimsOpen, "Claims should be open");
+      console.log(`Launch state - Claims open: ${launchAccount.claimsOpen}`);
+      assert.isTrue(launchAccount.selectionFinalized, "Selection should be finalized");
+      assert.isTrue(launchAccount.claimsOpen, "Claims should be open");
     }
 
     // Configure SlotHashes to include a valid blockhash for this project's range
@@ -526,8 +517,8 @@ describe("engine litesvm", () => {
     }
 
     // Compute project's personal blockhash range and pick range_start (inclusive)
-    const projectId = launchState.projectId.toNumber();
-    const numBlocks = launchState.numBlocks.toNumber();
+    const projectId = launchAccount.projectId.toNumber();
+    const numBlocks = launchAccount.numBlocks.toNumber();
     const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
