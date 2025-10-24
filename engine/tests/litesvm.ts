@@ -770,18 +770,7 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
     await sdk.initRoster({ launch: clmmLaunchState, signers: [admin.payer] });
-
-    const [rosterShard] = sdk.getRosterShardPda(clmmLaunchState, 0);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(0)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: clmmLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
+    await sdk.initRosterShard({ launch: clmmLaunchState, shardId: 0 });
 
     const targetRaise = 100 + Math.floor(Math.random() * 350);
     console.log(`Target raise: ${targetRaise} SOL`);
