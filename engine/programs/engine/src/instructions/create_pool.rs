@@ -34,9 +34,10 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
-    // Check if selection is finalized and claims are open
+    // Check if selection is finalized; claims do not need to be open yet
     require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
-    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    // Optionally forbid creating pool after opening claims
+    require!(!launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     // Get the SlotHashes sysvar

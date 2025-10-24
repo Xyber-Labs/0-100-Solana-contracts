@@ -8,8 +8,7 @@ use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
 
-// TODO (@xykeeper): total_supply to the EngineConfig
-const TOTAL_SUPPLY: u64 = 1_000_000_000u64;
+// Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -29,19 +28,14 @@ pub struct CreateClmmPool<'info> {
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 9,
-        mint::authority = escrow_authority,
-        mint::token_program = base_token_program
-    )]
-    pub base_mint: Box<Account<'info, Mint>>,
+    // Use the sale mint as base mint for pool
+    #[account(mut, address = launch_state.sale_mint)]
+    pub sale_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
     #[account(
         mut,
-        seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), base_mint.key().as_ref()],
+        seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), sale_mint.key().as_ref()],
         seeds::program = associated_token_program.key(),
         bump
     )]
@@ -70,6 +64,10 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub raydium_tick_array_bitmap: UncheckedAccount<'info>,
 
+    /// CHECK: PDA mint authority for sale_mint
+    #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
+    pub mint_auth: UncheckedAccount<'info>,
+
     pub raydium_program: Program<'info, AmmV3>,
     pub quote_token_program: Interface<'info, TokenInterface>,
     pub base_token_program: Program<'info, Token>,
@@ -80,9 +78,9 @@ pub struct CreateClmmPool<'info> {
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
-    mint_base_tokens(&ctx)?;
+    mint_sale_tokens_to_escrow(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
-    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
+    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.sale_mint.key());
     Ok(())
 }
 
@@ -93,7 +91,7 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
             payer: ctx.accounts.payer.to_account_info(),
             associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
             authority: ctx.accounts.escrow_authority.to_account_info(),
-            mint: ctx.accounts.base_mint.to_account_info(),
+            mint: ctx.accounts.sale_mint.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
             token_program: ctx.accounts.base_token_program.to_account_info(),
         },
@@ -102,26 +100,33 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
     Ok(())
 }
 
-fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let launch_key = ctx.accounts.launch_state.key();
-    let seeds = &[
+fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    let to_mint = ctx
+        .accounts
+        .launch_state
+        .sale_allocation
+        .checked_add(ctx.accounts.launch_state.lp_allocation)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    // signer is mint_auth PDA [SEED_ROOT, "mint_auth", launch]
+    let seeds: &[&[u8]] = &[
         SEED_ROOT,
-        b"escrow_authority",
-        launch_key.as_ref(),
-        &[ctx.bumps.escrow_authority],
+        b"mint_auth",
+        &ctx.accounts.launch_state.key().to_bytes(),
+        &[ctx.accounts.launch_state.mint_auth_bump()],
     ];
-    let seeds_binding = [&seeds[..]];
+    let signer_seeds = &[seeds];
     let mint_accounts = MintTo {
-        mint: ctx.accounts.base_mint.to_account_info(),
+        mint: ctx.accounts.sale_mint.to_account_info(),
         to: ctx.accounts.base_escrow_ata.to_account_info(),
-        authority: ctx.accounts.escrow_authority.to_account_info(),
+        authority: ctx.accounts.mint_auth.to_account_info(),
     };
     let mint_ctx = CpiContext::new_with_signer(
         ctx.accounts.base_token_program.to_account_info(),
         mint_accounts,
-        &seeds_binding,
+        signer_seeds,
     );
-    token::mint_to(mint_ctx, TOTAL_SUPPLY)?;
+    token::mint_to(mint_ctx, to_mint)?;
 
     Ok(())
 }
@@ -139,7 +144,7 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
 
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
-        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.sale_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_program.to_account_info(),

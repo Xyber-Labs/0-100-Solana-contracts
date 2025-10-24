@@ -6,7 +6,7 @@ use crate::{
     utils::selection::permute_u32,
 };
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct ClaimTokens<'info> {
@@ -19,12 +19,19 @@ pub struct ClaimTokens<'info> {
     #[account(constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
 
-    #[account(mut)]
+    #[account(address = launch_state.sale_mint)]
     pub sale_mint: Account<'info, Mint>,
-    /// CHECK: mint authority PDA
-    /// Seeds: ["mint_auth", launch_state]
-    #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
-    pub mint_auth: UncheckedAccount<'info>,
+
+    /// CHECK: PDA owning the escrow ATA for sale_mint
+    #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        associated_token::mint = sale_mint,
+        associated_token::authority = escrow_authority,
+    )]
+    pub base_escrow_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
@@ -102,25 +109,25 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         .and_then(|val| val.checked_div(1_000_000))
         .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
 
-    // Mint from sale_mint; mint authority is PDA [mint_auth, launch_state]
+    // Transfer from escrow ATA to user ATA, signed by escrow_authority PDA
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
-        b"mint_auth",
+        b"escrow_authority",
         &launch_state.key().to_bytes(),
-        &[launch_state.mint_auth_bump()],
+        &[ctx.bumps.escrow_authority],
     ];
     let signer_seeds = &[seeds];
-    let cpi_accounts = MintTo {
-        mint: ctx.accounts.sale_mint.to_account_info(),
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.base_escrow_ata.to_account_info(),
         to: ctx.accounts.user_ata.to_account_info(),
-        authority: ctx.accounts.mint_auth.to_account_info(),
+        authority: ctx.accounts.escrow_authority.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
         cpi_accounts,
         signer_seeds,
     );
-    token::mint_to(cpi_ctx, amount)?;
+    token::transfer(cpi_ctx, amount)?;
 
     user.claimed_tokens = true;
 

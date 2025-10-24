@@ -1,7 +1,8 @@
 use crate::{
+    constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{ClaimsOpened, SelectionFinalized},
-    state::{CreatorGrant, LaunchState},
+    state::{CreatorGrant, LaunchState, PoolState},
 };
 use anchor_lang::prelude::*;
 
@@ -17,6 +18,12 @@ pub struct OpenClaims<'info> {
         bump,
     )]
     pub creator_grant: Account<'info, CreatorGrant>,
+
+    #[account(
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
+        bump,
+    )]
+    pub pool_state: Account<'info, PoolState>,
 }
 
 pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
@@ -24,6 +31,7 @@ pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
     let creator_grant = &mut ctx.accounts.creator_grant;
 
     // Preconditions
+    require!(ctx.accounts.pool_state.created, EngineErrorCode::PoolNotCreated);
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
     require!(
         launch_state.total_deposited >= launch_state.min_raise_lamports,

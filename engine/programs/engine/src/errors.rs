@@ -117,4 +117,7 @@ pub enum ErrorCode {
     InvalidShareSum,
     #[msg("Base token decimals must be less than 18")]
     InvalidBaseDecimals,
+
+    #[msg("Pool not created yet")]
+    PoolNotCreated,
 }
