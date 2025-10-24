@@ -652,6 +652,46 @@ export class TxBuilder {
 
 
 
+  async createPoolTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    computeUnits?: number;
+    computeUnitPriceMicroLamports?: number;
+  }): Promise<{
+    transaction: web3.Transaction;
+    poolState: web3.PublicKey;
+  }> {
+    const [poolState] = this.getPda(["pool", params.launch]);
+    const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+
+    const ix = await this.program.methods
+      .createPool()
+      .accountsStrict({
+        payer: params.payer,
+        launchState: params.launch,
+        poolState,
+        slotHashes: SLOT_HASHES_SYSVAR,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+
+    const preIxs: web3.TransactionInstruction[] = [];
+    if (typeof params.computeUnits === "number") {
+      preIxs.push(web3.ComputeBudgetProgram.setComputeUnitLimit({ units: params.computeUnits }));
+    }
+    if (typeof params.computeUnitPriceMicroLamports === "number") {
+      preIxs.push(
+        web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: params.computeUnitPriceMicroLamports })
+      );
+    }
+
+    const transaction = new web3.Transaction();
+    if (preIxs.length) transaction.add(...preIxs);
+    transaction.add(ix);
+
+    return { transaction, poolState };
+  }
+
   async createClmmPoolTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;

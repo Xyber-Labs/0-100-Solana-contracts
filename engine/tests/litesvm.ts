@@ -417,16 +417,11 @@ describe("engine litesvm", () => {
 
     // Attempt to create pool at the very beginning - should fail (simulate to avoid side effects)
     try {
-      await program.methods
-        .createPool()
-        .accountsStrict({
-          payer: admin.publicKey,
-          launchState: existingLaunchPda,
-          poolState: earlyPoolState,
-          slotHashes: SLOT_HASHES_SYSVAR,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .simulate();
+      const { transaction } = await sdk.createPoolTx({
+        payer: admin.publicKey,
+        launch: existingLaunchPda,
+      });
+      await provider.simulate(transaction);
       assert.fail("createPool should fail before deposits/claims/blockhash setup");
     } catch (err) {
       const msg = (err as any)?.message ?? String(err);
@@ -458,16 +453,11 @@ describe("engine litesvm", () => {
 
       // Attempt to create pool after deposits but before finalization/claims/blockhash - should fail (simulate)
       try {
-        await program.methods
-          .createPool()
-          .accountsStrict({
-            payer: admin.publicKey,
-            launchState: existingLaunchPda,
-            poolState: earlyPoolState,
-            slotHashes: SLOT_HASHES_SYSVAR,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          })
-          .simulate();
+        const { transaction } = await sdk.createPoolTx({
+          payer: admin.publicKey,
+          launch: existingLaunchPda,
+        });
+        await provider.simulate(transaction);
         assert.fail("createPool should fail before claims opened/blockhash setup");
       } catch (err) {
         const msg = (err as any)?.message ?? String(err);
@@ -530,16 +520,11 @@ describe("engine litesvm", () => {
     });
 
     try {
-      await program.methods
-        .createPool()
-        .accountsStrict({
-          payer: admin.publicKey,
-          launchState: existingLaunchPda,
-          poolState: earlyPoolState,
-          slotHashes: SLOT_HASHES_SYSVAR,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .simulate();
+      const { transaction } = await sdk.createPoolTx({
+        payer: admin.publicKey,
+        launch: existingLaunchPda,
+      });
+      await provider.simulate(transaction);
       assert.fail("createPool should fail with incorrect slot hashes");
     } catch (err) {
       const msg = (err as any)?.message ?? String(err);
