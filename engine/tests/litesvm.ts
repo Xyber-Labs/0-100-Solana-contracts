@@ -447,23 +447,12 @@ describe("engine litesvm", () => {
         const depositor = await createAndFundAccount(client, 10);
         const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
         const amount = remaining.gt(PER_WALLET_CAP) ? PER_WALLET_CAP : remaining;
-        await program.methods
-          .deposit(amount)
-          .accounts({
-            user: depositor.publicKey,
-            launchState: existingLaunchPda,
-            userContribution: sdk.getUserContributionPda(
-              existingLaunchPda,
-              depositor.publicKey
-            )[0],
-            rosterShard,
-            escrow: sdk.getEscrowPda(existingLaunchPda)[0],
-            escrowAuthority: sdk.getEscrowAuthorityPda(existingLaunchPda)[0],
-            launch: existingLaunchPda,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          } as any)
-          .signers([depositor])
-          .rpc();
+        await sdk.deposit({
+          launch: existingLaunchPda,
+          amountLamports: amount,
+          userKeypair: depositor,
+          rosterShard,
+        });
         totalDeposited = totalDeposited.add(amount);
       }
 
