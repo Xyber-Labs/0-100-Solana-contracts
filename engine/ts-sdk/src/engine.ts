@@ -429,35 +429,18 @@ export default {
       computeUnitPriceMicroLamports?: number;
     }): Promise<{ signature: string }> {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
-      const [poolState] = getPoolPda(args.launch);
-
-      // SlotHashes sysvar
-      const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
-
-      // For now, always use createPool since createPoolTest is only available with test feature
-      let rpc = program.methods.createPool().accountsStrict({
+      const { transaction } = await txBuilder.createPoolTx({
         payer: payerPubkey,
-        launchState: args.launch,
-        poolState,
-        slotHashes: SLOT_HASHES_SYSVAR,
-        systemProgram: anchor.web3.SystemProgram.programId,
+        launch: args.launch,
+        computeUnits: args.computeUnits,
+        computeUnitPriceMicroLamports: args.computeUnitPriceMicroLamports,
       });
-      const preIxs: anchor.web3.TransactionInstruction[] = [];
-      if (typeof args.computeUnits === "number") {
-        preIxs.push(
-          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: args.computeUnits })
-        );
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
       }
-      if (typeof args.computeUnitPriceMicroLamports === "number") {
-        preIxs.push(
-          anchor.web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: args.computeUnitPriceMicroLamports })
-        );
-      }
-      if (preIxs.length) {
-        rpc = rpc.preInstructions(preIxs);
-      }
-      if (args.payerKeypair) rpc.signers([args.payerKeypair]);
-      return { signature: await rpc.rpc() };
+      const signers = args.payerKeypair ? [args.payerKeypair] : [];
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature };
     }
 
     async function createClmmPool(args: {
@@ -829,6 +812,7 @@ export default {
       withdrawTx,
       withdrawIx,
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
+      createPoolTx: txBuilder.createPoolTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
       fetchLaunch,
