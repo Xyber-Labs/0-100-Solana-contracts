@@ -47,7 +47,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
     require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
-    let hashes_to_check = std::cmp::min(64, num_hashes);
+    let hashes_to_check = std::cmp::min(512, num_hashes);
     let mut found_valid_hash = false;
     let mut valid_slot = 0u64;
     let mut valid_hash = [0u8; 32];

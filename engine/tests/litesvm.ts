@@ -19,7 +19,7 @@ let client: LiteSVM;
 let provider: LiteSVMProvider;
 let program: Program<Engine>;
 let admin: anchor.Wallet;
-let sdk: any;
+let sdk: ReturnType<typeof EngineSDK.create>;
 let adminKeypair: anchor.web3.Keypair;
 
 describe("engine litesvm", () => {
@@ -411,59 +411,172 @@ describe("engine litesvm", () => {
   it("Creates pool with blockhash verification", async () => {
     console.log("\n=== Creating Pool ===");
 
-    const existingLaunchPda = sdk.getLaunchPda(saleMint.publicKey)[0];
+    const existingLaunchPda = launchState;
+    const [earlyPoolState] = sdk.getPoolPda(existingLaunchPda);
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    const launchState = await sdk.fetchLaunch(existingLaunchPda);
-    console.log(
-      `Launch state - Selection finalized: ${launchState.selectionFinalized}`
-    );
-    console.log(`Launch state - Claims open: ${launchState.claimsOpen}`);
-
-    if (!launchState.selectionFinalized || !launchState.claimsOpen) {
-      console.log("Skipping pool creation test - prerequisites not met");
-      console.log("(Selection must be finalized and claims must be open)");
-      return;
+    // Attempt to create pool at the very beginning - should fail (simulate to avoid side effects)
+    try {
+      const { transaction } = await sdk.createPoolTx({
+        payer: admin.publicKey,
+        launch: existingLaunchPda,
+      });
+      await provider.simulate(transaction);
+      assert.fail("createPool should fail before deposits/claims/blockhash setup");
+    } catch (err) {
+      const msg = (err as any)?.message ?? String(err);
+      console.log("Expected failure (early createPool):", msg);
     }
+
+    // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
+    let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
+    if (!launchAccount.selectionFinalized || !launchAccount.claimsOpen) {
+      // 1) Init roster and shard 0
+      await sdk.initRoster({ launch: existingLaunchPda });
+      await sdk.initRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      
+      // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
+      let totalDeposited = new anchor.BN(0);
+      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
+      while (totalDeposited.lt(MIN_RAISE_LAMPORTS)) {
+        const depositor = await createAndFundAccount(client, 10);
+        const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
+        const amount = remaining.gt(PER_WALLET_CAP) ? PER_WALLET_CAP : remaining;
+        await sdk.deposit({
+          launch: existingLaunchPda,
+          amountLamports: amount,
+          userKeypair: depositor,
+          rosterShard,
+        });
+        totalDeposited = totalDeposited.add(amount);
+      }
+
+      // Attempt to create pool after deposits but before finalization/claims/blockhash - should fail (simulate)
+      try {
+        const { transaction } = await sdk.createPoolTx({
+          payer: admin.publicKey,
+          launch: existingLaunchPda,
+        });
+        await provider.simulate(transaction);
+        assert.fail("createPool should fail before claims opened/blockhash setup");
+      } catch (err) {
+        const msg = (err as any)?.message ?? String(err);
+        console.log("Expected failure (after deposits):", msg);
+      }
+
+      // 3) Advance time beyond funding period
+      await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
+
+      // 4) Set VRF seed, finalize shard, open claims
+      await sdk.setSeed({ launch: existingLaunchPda });
+      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      await sdk.openClaims({ launch: existingLaunchPda });
+
+      // Refresh state
+      launchAccount = await sdk.fetchLaunch(existingLaunchPda);
+      console.log(
+        `Launch state - Selection finalized: ${launchAccount.selectionFinalized}`
+      );
+      console.log(`Launch state - Claims open: ${launchAccount.claimsOpen}`);
+      assert.isTrue(launchAccount.selectionFinalized, "Selection should be finalized");
+      assert.isTrue(launchAccount.claimsOpen, "Claims should be open");
+    }
+
+    // Configure SlotHashes to include a valid blockhash for this project's range
+    const currentClock = client.getClock();
+
+    function bigIntTo32BytesBE(x: bigint): Buffer {
+      const buf = Buffer.alloc(32);
+      let v = x;
+      for (let i = 31; i >= 0; i--) {
+        buf[i] = Number(v & BigInt(255));
+        v = v >> BigInt(8);
+      }
+      return buf;
+    }
+
+    // Compute project's personal blockhash range and pick range_start (inclusive)
+    const projectId = launchAccount.projectId.toNumber();
+    const numBlocks = launchAccount.numBlocks.toNumber();
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+    const rangeStart = width * BigInt(projectId - 1);
+    const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
+
+    // Write incorrect SlotHashes and simulate createPool (should fail)
+    const invalidNumHashes = 512;
+    const slotHashesDataInvalid = Buffer.alloc(8 + invalidNumHashes * 40);
+    slotHashesDataInvalid.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
+    for (let i = 0; i < invalidNumHashes; i++) {
+      const offset = 8 + i * 40;
+      slotHashesDataInvalid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8);
+    }
+
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesDataInvalid,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
+    });
 
     try {
-      const { signature } = await sdk.createPool({
+      const { transaction } = await sdk.createPoolTx({
+        payer: admin.publicKey,
         launch: existingLaunchPda,
-        useTestMode: false,
       });
+      await provider.simulate(transaction);
+      assert.fail("createPool should fail with incorrect slot hashes");
+    } catch (err) {
+      const msg = (err as any)?.message ?? String(err);
+      console.log("Expected failure (invalid SlotHashes):", msg);
+    }
 
-      console.log("Pool created successfully!");
-      console.log("Signature:", signature);
-
-      const poolState = await sdk.fetchPoolState(existingLaunchPda);
-      console.log("Pool ID:", poolState.poolId.toString());
-      console.log("Project ID:", poolState.projectId.toString());
-      console.log("Created:", poolState.created);
-      console.log("Created Slot:", poolState.createdSlot.toString());
-      console.log(
-        "Created Blockhash:",
-        Buffer.from(poolState.createdBlockhash).toString("hex")
-      );
-
-      assert.ok(poolState.created, "Pool should be marked as created");
-      assert.ok(
-        poolState.launch.equals(existingLaunchPda),
-        "Pool should reference correct launch"
-      );
-    } catch (error) {
-      console.error("Error creating pool:", error);
-
-      if (error.message && error.message.includes("NoValidBlockhash")) {
-        console.log(
-          "Pool creation failed as expected - no valid blockhash found"
-        );
-        console.log(
-          "This is normal behavior - blockhash validation is working correctly"
-        );
-        console.log("✅ Blockhash verification is working as intended");
+    const numHashes = 512;
+    const slotHashesData = Buffer.alloc(8 + numHashes * 40);
+    slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
+    // Fill 63 invalid hashes and put the valid one at index 63 (64th element)
+    for (let i = 0; i < numHashes; i++) {
+      const offset = 8 + i * 40;
+      slotHashesData.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      if (i === numHashes - 1) {
+        bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
       } else {
-        throw error;
+        bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
       }
     }
+
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesData,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
+    });
+
+    const { signature } = await sdk.createPool({
+      launch: existingLaunchPda,
+      useTestMode: false,
+      computeUnits: 2_000_000
+    });
+
+    console.log("Pool created successfully!");
+    console.log("Signature:", signature);
+
+    const poolState = await sdk.fetchPoolState(existingLaunchPda);
+    console.log("Pool ID:", poolState.poolId.toString());
+    console.log("Project ID:", poolState.projectId.toString());
+    console.log("Created:", poolState.created);
+    console.log("Created Slot:", poolState.createdSlot.toString());
+    console.log(
+      "Created Blockhash:",
+      Buffer.from(poolState.createdBlockhash).toString("hex")
+    );
+
+    assert.ok(poolState.created, "Pool should be marked as created");
+    assert.ok(
+      poolState.launch.equals(existingLaunchPda),
+      "Pool should reference correct launch"
+    );
+
   });
 
   it("Initializes launch with creator deposit", async () => {
@@ -622,18 +735,7 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
     await sdk.initRoster({ launch: clmmLaunchState, signers: [admin.payer] });
-
-    const [rosterShard] = sdk.getRosterShardPda(clmmLaunchState, 0);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(0)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: clmmLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await provider.sendAndConfirm(initRosterShardTx, [admin.payer]);
+    await sdk.initRosterShard({ launch: clmmLaunchState, shardId: 0 });
 
     const targetRaise = 100 + Math.floor(Math.random() * 350);
     console.log(`Target raise: ${targetRaise} SOL`);
@@ -955,8 +1057,7 @@ describe("Full flow", () => {
     let state = await sdk.fetchLaunch(testLaunchState);
     assert.isAtLeast(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(
-      `Total deposited: ${
-        state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
+      `Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
       } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
     );
 
@@ -1072,9 +1173,8 @@ describe("Full flow", () => {
 
     assert.isTrue(userAccountAfter.claimedRefund);
     console.log(
-      `User refund claimed. Balance change: ${
-        (Number(userFinalBalance) - Number(userInitialBalance)) /
-        anchor.web3.LAMPORTS_PER_SOL
+      `User refund claimed. Balance change: ${(Number(userFinalBalance) - Number(userInitialBalance)) /
+      anchor.web3.LAMPORTS_PER_SOL
       } SOL`
     );
 
@@ -1121,8 +1221,7 @@ describe("Full flow", () => {
 
     assert.isTrue(userAccountFinal.claimedTokens);
     console.log(
-      `User tokens claimed. Token balance: ${
-        Number(userTokenAccount.amount) / 1_000_000
+      `User tokens claimed. Token balance: ${Number(userTokenAccount.amount) / 1_000_000
       }`
     );
 

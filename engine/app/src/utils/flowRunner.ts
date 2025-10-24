@@ -55,7 +55,7 @@ export async function runFullFlow(
   const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
   const SALE_PERCENTAGE = 0.45946; // 45.946%
   const TOKEN_DECIMALS = 6;
-  
+
   // // Calculate sale_allocation based on simulation parameters
   // const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
   // config.saleAllocation = saleAllocation;
@@ -64,7 +64,7 @@ export async function runFullFlow(
   const LAMPORTS_PER_SOL = 1_000_000_000;
   config.creatorInitialDepositLamports = 8 * LAMPORTS_PER_SOL;
   config.creatorDailyLamportsLimit = 2 * LAMPORTS_PER_SOL; // Set to 2 SOL to make daily_ticket_cap = 2
-  
+
   addLog(`\n--- Using Simulation Parameters ---`);
   addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
   addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
@@ -111,9 +111,8 @@ export async function runFullFlow(
         adminBalance / 1e9
       ).toFixed(
         2
-      )} SOL). Please fund it with at least ${
-        MIN_BALANCE_FOR_FEES / 1e9
-      } SOL to cover transaction fees.`;
+      )} SOL). Please fund it with at least ${MIN_BALANCE_FOR_FEES / 1e9
+        } SOL to cover transaction fees.`;
       addLog(errorMessage);
       return { success: false, message: errorMessage };
     }
@@ -151,18 +150,18 @@ export async function runFullFlow(
 
     // 1. Initialize Launch
     addLog(`[1/10] Initializing Launch...`);
-    
+
     const balanceBeforeLaunch = await provider.connection.getBalance(admin.publicKey);
 
     // Debug: Check available methods
     addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
-    
+
     const testSaleMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
-    
+
     // Check if getCreatorGrantPda exists before calling it
     let creatorGrant: PublicKey;
     if (typeof sdk.getCreatorGrantPda === 'function') {
@@ -256,9 +255,9 @@ export async function runFullFlow(
       } catch (error: any) {
         // This might happen if another process initialized it, which is fine.
         if (error.message && error.message.includes("custom program error: 0x0")) {
-            addLog(`   -> Shard ${i} was already initialized.`);
+          addLog(`   -> Shard ${i} was already initialized.`);
         } else {
-            throw error;
+          throw error;
         }
       }
     }
@@ -387,8 +386,7 @@ export async function runFullFlow(
             );
             // Stop the simulation on failure to prevent cascading issues.
             throw new Error(
-              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${
-                user.shardId
+              `Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${user.shardId
               }: ${error.message}`
             );
           }
@@ -432,7 +430,7 @@ export async function runFullFlow(
     // 8. Create Pool
     addLog(`\n[8/10] Creating Pool...`);
     try {
-      await sdk.createPool({ launch: testLaunchState });
+      await sdk.createPool({ launch: testLaunchState, computeUnits: 2_000_000 });
       addLog("   -> Pool created successfully!");
       const poolState = await sdk.fetchPoolState(testLaunchState);
       addLog(`      - Pool ID: ${poolState.poolId.toString()}`);
@@ -463,7 +461,7 @@ export async function runFullFlow(
     for (let i = 0; i < allUsersData.length; i += CLAIM_BATCH_SIZE) {
       const batch = allUsersData.slice(i, i + CLAIM_BATCH_SIZE);
       addLog(`   -> Processing claim batch ${Math.floor(i / CLAIM_BATCH_SIZE) + 1}...`);
-      
+
       const claimPromises = batch.map(async (userData) => {
         try {
           // Attempt to claim tokens for every user
@@ -544,10 +542,8 @@ export async function runFullFlow(
           failedClaims++;
           if (result.publicKey && result.error) {
             addLog(
-              `   -> ❌ ${
-                result.type
-              } claim failed for ${result.publicKey.toBase58()}: ${
-                result.error.message
+              `   -> ❌ ${result.type
+              } claim failed for ${result.publicKey.toBase58()}: ${result.error.message
               }`
             );
           }
@@ -656,11 +652,11 @@ export async function runFullFlow(
       await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
 
       addLog(`\n   --- Attempting to claim all remaining accrued tokens at once ---`);
-      
+
       // Debug: Check creator grant state before final claim
       const creatorGrantBeforeFinal = await sdk.fetchCreatorGrant(testLaunchState);
       addLog(`   -> Creator grant before final claim: reserved=${creatorGrantBeforeFinal.reservedTickets}, claimed=${creatorGrantBeforeFinal.claimedTickets}`);
-      
+
       try {
         const initialBalance = await getTokenBalance(creatorAta);
         await sdk.claimCreatorTokens({
@@ -676,7 +672,7 @@ export async function runFullFlow(
         // Debug: Check if all tokens were already claimed
         const creatorGrantAfterError = await sdk.fetchCreatorGrant(testLaunchState);
         addLog(`   -> Creator grant after error: reserved=${creatorGrantAfterError.reservedTickets}, claimed=${creatorGrantAfterError.claimedTickets}`);
-        
+
         if (creatorGrantAfterError.claimedTickets === creatorGrantAfterError.reservedTickets) {
           addLog(`   -> ✅ SUCCESS: All tokens were already claimed in previous attempts. This is expected behavior.`);
         } else if (error.message.includes("NothingToClaim")) {
@@ -686,7 +682,7 @@ export async function runFullFlow(
           throw error;
         }
       }
-      
+
       addLog(`\n   --- Final check: Attempting to claim again (should fail) ---`);
       try {
         await sdk.claimCreatorTokens({
