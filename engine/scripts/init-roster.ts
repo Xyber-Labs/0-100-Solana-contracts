@@ -13,7 +13,6 @@ async function main() {
       process.exit(1);
     }
     console.log("Found launch state:", project.launchPda.toBase58());
-    console.log("");
     console.log("Initializing roster...");
 
     const result = await sdk.initRoster({
