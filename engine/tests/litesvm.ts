@@ -874,16 +874,16 @@ describe("engine litesvm - raydium clmm", () => {
       await sdk.createPool({ launch: clmmLaunchState, useTestMode: false, computeUnits: 2_000_000 });
     }
 
-    let baseMintKeypair: anchor.web3.Keypair;
+    let saleMintKeypair: anchor.web3.Keypair;
     do {
-      baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+      saleMintKeypair = anchor.web3.Keypair.generate();
+    } while (saleMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
 
     const createPoolResultTx = await sdk.createClmmPoolTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
-      baseMint: baseMintKeypair,
+      saleMint: saleMintKeypair,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
@@ -904,7 +904,7 @@ describe("engine litesvm - raydium clmm", () => {
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
-      baseMint: baseMintKeypair.publicKey,
+      saleMint: saleMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
@@ -937,7 +937,7 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("✅ CLMM Pool and Liquidity created successfully!");
     console.log("Pool Signature:", poolSig);
     console.log("Liquidity Signature:", liquiditySig);
-    console.log("Base Mint:", createPoolResultTx.baseMint.toString());
+    console.log("Base Mint:", createPoolResultTx.saleMint.toString());
     console.log("Base Token ATA:", createPoolResultTx.baseTokenAta.toString());
 
     console.log("\n=== Pool State Details ===");
@@ -985,7 +985,7 @@ describe("engine litesvm - raydium clmm", () => {
       }
     }
 
-    assert.ok(createPoolResultTx.baseMint, "Should return base mint");
+    assert.ok(createPoolResultTx.saleMint, "Should return base mint");
     assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
     assert.ok(poolStateAccount, "Pool state should exist");
     assert.ok(Number(quoteVaultBalance) > 0, "Quote vault should have SOL");
@@ -1206,7 +1206,7 @@ describe("Full flow", () => {
       payer: admin.publicKey,
       launch: testLaunchState,
       quoteMint: WSOL_MINT,
-      baseMint: testSaleMint, // unused by SDK, saleMint is taken from launch
+      saleMint: testSaleMint, // unused by SDK, saleMint is taken from launch
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
@@ -1217,7 +1217,7 @@ describe("Full flow", () => {
       payer: admin.publicKey,
       launch: testLaunchState,
       quoteMint: WSOL_MINT,
-      baseMint: testSaleMint.publicKey,
+      saleMint: testSaleMint.publicKey,
       baseTokenAta: clmmCreate.baseTokenAta,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,

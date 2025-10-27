@@ -19,10 +19,10 @@ pub struct AddClmmLiquidity<'info> {
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
-        constraint = launch_state.clmm_base_mint == Some(base_mint.key()),
+        constraint = launch_state.clmm_sale_mint == Some(sale_mint.key()),
         mint::token_program = base_token_program
     )]
-    pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
+    pub sale_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -30,7 +30,7 @@ pub struct AddClmmLiquidity<'info> {
 
     #[account(
         mut,
-        associated_token::mint = base_mint,
+        associated_token::mint = sale_mint,
         associated_token::authority = escrow_authority,
         associated_token::token_program = base_token_program,
     )]
@@ -161,7 +161,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
 
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
-        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.sale_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_ata.to_account_info(),
@@ -285,7 +285,7 @@ struct TokenOrder<'info> {
 impl<'info> TokenOrder<'info> {
     fn new(
         quote_mint: &AccountInfo<'info>,
-        base_mint: &AccountInfo<'info>,
+        sale_mint: &AccountInfo<'info>,
         quote_vault: &AccountInfo<'info>,
         base_vault: &AccountInfo<'info>,
         quote_account: &AccountInfo<'info>,
@@ -293,10 +293,10 @@ impl<'info> TokenOrder<'info> {
         quote_amount: u64,
         base_amount: u64,
     ) -> Self {
-        if quote_mint.key() < base_mint.key() {
+        if quote_mint.key() < sale_mint.key() {
             Self {
                 token_mint_0: quote_mint.clone(),
-                token_mint_1: base_mint.clone(),
+                token_mint_1: sale_mint.clone(),
                 token_vault_0: quote_vault.clone(),
                 token_vault_1: base_vault.clone(),
                 token_account_0: quote_account.clone(),
@@ -306,7 +306,7 @@ impl<'info> TokenOrder<'info> {
             }
         } else {
             Self {
-                token_mint_0: base_mint.clone(),
+                token_mint_0: sale_mint.clone(),
                 token_mint_1: quote_mint.clone(),
                 token_vault_0: base_vault.clone(),
                 token_vault_1: quote_vault.clone(),

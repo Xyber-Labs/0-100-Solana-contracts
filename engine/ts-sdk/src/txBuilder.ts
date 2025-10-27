@@ -703,14 +703,14 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.Keypair; // unused now; kept for API compatibility
+    saleMint: web3.Keypair; // unused now; kept for API compatibility
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
-    baseMint: web3.PublicKey;
+    saleMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
     poolState: web3.PublicKey;
   }> {
@@ -802,7 +802,7 @@ export class TxBuilder {
     return {
       transaction,
       signers: [],
-      baseMint: saleMint,
+      saleMint: saleMint,
       baseTokenAta,
       poolState,
     };
@@ -812,7 +812,7 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.PublicKey; // ignored; use saleMint from launch
+    saleMint: web3.PublicKey; // ignored; use saleMint from launch
     baseTokenAta: web3.PublicKey;
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
@@ -943,7 +943,7 @@ export class TxBuilder {
         payer: params.payer,
         raydiumProgram: params.clmmProgram,
         launchState: params.launch,
-        baseMint: saleMint,
+        saleMint: saleMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
         poolState,

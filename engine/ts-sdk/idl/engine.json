@@ -34,7 +34,7 @@
           "writable": true
         },
         {
-          "name": "base_mint"
+          "name": "sale_mint"
         },
         {
           "name": "escrow_authority",
@@ -101,7 +101,7 @@
               },
               {
                 "kind": "account",
-                "path": "base_mint"
+                "path": "sale_mint"
               }
             ],
             "program": {
@@ -3250,7 +3250,7 @@
             "type": "u16"
           },
           {
-            "name": "clmm_base_mint",
+            "name": "clmm_sale_mint",
             "type": {
               "option": "pubkey"
             }

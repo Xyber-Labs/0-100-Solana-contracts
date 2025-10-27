@@ -17,7 +17,7 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
+        constraint = launch_state.clmm_sale_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Account<'info, LaunchState>,
 
@@ -29,7 +29,7 @@ pub struct CreateClmmPool<'info> {
     #[account(mut, address = launch_state.sale_mint)]
     pub sale_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
+    /// CHECK: Escrow ATA for base token (ATA of escrow_authority for sale_mint)
     #[account(
         mut,
         seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), sale_mint.key().as_ref()],
@@ -89,7 +89,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
-    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.sale_mint.key());
+    ctx.accounts.launch_state.clmm_sale_mint = Some(ctx.accounts.sale_mint.key());
     Ok(())
 }
 
@@ -231,17 +231,17 @@ struct TokenOrderForPool<'info> {
 impl<'info> TokenOrderForPool<'info> {
     fn new(
         quote_mint: &AccountInfo<'info>,
-        base_mint: &AccountInfo<'info>,
+        sale_mint: &AccountInfo<'info>,
         quote_vault: &AccountInfo<'info>,
         base_vault: &AccountInfo<'info>,
         quote_program: &AccountInfo<'info>,
         base_program: &AccountInfo<'info>,
         sqrt_price_x64: u128,
     ) -> Result<Self> {
-        if quote_mint.key() < base_mint.key() {
+        if quote_mint.key() < sale_mint.key() {
             Ok(Self {
                 token_mint_0: quote_mint.clone(),
-                token_mint_1: base_mint.clone(),
+                token_mint_1: sale_mint.clone(),
                 token_vault_0: quote_vault.clone(),
                 token_vault_1: base_vault.clone(),
                 token_program_0: quote_program.clone(),
@@ -259,7 +259,7 @@ impl<'info> TokenOrderForPool<'info> {
             let inverted_sqrt_price: u128 =
                 inv.try_into().map_err(|_| ErrorCode::ArithmeticOverflow)?;
             Ok(Self {
-                token_mint_0: base_mint.clone(),
+                token_mint_0: sale_mint.clone(),
                 token_mint_1: quote_mint.clone(),
                 token_vault_0: base_vault.clone(),
                 token_vault_1: quote_vault.clone(),

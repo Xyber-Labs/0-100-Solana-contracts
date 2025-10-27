@@ -446,21 +446,21 @@ const EngineSDK = {
     async function createClmmPool(args: {
       launch: anchor.web3.PublicKey;
       quoteMint: anchor.web3.PublicKey;
-      baseMint?: anchor.web3.Keypair;
+      saleMint?: anchor.web3.Keypair;
       ammConfig: anchor.web3.PublicKey;
       clmmProgram: anchor.web3.PublicKey;
     }): Promise<{
       signature: string;
-      baseMint: anchor.web3.PublicKey;
+      saleMint: anchor.web3.PublicKey;
       baseTokenAta: anchor.web3.PublicKey;
     }> {
-      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
+      const saleMint = args.saleMint ?? anchor.web3.Keypair.generate();
 
       const result = await txBuilder.createClmmPoolTx({
         payer,
         launch: args.launch,
         quoteMint: args.quoteMint,
-        baseMint,
+        saleMint,
         ammConfig: args.ammConfig,
         clmmProgram: args.clmmProgram,
         provider,
@@ -473,7 +473,7 @@ const EngineSDK = {
       const signature = await provider.sendAndConfirm(result.transaction, result.signers);
       return {
         signature,
-        baseMint: result.baseMint,
+        saleMint: result.saleMint,
         baseTokenAta: result.baseTokenAta,
       };
     }

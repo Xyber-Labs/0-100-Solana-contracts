@@ -40,7 +40,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "baseMint"
+          "name": "saleMint"
         },
         {
           "name": "escrowAuthority",
@@ -107,7 +107,7 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "baseMint"
+                "path": "saleMint"
               }
             ],
             "program": {
@@ -3256,7 +3256,7 @@ export type Engine = {
             "type": "u16"
           },
           {
-            "name": "clmmBaseMint",
+            "name": "clmmSaleMint",
             "type": {
               "option": "pubkey"
             }
