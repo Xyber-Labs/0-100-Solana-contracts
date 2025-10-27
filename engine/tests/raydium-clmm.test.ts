@@ -82,7 +82,6 @@ describe("engine litesvm - raydium clmm", () => {
       const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
       console.log("✅ Launch initialized:", initLaunchSignature);
 
-      // Check if account was created
       const accountInfo = client.getAccount(clmmLaunchState);
       if (accountInfo) {
         console.log("✅ Launch state account exists, size:", accountInfo.data.length);
@@ -217,7 +216,7 @@ describe("engine litesvm - raydium clmm", () => {
 
     const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
     const quoteTokenAtaInfo = client.getAccount(quoteTokenAta);
-    console.log(`\n=== Quote Token ATA (WSOL) ===`);
+    console.log("=== Quote Token ATA (WSOL) ===");
     console.log("Quote token ATA:", quoteTokenAta.toString());
     if (quoteTokenAtaInfo && quoteTokenAtaInfo.data.length >= 72) {
       const dataBuffer = Buffer.from(quoteTokenAtaInfo.data);
@@ -228,9 +227,8 @@ describe("engine litesvm - raydium clmm", () => {
     }
 
     const payerBalanceAfter = client.getBalance(admin.publicKey);
-    console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    console.log("\n=== Pool State Details ===");
+    console.log(`Payer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log("=== Pool State Details ===");
     console.log("Pool State PDA:", createPoolResultTx.poolState.toString());
     const poolStateAccount = client.getAccount(createPoolResultTx.poolState);
     if (poolStateAccount) {
@@ -238,13 +236,11 @@ describe("engine litesvm - raydium clmm", () => {
       console.log("Pool data size:", poolStateAccount.data.length, "bytes");
       console.log("Pool owner:", new anchor.web3.PublicKey(poolStateAccount.owner).toString());
     }
-
-    console.log("\n=== Quote Vault (WSOL) ===");
+    console.log("=== Quote Vault (WSOL) ===");
     console.log("Quote vault PDA:", addLiquidityResultTx.quoteVault.toString());
     const quoteVaultBalance = client.getBalance(addLiquidityResultTx.quoteVault);
     console.log("Quote vault balance:", Number(quoteVaultBalance) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
-
-    console.log("\n=== Base Vault (Token) ===");
+    console.log("=== Base Vault (Token) ===");
     console.log("Base vault PDA:", addLiquidityResultTx.baseVault.toString());
     const baseVaultAccount = client.getAccount(addLiquidityResultTx.baseVault);
     if (baseVaultAccount && baseVaultAccount.data.length >= 72) {
@@ -252,8 +248,7 @@ describe("engine litesvm - raydium clmm", () => {
       const amount = dataBuffer.readBigUInt64LE(64);
       console.log("Base vault token amount:", Number(amount) / 1_000_000, "tokens");
     }
-
-    console.log("\n=== Position NFT ===");
+    console.log("=== Position NFT ===");
     if (addLiquidityResultTx.positionNftMint) {
       console.log("Position NFT mint:", addLiquidityResultTx.positionNftMint.toString());
       const nftMintAccount = client.getAccount(addLiquidityResultTx.positionNftMint);
