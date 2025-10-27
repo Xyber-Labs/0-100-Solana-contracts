@@ -21,8 +21,7 @@ pub struct Deposit<'info> {
         bump
     )]
     pub user_contribution: Account<'info, UserContribution>,
-    // Legacy roster removed from new flow to reduce account size and confusion
-    // Sharded roster account, required for new flow
+    
     #[account(mut, constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
     /// CHECK: Escrow authority PDA without data for SOL storage

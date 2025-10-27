@@ -14,7 +14,7 @@ pub struct Withdraw<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    // Legacy roster removed from new flow
+    
     #[account(mut, constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
     /// CHECK: Escrow authority PDA without data for SOL storage

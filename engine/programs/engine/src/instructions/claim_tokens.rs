@@ -86,15 +86,7 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let base =
         shard.shard_base.checked_add(prefix_value).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    // Debug logging (remove in production)
-    msg!(
-        "DEBUG: User {} in shard {}, idx {}, prefix {}, base {}",
-        ctx.accounts.user.key(),
-        shard.shard_id,
-        u,
-        prefix_value,
-        base
-    );
+    
 
     // Early exit to avoid permute on n==0 and when no public winners are possible
     if k_pub == 0 || n == 0 {

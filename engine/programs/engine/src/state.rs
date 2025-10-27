@@ -34,7 +34,7 @@ pub struct LaunchState {
 
     // Selection
     pub vrf_seed: Option<[u8; 32]>,
-    pub selection_processed: u32, // mirror, not used in MVP (kept in SelectionState)
+    pub selection_processed: u32,
     pub selection_finalized: bool,
     pub threshold_score: Option<u128>,
 
@@ -114,9 +114,9 @@ pub struct Roster {
 
     // built at close
     #[max_len(100)]
-    pub prefix: Vec<u32>, // prefix[u] = Σ counts[k], k<u
+    pub prefix: Vec<u32>,
     pub total_in_shard: u32,
-    pub shard_base: u32, // 0 in MVP
+    pub shard_base: u32,
 }
 
 // New sharded roster account

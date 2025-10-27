@@ -100,7 +100,7 @@ pub struct AddClmmLiquidity<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-    // pool_state no longer required for this instruction; claims_ready will be set elsewhere
+    
 }
 
 /// Adds initial liquidity to Raydium CLMM pool
@@ -217,7 +217,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     Ok(())
 }
 
-// TODO (@xykeeper) to be refined within the other issue processing
+ 
 struct StakingCalculator {
     raised_lamports: u64,
     sale_allocation: u64,

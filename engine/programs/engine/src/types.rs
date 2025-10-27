@@ -15,4 +15,4 @@ pub struct HeapEntry {
 // Instruction Context Structures
 // -------------------------------
 
-// Deprecated: ProcessBatch accounts removed in permutation-based flow
+ 

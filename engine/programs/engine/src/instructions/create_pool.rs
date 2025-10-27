@@ -156,9 +156,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
 
     launch_state.tokens_per_ticket = Some(tokens_per_ticket);
     launch_state.selection_finalized = true;
-    // do not open claims here anymore; gating moves to add_clmm_liquidity
-
-    // TODO: Add CPI call to Raydium here
+    
 
     emit!(SelectionFinalized {
         launch: launch_state.key(),
