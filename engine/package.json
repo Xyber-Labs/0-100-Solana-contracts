@@ -7,7 +7,7 @@
     "dump:raydium": "bash tests/dump-raydium.sh",
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
     "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",
-    "test:litesvm:raydium": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm'",
+    "test:litesvm:raydium": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/raydium-clmm.test.ts",
     "test:litesvm:full": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'Full flow'",
     "test:litesvm:dispatcher": "ts-mocha -p ./tsconfig.json -t 1000000 tests/income-dispatcher.ts",
     "script:local-flow": "ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node --no-cache scripts/run-local-flow.ts",
