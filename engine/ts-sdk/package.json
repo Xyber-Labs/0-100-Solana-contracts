@@ -1,21 +1,24 @@
 {
-    "name": "0-100-sdk",
-    "version": "0.1.0",
-    "main": "dist/src/engine.js",
-    "types": "dist/src/engine.d.ts",
-    "scripts": {
-        "build": "tsc -b"
-    },
-    "files": [
-        "dist",
-        "src",
-        "idl"
-    ],
-    "dependencies": {
-        "@coral-xyz/anchor": "^0.31.1",
-        "@solana/spl-token": "^0.4.13"
-    },
-    "devDependencies": {
-        "typescript": "^5.7.3"
-    }
+  "name": "@xyber-labs/0-100-sdk",
+  "version": "0.1.0",
+  "main": "dist/src/engine.js",
+  "types": "dist/src/engine.d.ts",
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "files": [
+    "dist",
+    "src",
+    "idl"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.13"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
 }
