@@ -3,7 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "build": "anchor build && cp target/types/engine.ts ts-sdk/idl/engine.ts && cp target/idl/engine.json ts-sdk/idl/engine.json && yarn install",
+    "build": "anchor build && cp target/types/engine.ts ts-sdk/idl/engine.ts && cp target/idl/engine.json ts-sdk/idl/engine.json && cd ts-sdk && yarn build && cd .. && yarn install",
     "dump:raydium": "bash tests/dump-raydium.sh",
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
     "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",
@@ -13,7 +13,7 @@
     "script:remote-flow": "ANCHOR_PROVIDER_URL=http://10.186.0.84:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node scripts/run-local-flow.ts"
   },
   "dependencies": {
-    "0-100-sdk": "file:./ts-sdk",
+    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/spl-token": "^0.4.14",
     "bs58": "^6.0.0",

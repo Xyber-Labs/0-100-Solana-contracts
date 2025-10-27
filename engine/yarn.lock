@@ -2,12 +2,6 @@
 # yarn lockfile v1
 
 
-"0-100-sdk@file:./ts-sdk":
-  version "0.1.0"
-  dependencies:
-    "@coral-xyz/anchor" "^0.31.1"
-    "@solana/spl-token" "^0.4.13"
-
 "@babel/runtime@^7.25.0":
   version "7.28.4"
   resolved "https://registry.yarnpkg.com/@babel/runtime/-/runtime-7.28.4.tgz#a70226016fabe25c5783b2f22d3e1c9bc5ca3326"
@@ -282,6 +276,12 @@
   version "1.1.2"
   resolved "https://registry.yarnpkg.com/@ungap/promise-all-settled/-/promise-all-settled-1.1.2.tgz#aa58042711d6e3275dd37dc597e5d31e8c290a44"
   integrity sha512-sL/cEvJWAnClXw0wHk85/2L0G6Sj8UB0Ctc1TEMbKSsmpRosqhwj9gWgFRZSrBr2f9tiXISwNhCPmlfqUqyb9Q==
+
+"@xyber-labs/0-100-sdk@file:./ts-sdk":
+  version "0.2.0"
+  dependencies:
+    "@coral-xyz/anchor" "^0.31.1"
+    "@solana/spl-token" "^0.4.13"
 
 agentkeepalive@^4.5.0:
   version "4.6.0"

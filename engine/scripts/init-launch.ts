@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import EngineSDK from "0-100-sdk";
+import EngineSDK from "@xyber-labs/0-100-sdk";
 
 async function main() {
   const opts = parseArgs();
