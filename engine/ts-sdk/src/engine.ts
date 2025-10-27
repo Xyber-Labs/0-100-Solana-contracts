@@ -47,7 +47,7 @@ const EngineSDK = {
     }
 
     function getEscrowPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["escrow", launch]);
+      return txBuilder.getPda(["escrow_authority", launch]);
     }
 
     function getEscrowAuthorityPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -140,7 +140,7 @@ const EngineSDK = {
       signature: string;
     }> {
       const creatorPayer = args.creator?.publicKey ?? payer;
-      const { instruction, launchState, escrow } = await txBuilder.initLaunchIx(
+      const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
           saleMint: args.saleMint,
@@ -176,7 +176,7 @@ const EngineSDK = {
         throw new Error("Provider does not support sendAndConfirm");
       }
       const signature = await provider.sendAndConfirm(tx, signers);
-      return { launchPda: launchState, escrowPda: escrow, signature };
+      return { launchPda: launchState, escrowPda: escrowAuthority, signature };
     }
 
     async function initRoster(args: {

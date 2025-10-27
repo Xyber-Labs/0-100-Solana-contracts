@@ -147,7 +147,6 @@ describe("engine litesvm", () => {
           depositor.publicKey
         )[0],
         rosterShard,
-        escrow: sdk.getEscrowPda(testLaunchState)[0],
         escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -216,7 +215,6 @@ describe("engine litesvm", () => {
           depositor.publicKey
         )[0],
         rosterShard,
-        escrow: sdk.getEscrowPda(testLaunchState)[0],
         escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -236,7 +234,7 @@ describe("engine litesvm", () => {
           depositor.publicKey
         )[0],
         rosterShard,
-        escrow: sdk.getEscrowPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         launch: testLaunchState,
         systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
@@ -634,7 +632,7 @@ describe("engine litesvm", () => {
         projectCounter: sdk.getProjectCounterPda()[0],
         launchState: testLaunchState,
         saleMint: testSaleMint.publicKey,
-        escrow: sdk.getEscrowPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         creatorGrant: creatorGrant,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -1032,8 +1030,7 @@ describe("Full flow", () => {
             testLaunchState,
             user.publicKey
           )[0],
-          rosterShard,
-          escrow: sdk.getEscrowPda(testLaunchState)[0],
+        rosterShard,
           escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
           launch: testLaunchState,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -1144,7 +1141,8 @@ describe("Full flow", () => {
         launchState: testLaunchState,
         userContribution: testUser.contribution,
         rosterShard,
-        escrow: sdk.getEscrowPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
+        systemProgram: anchor.web3.SystemProgram.programId,
       } as any)
       .signers([testUser.keypair])
       .transaction();

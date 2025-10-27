@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, events::ClaimsOpened, EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, events::ClaimsOpened, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -23,9 +23,6 @@ pub struct AddClmmLiquidity<'info> {
         mint::token_program = base_token_program
     )]
     pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
-
-    #[account(seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
-    pub escrow: Account<'info, EscrowAccount>,
 
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -96,7 +93,6 @@ pub struct AddClmmLiquidity<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-
     // pool_state no longer required for this instruction; claims_ready will be set elsewhere
 }
 

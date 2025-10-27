@@ -1,7 +1,6 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-
 use constants::*;
 use state::*;
 
@@ -47,8 +46,6 @@ pub mod engine {
     pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
         instructions::finalize_roster_shard(ctx, shard_id)
     }
-
-    
 
     // -------------------------------
     // User (UI)

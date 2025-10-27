@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+    state::{LaunchState, RosterShard, UserContribution},
 };
 use anchor_lang::{prelude::*, solana_program};
 use solana_program::sysvar::clock::Clock;
@@ -25,10 +25,6 @@ pub struct Deposit<'info> {
     // Sharded roster account, required for new flow
     #[account(mut, constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
-    /// Escrow account (PDA off launch_state)
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
-    pub escrow: Account<'info, EscrowAccount>,
-
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -72,13 +68,6 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
-
-    ctx.accounts.escrow.balance = ctx
-        .accounts
-        .escrow
-        .balance
-        .checked_add(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     // update user
     let user = &mut ctx.accounts.user_contribution;

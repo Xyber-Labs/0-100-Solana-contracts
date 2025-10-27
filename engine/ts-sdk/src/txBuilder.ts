@@ -64,12 +64,12 @@ export class TxBuilder {
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
-    escrow: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
     projectCounter: web3.PublicKey;
     creatorGrant: web3.PublicKey;
   }> {
     const [launchState] = this.getPda(["launch", params.saleMint]);
-    const [escrow] = this.getPda(["escrow", launchState]);
+    const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
     const [creatorGrant] = this.getPda(["creator", launchState]);
 
@@ -92,7 +92,7 @@ export class TxBuilder {
         creator: params.creator,
         launchState: launchState,
         saleMint: params.saleMint,
-        escrow: escrow,
+        escrowAuthority: escrowAuthority,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
         systemProgram: web3.SystemProgram.programId,
@@ -103,7 +103,7 @@ export class TxBuilder {
     return {
       instruction,
       launchState,
-      escrow,
+      escrowAuthority,
       projectCounter,
       creatorGrant,
     };
@@ -127,7 +127,7 @@ export class TxBuilder {
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
-    escrow: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
     creatorGrant: web3.PublicKey;
     signers: web3.Keypair[];
   }> {
@@ -151,7 +151,7 @@ export class TxBuilder {
     const {
       instruction: initLaunchIx,
       launchState,
-      escrow,
+      escrowAuthority,
       creatorGrant,
     } = await this.initLaunchIx({
       creator: params.creator,
@@ -178,7 +178,7 @@ export class TxBuilder {
     return {
       initLaunchTx,
       launchState,
-      escrow,
+      escrowAuthority,
       creatorGrant,
       signers: [params.saleMint],
     };
@@ -279,7 +279,7 @@ export class TxBuilder {
     const rosterShard =
       params.rosterShard ??
       this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
-    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
+    // escrow removed; use only escrow_authority PDA
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
     const instruction = await this.program.methods
@@ -290,7 +290,7 @@ export class TxBuilder {
         userContribution: userContribution,
         roster: roster,
         rosterShard,
-        escrow: escrow,
+        // escrow removed
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
@@ -333,8 +333,6 @@ export class TxBuilder {
     const rosterShard =
       params.rosterShard ??
       this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
-    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
-
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
     const instruction = await this.program.methods
@@ -345,7 +343,7 @@ export class TxBuilder {
         userContribution: userContribution,
         roster: roster,
         rosterShard,
-        escrow: escrow,
+        // escrow removed
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
@@ -387,7 +385,7 @@ export class TxBuilder {
       (params.shardId !== undefined
         ? this.getRosterShardPda(params.launch, params.shardId)[0]
         : (() => { throw new Error("Provide shardId or rosterShard for claimRefund"); })());
-    const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
+    // escrow removed
 
     const instruction = await this.program.methods
       .claimRefund()
@@ -396,7 +394,7 @@ export class TxBuilder {
         launchState: params.launch,
         userContribution: userContribution,
         rosterShard,
-        escrow,
+        // escrow removed
       } as any)
       .instruction();
 
@@ -624,7 +622,7 @@ export class TxBuilder {
     creator: web3.PublicKey;
   }): Promise<{ transaction: web3.Transaction }> {
     const [creatorGrant] = this.getPda(["creator", params.launch]);
-    const [escrow] = this.getPda(["escrow", params.launch]);
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
 
     const transaction = new web3.Transaction();
 
@@ -634,7 +632,8 @@ export class TxBuilder {
         creator: params.creator,
         launchState: params.launch,
         creatorGrant,
-        escrow,
+        escrowAuthority,
+        systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
 
@@ -705,7 +704,6 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
     poolState: web3.PublicKey;
   }> {
-    const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     // Fetch launch to get the sale mint
     const launchState = await this.program.account.launchState.fetch(params.launch);
@@ -764,7 +762,6 @@ export class TxBuilder {
       .accounts({
         payer: params.payer,
         launchState: params.launch,
-        escrow: escrow,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         saleMint: saleMint,
@@ -937,7 +934,6 @@ export class TxBuilder {
         raydiumProgram: params.clmmProgram,
         launchState: params.launch,
         baseMint: saleMint,
-        escrow: escrow,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
         quoteMint: params.quoteMint,

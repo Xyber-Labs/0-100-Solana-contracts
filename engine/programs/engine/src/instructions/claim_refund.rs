@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::RefundClaimed,
-    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+    state::{LaunchState, RosterShard, UserContribution},
     utils::selection::permute_u32,
 };
 use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
@@ -18,8 +18,9 @@ pub struct ClaimRefund<'info> {
     #[account(constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
     /// CHECK:
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()))]
-    pub escrow: Account<'info, EscrowAccount>,
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
@@ -34,12 +35,25 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     {
         let refund = user.deposited;
         if refund > 0 {
-            **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
-            **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
-
-            let escrow = &mut ctx.accounts.escrow;
-            escrow.balance =
-                escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            let launch_key = launch_state.key();
+            let seeds = [
+                SEED_ROOT,
+                b"escrow_authority",
+                launch_key.as_ref(),
+                &[ctx.bumps.escrow_authority],
+            ];
+            let signer = &[&seeds[..]];
+            anchor_lang::system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.escrow_authority.to_account_info(),
+                        to: ctx.accounts.user.to_account_info(),
+                    },
+                    signer,
+                ),
+                refund,
+            )?;
         }
         user.claimed_refund = true;
 
@@ -85,11 +99,25 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
             .checked_sub(approved_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if refund > 0 {
-            **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
-            **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
-            let escrow = &mut ctx.accounts.escrow;
-            escrow.balance =
-                escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            let launch_key = launch_state.key();
+            let seeds = [
+                SEED_ROOT,
+                b"escrow_authority",
+                launch_key.as_ref(),
+                &[ctx.bumps.escrow_authority],
+            ];
+            let signer = &[&seeds[..]];
+            anchor_lang::system_program::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.system_program.to_account_info(),
+                    anchor_lang::system_program::Transfer {
+                        from: ctx.accounts.escrow_authority.to_account_info(),
+                        to: ctx.accounts.user.to_account_info(),
+                    },
+                    signer,
+                ),
+                refund,
+            )?;
         }
         user.claimed_refund = true;
         emit!(RefundClaimed {
@@ -115,12 +143,25 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     let refund =
         user.deposited.checked_sub(approved_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     if refund > 0 {
-        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
-        **ctx.accounts.user.to_account_info().try_borrow_mut_lamports()? += refund;
-
-        let escrow = &mut ctx.accounts.escrow;
-        escrow.balance =
-            escrow.balance.checked_sub(refund).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let launch_key = launch_state.key();
+        let seeds = [
+            SEED_ROOT,
+            b"escrow_authority",
+            launch_key.as_ref(),
+            &[ctx.bumps.escrow_authority],
+        ];
+        let signer = &[&seeds[..]];
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.escrow_authority.to_account_info(),
+                    to: ctx.accounts.user.to_account_info(),
+                },
+                signer,
+            ),
+            refund,
+        )?;
     }
     user.claimed_refund = true;
 

@@ -133,13 +133,6 @@ pub struct RosterShard {
 
 #[account]
 #[derive(InitSpace)]
-pub struct EscrowAccount {
-    pub launch: Pubkey,
-    pub balance: u64,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct SelectionState {
     pub launch: Pubkey,
     pub vrf_seed: [u8; 32],

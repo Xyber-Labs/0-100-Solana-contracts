@@ -37,45 +37,6 @@
           "name": "base_mint"
         },
         {
-          "name": "escrow",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "escrow_authority",
           "writable": true,
           "pda": {
@@ -377,8 +338,58 @@
           }
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrow_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -708,8 +719,58 @@
           "name": "roster_shard"
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrow_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -994,46 +1055,6 @@
         {
           "name": "launch_state",
           "writable": true
-        },
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
         },
         {
           "name": "escrow_authority",
@@ -1352,13 +1373,6 @@
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
-          "writable": true
-        },
-        {
           "name": "escrow_authority",
           "writable": true,
           "pda": {
@@ -1623,10 +1637,7 @@
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
+          "name": "escrow_authority",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1655,7 +1666,17 @@
                   99,
                   114,
                   111,
-                  119
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               },
               {
@@ -1996,13 +2017,6 @@
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
-          "writable": true
-        },
-        {
           "name": "escrow_authority",
           "writable": true,
           "pda": {
@@ -2093,19 +2107,6 @@
         50,
         10,
         157
-      ]
-    },
-    {
-      "name": "EscrowAccount",
-      "discriminator": [
-        36,
-        69,
-        48,
-        18,
-        128,
-        225,
-        125,
-        135
       ]
     },
     {
@@ -2948,22 +2949,6 @@
           {
             "name": "total_tickets",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "EscrowAccount",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "balance",
-            "type": "u64"
           }
         ]
       }

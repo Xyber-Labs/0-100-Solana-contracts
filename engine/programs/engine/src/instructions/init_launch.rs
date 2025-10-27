@@ -2,7 +2,7 @@ use crate::{
     constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT},
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
-    state::{CreatorGrant, EscrowAccount, LaunchState, ProjectCounter},
+    state::{CreatorGrant, LaunchState, ProjectCounter},
 };
 use anchor_lang::{
     prelude::*,
@@ -38,15 +38,9 @@ pub struct InitLaunch<'info> {
     #[account(mut)]
     pub sale_mint: Account<'info, Mint>,
 
-    /// Escrow account (PDA off launch_state)
-    #[account(
-        init,
-        payer = creator,
-        space = 8 + EscrowAccount::INIT_SPACE,
-        seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()],
-        bump
-    )]
-    pub escrow: Account<'info, EscrowAccount>,
+    /// CHECK: Escrow authority PDA without data for SOL storage
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
 
     /// Creator grant account (PDA off launch_state)
     #[account(
@@ -108,7 +102,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     };
     require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumBlocks);
 
-    let launch_key = ctx.accounts.launch_state.key();
 
     let counter = &mut ctx.accounts.project_counter;
     let project_id =
@@ -172,17 +165,17 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
             amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
 
-        // Transfer creator deposit to escrow using system program
+        // Transfer creator deposit to escrow_authority PDA using system program
         let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.creator.key(),
-            &ctx.accounts.escrow.key(),
+            &ctx.accounts.escrow_authority.key(),
             amount,
         );
         anchor_lang::solana_program::program::invoke(
             &transfer_ix,
             &[
                 ctx.accounts.creator.to_account_info(),
-                ctx.accounts.escrow.to_account_info(),
+                ctx.accounts.escrow_authority.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
@@ -191,11 +184,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.total_deposited = amount;
     state.creator_initial_deposit = amount; // Store the initial deposit
 
-    // Initialize escrow account
-    let escrow = &mut ctx.accounts.escrow;
     let funding_end = state.funding_period_end;
-    escrow.launch = launch_key;
-    escrow.balance = amount;
 
     // Creator grant reserved_tickets will be calculated in open_claims
     let reserved_tickets = 0;

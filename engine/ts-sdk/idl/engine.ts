@@ -43,45 +43,6 @@ export type Engine = {
           "name": "baseMint"
         },
         {
-          "name": "escrow",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -383,8 +344,58 @@ export type Engine = {
           }
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -714,8 +725,58 @@ export type Engine = {
           "name": "rosterShard"
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1000,46 +1061,6 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
-        },
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
         },
         {
           "name": "escrowAuthority",
@@ -1358,13 +1379,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
-          "writable": true
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -1629,10 +1643,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
+          "name": "escrowAuthority",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1661,7 +1672,17 @@ export type Engine = {
                   99,
                   114,
                   111,
-                  119
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               },
               {
@@ -2002,13 +2023,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
-          "writable": true
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -2099,19 +2113,6 @@ export type Engine = {
         50,
         10,
         157
-      ]
-    },
-    {
-      "name": "escrowAccount",
-      "discriminator": [
-        36,
-        69,
-        48,
-        18,
-        128,
-        225,
-        125,
-        135
       ]
     },
     {
@@ -2954,22 +2955,6 @@ export type Engine = {
           {
             "name": "totalTickets",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "escrowAccount",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "balance",
-            "type": "u64"
           }
         ]
       }
