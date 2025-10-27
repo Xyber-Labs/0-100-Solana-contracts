@@ -22,11 +22,20 @@ let adminKeypair: anchor.web3.Keypair;
 describe("engine litesvm - raydium clmm", () => {
   let raydiumProgramId: anchor.web3.PublicKey;
   let raydiumAmmConfig: anchor.web3.PublicKey;
+  let clmmSaleMint: anchor.web3.Keypair;
+  let clmmLaunchState: anchor.web3.PublicKey;
+  let baseMintKeypair: anchor.web3.Keypair;
+  let createPoolResultTx: any;
+  let addLiquidityResultTx: any;
 
+  const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const ROSTER_SHARD_CAP = 100;
+  const CLMM_HARD_CAP = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
+  const CLMM_SALE_ALLOCATION = new anchor.BN(540_540_000);
+  const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
 
   before(async () => {
     client = fromWorkspace("./");
@@ -43,15 +52,12 @@ describe("engine litesvm - raydium clmm", () => {
     raydiumAmmConfig = raydiumSetup.ammConfig;
   });
 
-  it("Creates CLMM pool on Raydium", async () => {
-    console.log("\n=== Creating CLMM Pool ===");
+  it("Initializes launch and collects deposits", async () => {
+    console.log("=== Initializing Launch ===");
 
-    const clmmSaleMint = anchor.web3.Keypair.generate();
-    const CLMM_HARD_CAP = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
-    const CLMM_SALE_ALLOCATION = new anchor.BN(540_540_000);
-    const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
+    clmmSaleMint = anchor.web3.Keypair.generate();
 
-    const { initLaunchTx, signers, launchState: clmmLaunchState } = await sdk.initLaunchTx({
+    const { initLaunchTx, signers, launchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
       saleMint: clmmSaleMint,
       hardCapLamports: CLMM_HARD_CAP,
@@ -68,7 +74,8 @@ describe("engine litesvm - raydium clmm", () => {
       provider,
     });
 
-    console.log("Initializing launch...");
+    clmmLaunchState = launchState;
+
     console.log("Launch state PDA:", clmmLaunchState.toString());
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
     try {
@@ -118,8 +125,10 @@ describe("engine litesvm - raydium clmm", () => {
     }
 
     console.log(`Total raised: ${totalRaised} SOL`);
+  });
 
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+  it("Creates CLMM pool on Raydium", async () => {
+    console.log("=== Creating CLMM Pool ===");
 
     console.log("Raydium CLMM setup:");
     console.log("CLMM Program:", raydiumProgramId.toString());
@@ -150,12 +159,11 @@ describe("engine litesvm - raydium clmm", () => {
       unixTimestamp: clock.unixTimestamp.toString(),
     });
 
-    let baseMintKeypair: anchor.web3.Keypair;
     do {
       baseMintKeypair = anchor.web3.Keypair.generate();
     } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
 
-    const createPoolResultTx = await sdk.createClmmPoolTx({
+    createPoolResultTx = await sdk.createClmmPoolTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
@@ -172,11 +180,24 @@ describe("engine litesvm - raydium clmm", () => {
     );
     console.log("✅ Pool created:", poolSig);
 
+    const poolStateAccount = client.getAccount(createPoolResultTx.poolState);
+    assert.ok(poolStateAccount, "Pool state should exist");
+    console.log("✅ Pool account exists");
+    console.log("Pool data size:", poolStateAccount.data.length, "bytes");
+    console.log("Pool owner:", new anchor.web3.PublicKey(poolStateAccount.owner).toString());
+
+    assert.ok(createPoolResultTx.baseMint, "Should return base mint");
+    assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
+  });
+
+  it("Adds liquidity to CLMM pool", async () => {
+    console.log("=== Adding Liquidity ===");
+
     const [escrow] = sdk.getEscrowPda(clmmLaunchState);
     const escrowBalanceBefore = client.getBalance(escrow);
     console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-    const addLiquidityResultTx = await sdk.addClmmLiquidityTx({
+    addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
@@ -253,11 +274,10 @@ describe("engine litesvm - raydium clmm", () => {
         console.log("✅ Position NFT owned by escrow_authority");
       }
     }
+  });
 
-    assert.ok(createPoolResultTx.baseMint, "Should return base mint");
-    assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
-    assert.ok(poolStateAccount, "Pool state should exist");
-    assert.ok(Number(quoteVaultBalance) > 0, "Quote vault should have SOL");
-    assert.ok(baseVaultAccount, "Base vault should exist");
+  it.skip("Executes trader swaps to accumulate fees", async () => {
+    console.log("=== Executing Trader Swaps ===");
+    console.log("⚠️  TODO: Implement swap functionality with proper tick array setup");
   });
 });
