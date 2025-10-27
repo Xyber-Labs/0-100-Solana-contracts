@@ -854,6 +854,52 @@ describe("engine litesvm - raydium clmm", () => {
     const escrowBalanceBefore = client.getBalance(escrow);
     console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
+    // Ensure our Engine pool_state is initialized before adding CLMM liquidity
+    {
+      const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+      let state = await sdk.fetchLaunch(clmmLaunchState);
+      const projectId = state.projectId.toNumber();
+      const numBlocks = state.numBlocks.toNumber();
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+      const rangeStart = width * BigInt(projectId - 1);
+      const rangeEnd = rangeStart + width;
+
+      function bigIntTo32BytesBE(x: bigint): Buffer {
+        const buf = Buffer.alloc(32);
+        let v = x;
+        for (let i = 31; i >= 0; i--) {
+          buf[i] = Number(v & BigInt(255));
+          v = v >> BigInt(8);
+        }
+        return buf;
+      }
+
+      const currentClock2 = client.getClock();
+      const numHashes = 512;
+      const slotHashesData = Buffer.alloc(8 + numHashes * 40);
+      slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
+      for (let i = 0; i < numHashes; i++) {
+        const offset = 8 + i * 40;
+        slotHashesData.writeBigUInt64LE(currentClock2.slot + BigInt(i + 1), offset);
+        if (i === numHashes - 1) {
+          bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
+        } else {
+          bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
+        }
+      }
+
+      client.setAccount(SLOT_HASHES_SYSVAR, {
+        lamports: 1_000_000,
+        data: slotHashesData,
+        owner: anchor.web3.SystemProgram.programId,
+        executable: false,
+      });
+
+      await sdk.setSeed({ launch: clmmLaunchState });
+      await sdk.finalizeRosterShard({ launch: clmmLaunchState, shardId: 0 });
+      await sdk.createPool({ launch: clmmLaunchState, useTestMode: false, computeUnits: 2_000_000 });
+    }
+
     const addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
