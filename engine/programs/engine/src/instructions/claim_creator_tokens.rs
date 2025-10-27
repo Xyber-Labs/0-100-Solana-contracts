@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::CreatorClaimed,
-    state::{CreatorGrant, LaunchState},
+    state::{CreatorGrant, LaunchState, PoolState},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
@@ -13,6 +13,12 @@ pub struct ClaimCreatorTokens<'info> {
     pub creator: Signer<'info>,
 
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
+        bump,
+    )]
+    pub pool_state: Account<'info, PoolState>,
 
     #[account(
         mut,
@@ -48,7 +54,7 @@ pub struct ClaimCreatorTokens<'info> {
 pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
-    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
 
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let creator_grant = &mut ctx.accounts.creator_grant;

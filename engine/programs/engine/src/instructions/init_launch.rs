@@ -8,7 +8,7 @@ use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock::Clock, Sysvar},
 };
-use anchor_spl::token::{self, spl_token::instruction::AuthorityType, Mint, Token};
+use anchor_spl::token::{Mint, Token};
 
 #[derive(Accounts)]
 pub struct InitLaunch<'info> {
@@ -163,21 +163,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
 
     // save sale mint
     state.sale_mint = ctx.accounts.sale_mint.key();
-
-    // Transfer mint authority of sale_mint to PDA mint_auth = [SEED_ROOT, "mint_auth", launch_state]
-    // Current mint authority must sign; we expect creator is current authority
-    let mint_auth_pda = Pubkey::find_program_address(
-        &[SEED_ROOT, b"mint_auth", state.key().as_ref()],
-        &crate::ID,
-    )
-    .0;
-
-    let cpi_accounts = token::SetAuthority {
-        current_authority: ctx.accounts.creator.to_account_info(),
-        account_or_mint: ctx.accounts.sale_mint.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    token::set_authority(cpi_ctx, AuthorityType::MintTokens, Some(mint_auth_pda))?;
 
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;

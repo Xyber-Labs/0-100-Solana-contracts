@@ -167,6 +167,7 @@ pub struct PoolState {
     pub range_start: [u8; 32],
     pub range_end: [u8; 32],
     pub created: bool,
+    pub claims_ready: bool,
 }
 
 #[account]

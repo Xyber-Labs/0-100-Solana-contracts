@@ -213,7 +213,7 @@ const EngineSDK = {
 
     // processBatch deprecated in on-chain program; keep for compatibility but will fail
     async function processBatch(_: any): Promise<{ signature: string }> {
-      throw new Error("processBatch deprecated; use finalizeRosterShard + openClaims");
+      throw new Error("processBatch deprecated; use finalizeRosterShard + createPool");
     }
 
     async function deposit(args: {
@@ -569,17 +569,7 @@ const EngineSDK = {
       return { signature };
     }
 
-    async function openClaims(args: { launch: anchor.web3.PublicKey }): Promise<{ signature: string }> {
-      const ix = await txBuilder.openClaimsIx({ launch: args.launch, payer });
-      const tx = new anchor.web3.Transaction().add(ix);
-      tx.feePayer = payer;
-      const signers = adminKeypair ? [adminKeypair] : [];
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(tx, signers);
-      return { signature };
-    }
+    // openClaims removed; createPool now finalizes and opens claims
 
     async function claimCreatorTokens(args: {
       launch: anchor.web3.PublicKey;
@@ -791,7 +781,6 @@ const EngineSDK = {
       claimTokens,
       initRosterShard,
       finalizeRosterShard,
-      openClaims,
       claimRefundTx,
       claimTokensTx,
       claimCreatorTokens,

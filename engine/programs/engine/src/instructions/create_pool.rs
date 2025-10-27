@@ -1,7 +1,7 @@
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::PoolCreated,
+    events::{PoolCreated, SelectionFinalized},
     state::{LaunchState, PoolState},
     utils::pool,
 };
@@ -12,6 +12,7 @@ pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -31,13 +32,20 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
-    let launch_state = &ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
-    // Check if selection is finalized; claims do not need to be open yet
-    require!(launch_state.selection_finalized, EngineErrorCode::NotFinalized);
-    // Optionally forbid creating pool after opening claims
-    require!(!launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    // Preconditions: ready to finalize + enable claims
+    require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
+    require!(
+        launch_state.total_deposited >= launch_state.min_raise_lamports,
+        EngineErrorCode::MinRaiseNotMet
+    );
+    require!(launch_state.roster_shards > 0, EngineErrorCode::ShardsNotFullyFinalized);
+    require!(
+        launch_state.roster_finalized_up_to + 1 == launch_state.roster_shards as i32,
+        EngineErrorCode::ShardsNotFullyFinalized
+    );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     // Get the SlotHashes sysvar
@@ -110,7 +118,53 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     pool_state.range_end = range_end_bytes;
     pool_state.created = true;
 
+    // ---- Selection finalization and opening claims
+    if launch_state.creator_grant_present {
+        require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
+
+        let creator_share_ppm = (launch_state.creator_initial_deposit as u128)
+            .checked_mul(1_000_000)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?
+            .checked_div(launch_state.hard_cap_lamports as u128)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let creator_reserved_u128 = (launch_state.k_capacity as u128)
+            .checked_mul(creator_share_ppm)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?
+            .checked_div(1_000_000)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        require!(
+            creator_reserved_u128 <= u32::MAX as u128,
+            EngineErrorCode::U64ConversionOverflow
+        );
+        launch_state.creator_reserved_tickets = creator_reserved_u128 as u32;
+    }
+
+    launch_state.total_launch_allocation = launch_state.sale_allocation;
+
+    // tokens_per_ticket
+    let grand_total_tickets = (launch_state.public_total_tickets as u64)
+        .checked_add(launch_state.creator_reserved_tickets as u64)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
+    require!(divisor > 0, EngineErrorCode::InvalidDivisor);
+
+    let tokens_per_ticket = (launch_state.sale_allocation as u128)
+        .checked_mul(1_000_000)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?
+        .checked_div(divisor as u128)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
+
+    launch_state.tokens_per_ticket = Some(tokens_per_ticket);
+    launch_state.selection_finalized = true;
+    // do not open claims here anymore; gating moves to add_clmm_liquidity
+
     // TODO: Add CPI call to Raydium here
+
+    emit!(SelectionFinalized {
+        launch: launch_state.key(),
+        k_capacity: launch_state.k_capacity,
+    });
+    
 
     emit!(PoolCreated {
         launch: launch_state.key(),

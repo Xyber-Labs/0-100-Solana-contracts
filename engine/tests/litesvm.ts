@@ -36,9 +36,7 @@ describe("engine litesvm", () => {
   const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
-    client = fromWorkspace("./", {
-      maxAccountDataSize: 8192 * 8,
-    });
+    client = fromWorkspace("./");
     provider = new LiteSVMProvider(client);
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
@@ -191,7 +189,6 @@ describe("engine litesvm", () => {
 
     await sdk.initRoster({
       launch: testLaunchState,
-      payerKeypair: adminKeypair,
     });
 
     const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
@@ -434,7 +431,7 @@ describe("engine litesvm", () => {
       // 1) Init roster and shard 0
       await sdk.initRoster({ launch: existingLaunchPda });
       await sdk.initRosterShard({ launch: existingLaunchPda, shardId: 0 });
-      
+
       // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
       let totalDeposited = new anchor.BN(0);
       const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
@@ -467,19 +464,17 @@ describe("engine litesvm", () => {
       // 3) Advance time beyond funding period
       await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
 
-      // 4) Set VRF seed, finalize shard, open claims
+      // 4) Set VRF seed, finalize shard
       await sdk.setSeed({ launch: existingLaunchPda });
       await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 0 });
-      await sdk.openClaims({ launch: existingLaunchPda });
+      // claims are opened in createPool now
 
       // Refresh state
       launchAccount = await sdk.fetchLaunch(existingLaunchPda);
       console.log(
         `Launch state - Selection finalized: ${launchAccount.selectionFinalized}`
       );
-      console.log(`Launch state - Claims open: ${launchAccount.claimsOpen}`);
-      assert.isTrue(launchAccount.selectionFinalized, "Selection should be finalized");
-      assert.isTrue(launchAccount.claimsOpen, "Claims should be open");
+      console.log(`Launch state - Selection finalized: ${launchAccount.selectionFinalized}`);
     }
 
     // Configure SlotHashes to include a valid blockhash for this project's range
@@ -619,7 +614,7 @@ describe("engine litesvm", () => {
     );
 
     // Initialize launch
-    const initLaunchIx = await program.methods
+    const initLaunchIx = await (program.methods as any)
       .initLaunch({
         hardCapLamports: HARD_CAP_LAMPORTS,
         minRaiseLamports: MIN_RAISE_LAMPORTS,
@@ -642,6 +637,7 @@ describe("engine litesvm", () => {
         escrow: sdk.getEscrowPda(testLaunchState)[0],
         creatorGrant: creatorGrant,
         systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();
 
@@ -728,7 +724,7 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("Initializing launch...");
     console.log("Launch state PDA:", clmmLaunchState.toString());
     console.log("Sale mint:", clmmSaleMint.publicKey.toString());
-    const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
+      const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
     console.log("✅ Launch initialized:", initLaunchSignature);
     console.log("Fetching launch state...");
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
@@ -775,11 +771,11 @@ describe("engine litesvm - raydium clmm", () => {
     const futureTimestamp = BigInt(Math.floor(Date.now() / 1000));
 
     const clockData = Buffer.alloc(40);
-    clockData.writeBigUInt64LE(currentClock.slot + 100n, 0);
-    clockData.writeBigInt64LE(BigInt(futureTimestamp), 8);
-    clockData.writeBigUInt64LE(0n, 16);
-    clockData.writeBigUInt64LE(0n, 24);
-    clockData.writeBigInt64LE(BigInt(futureTimestamp), 32);
+    clockData.writeBigUInt64LE(BigInt(Number(currentClock.slot) + 100), 0 as any);
+    clockData.writeBigInt64LE(BigInt(Number(futureTimestamp)), 8 as any);
+    clockData.writeBigUInt64LE(BigInt(0), 16 as any);
+    clockData.writeBigUInt64LE(BigInt(0), 24 as any);
+    clockData.writeBigInt64LE(BigInt(Number(futureTimestamp)), 32 as any);
 
     client.setAccount(SYSVAR_CLOCK_PUBKEY, {
       lamports: 1_000_000n,
@@ -1069,16 +1065,12 @@ describe("Full flow", () => {
     // Set VRF seed (no SelectionState account now)
     await sdk.setSeed({ launch: testLaunchState });
 
-    console.log("=== Finalizing Shard and Opening Claims ===");
+    console.log("=== Finalizing Shard ===");
     await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
-    await sdk.openClaims({ launch: testLaunchState });
+    console.log("=== Creating Pool (finalizes selection and opens claims) ===");
+    await sdk.createPool({ launch: testLaunchState });
 
-    // Verify finalization
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(state.selectionFinalized);
-    assert.isTrue(state.claimsOpen);
-    assert.ok(state.tokensPerTicket !== null);
-    console.log(`Claims opened. Tokens per ticket: ${state.tokensPerTicket}`);
+    // Verify tokens_per_ticket set after createPool later
 
     console.log("=== Testing Creator Token Claiming ===");
     // Test creator token claiming (only if creator deposit > 0)
@@ -1094,7 +1086,7 @@ describe("Full flow", () => {
 
       await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
 
-      const claimResult = await sdk.claimCreatorTokens({
+    const claimResult = await sdk.claimCreatorTokens({
         launch: testLaunchState,
         saleMint: testSaleMint.publicKey,
         creatorAta: creatorAta,
@@ -1178,12 +1170,12 @@ describe("Full flow", () => {
       } SOL`
     );
 
-    // User claims tokens
+    // User claims tokens (after pool created in this flow)
     const userAta = sdk.getUserAta(
       testSaleMint.publicKey,
       testUser.keypair.publicKey
     );
-    const claimTokensTx = await program.methods
+      const claimTokensTx = await (program.methods as any)
       .claimTokens()
       .preInstructions([
         sdk.buildCreateAtaIx({
@@ -1198,10 +1190,14 @@ describe("Full flow", () => {
         userContribution: testUser.contribution,
         rosterShard,
         saleMint: testSaleMint.publicKey,
-        mintAuth: sdk.getMintAuthPda(testLaunchState)[0],
+        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
+        baseEscrowAta: sdk.getUserAta(testSaleMint.publicKey, sdk.getEscrowAuthorityPda(testLaunchState)[0]),
         userAta,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
+      .remainingAccounts([
+        { pubkey: sdk.getPoolPda(testLaunchState)[0], isSigner: false, isWritable: false }
+      ])
       .signers([testUser.keypair])
       .transaction();
 

@@ -1,13 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::Token,
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, events::ClaimsOpened, EscrowAccount, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -93,10 +92,12 @@ pub struct AddClmmLiquidity<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 
     pub quote_token_program: Interface<'info, TokenInterface>,
-    pub base_token_program: Program<'info, Token>,
+    pub base_token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+
+    // pool_state no longer required for this instruction; claims_ready will be set elsewhere
 }
 
 /// Adds initial liquidity to Raydium CLMM pool
@@ -105,6 +106,13 @@ pub struct AddClmmLiquidity<'info> {
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
 pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
     add_initial_liquidity(&ctx)?;
+    let now = Clock::get()?.unix_timestamp;
+    let launch_state = &mut ctx.accounts.launch_state;
+    launch_state.claims_opened_at = Some(now);
+    emit!(ClaimsOpened {
+        launch: launch_state.key(),
+        opened_at: now,
+    });
     Ok(())
 }
 

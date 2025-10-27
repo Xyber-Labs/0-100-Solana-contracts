@@ -43,20 +43,12 @@ pub mod engine {
         instructions::set_seed(ctx)
     }
 
-    /// Permissionless crank: process up to max_items tickets (t = processed ..).
-    pub fn process_batch(ctx: Context<ProcessBatch>, max_items: u16) -> Result<()> {
-        instructions::process_batch(ctx, max_items)
-    }
-
     /// Finalize roster shard (compute prefix, set shard_base, bump totals)
     pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
         instructions::finalize_roster_shard(ctx, shard_id)
     }
 
-    /// Open claims after all shards finalized
-    pub fn open_claims(ctx: Context<OpenClaims>) -> Result<()> {
-        instructions::open_claims(ctx)
-    }
+    
 
     // -------------------------------
     // User (UI)

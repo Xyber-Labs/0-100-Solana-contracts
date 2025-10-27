@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::TokensClaimed,
-    state::{LaunchState, RosterShard, UserContribution},
+    state::{LaunchState, PoolState, RosterShard, UserContribution},
     utils::selection::permute_u32,
 };
 use anchor_lang::prelude::*;
@@ -18,6 +18,12 @@ pub struct ClaimTokens<'info> {
     // Sharded roster account to compute ticket indices
     #[account(constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
+
+    #[account(
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
+        bump,
+    )]
+    pub pool_state: Account<'info, PoolState>,
 
     #[account(address = launch_state.sale_mint)]
     pub sale_mint: Account<'info, Mint>,
@@ -45,7 +51,7 @@ pub struct ClaimTokens<'info> {
 pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
-    require!(launch_state.claims_open, EngineErrorCode::ClaimsNotOpen);
+    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
     // Tokens are claimed only if the raise was successful
