@@ -133,18 +133,6 @@ pub struct RosterShard {
 
 #[account]
 #[derive(InitSpace)]
-pub struct SelectionState {
-    pub launch: Pubkey,
-    pub vrf_seed: [u8; 32],
-    pub processed: u32,
-    pub finalized: bool,
-    pub threshold: Option<u128>,
-    #[max_len(100)]
-    pub heap: Vec<crate::types::HeapEntry>, // size ≤ K
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct ProjectCounter {
     pub last_project_id: u64,
 }

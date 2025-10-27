@@ -13,7 +13,6 @@ mod events;
 mod income_calculator;
 mod instructions;
 mod state;
-mod types;
 pub mod utils;
 
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
