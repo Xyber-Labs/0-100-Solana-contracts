@@ -728,7 +728,7 @@ describe("engine litesvm - raydium clmm", () => {
     const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
     console.log("Launch state verified:", launchStateData.projectId.toString());
 
-    await sdk.initRoster({ launch: clmmLaunchState, signers: [admin.payer] });
+    await sdk.initRoster({ launch: clmmLaunchState });
     await sdk.initRosterShard({ launch: clmmLaunchState, shardId: 0 });
 
     const targetRaise = 100 + Math.floor(Math.random() * 350);
@@ -776,7 +776,7 @@ describe("engine litesvm - raydium clmm", () => {
     clockData.writeBigInt64LE(BigInt(Number(futureTimestamp)), 32 as any);
 
     client.setAccount(SYSVAR_CLOCK_PUBKEY, {
-      lamports: 1_000_000n,
+      lamports: 1000000,
       data: clockData,
       owner: anchor.web3.SystemProgram.programId,
       executable: false,
@@ -892,7 +892,7 @@ describe("engine litesvm - raydium clmm", () => {
       });
       const nftAtaInfo = client.getAccount(positionNftAta);
       if (nftAtaInfo) {
-        const nftAccount = unpackAccount(positionNftAta, nftAtaInfo);
+        const nftAccount = unpackAccount(positionNftAta, { ...(nftAtaInfo as any), data: Buffer.from(nftAtaInfo.data) } as any);
         console.log("Position NFT owner:", nftAccount.owner.toString());
         assert.ok(nftAccount.owner.equals(escrowAuthority), "Position NFT owned by escrow_authority");
         console.log("✅ Position NFT owned by escrow_authority");
@@ -1054,6 +1054,7 @@ describe("Full flow", () => {
       } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
     );
 
+    const escrowAuthorityBeforeLiquidity = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
     console.log("=== Waiting for Funding Period to End ===");
     // Wait for funding period to end
     await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
@@ -1065,7 +1066,78 @@ describe("Full flow", () => {
     console.log("=== Finalizing Shard ===");
     await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
     console.log("=== Creating Pool (finalizes selection and opens claims) ===");
+    // Inject SlotHashes sysvar with a valid blockhash for this project's range (mirrors raydium test)
+    {
+      const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey(
+        "SysvarS1otHashes111111111111111111111111111"
+      );
+      // Use latest launch state to compute personal range
+      state = await sdk.fetchLaunch(testLaunchState);
+      const projectId = state.projectId.toNumber();
+      const numBlocks = state.numBlocks.toNumber();
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+      const rangeStart = width * BigInt(projectId - 1);
+      const rangeEnd = rangeStart + width; // exclusive upper bound
+
+      function bigIntTo32BytesBE(x: bigint): Buffer {
+        const buf = Buffer.alloc(32);
+        let v = x;
+        for (let i = 31; i >= 0; i--) {
+          buf[i] = Number(v & BigInt(255));
+          v = v >> BigInt(8);
+        }
+        return buf;
+      }
+
+      const currentClock = client.getClock();
+      const numHashes = 512;
+      const slotHashesData = Buffer.alloc(8 + numHashes * 40);
+      slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
+      for (let i = 0; i < numHashes; i++) {
+        const offset = 8 + i * 40;
+        slotHashesData.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+        if (i === numHashes - 1) {
+          bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
+        } else {
+          bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
+        }
+      }
+
+      client.setAccount(SLOT_HASHES_SYSVAR, {
+        lamports: 1_000_000,
+        data: slotHashesData,
+        owner: anchor.web3.SystemProgram.programId,
+        executable: false,
+      });
+    }
     await sdk.createPool({ launch: testLaunchState });
+
+    // Create Raydium CLMM pool and add liquidity to open claims and initialize escrow ATA
+    const { raydiumProgramId, ammConfig: raydiumAmmConfig } = await setupRaydiumCLMM(client);
+    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+
+    const clmmCreate = await sdk.createClmmPoolTx({
+      payer: admin.publicKey,
+      launch: testLaunchState,
+      quoteMint: WSOL_MINT,
+      baseMint: testSaleMint, // unused by SDK, saleMint is taken from launch
+      ammConfig: raydiumAmmConfig,
+      clmmProgram: raydiumProgramId,
+      provider,
+    });
+    await provider.sendAndConfirm(clmmCreate.transaction, [admin.payer, ...clmmCreate.signers]);
+
+    const clmmAddLiq = await sdk.addClmmLiquidityTx({
+      payer: admin.publicKey,
+      launch: testLaunchState,
+      quoteMint: WSOL_MINT,
+      baseMint: testSaleMint.publicKey,
+      baseTokenAta: clmmCreate.baseTokenAta,
+      ammConfig: raydiumAmmConfig,
+      clmmProgram: raydiumProgramId,
+      provider,
+    });
+    await provider.sendAndConfirm(clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
 
     // Verify tokens_per_ticket set after createPool later
 
@@ -1094,13 +1166,13 @@ describe("Full flow", () => {
 
       // Verify creator grant state after claiming
       const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
-      const expectedFirstDayTickets = dailyLimit.toNumber() / testTau.toNumber();
+      const expectedFirstDayTickets = Math.floor(dailyLimit.toNumber() / testTau.toNumber());
       assert.equal(creatorGrantAfterClaim.claimedTickets, expectedFirstDayTickets);
 
       // Verify creator token balance
       const tokenAccountInfo = client.getAccount(creatorAta);
-      const tokenAccount = unpackAccount(creatorAta, tokenAccountInfo);
-      const expectedTokens = state.tokensPerTicket * expectedFirstDayTickets;
+      const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
+      const expectedTokens = Math.floor((state.tokensPerTicket * expectedFirstDayTickets) / 1_000_000);
       assert.equal(Number(tokenAccount.amount), expectedTokens);
 
       console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedTokens} tokens`);
@@ -1109,18 +1181,15 @@ describe("Full flow", () => {
     }
 
     console.log("=== Testing Creator Deposit Fix ===");
-    // Verify that the creator deposit fix works by checking escrow_authority balance
-    const escrowAuthorityBalance = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
+    const escrowAuthorityBalance = escrowAuthorityBeforeLiquidity;
     console.log(`Main launch escrow_authority balance: ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Creator deposit amount: ${creatorDepositAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
-    // The escrow_authority should contain the creator's initial deposit plus user deposits (20 SOL hard cap)
-    // Plus some lamports for account rent
     const userDeposits = testHardCap;
     const expectedMinBalance = creatorDepositAmount.add(userDeposits);
 
     assert.isTrue(Number(escrowAuthorityBalance) >= expectedMinBalance.toNumber());
-    console.log(`Escrow authority balance ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+    console.log(`Escrow authority balance ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL before liquidity move`);
 
     if (creatorDepositAmount.toNumber() > 0) {
       console.log("Creator deposit fix verified: escrow contains creator's initial deposit");
@@ -1207,7 +1276,7 @@ describe("Full flow", () => {
     await provider.sendAndConfirm(claimTokensTx, [testUser.keypair]);
 
     const userTokenAccountInfo = client.getAccount(userAta);
-    const userTokenAccount = unpackAccount(userAta, userTokenAccountInfo);
+    const userTokenAccount = unpackAccount(userAta, { ...(userTokenAccountInfo as any), data: Buffer.from(userTokenAccountInfo.data) } as any);
     const userAccountFinal = await sdk.fetchUserContribution(
       testLaunchState,
       testUser.keypair.publicKey

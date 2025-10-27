@@ -67,11 +67,17 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     projectCounter: web3.PublicKey;
     creatorGrant: web3.PublicKey;
+    baseEscrowAta: web3.PublicKey;
   }> {
     const [launchState] = this.getPda(["launch", params.saleMint]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
     const [creatorGrant] = this.getPda(["creator", launchState]);
+    const baseEscrowAta = getAssociatedTokenAddressSync(
+      params.saleMint,
+      escrowAuthority,
+      true
+    );
 
     const instruction = await this.program.methods
       .initLaunch({
@@ -93,11 +99,13 @@ export class TxBuilder {
         launchState: launchState,
         saleMint: params.saleMint,
         escrowAuthority: escrowAuthority,
+        baseEscrowAta: baseEscrowAta,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-      })
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      } as any)
       .instruction();
 
     return {
@@ -106,6 +114,7 @@ export class TxBuilder {
       escrowAuthority,
       projectCounter,
       creatorGrant,
+      baseEscrowAta,
     };
   }
 
@@ -153,6 +162,7 @@ export class TxBuilder {
       launchState,
       escrowAuthority,
       creatorGrant,
+      baseEscrowAta,
     } = await this.initLaunchIx({
       creator: params.creator,
       saleMint: params.saleMint.publicKey,
@@ -936,6 +946,7 @@ export class TxBuilder {
         baseMint: saleMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
+        poolState,
         quoteMint: params.quoteMint,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
@@ -955,7 +966,7 @@ export class TxBuilder {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
-      })
+      } as any)
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({

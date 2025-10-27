@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, events::ClaimsOpened, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -35,6 +35,13 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::token_program = base_token_program,
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
+        bump,
+    )]
+    pub pool_state: Account<'info, PoolState>,
 
     #[account(
         mint::token_program = quote_token_program,
@@ -105,6 +112,7 @@ pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let launch_state = &mut ctx.accounts.launch_state;
     launch_state.claims_opened_at = Some(now);
+    ctx.accounts.pool_state.claims_ready = true;
     emit!(ClaimsOpened {
         launch: launch_state.key(),
         opened_at: now,
