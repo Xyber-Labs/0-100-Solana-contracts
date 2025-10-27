@@ -1,6 +1,7 @@
 # Engine Solana Program
 
-A comprehensive Solana program implementing a lottery/raffle system with fair winner selection using VRF (Verifiable Random Function) and cranking mechanism.
+A comprehensive Solana program implementing a lottery/raffle system with fair winner selection using VRF (Verifiable
+Random Function) and cranking mechanism.
 
 ## Features
 
@@ -30,6 +31,7 @@ The comprehensive test demonstrates the complete lottery/raffle flow:
 6. **Claims**: Tests refunds and token claims
 
 ### Test Results
+
 ```
 ✔ Initializes the launch state
 ✔ Opens funding
@@ -58,14 +60,38 @@ The comprehensive test demonstrates the complete lottery/raffle flow:
 4. **Threshold Setting**: Final threshold for tie-breaking
 5. **Claims Processing**: Refunds losers, mints tokens for winners
 
+## Contract Management Scripts
+
+Scripts for initializing and managing launches across any Solana environment (mainnet, devnet, testnet, localnet).
+
+### Initialize Launch
+
+```bash
+anchor run --provider.cluster localnet init-launch
+```
+
+Configurable parameters: hard cap, min raise, per-wallet cap, tau, sale/LP allocations, funding duration, roster shard
+cap, creator deposit/limits/lock period (use `--help` for details). The script outputs a transaction signature with and
+explorer link for the cluster.
+
+### Initialize Roster
+
+```bash
+anchor run --provider.cluster localnet init-roster -- --project-id <PROJECT_ID>
+```
+
+Initializes the roster (participant list) for a launch project. Use `--help` for parameter details. The script outputs a transaction signature with explorer link for the cluster.
+
 ## Development
 
 ### Building
+
 ```bash
 anchor build
 ```
 
 ### Deploying
+
 ```bash
 anchor deploy
 ```

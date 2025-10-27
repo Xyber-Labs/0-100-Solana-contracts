@@ -21,7 +21,7 @@ const loadIdl = async () => {
   return idl;
 };
 
-export default {
+const EngineSDK = {
   idlJson: null, // Will be loaded dynamically
   loadIdl,
   idlType: null as unknown as EngineIDL, // type‑only reference
@@ -828,4 +828,5 @@ export default {
   },
 };
 
+export default EngineSDK;
 export type { EngineIDL };
