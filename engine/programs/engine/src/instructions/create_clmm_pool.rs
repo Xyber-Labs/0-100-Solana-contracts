@@ -74,6 +74,18 @@ pub struct CreateClmmPool<'info> {
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
+    require!(ctx.accounts.launch_state.selection_finalized, ErrorCode::NotFinalized);
+    require!(
+        ctx.accounts.launch_state.total_deposited >= ctx.accounts.launch_state.min_raise_lamports,
+        ErrorCode::MinRaiseNotMet
+    );
+    require!(
+        ctx.accounts.launch_state.roster_shards > 0
+            && ctx.accounts.launch_state.roster_finalized_up_to + 1
+                == ctx.accounts.launch_state.roster_shards as i32,
+        ErrorCode::ShardsNotFullyFinalized
+    );
+
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;

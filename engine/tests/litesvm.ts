@@ -828,36 +828,10 @@ describe("engine litesvm - raydium clmm", () => {
       unixTimestamp: clock.unixTimestamp.toString(),
     });
 
-    let baseMintKeypair: anchor.web3.Keypair;
-    do {
-      baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
-
-    const createPoolResultTx = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
-      launch: clmmLaunchState,
-      quoteMint: WSOL_MINT,
-      baseMint: baseMintKeypair,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
-      provider,
-    });
-
-    console.log("Creating CLMM pool...");
-    const poolSig = await safeSendAndConfirm(
-      createPoolResultTx.transaction,
-      [admin.payer, ...createPoolResultTx.signers]
-    );
-    console.log("✅ Pool created:", poolSig);
-
-    const [escrow] = sdk.getEscrowPda(clmmLaunchState);
-    const escrowBalanceBefore = client.getBalance(escrow);
-    console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    // Ensure our Engine pool_state is initialized before adding CLMM liquidity
+    // Finalize selection and create Engine pool BEFORE creating Raydium CLMM pool
     {
       const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
-      let state = await sdk.fetchLaunch(clmmLaunchState);
+      const state = await sdk.fetchLaunch(clmmLaunchState);
       const projectId = state.projectId.toNumber();
       const numBlocks = state.numBlocks.toNumber();
       const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
@@ -899,6 +873,32 @@ describe("engine litesvm - raydium clmm", () => {
       await sdk.finalizeRosterShard({ launch: clmmLaunchState, shardId: 0 });
       await sdk.createPool({ launch: clmmLaunchState, useTestMode: false, computeUnits: 2_000_000 });
     }
+
+    let baseMintKeypair: anchor.web3.Keypair;
+    do {
+      baseMintKeypair = anchor.web3.Keypair.generate();
+    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+
+    const createPoolResultTx = await sdk.createClmmPoolTx({
+      payer: admin.publicKey,
+      launch: clmmLaunchState,
+      quoteMint: WSOL_MINT,
+      baseMint: baseMintKeypair,
+      ammConfig: raydiumAmmConfig,
+      clmmProgram: raydiumProgramId,
+      provider,
+    });
+
+    console.log("Creating CLMM pool...");
+    const poolSig = await safeSendAndConfirm(
+      createPoolResultTx.transaction,
+      [admin.payer, ...createPoolResultTx.signers]
+    );
+    console.log("✅ Pool created:", poolSig);
+
+    const [escrow] = sdk.getEscrowPda(clmmLaunchState);
+    const escrowBalanceBefore = client.getBalance(escrow);
+    console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
     const addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
