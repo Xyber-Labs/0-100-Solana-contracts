@@ -53,7 +53,7 @@ export function getRaydiumTickArrayPda(
   raydiumProgramId: anchor.web3.PublicKey
 ): [anchor.web3.PublicKey, number] {
   const startTickIndexBuffer = Buffer.alloc(4);
-  startTickIndexBuffer.writeInt32LE(startTickIndex, 0);
+  startTickIndexBuffer.writeInt32BE(startTickIndex, 0);
 
   return anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from('tick_array'), poolState.toBuffer(), startTickIndexBuffer],
@@ -151,8 +151,15 @@ export async function swapTokens(params: SwapParams): Promise<string> {
     isBaseInputBuffer,
   ]);
 
-  const [tickArrayLower] = getRaydiumTickArrayPda(poolState, 0, raydiumProgramId);
-  const [tickArrayUpper] = getRaydiumTickArrayPda(poolState, 3600, raydiumProgramId);
+  const tickSpacing = 60;
+  const TICK_ARRAY_SIZE = 60;
+  const tickLowerIndex = 0;
+  const tickUpperIndex = 443580;
+  const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+  const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+
+  const [tickArrayLower] = getRaydiumTickArrayPda(poolState, tickArrayLowerStartIndex, raydiumProgramId);
+  const [tickArrayUpper] = getRaydiumTickArrayPda(poolState, tickArrayUpperStartIndex, raydiumProgramId);
 
   const keys = [
     { pubkey: trader.publicKey, isSigner: true, isWritable: false },
@@ -231,11 +238,11 @@ export async function executeTraderSwaps(
   traders: anchor.web3.Keypair[],
   wsolMint: anchor.web3.PublicKey,
   baseMint: anchor.web3.PublicKey,
+  poolState: anchor.web3.PublicKey,
   ammConfig: anchor.web3.PublicKey,
   raydiumProgramId: anchor.web3.PublicKey,
   provider: any
 ): Promise<void> {
-  const [poolState] = getRaydiumPoolStatePda(ammConfig, wsolMint, baseMint, raydiumProgramId);
   const [observationState] = getRaydiumObservationPda(poolState, raydiumProgramId);
   const [quoteVault] = getRaydiumVaultPda(poolState, wsolMint, raydiumProgramId);
   const [baseVault] = getRaydiumVaultPda(poolState, baseMint, raydiumProgramId);
@@ -247,7 +254,7 @@ export async function executeTraderSwaps(
     await createTraderATAs(trader, wsolMint, baseMint, provider);
     console.log(`  ✅ Created ATAs`);
 
-    const swapAmount = new anchor.BN(0.5 * anchor.web3.LAMPORTS_PER_SOL);
+    const swapAmount = new anchor.BN(0.01 * anchor.web3.LAMPORTS_PER_SOL);
 
     const buySig = await swapTokens({
       trader,
