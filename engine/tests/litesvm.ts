@@ -1,7 +1,9 @@
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
-import { LiteSVM } from "litesvm";
+import { LiteSVM, FailedTransactionMetadata } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
+import bs58 from "bs58";
+import { SendTransactionError } from "@solana/web3.js";
 import {
   createInitializeMintInstruction,
   TOKEN_PROGRAM_ID,
@@ -694,6 +696,44 @@ describe("engine litesvm - raydium clmm", () => {
     raydiumAmmConfig = raydiumSetup.ammConfig;
   });
 
+  function encodeSignatureSafe(sigRaw: any): string {
+    if (!sigRaw) throw new Error("Missing signature");
+    if (typeof sigRaw === "string") return sigRaw;
+    if (Array.isArray(sigRaw)) return bs58.encode(Uint8Array.from(sigRaw));
+    if (sigRaw instanceof Uint8Array) return bs58.encode(sigRaw);
+    if (Buffer.isBuffer(sigRaw)) return bs58.encode(new Uint8Array(sigRaw));
+    if (sigRaw?.buffer && typeof sigRaw.byteLength === "number") {
+      return bs58.encode(new Uint8Array(sigRaw.buffer, sigRaw.byteOffset ?? 0, sigRaw.byteLength));
+    }
+    if (sigRaw?.data) {
+      try { return bs58.encode(Uint8Array.from(sigRaw.data)); } catch {}
+    }
+    throw new TypeError("Unsupported signature type for encoding");
+  }
+
+  async function safeSendAndConfirm(tx: any, signers: any[]): Promise<string> {
+    if ("version" in tx) {
+      signers?.forEach((s) => tx.sign([s]));
+    } else {
+      tx.feePayer = tx.feePayer ?? provider.wallet.publicKey;
+      tx.recentBlockhash = client.latestBlockhash();
+      signers?.forEach((s) => tx.partialSign(s));
+    }
+    await provider.wallet.signTransaction(tx as any);
+    const sigRaw = "version" in tx ? tx.signatures[0] : tx.signature;
+    const signature = encodeSignatureSafe(sigRaw);
+    const res = client.sendTransaction(tx as any);
+    if (res instanceof FailedTransactionMetadata) {
+      throw new SendTransactionError({
+        action: "send",
+        signature,
+        transactionMessage: res.err().toString(),
+        logs: res.meta().logs(),
+      } as any);
+    }
+    return signature;
+  }
+
   it("Creates CLMM pool on Raydium", async () => {
     console.log("\n=== Creating CLMM Pool ===");
 
@@ -804,7 +844,7 @@ describe("engine litesvm - raydium clmm", () => {
     });
 
     console.log("Creating CLMM pool...");
-    const poolSig = await provider.sendAndConfirm(
+    const poolSig = await safeSendAndConfirm(
       createPoolResultTx.transaction,
       [admin.payer, ...createPoolResultTx.signers]
     );
@@ -826,21 +866,10 @@ describe("engine litesvm - raydium clmm", () => {
     });
 
     console.log("Adding liquidity...");
-    let liquiditySig: string;
-    try {
-      liquiditySig = await provider.sendAndConfirm(
-        addLiquidityResultTx.transaction,
-        [admin.payer, ...addLiquidityResultTx.signers]
-      );
-    } catch (e: any) {
-      const msg = (e && (e.message ?? String(e))) as string;
-      const isUint8EncodeIssue = msg.includes("Expected Uint8Array") && msg.toLowerCase().includes("base-x");
-      if (isUint8EncodeIssue) {
-        console.log("Skipping liquidity due to Uint8Array/base-x encode mismatch in this environment");
-        return;
-      }
-      throw e;
-    }
+    const liquiditySig = await safeSendAndConfirm(
+      addLiquidityResultTx.transaction,
+      [admin.payer, ...addLiquidityResultTx.signers]
+    );
     console.log("✅ Liquidity added:", liquiditySig);
 
     const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
