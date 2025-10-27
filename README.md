@@ -74,6 +74,14 @@ Configurable parameters: hard cap, min raise, per-wallet cap, tau, sale/LP alloc
 cap, creator deposit/limits/lock period (use `--help` for details). The script outputs a transaction signature with and
 explorer link for the cluster.
 
+### Initialize Roster
+
+```bash
+anchor run --provider.cluster localnet init-roster -- --project-id <PROJECT_ID>
+```
+
+Initializes the roster (participant list) for a launch project. Use `--help` for parameter details. The script outputs a transaction signature with explorer link for the cluster.
+
 ## Development
 
 ### Building
