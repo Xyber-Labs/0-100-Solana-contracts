@@ -42,8 +42,8 @@ const EngineSDK = {
     const txBuilder = new TxBuilder(program, admin);
 
     // -------------- PDA helpers --------------
-    function getLaunchPda(saleMint: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["launch", saleMint]);
+    function getLaunchPda(baseMint: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+      return txBuilder.getPda(["launch", baseMint]);
     }
 
     function getEscrowPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -112,12 +112,12 @@ const EngineSDK = {
     // =============================
 
     /**
-     * IMPORTANT: For claimTokens to work, the mint authority of saleMint
+     * IMPORTANT: For claimTokens to work, the mint authority of baseMint
      * must be PDA ["mint_auth", launch_state]. This can be computed in advance,
-     * because launch = PDA(["launch", saleMint]).
+     * because launch = PDA(["launch", baseMint]).
      */
     async function initLaunch(args: {
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       hardCapLamports: BN;
       minRaiseLamports: BN;
       perWalletCap: BN;
@@ -143,7 +143,7 @@ const EngineSDK = {
       const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
-          saleMint: args.saleMint,
+          baseMint: args.baseMint,
           hardCapLamports: args.hardCapLamports,
           minRaiseLamports: args.minRaiseLamports,
           perWalletCap: args.perWalletCap,
@@ -417,8 +417,8 @@ const EngineSDK = {
 
     /**
      * Important:
-     * 1) saleMint must have mintAuthority = PDA ["mint_auth", launch].
-     * 2) userAta (user's ATA for saleMint) must exist. If
+     * 1) baseMint must have mintAuthority = PDA ["mint_auth", launch].
+     * 2) userAta (user's ATA for baseMint) must exist. If
      *    createAtaIfMissing = true, the SDK will add an ix for creation.
      */
     async function createPool(args: {
@@ -446,21 +446,21 @@ const EngineSDK = {
     async function createClmmPool(args: {
       launch: anchor.web3.PublicKey;
       quoteMint: anchor.web3.PublicKey;
-      saleMint?: anchor.web3.Keypair;
+      baseMint?: anchor.web3.Keypair;
       ammConfig: anchor.web3.PublicKey;
       clmmProgram: anchor.web3.PublicKey;
     }): Promise<{
       signature: string;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       baseTokenAta: anchor.web3.PublicKey;
     }> {
-      const saleMint = args.saleMint ?? anchor.web3.Keypair.generate();
+      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
 
       const result = await txBuilder.createClmmPoolTx({
         payer,
         launch: args.launch,
         quoteMint: args.quoteMint,
-        saleMint,
+        baseMint,
         ammConfig: args.ammConfig,
         clmmProgram: args.clmmProgram,
         provider,
@@ -473,14 +473,14 @@ const EngineSDK = {
       const signature = await provider.sendAndConfirm(result.transaction, result.signers);
       return {
         signature,
-        saleMint: result.saleMint,
+        baseMint: result.baseMint,
         baseTokenAta: result.baseTokenAta,
       };
     }
 
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       userKeypair?: anchor.web3.Keypair;
       rosterShard?: anchor.web3.PublicKey;
       shardId?: number;
@@ -490,7 +490,7 @@ const EngineSDK = {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
       const { transaction, userAta } = await txBuilder.claimTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         user: userPubkey,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -511,7 +511,7 @@ const EngineSDK = {
 
     async function claimTokensTx(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       userPubkey: anchor.web3.PublicKey;
       rosterShard?: anchor.web3.PublicKey;
       shardId?: number;
@@ -520,7 +520,7 @@ const EngineSDK = {
     }): Promise<{ transaction: anchor.web3.Transaction; userAta: anchor.web3.PublicKey }> {
       return txBuilder.claimTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         user: args.userPubkey,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -573,7 +573,7 @@ const EngineSDK = {
 
     async function claimCreatorTokens(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       creatorKeypair?: anchor.web3.Keypair;
       creatorAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
@@ -581,7 +581,7 @@ const EngineSDK = {
       const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
       const { transaction, creatorAta } = await txBuilder.claimCreatorTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         creator: creatorPubkey,
         creatorAta: args.creatorAta,
         createAtaIfMissing: args.createAtaIfMissing,
@@ -598,14 +598,14 @@ const EngineSDK = {
 
     async function claimCreatorTokensTx(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       creator: anchor.web3.PublicKey;
       creatorAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
     }): Promise<{ transaction: anchor.web3.Transaction; creatorAta: anchor.web3.PublicKey }> {
       return txBuilder.claimCreatorTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         creator: args.creator,
         creatorAta: args.creatorAta,
         createAtaIfMissing: args.createAtaIfMissing,
@@ -689,7 +689,7 @@ const EngineSDK = {
               launchPda: account.publicKey,
               account: account.account,
               // Try to derive sale mint from launch PDA
-              saleMint: account.account.saleMint,
+              baseMint: account.account.baseMint,
             };
           })
           .sort((a, b) => a.projectId - b.projectId);
@@ -726,7 +726,7 @@ const EngineSDK = {
           projectId: launchData.projectId.toNumber(),
           launchPda,
           account: launchData,
-          saleMint: launchData.saleMint,
+          baseMint: launchData.baseMint,
         };
       } catch (error) {
         console.error("Error getting project by launch PDA:", error);
@@ -738,9 +738,9 @@ const EngineSDK = {
     //        HIGH-LEVEL flows
     // =============================
 
-    /** Returns all PDAs for a given saleMint. Convenient for initialization. */
-    function deriveAllPdas(saleMint: anchor.web3.PublicKey) {
-      const [launch] = getLaunchPda(saleMint);
+    /** Returns all PDAs for a given baseMint. Convenient for initialization. */
+    function deriveAllPdas(baseMint: anchor.web3.PublicKey) {
+      const [launch] = getLaunchPda(baseMint);
       const [escrow] = getEscrowPda(launch);
       const [roster] = getRosterPda(launch);
       const [mintAuth] = getMintAuthPda(launch);

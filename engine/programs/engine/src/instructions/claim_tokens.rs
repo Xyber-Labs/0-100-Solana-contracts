@@ -25,23 +25,23 @@ pub struct ClaimTokens<'info> {
     )]
     pub pool_state: Account<'info, PoolState>,
 
-    #[account(address = launch_state.sale_mint)]
-    pub sale_mint: Account<'info, Mint>,
+    #[account(address = launch_state.base_mint)]
+    pub base_mint: Account<'info, Mint>,
 
-    /// CHECK: PDA owning the escrow ATA for sale_mint
+    /// CHECK: PDA owning the escrow ATA for base_mint
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
     #[account(
         mut,
-        associated_token::mint = sale_mint,
+        associated_token::mint = base_mint,
         associated_token::authority = escrow_authority,
     )]
     pub base_escrow_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
-        constraint = user_ata.mint == sale_mint.key() @ EngineErrorCode::InvalidMint,
+        constraint = user_ata.mint == base_mint.key() @ EngineErrorCode::InvalidMint,
         constraint = user_ata.owner == user.key() @ EngineErrorCode::InvalidOwner,
     )]
     pub user_ata: Account<'info, TokenAccount>,
@@ -50,7 +50,7 @@ pub struct ClaimTokens<'info> {
 
 pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(ctx.accounts.sale_mint.key() == launch_state.sale_mint, EngineErrorCode::Unauthorized);
+    require!(ctx.accounts.base_mint.key() == launch_state.base_mint, EngineErrorCode::Unauthorized);
     require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 

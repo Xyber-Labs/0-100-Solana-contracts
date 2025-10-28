@@ -80,7 +80,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [sdk, setSdk] = useState<any>(null);
   const [program, setProgram] = useState<any>(null);
   const [launchState, setLaunchState] = useState<PublicKey | null>(null);
-  const [saleMint, setSaleMint] = useState<Keypair | null>(null);
+  const [baseMint, setbaseMint] = useState<Keypair | null>(null);
   const [escrow, setEscrow] = useState<PublicKey | null>(null);
   const [roster, setRoster] = useState<PublicKey | null>(null);
   const [selection, setSelection] = useState<PublicKey | null>(null);
@@ -332,8 +332,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setIsLoading(true);
       addLog('Initializing launch with custom parameters...');
       
-      const saleMintKeypair = Keypair.generate();
-      const [launchPda] = sdk.getLaunchPda(saleMintKeypair.publicKey);
+      const baseMintKeypair = Keypair.generate();
+      const [launchPda] = sdk.getLaunchPda(baseMintKeypair.publicKey);
       const [escrowPda] = sdk.getEscrowPda(launchPda);
 
       // Get mint authority PDA
@@ -342,8 +342,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       const [projectCounter] = sdk.getProjectCounterPda();
 
       console.log('Creating initLaunch transaction with:');
-      console.log('saleMint:', saleMintKeypair.publicKey.toString());
-      console.log('signers:', [saleMintKeypair].map(kp => kp.publicKey.toString()));
+      console.log('baseMint:', baseMintKeypair.publicKey.toString());
+      console.log('signers:', [baseMintKeypair].map(kp => kp.publicKey.toString()));
       
       // Create the transaction manually to handle signers properly
       const transaction = new Transaction();
@@ -353,13 +353,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
       );
       
-      addLog(`Creating transaction for saleMint: ${saleMintKeypair.publicKey.toString()}`);
+      addLog(`Creating transaction for baseMint: ${baseMintKeypair.publicKey.toString()}`);
       
       // Add pre-instructions
       transaction.add(
         SystemProgram.createAccount({
           fromPubkey: (testWallet?.publicKey || publicKey)!,
-          newAccountPubkey: saleMintKeypair.publicKey,
+          newAccountPubkey: baseMintKeypair.publicKey,
           space: 82,
           lamports: await connection.getMinimumBalanceForRentExemption(82),
           programId: TOKEN_PROGRAM_ID,
@@ -368,7 +368,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       
       transaction.add(
         createInitializeMintInstruction(
-          saleMintKeypair.publicKey,
+          baseMintKeypair.publicKey,
           6,
           mintAuth,
           (testWallet?.publicKey || publicKey)!
@@ -395,7 +395,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           creator: (testWallet?.publicKey || publicKey)!,
           projectCounter,
           launchState: launchPda,
-          saleMint: saleMintKeypair.publicKey,
+          baseMint: baseMintKeypair.publicKey,
           escrow: escrowPda,
           creatorGrant,
           systemProgram: SystemProgram.programId,
@@ -420,8 +420,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       if (testWallet) {
         // For TestWallet, sign manually
         addLog(`Signing with TestWallet: ${testWallet.publicKey.toString()}`);
-        transaction.sign(testWallet, saleMintKeypair);
-        const signers = [testWallet, saleMintKeypair].filter(Boolean) as Keypair[];
+        transaction.sign(testWallet, baseMintKeypair);
+        const signers = [testWallet, baseMintKeypair].filter(Boolean) as Keypair[];
         addLog(`Sending transaction with signers: ${signers.map(s => s.publicKey.toString()).join(', ')}`);
         signature = await connection.sendTransaction(transaction, signers);
       } else {
@@ -436,27 +436,27 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         addLog(`Browser wallet signed transaction`);
         addLog(`Signed transaction signatures: ${signedTransaction.signatures.map(sig => sig.publicKey.toString()).join(', ')}`);
         
-        // Send the transaction with saleMintKeypair as additional signer
-        addLog(`Sending transaction with additional signer: ${saleMintKeypair.publicKey.toString()}`);
+        // Send the transaction with baseMintKeypair as additional signer
+        addLog(`Sending transaction with additional signer: ${baseMintKeypair.publicKey.toString()}`);
         addLog(`Transaction feePayer: ${signedTransaction.feePayer?.toString()}`);
         addLog(`Transaction recentBlockhash: ${signedTransaction.recentBlockhash}`);
         addLog(`Transaction instructions count: ${signedTransaction.instructions.length}`);
         
-        // Check if saleMintKeypair is already signed
-        const isSaleMintSigned = signedTransaction.signatures.some(sig => 
-          sig.publicKey.equals(saleMintKeypair.publicKey) && sig.signature !== null
+        // Check if baseMintKeypair is already signed
+        const isbaseMintSigned = signedTransaction.signatures.some(sig => 
+          sig.publicKey.equals(baseMintKeypair.publicKey) && sig.signature !== null
         );
-        addLog(`SaleMint already signed: ${isSaleMintSigned}`);
+        addLog(`baseMint already signed: ${isbaseMintSigned}`);
         
         try {
-          if (isSaleMintSigned) {
+          if (isbaseMintSigned) {
             // If already signed, send without additional signers
             addLog(`Sending transaction without additional signers (already signed)`);
             signature = await connection.sendRawTransaction(signedTransaction.serialize());
           } else {
             // If not signed, send with additional signer
             addLog(`Sending transaction with additional signer`);
-            signature = await connection.sendTransaction(signedTransaction, [saleMintKeypair]);
+            signature = await connection.sendTransaction(signedTransaction, [baseMintKeypair]);
           }
           addLog(`Transaction sent, signature: ${signature}`);
         } catch (sendError) {
@@ -467,7 +467,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       }
       
       setLaunchState(launchPda);
-      setSaleMint(saleMintKeypair);
+      setbaseMint(baseMintKeypair);
       setEscrow(escrowPda);
       
       if (!signature) {
@@ -476,7 +476,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       
       addLog(`SUCCESS: Launch initialized - Signature: ${signature}`);
       addLog(`Launch PDA: ${launchPda.toString()}`);
-      addLog(`Sale Mint: ${saleMintKeypair.publicKey.toString()}`);
+      addLog(`Sale Mint: ${baseMintKeypair.publicKey.toString()}`);
       addLog(`Transaction sent successfully`);
       
       // Wait for transaction confirmation and account creation
@@ -592,7 +592,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   }, [sdk, launchState, fetchUserData]);
 
   const claimTokens = useCallback(async () => {
-    if (!sdk || !launchState || !saleMint) {
+    if (!sdk || !launchState || !baseMint) {
       addLog('ERROR: Launch or sale mint not initialized');
       return;
     }
@@ -602,7 +602,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       addLog('Claiming tokens...');
       const { userAta, signature } = await sdk.claimTokens({
         launch: launchState,
-        saleMint: saleMint.publicKey,
+        baseMint: baseMint.publicKey,
         createAtaIfMissing: true,
       });
       addLog(`SUCCESS: Tokens claimed - Signature: ${signature}`);
@@ -613,7 +613,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, saleMint, fetchUserData]);
+  }, [sdk, launchState, baseMint, fetchUserData]);
 
   const requestFaucet = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
@@ -678,7 +678,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   const resetState = () => {
     setLaunchState(null);
-    setSaleMint(null);
+    setbaseMint(null);
     setEscrow(null);
     setRoster(null);
     setSelection(null);
@@ -705,16 +705,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       try {
         addLog('Restoring sale mint...');
         // Handle both old format (string) and new format (object with secretKey)
-        let restoredSaleMint: Keypair;
-        if (typeof project.saleMint === 'string') {
+        let restoredbaseMint: Keypair;
+        if (typeof project.baseMint === 'string') {
           // Old format - only public key, create a dummy keypair
-          addLog('WARNING: Project saved in old format, saleMint keypair cannot be fully restored');
-          restoredSaleMint = { publicKey: new PublicKey(project.saleMint) } as Keypair;
+          addLog('WARNING: Project saved in old format, baseMint keypair cannot be fully restored');
+          restoredbaseMint = { publicKey: new PublicKey(project.baseMint) } as Keypair;
         } else {
           // New format - full keypair with secret key
-          restoredSaleMint = Keypair.fromSecretKey(new Uint8Array(project.saleMint.secretKey));
+          restoredbaseMint = Keypair.fromSecretKey(new Uint8Array(project.baseMint.secretKey));
         }
-        setSaleMint(restoredSaleMint);
+        setbaseMint(restoredbaseMint);
       } catch (error) {
         addLog(`ERROR: Failed to restore sale mint - ${error}`);
         throw error;
@@ -863,15 +863,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       addLog(`Found project #${projectId}, loading...`);
       addLog(`Launch PDA: ${project.launchPda.toString()}`);
-      addLog(`Sale Mint: ${project.saleMint.toString()}`);
+      addLog(`Sale Mint: ${project.baseMint.toString()}`);
 
       // Set the project data
       setLaunchState(project.launchPda);
-      setSaleMint({ publicKey: project.saleMint } as Keypair); // We can't restore the full keypair, but we can use the public key
+      setbaseMint({ publicKey: project.baseMint } as Keypair); // We can't restore the full keypair, but we can use the public key
       
       // Derive other PDAs
       addLog('Deriving PDAs...');
-      const pdas = sdk.deriveAllPdas(project.saleMint);
+      const pdas = sdk.deriveAllPdas(project.baseMint);
       setEscrow(pdas.escrow);
       setRoster(pdas.roster);
       setSelection(pdas.selection);
@@ -1325,7 +1325,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                         Launch PDA: {project.launchPda.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
-                        Sale Mint: {project.saleMint.toString().slice(0, 8)}...
+                        Sale Mint: {project.baseMint.toString().slice(0, 8)}...
                       </div>
                       <div className="text-xs terminal-output">
                         Funding Period End: {new Date(safeToNumber(project.account.fundingPeriodEnd) * 1000).toLocaleString()}
@@ -1443,8 +1443,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
             <div className="flex justify-between">
               <span className="terminal-output">Sale Mint:</span>
-              <span className={saleMint ? 'terminal-success' : 'terminal-error'}>
-                {saleMint ? saleMint.publicKey.toString().slice(0, 8) + '...' : 'NONE'}
+              <span className={baseMint ? 'terminal-success' : 'terminal-error'}>
+                {baseMint ? baseMint.publicKey.toString().slice(0, 8) + '...' : 'NONE'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -1669,7 +1669,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             <button 
               onClick={claimTokens}
               className="terminal-button w-full text-left"
-              disabled={!launchState || !saleMint || isLoading || isFlowRunning}
+              disabled={!launchState || !baseMint || isLoading || isFlowRunning}
             >
               <span className="terminal-prompt">$</span> Claim Tokens
             </button>

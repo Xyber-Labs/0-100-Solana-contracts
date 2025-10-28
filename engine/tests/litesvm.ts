@@ -26,7 +26,7 @@ let adminKeypair: anchor.web3.Keypair;
 
 describe("engine litesvm", () => {
 
-  let saleMint: anchor.web3.Keypair;
+  let baseMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
 
   const HARD_CAP_LAMPORTS = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
@@ -51,11 +51,11 @@ describe("engine litesvm", () => {
   });
 
   it("Initializes the launch state correctly", async () => {
-    saleMint = anchor.web3.Keypair.generate();
+    baseMint = anchor.web3.Keypair.generate();
 
     const result = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      saleMint: saleMint,
+      baseMint: baseMint,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -94,7 +94,7 @@ describe("engine litesvm", () => {
     assert.isNull(state.vrfSeed);
     assert.isFalse(state.claimsOpen);
     assert.isNull(state.tokensPerTicket);
-    assert.ok(state.saleMint.equals(saleMint.publicKey));
+    assert.ok(state.baseMint.equals(baseMint.publicKey));
   });
 
   it.skip("Sets the VRF seed", async () => {
@@ -104,11 +104,11 @@ describe("engine litesvm", () => {
   });
 
   it("Allows deposits", async () => {
-    const testSaleMint = anchor.web3.Keypair.generate();
+    const testbaseMint = anchor.web3.Keypair.generate();
 
     const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      saleMint: testSaleMint,
+      baseMint: testbaseMint,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -167,11 +167,11 @@ describe("engine litesvm", () => {
   });
 
   it("Allows withdrawals", async () => {
-    const testSaleMint = anchor.web3.Keypair.generate();
+    const testbaseMint = anchor.web3.Keypair.generate();
 
     const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      saleMint: testSaleMint,
+      baseMint: testbaseMint,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -264,7 +264,7 @@ describe("engine litesvm", () => {
     const [project1Launch] = sdk.getLaunchPda(project1Mint.publicKey);
 
     await sdk.initLaunch({
-      saleMint: project1Mint.publicKey,
+      baseMint: project1Mint.publicKey,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -297,7 +297,7 @@ describe("engine litesvm", () => {
     const [project2Launch] = sdk.getLaunchPda(project2Mint.publicKey);
 
     await sdk.initLaunch({
-      saleMint: project2Mint.publicKey,
+      baseMint: project2Mint.publicKey,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -330,7 +330,7 @@ describe("engine litesvm", () => {
     const [project3Launch] = sdk.getLaunchPda(project3Mint.publicKey);
 
     await sdk.initLaunch({
-      saleMint: project3Mint.publicKey,
+      baseMint: project3Mint.publicKey,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -584,8 +584,8 @@ describe("engine litesvm", () => {
       creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
     }
 
-    const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
+    const testbaseMint = anchor.web3.Keypair.generate();
+    const [testLaunchState] = sdk.getLaunchPda(testbaseMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
 
@@ -600,14 +600,14 @@ describe("engine litesvm", () => {
     // Create mint account first
     const createMintIx = anchor.web3.SystemProgram.createAccount({
       fromPubkey: admin.publicKey,
-      newAccountPubkey: testSaleMint.publicKey,
+      newAccountPubkey: testbaseMint.publicKey,
       space: 82,
       lamports: 2039280, // Fixed rent exemption for 82 bytes
       programId: TOKEN_PROGRAM_ID,
     });
 
     const initMintIx = createInitializeMintInstruction(
-      testSaleMint.publicKey,
+      testbaseMint.publicKey,
       6,
       mintAuth,
       admin.publicKey
@@ -633,7 +633,7 @@ describe("engine litesvm", () => {
         creator: admin.publicKey,
         projectCounter: sdk.getProjectCounterPda()[0],
         launchState: testLaunchState,
-        saleMint: testSaleMint.publicKey,
+        baseMint: testbaseMint.publicKey,
         escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         creatorGrant: creatorGrant,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -643,7 +643,7 @@ describe("engine litesvm", () => {
 
     // Send transaction
     const tx = new anchor.web3.Transaction().add(createMintIx, initMintIx, initLaunchIx);
-    const signature = await provider.sendAndConfirm(tx, [testSaleMint]);
+    const signature = await provider.sendAndConfirm(tx, [testbaseMint]);
 
     console.log("Launch with creator deposit initialized. Signature:", signature);
 
@@ -737,14 +737,14 @@ describe("engine litesvm - raydium clmm", () => {
   it("Creates CLMM pool on Raydium", async () => {
     console.log("\n=== Creating CLMM Pool ===");
 
-    const clmmSaleMint = anchor.web3.Keypair.generate();
+    const clmmbaseMint = anchor.web3.Keypair.generate();
     const CLMM_HARD_CAP = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
     const CLMM_SALE_ALLOCATION = new anchor.BN(540_540_000);
     const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
 
     const { initLaunchTx, signers, launchState: clmmLaunchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      saleMint: clmmSaleMint,
+      baseMint: clmmbaseMint,
       hardCapLamports: CLMM_HARD_CAP,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -761,7 +761,7 @@ describe("engine litesvm - raydium clmm", () => {
 
     console.log("Initializing launch...");
     console.log("Launch state PDA:", clmmLaunchState.toString());
-    console.log("Sale mint:", clmmSaleMint.publicKey.toString());
+    console.log("Sale mint:", clmmbaseMint.publicKey.toString());
       const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
     console.log("✅ Launch initialized:", initLaunchSignature);
     console.log("Fetching launch state...");
@@ -874,16 +874,16 @@ describe("engine litesvm - raydium clmm", () => {
       await sdk.createPool({ launch: clmmLaunchState, useTestMode: false, computeUnits: 2_000_000 });
     }
 
-    let saleMintKeypair: anchor.web3.Keypair;
+    let baseMintKeypair: anchor.web3.Keypair;
     do {
-      saleMintKeypair = anchor.web3.Keypair.generate();
-    } while (saleMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+      baseMintKeypair = anchor.web3.Keypair.generate();
+    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
 
     const createPoolResultTx = await sdk.createClmmPoolTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
-      saleMint: saleMintKeypair,
+      baseMint: baseMintKeypair,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
@@ -904,7 +904,7 @@ describe("engine litesvm - raydium clmm", () => {
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
-      saleMint: saleMintKeypair.publicKey,
+      baseMint: baseMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
@@ -937,7 +937,7 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("✅ CLMM Pool and Liquidity created successfully!");
     console.log("Pool Signature:", poolSig);
     console.log("Liquidity Signature:", liquiditySig);
-    console.log("Base Mint:", createPoolResultTx.saleMint.toString());
+    console.log("Base Mint:", createPoolResultTx.baseMint.toString());
     console.log("Base Token ATA:", createPoolResultTx.baseTokenAta.toString());
 
     console.log("\n=== Pool State Details ===");
@@ -985,7 +985,7 @@ describe("engine litesvm - raydium clmm", () => {
       }
     }
 
-    assert.ok(createPoolResultTx.saleMint, "Should return base mint");
+    assert.ok(createPoolResultTx.baseMint, "Should return base mint");
     assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
     assert.ok(poolStateAccount, "Pool state should exist");
     assert.ok(Number(quoteVaultBalance) > 0, "Quote vault should have SOL");
@@ -1031,8 +1031,8 @@ describe("Full flow", () => {
       creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
     }
 
-    const testSaleMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = sdk.getLaunchPda(testSaleMint.publicKey);
+    const testbaseMint = anchor.web3.Keypair.generate();
+    const [testLaunchState] = sdk.getLaunchPda(testbaseMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
 
     const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
@@ -1044,7 +1044,7 @@ describe("Full flow", () => {
     console.log("=== Initializing Launch with Creator Deposit ===");
     // Initialize launch with creator deposit
     await sdk.initLaunch({
-      saleMint: testSaleMint.publicKey,
+      baseMint: testbaseMint.publicKey,
       hardCapLamports: testHardCap,
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
@@ -1061,19 +1061,19 @@ describe("Full flow", () => {
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
           fromPubkey: admin.publicKey,
-          newAccountPubkey: testSaleMint.publicKey,
+          newAccountPubkey: testbaseMint.publicKey,
           space: 82,
           lamports: 2039280, // Fixed rent exemption for 82 bytes
           programId: TOKEN_PROGRAM_ID,
         }),
         createInitializeMintInstruction(
-          testSaleMint.publicKey,
+          testbaseMint.publicKey,
           6,
           mintAuth,
           admin.publicKey
         ),
       ],
-      signers: [adminKeypair, testSaleMint],
+      signers: [adminKeypair, testbaseMint],
     });
 
     // Verify creator grant was initialized
@@ -1206,7 +1206,7 @@ describe("Full flow", () => {
       payer: admin.publicKey,
       launch: testLaunchState,
       quoteMint: WSOL_MINT,
-      saleMint: testSaleMint, // unused by SDK, saleMint is taken from launch
+      baseMint: testbaseMint, // unused by SDK, baseMint is taken from launch
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
@@ -1217,7 +1217,7 @@ describe("Full flow", () => {
       payer: admin.publicKey,
       launch: testLaunchState,
       quoteMint: WSOL_MINT,
-      saleMint: testSaleMint.publicKey,
+      baseMint: testbaseMint.publicKey,
       baseTokenAta: clmmCreate.baseTokenAta,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
@@ -1230,20 +1230,20 @@ describe("Full flow", () => {
     console.log("=== Testing Creator Token Claiming ===");
     // Test creator token claiming (only if creator deposit > 0)
     if (creatorDepositAmount.toNumber() > 0) {
-      const creatorAta = sdk.getUserAta(testSaleMint.publicKey, admin.publicKey);
+      const creatorAta = sdk.getUserAta(testbaseMint.publicKey, admin.publicKey);
 
       // Create creator ATA first
       const createAtaIx = sdk.buildCreateAtaIx({
         payer: admin.publicKey,
         owner: admin.publicKey,
-        mint: testSaleMint.publicKey,
+        mint: testbaseMint.publicKey,
       }).ix;
 
       await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
 
     const claimResult = await sdk.claimCreatorTokens({
         launch: testLaunchState,
-        saleMint: testSaleMint.publicKey,
+        baseMint: testbaseMint.publicKey,
         creatorAta: creatorAta,
         createAtaIfMissing: false,
       });
@@ -1325,7 +1325,7 @@ describe("Full flow", () => {
 
     // User claims tokens (after pool created in this flow)
     const userAta = sdk.getUserAta(
-      testSaleMint.publicKey,
+      testbaseMint.publicKey,
       testUser.keypair.publicKey
     );
       const claimTokensTx = await (program.methods as any)
@@ -1334,7 +1334,7 @@ describe("Full flow", () => {
         sdk.buildCreateAtaIx({
           payer: admin.publicKey,
           owner: testUser.keypair.publicKey,
-          mint: testSaleMint.publicKey,
+          mint: testbaseMint.publicKey,
         }).ix,
       ])
       .accounts({
@@ -1342,9 +1342,9 @@ describe("Full flow", () => {
         launchState: testLaunchState,
         userContribution: testUser.contribution,
         rosterShard,
-        saleMint: testSaleMint.publicKey,
+        baseMint: testbaseMint.publicKey,
         escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        baseEscrowAta: sdk.getUserAta(testSaleMint.publicKey, sdk.getEscrowAuthorityPda(testLaunchState)[0]),
+        baseEscrowAta: sdk.getUserAta(testbaseMint.publicKey, sdk.getEscrowAuthorityPda(testLaunchState)[0]),
         userAta,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)

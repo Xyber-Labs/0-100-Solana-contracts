@@ -29,14 +29,14 @@ pub struct InitLaunch<'info> {
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()],
+        seeds = [SEED_ROOT, b"launch", base_mint.key().as_ref()],
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
 
     /// Mint for sale tokens (program's mint authority will be PDA)
     #[account(mut)]
-    pub sale_mint: Account<'info, Mint>,
+    pub base_mint: Account<'info, Mint>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -155,7 +155,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
 
     // save sale mint
-    state.sale_mint = ctx.accounts.sale_mint.key();
+    state.base_mint = ctx.accounts.base_mint.key();
 
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;
@@ -226,7 +226,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     emit!(LaunchInitialized {
         project_id,
         creator: ctx.accounts.creator.key(),
-        sale_mint: ctx.accounts.sale_mint.key(),
+        base_mint: ctx.accounts.base_mint.key(),
         hard_cap_lamports: params.hard_cap_lamports,
         min_raise_lamports: params.min_raise_lamports,
         per_wallet_cap: params.per_wallet_cap,

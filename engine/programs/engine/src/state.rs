@@ -21,7 +21,7 @@ pub struct LaunchState {
     pub num_blocks: u64, // N value for hash range calculation
 
     // Sale/LP (MVP)
-    pub sale_mint: Pubkey,
+    pub base_mint: Pubkey,
     pub sale_allocation: u64,
     pub total_launch_allocation: u64, // sale_allocation + creator allocation
     pub lp_allocation: u64,
@@ -54,7 +54,7 @@ pub struct LaunchState {
     pub creator_claim_lock_period_sec: i64,
     pub creator_initial_deposit: u64,
     pub roster_shard_cap: u16,
-    pub clmm_sale_mint: Option<Pubkey>,
+    pub clmm_base_mint: Option<Pubkey>,
 }
 
 impl LaunchState {
@@ -69,7 +69,7 @@ impl LaunchState {
             &[
                 crate::constants::SEED_ROOT,
                 b"launch",
-                self.sale_mint.as_ref(),
+                self.base_mint.as_ref(),
             ],
             &crate::ID,
         )

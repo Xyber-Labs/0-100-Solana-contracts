@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 pub struct LaunchInitialized {
     pub project_id: u64,
     pub creator: Pubkey,
-    pub sale_mint: Pubkey,
+    pub base_mint: Pubkey,
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,

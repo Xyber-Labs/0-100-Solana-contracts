@@ -17,7 +17,7 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.clmm_sale_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
+        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Account<'info, LaunchState>,
 
@@ -26,13 +26,13 @@ pub struct CreateClmmPool<'info> {
     pub escrow_authority: UncheckedAccount<'info>,
 
     // Use the sale mint as base mint for pool
-    #[account(mut, address = launch_state.sale_mint)]
-    pub sale_mint: Box<Account<'info, Mint>>,
+    #[account(mut, address = launch_state.base_mint)]
+    pub base_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: Escrow ATA for base token (ATA of escrow_authority for sale_mint)
+    /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
     #[account(
         mut,
-        seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), sale_mint.key().as_ref()],
+        seeds = [escrow_authority.key().as_ref(), base_token_program.key().as_ref(), base_mint.key().as_ref()],
         seeds::program = associated_token_program.key(),
         bump
     )]
@@ -61,7 +61,7 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub raydium_tick_array_bitmap: UncheckedAccount<'info>,
 
-    /// CHECK: PDA mint authority for sale_mint
+    /// CHECK: PDA mint authority for base_mint
     #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
     pub mint_auth: UncheckedAccount<'info>,
 
@@ -89,7 +89,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
-    ctx.accounts.launch_state.clmm_sale_mint = Some(ctx.accounts.sale_mint.key());
+    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
 }
 
@@ -100,7 +100,7 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
             payer: ctx.accounts.payer.to_account_info(),
             associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
             authority: ctx.accounts.escrow_authority.to_account_info(),
-            mint: ctx.accounts.sale_mint.to_account_info(),
+            mint: ctx.accounts.base_mint.to_account_info(),
             system_program: ctx.accounts.system_program.to_account_info(),
             token_program: ctx.accounts.base_token_program.to_account_info(),
         },
@@ -126,7 +126,7 @@ fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
     ];
     let signer_seeds = &[seeds];
     let mint_accounts = MintTo {
-        mint: ctx.accounts.sale_mint.to_account_info(),
+        mint: ctx.accounts.base_mint.to_account_info(),
         to: ctx.accounts.base_escrow_ata.to_account_info(),
         authority: ctx.accounts.mint_auth.to_account_info(),
     };
@@ -155,10 +155,9 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let open_time =
         Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
-    let base_mint = ctx.accounts.sale_mint.to_account_info();
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
-        &base_mint,
+        &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_program.to_account_info(),
@@ -232,17 +231,17 @@ struct TokenOrderForPool<'info> {
 impl<'info> TokenOrderForPool<'info> {
     fn new(
         quote_mint: &AccountInfo<'info>,
-        sale_mint: &AccountInfo<'info>,
+        base_mint: &AccountInfo<'info>,
         quote_vault: &AccountInfo<'info>,
         base_vault: &AccountInfo<'info>,
         quote_program: &AccountInfo<'info>,
         base_program: &AccountInfo<'info>,
         sqrt_price_x64: u128,
     ) -> Result<Self> {
-        if quote_mint.key() < sale_mint.key() {
+        if quote_mint.key() < base_mint.key() {
             Ok(Self {
                 token_mint_0: quote_mint.clone(),
-                token_mint_1: sale_mint.clone(),
+                token_mint_1: base_mint.clone(),
                 token_vault_0: quote_vault.clone(),
                 token_vault_1: base_vault.clone(),
                 token_program_0: quote_program.clone(),
@@ -260,7 +259,7 @@ impl<'info> TokenOrderForPool<'info> {
             let inverted_sqrt_price: u128 =
                 inv.try_into().map_err(|_| ErrorCode::ArithmeticOverflow)?;
             Ok(Self {
-                token_mint_0: sale_mint.clone(),
+                token_mint_0: base_mint.clone(),
                 token_mint_1: quote_mint.clone(),
                 token_vault_0: base_vault.clone(),
                 token_vault_1: quote_vault.clone(),

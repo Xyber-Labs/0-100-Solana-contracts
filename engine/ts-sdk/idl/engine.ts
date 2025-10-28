@@ -40,7 +40,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "saleMint"
+          "name": "baseMint"
         },
         {
           "name": "escrowAuthority",
@@ -107,7 +107,7 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ],
             "program": {
@@ -541,7 +541,7 @@ export type Engine = {
           }
         },
         {
-          "name": "saleMint"
+          "name": "baseMint"
         },
         {
           "name": "escrowAuthority",
@@ -640,7 +640,7 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ],
             "program": {
@@ -926,7 +926,7 @@ export type Engine = {
           }
         },
         {
-          "name": "saleMint"
+          "name": "baseMint"
         },
         {
           "name": "escrowAuthority",
@@ -1025,7 +1025,7 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ],
             "program": {
@@ -1150,7 +1150,7 @@ export type Engine = {
           }
         },
         {
-          "name": "saleMint",
+          "name": "baseMint",
           "writable": true
         },
         {
@@ -1168,7 +1168,7 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ],
             "program": {
@@ -1668,13 +1668,13 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "saleMint",
+          "name": "baseMint",
           "docs": [
             "Mint for sale tokens (program's mint authority will be PDA)"
           ],
@@ -3083,7 +3083,7 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "saleMint",
+            "name": "baseMint",
             "type": "pubkey"
           },
           {
@@ -3151,7 +3151,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "saleMint",
+            "name": "baseMint",
             "type": "pubkey"
           },
           {
@@ -3256,7 +3256,7 @@ export type Engine = {
             "type": "u16"
           },
           {
-            "name": "clmmSaleMint",
+            "name": "clmmBaseMint",
             "type": {
               "option": "pubkey"
             }

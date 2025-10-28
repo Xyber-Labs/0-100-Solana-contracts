@@ -34,7 +34,7 @@
           "writable": true
         },
         {
-          "name": "sale_mint"
+          "name": "base_mint"
         },
         {
           "name": "escrow_authority",
@@ -101,7 +101,7 @@
               },
               {
                 "kind": "account",
-                "path": "sale_mint"
+                "path": "base_mint"
               }
             ],
             "program": {
@@ -535,7 +535,7 @@
           }
         },
         {
-          "name": "sale_mint"
+          "name": "base_mint"
         },
         {
           "name": "escrow_authority",
@@ -634,7 +634,7 @@
               },
               {
                 "kind": "account",
-                "path": "sale_mint"
+                "path": "base_mint"
               }
             ],
             "program": {
@@ -920,7 +920,7 @@
           }
         },
         {
-          "name": "sale_mint"
+          "name": "base_mint"
         },
         {
           "name": "escrow_authority",
@@ -1019,7 +1019,7 @@
               },
               {
                 "kind": "account",
-                "path": "sale_mint"
+                "path": "base_mint"
               }
             ],
             "program": {
@@ -1144,7 +1144,7 @@
           }
         },
         {
-          "name": "sale_mint",
+          "name": "base_mint",
           "writable": true
         },
         {
@@ -1162,7 +1162,7 @@
               },
               {
                 "kind": "account",
-                "path": "sale_mint"
+                "path": "base_mint"
               }
             ],
             "program": {
@@ -1662,13 +1662,13 @@
               },
               {
                 "kind": "account",
-                "path": "sale_mint"
+                "path": "base_mint"
               }
             ]
           }
         },
         {
-          "name": "sale_mint",
+          "name": "base_mint",
           "docs": [
             "Mint for sale tokens (program's mint authority will be PDA)"
           ],
@@ -3077,7 +3077,7 @@
             "type": "pubkey"
           },
           {
-            "name": "sale_mint",
+            "name": "base_mint",
             "type": "pubkey"
           },
           {
@@ -3145,7 +3145,7 @@
             "type": "u64"
           },
           {
-            "name": "sale_mint",
+            "name": "base_mint",
             "type": "pubkey"
           },
           {
@@ -3250,7 +3250,7 @@
             "type": "u16"
           },
           {
-            "name": "clmm_sale_mint",
+            "name": "clmm_base_mint",
             "type": {
               "option": "pubkey"
             }

@@ -100,7 +100,7 @@ export type Engine = {
           writable: true;
         },
         {
-          name: "saleMint";
+          name: "baseMint";
           writable: true;
         },
         {
@@ -258,13 +258,13 @@ export type Engine = {
               },
               {
                 kind: "account";
-                path: "saleMint";
+                path: "baseMint";
               }
             ];
           };
         },
         {
-          name: "saleMint";
+          name: "baseMint";
           docs: ["Mint for sale tokens (program's mint authority will be PDA)"];
           writable: true;
         },
@@ -725,7 +725,7 @@ export type Engine = {
             type: "u64";
           },
           {
-            name: "saleMint";
+            name: "baseMint";
             type: "pubkey";
           },
           {
