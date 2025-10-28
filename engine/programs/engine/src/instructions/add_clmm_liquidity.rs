@@ -36,11 +36,7 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
-        bump,
-    )]
+    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
     pub pool_state: Account<'info, PoolState>,
 
     #[account(
@@ -126,9 +122,8 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         .checked_mul(sale_bps)
         .and_then(|v| v.checked_div(10_000))
         .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let lp_allocation = total_allocation
-        .checked_sub(sale_allocation)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let lp_allocation =
+        total_allocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
 
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,

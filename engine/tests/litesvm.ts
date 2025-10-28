@@ -24,6 +24,16 @@ let admin: anchor.Wallet;
 let sdk: ReturnType<typeof EngineSDK.create>;
 let adminKeypair: anchor.web3.Keypair;
 
+function bigIntTo32BytesBE(x: bigint): Buffer {
+  const buf = Buffer.alloc(32);
+  let v = x;
+  for (let i = 31; i >= 0; i--) {
+    buf[i] = Number(v & BigInt(255));
+    v = v >> BigInt(8);
+  }
+  return buf;
+}
+
 describe("engine litesvm", () => {
 
   let baseMint: anchor.web3.Keypair;
@@ -485,16 +495,6 @@ describe("engine litesvm", () => {
     // Configure SlotHashes to include a valid blockhash for this project's range
     const currentClock = client.getClock();
 
-    function bigIntTo32BytesBE(x: bigint): Buffer {
-      const buf = Buffer.alloc(32);
-      let v = x;
-      for (let i = 31; i >= 0; i--) {
-        buf[i] = Number(v & BigInt(255));
-        v = v >> BigInt(8);
-      }
-      return buf;
-    }
-
     // Compute project's personal blockhash range and pick range_start (inclusive)
     const projectId = launchAccount.projectId.toNumber();
     const unlock = Number((launchAccount as any).unlockTimeSec);
@@ -888,7 +888,7 @@ describe("Full flow", () => {
       } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
     );
 
-    const escrowAuthorityBeforeLiquidity = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
+    const balanceBefore = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
     console.log("=== Waiting for Funding Period to End ===");
     // Wait for funding period to end
     await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
@@ -913,16 +913,6 @@ describe("Full flow", () => {
       const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
       const rangeStart = width * BigInt(projectId - 1);
       const rangeEnd = rangeStart + width; // exclusive upper bound
-
-      function bigIntTo32BytesBE(x: bigint): Buffer {
-        const buf = Buffer.alloc(32);
-        let v = x;
-        for (let i = 31; i >= 0; i--) {
-          buf[i] = Number(v & BigInt(255));
-          v = v >> BigInt(8);
-        }
-        return buf;
-      }
 
       const currentClock = client.getClock();
       const numHashes = 512;
@@ -1017,7 +1007,7 @@ describe("Full flow", () => {
     }
 
     console.log("=== Testing Creator Deposit Fix ===");
-    const escrowAuthorityBalance = escrowAuthorityBeforeLiquidity;
+    const escrowAuthorityBalance = balanceBefore;
     console.log(`Main launch escrow_authority balance: ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
     console.log(`Creator deposit amount: ${creatorDepositAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
