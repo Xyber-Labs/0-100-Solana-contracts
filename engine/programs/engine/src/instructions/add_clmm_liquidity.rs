@@ -7,7 +7,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -103,18 +103,42 @@ pub struct AddClmmLiquidity<'info> {
 ///
 /// Requires 400,000-600,000 compute units due to complex CPI operations with Raydium.
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
-pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-    add_initial_liquidity(&ctx)?;
+///
+/// # Parameters
+/// * `tick_lower_index` - Lower tick boundary (must be aligned to tick_spacing)
+/// * `tick_upper_index` - Upper tick boundary (must be aligned to tick_spacing)
+/// * `tick_array_lower_start_index` - Start index of tick array covering lower tick
+/// * `tick_array_upper_start_index` - Start index of tick array covering upper tick
+pub fn add_clmm_liquidity(
+    ctx: Context<AddClmmLiquidity>,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
+    tick_array_lower_start_index: i32,
+    tick_array_upper_start_index: i32,
+) -> Result<()> {
+    add_initial_liquidity(
+        &ctx,
+        tick_lower_index,
+        tick_upper_index,
+        tick_array_lower_start_index,
+        tick_array_upper_start_index,
+    )?;
     Ok(())
 }
 
-fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
-    let params = StakingCalculator::new(
-        ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
-    )
-    .get_pool_params()?;
+const RENT_RESERVE: u64 = 200_000_000;
+
+fn add_initial_liquidity(
+    ctx: &Context<AddClmmLiquidity>,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
+    tick_array_lower_start_index: i32,
+    tick_array_upper_start_index: i32,
+) -> Result<()> {
+    let quote_volume = ctx.accounts.launch_state.total_deposited;
+    let base_volume = LP_POOL_ALLOCATION;
+
+    let transfer_amount = quote_volume.saturating_sub(RENT_RESERVE);
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -134,7 +158,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
             },
             signers,
         ),
-        params.quote_volume,
+        transfer_amount,
     )?;
 
     anchor_lang::solana_program::program::invoke(
@@ -152,8 +176,8 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_ata.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
-        params.quote_volume,
-        params.base_volume,
+        transfer_amount,
+        base_volume,
     );
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
@@ -187,96 +211,22 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         signers,
     );
 
-    let is_token_0_quote = order.amount_0 == params.quote_volume;
+    let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
 
     raydium_amm_v3::cpi::open_position_v2(
         cpi_context,
-        params.tick_lower_index,
-        params.tick_upper_index,
-        params.tick_array_lower_start_index,
-        params.tick_array_upper_start_index,
+        tick_lower_index,
+        tick_upper_index,
+        tick_array_lower_start_index,
+        tick_array_upper_start_index,
         0,
         order.amount_0,
         order.amount_1,
         false,
-        Some(is_token_0_quote),
+        Some(is_base_token_0),
     )?;
 
     Ok(())
-}
-
-// TODO (@xykeeper) to be refined within the other issue processing
-struct StakingCalculator {
-    raised_lamports: u64,
-    sale_allocation: u64,
-    lp_allocation: u64,
-}
-
-struct RaydiumPoolParams {
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
-    base_volume: u64,
-    quote_volume: u64,
-}
-
-impl StakingCalculator {
-    fn new(raised_lamports: u64, sale_allocation: u64, lp_allocation: u64) -> Self {
-        Self {
-            raised_lamports,
-            sale_allocation,
-            lp_allocation,
-        }
-    }
-
-    fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
-        let tick_spacing = 60i32;
-        let tick_array_size = 60i32;
-        let ticks_in_array = tick_spacing * tick_array_size;
-
-        let base_volume = self.lp_allocation;
-        let quote_volume = u128::from(self.lp_allocation)
-            .checked_mul(u128::from(self.raised_lamports))
-            .and_then(|v| v.checked_div(u128::from(self.sale_allocation)))
-            .and_then(|v| u64::try_from(v).ok())
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-        let price = (self.raised_lamports as f64) / (self.sale_allocation as f64);
-        let price_lower = price * 0.55;
-        let price_upper = price * 5.5;
-
-        let log_base = (1.0001_f64).ln();
-        let tick_current_raw = price.ln() / log_base;
-        let tick_lower_raw = price_lower.ln() / log_base;
-        let tick_upper_raw = price_upper.ln() / log_base;
-
-        let tick_current_index =
-            (tick_current_raw / tick_spacing as f64).round() as i32 * tick_spacing;
-        let tick_lower_index = (tick_lower_raw / tick_spacing as f64).floor() as i32 * tick_spacing;
-        let tick_upper_index = (tick_upper_raw / tick_spacing as f64).ceil() as i32 * tick_spacing;
-
-        let mut tick_array_lower_start = tick_lower_index / ticks_in_array;
-        if tick_lower_index < 0 && tick_lower_index % ticks_in_array != 0 {
-            tick_array_lower_start -= 1;
-        }
-        let tick_array_lower_start_index = tick_array_lower_start * ticks_in_array;
-
-        let mut tick_array_upper_start = tick_upper_index / ticks_in_array;
-        if tick_upper_index < 0 && tick_upper_index % ticks_in_array != 0 {
-            tick_array_upper_start -= 1;
-        }
-        let tick_array_upper_start_index = tick_array_upper_start * ticks_in_array;
-
-        Ok(RaydiumPoolParams {
-            tick_lower_index,
-            tick_upper_index,
-            tick_array_lower_start_index,
-            tick_array_upper_start_index,
-            base_volume,
-            quote_volume,
-        })
-    }
 }
 
 struct TokenOrder<'info> {

@@ -809,6 +809,10 @@ export class TxBuilder {
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
+    tickLowerIndex: number;
+    tickUpperIndex: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
@@ -878,15 +882,11 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const tickSpacing = 60;
-    const tickLowerIndex = -443580;
-    const tickUpperIndex = 443580;
-
     const tickLowerBuffer = Buffer.alloc(4);
-    tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
+    tickLowerBuffer.writeInt32BE(params.tickLowerIndex, 0);
 
     const tickUpperBuffer = Buffer.alloc(4);
-    tickUpperBuffer.writeInt32BE(tickUpperIndex, 0);
+    tickUpperBuffer.writeInt32BE(params.tickUpperIndex, 0);
 
     const [protocolPosition] = web3.PublicKey.findProgramAddressSync(
       [
@@ -898,26 +898,11 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const TICK_ARRAY_SIZE = 60;
-    const ticksInArray = tickSpacing * TICK_ARRAY_SIZE;
-
-    let tickArrayLowerStart = Math.trunc(tickLowerIndex / ticksInArray);
-    if (tickLowerIndex < 0 && tickLowerIndex % ticksInArray !== 0) {
-      tickArrayLowerStart = tickArrayLowerStart - 1;
-    }
-    const tickArrayLowerStartIndex = tickArrayLowerStart * ticksInArray;
-
-    let tickArrayUpperStart = Math.trunc(tickUpperIndex / ticksInArray);
-    if (tickUpperIndex < 0 && tickUpperIndex % ticksInArray !== 0) {
-      tickArrayUpperStart = tickArrayUpperStart - 1;
-    }
-    const tickArrayUpperStartIndex = tickArrayUpperStart * ticksInArray;
-
     const tickArrayLowerBuffer = Buffer.alloc(4);
-    tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
+    tickArrayLowerBuffer.writeInt32BE(params.tickArrayLowerStartIndex, 0);
 
     const tickArrayUpperBuffer = Buffer.alloc(4);
-    tickArrayUpperBuffer.writeInt32BE(tickArrayUpperStartIndex, 0);
+    tickArrayUpperBuffer.writeInt32BE(params.tickArrayUpperStartIndex, 0);
 
     const [tickArrayLower] = web3.PublicKey.findProgramAddressSync(
       [
@@ -938,7 +923,12 @@ export class TxBuilder {
     );
 
     const addLiquidityIx = await this.program.methods
-      .addClmmLiquidity()
+      .addClmmLiquidity(
+        params.tickLowerIndex,
+        params.tickUpperIndex,
+        params.tickArrayLowerStartIndex,
+        params.tickArrayUpperStartIndex
+      )
       .accountsStrict({
         payer: params.payer,
         raydiumProgram: params.clmmProgram,

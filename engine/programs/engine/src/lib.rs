@@ -100,7 +100,19 @@ pub mod engine {
         instructions::create_clmm_pool(ctx)
     }
 
-    pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-        instructions::add_clmm_liquidity(ctx)
+    pub fn add_clmm_liquidity(
+        ctx: Context<AddClmmLiquidity>,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
+        tick_array_lower_start_index: i32,
+        tick_array_upper_start_index: i32,
+    ) -> Result<()> {
+        instructions::add_clmm_liquidity(
+            ctx,
+            tick_lower_index,
+            tick_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+        )
     }
 }

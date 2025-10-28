@@ -12,6 +12,7 @@ import EngineSDK from "../ts-sdk/src/engine";
 import { createAndFundAccount } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 import { executeTraderSwaps } from "./raydium-swap";
+import { fetchPoolAndCalculateRange, verifyPositionAmounts } from "./raydium-liquidity-calc";
 
 let client: LiteSVM;
 let provider: LiteSVMProvider;
@@ -197,6 +198,32 @@ describe("engine litesvm - raydium clmm", () => {
     const escrowBalanceBefore = client.getBalance(escrow);
     console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
 
+    const launchData = await program.account.launchState.fetch(clmmLaunchState);
+
+    const LP_POOL_ALLOCATION = 440_000_000;
+    const baseAmount = new anchor.BN(LP_POOL_ALLOCATION);
+
+    const quoteAmount = launchData.totalDeposited instanceof anchor.BN
+      ? launchData.totalDeposited
+      : new anchor.BN(launchData.totalDeposited);
+
+    console.log(`Base amount: ${baseAmount.toString()} (${Number(baseAmount) / 1e9} tokens)`);
+    console.log(`Quote amount: ${quoteAmount.toString()} (${Number(quoteAmount) / anchor.web3.LAMPORTS_PER_SOL} SOL)`);
+
+    const rangeParams = await fetchPoolAndCalculateRange(
+      createPoolResultTx.poolState,
+      baseAmount,
+      quoteAmount,
+      provider
+    );
+
+    console.log("Calculated range params:");
+    console.log(`  Current tick: ${rangeParams.currentTick}`);
+    console.log(`  Tick lower: ${rangeParams.tickLower}`);
+    console.log(`  Tick upper: ${rangeParams.tickUpper}`);
+    console.log(`  Tick array lower start: ${rangeParams.tickArrayLowerStartIndex}`);
+    console.log(`  Tick array upper start: ${rangeParams.tickArrayUpperStartIndex}`);
+
     addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
@@ -206,6 +233,10 @@ describe("engine litesvm - raydium clmm", () => {
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
+      tickLowerIndex: rangeParams.tickLower,
+      tickUpperIndex: rangeParams.tickUpper,
+      tickArrayLowerStartIndex: rangeParams.tickArrayLowerStartIndex,
+      tickArrayUpperStartIndex: rangeParams.tickArrayUpperStartIndex,
     });
 
     console.log("Adding liquidity...");
@@ -275,6 +306,36 @@ describe("engine litesvm - raydium clmm", () => {
         console.log("✅ Position NFT owned by escrow_authority");
       }
     }
+
+    console.log("=== Position Amount Verification ===");
+    const actualQuoteAmount = new anchor.BN(quoteVaultBalance.toString());
+    const actualBaseAmount = new anchor.BN(
+      baseVaultAccount && baseVaultAccount.data.length >= 72
+        ? Buffer.from(baseVaultAccount.data).readBigUInt64LE(64).toString()
+        : "0"
+    );
+
+    console.log(`Base tokens in pool vault: ${actualBaseAmount.toString()} (expected: ${baseAmount.toString()})`);
+    console.log(`Quote tokens in pool vault: ${actualQuoteAmount.toString()}`);
+
+    assert.ok(actualBaseAmount.gtn(0), "Base vault should have non-zero tokens");
+    assert.ok(actualQuoteAmount.gtn(0), "Quote vault should have non-zero tokens");
+
+    const baseVerification = verifyPositionAmounts({
+      actualBase: actualBaseAmount,
+      actualQuote: new anchor.BN(0),
+      expectedBase: baseAmount,
+      expectedQuote: new anchor.BN(0),
+      feeTolerancePercent: 1,
+    });
+
+    if (!baseVerification.baseMatches) {
+      console.warn(`⚠️  Base amount mismatch: ${baseVerification.baseError}`);
+    } else {
+      console.log("✅ Base amount within tolerance");
+    }
+
+    assert.ok(baseVerification.baseMatches, baseVerification.baseError);
   });
 
   it.skip("Executes trader swaps to accumulate fees", async () => {

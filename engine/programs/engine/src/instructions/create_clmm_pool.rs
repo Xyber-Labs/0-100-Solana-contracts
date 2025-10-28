@@ -6,10 +6,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
-use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
-
-// TODO (@xykeeper): total_supply to the EngineConfig
-const TOTAL_SUPPLY: u64 = 1_000_000_000u64;
+use crate::{errors::ErrorCode, EscrowAccount, LP_POOL_ALLOCATION, LaunchState, SEED_ROOT, TOTAL_SUPPLY};
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -129,8 +126,7 @@ fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
 fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let calculator = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
+        LP_POOL_ALLOCATION,
     );
 
     let sqrt_price_x64 = calculator.get_sqrt_price();
@@ -170,20 +166,21 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
 
 struct StakingCalculator {
     raised_lamports: u64,
-    sale_allocation: u64,
+    lp_allocation: u64,
 }
 
 impl StakingCalculator {
-    fn new(raised_lamports: u64, sale_allocation: u64, _lp_allocation: u64) -> Self {
+    fn new(raised_lamports: u64, lp_allocation: u64) -> Self {
         Self {
             raised_lamports,
-            sale_allocation,
+            lp_allocation,
         }
     }
 
     fn get_sqrt_price(&self) -> u128 {
-        let price = ((self.raised_lamports as u128) << 64) / self.sale_allocation as u128;
-        Self::integer_sqrt(price)
+        let price_ratio = ((self.raised_lamports as u128) << 64) / self.lp_allocation as u128;
+        let sqrt_price = Self::integer_sqrt(price_ratio);
+        sqrt_price << 32
     }
 
     fn integer_sqrt(n: u128) -> u128 {
@@ -258,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_sqrt_price_small_raise() {
-        let calc = StakingCalculator::new(1_000_000_000, 500_000_000, 500_000_000);
+        let calc = StakingCalculator::new(1_000_000_000, 500_000_000);
         let sqrt_price = calc.get_sqrt_price();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
@@ -276,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_sqrt_price_medium_raise() {
-        let calc = StakingCalculator::new(191_000_000_000, 540_540_000, 459_460_000);
+        let calc = StakingCalculator::new(191_000_000_000, 459_460_000);
         let sqrt_price = calc.get_sqrt_price();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
@@ -294,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_sqrt_price_large_raise() {
-        let calc = StakingCalculator::new(500_000_000_000, 1_000_000_000, 1_000_000_000);
+        let calc = StakingCalculator::new(500_000_000_000, 1_000_000_000);
         let sqrt_price = calc.get_sqrt_price();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
@@ -312,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_sqrt_price_max_hardcap() {
-        let calc = StakingCalculator::new(1_000 * 1_000_000_000, 10_000_000_000, 10_000_000_000);
+        let calc = StakingCalculator::new(1_000 * 1_000_000_000, 10_000_000_000);
         let sqrt_price = calc.get_sqrt_price();
         assert!(
             sqrt_price >= MIN_SQRT_PRICE_X64,
