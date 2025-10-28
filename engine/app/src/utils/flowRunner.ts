@@ -156,8 +156,8 @@ export async function runFullFlow(
     // Debug: Check available methods
     addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
 
-    const testbaseMint = Keypair.generate();
-    [testLaunchState] = sdk.getLaunchPda(testbaseMint.publicKey);
+    const testBaseMint = Keypair.generate();
+    [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
     const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
@@ -181,7 +181,7 @@ export async function runFullFlow(
     tx.add(
       SystemProgram.createAccount({
         fromPubkey: admin.publicKey,
-        newAccountPubkey: testbaseMint.publicKey,
+        newAccountPubkey: testBaseMint.publicKey,
         space: 82,
         lamports: 2039280, // Fixed rent exemption for 82 bytes
         programId: TOKEN_PROGRAM_ID,
@@ -189,7 +189,7 @@ export async function runFullFlow(
     );
     tx.add(
       createInitializeMintInstruction(
-        testbaseMint.publicKey,
+        testBaseMint.publicKey,
         6,
         mintAuth,
         admin.publicKey
@@ -216,7 +216,7 @@ export async function runFullFlow(
         creator: admin.publicKey,
         projectCounter,
         launchState: testLaunchState,
-        baseMint: testbaseMint.publicKey,
+        baseMint: testBaseMint.publicKey,
         escrow,
         creatorGrant,
         systemProgram: SystemProgram.programId,
@@ -232,7 +232,7 @@ export async function runFullFlow(
     ).blockhash;
 
     // Send transaction using provider's sendAndConfirm method
-    const signature = await provider.sendAndConfirm(tx, [testbaseMint]);
+    const signature = await provider.sendAndConfirm(tx, [testBaseMint]);
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
     const grossLaunchCost = balanceBeforeLaunch - balanceAfterLaunch;
@@ -466,14 +466,14 @@ export async function runFullFlow(
         try {
           // Attempt to claim tokens for every user
           const userAta = sdk.getUserAta(
-            testbaseMint.publicKey,
+            testBaseMint.publicKey,
             userData.keypair.publicKey
           );
           const initialBalance = await getTokenBalance(userAta);
 
           await sdk.claimTokens({
             launch: testLaunchState,
-            baseMint: testbaseMint.publicKey,
+            baseMint: testBaseMint.publicKey,
             userKeypair: userData.keypair,
             createAtaIfMissing: true,
             shardId: userData.shardId,
@@ -608,7 +608,7 @@ export async function runFullFlow(
       addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
       addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);
 
-      const creatorAta = sdk.getUserAta(testbaseMint.publicKey, admin.publicKey);
+      const creatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
 
       addLog(`\n   --- Firing 3 rapid claims to test initial lock ---`);
       let initialSuccess = 0;
@@ -619,7 +619,7 @@ export async function runFullFlow(
           const initialBalance = await getTokenBalance(creatorAta);
           await sdk.claimCreatorTokens({
             launch: testLaunchState,
-            baseMint: testbaseMint.publicKey,
+            baseMint: testBaseMint.publicKey,
             creatorAta: creatorAta,
             createAtaIfMissing: true,
             computeUnits: 2_000_000,
@@ -661,7 +661,7 @@ export async function runFullFlow(
         const initialBalance = await getTokenBalance(creatorAta);
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testbaseMint.publicKey,
+          baseMint: testBaseMint.publicKey,
           creatorAta: creatorAta,
         });
         const finalBalance = await getTokenBalance(creatorAta);
@@ -687,7 +687,7 @@ export async function runFullFlow(
       try {
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testbaseMint.publicKey,
+          baseMint: testBaseMint.publicKey,
           creatorAta: creatorAta,
         });
         addLog(`   -> ❌ VERIFICATION FAILED: Final claim succeeded when it should have failed.`);
