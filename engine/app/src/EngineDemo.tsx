@@ -443,13 +443,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         addLog(`Transaction instructions count: ${signedTransaction.instructions.length}`);
         
         // Check if baseMintKeypair is already signed
-        const isbaseMintSigned = signedTransaction.signatures.some(sig => 
+        const isBaseMintSigned = signedTransaction.signatures.some(sig => 
           sig.publicKey.equals(baseMintKeypair.publicKey) && sig.signature !== null
         );
-        addLog(`baseMint already signed: ${isbaseMintSigned}`);
+        addLog(`baseMint already signed: ${isBaseMintSigned}`);
         
         try {
-          if (isbaseMintSigned) {
+          if (isBaseMintSigned) {
             // If already signed, send without additional signers
             addLog(`Sending transaction without additional signers (already signed)`);
             signature = await connection.sendRawTransaction(signedTransaction.serialize());
@@ -705,16 +705,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       try {
         addLog('Restoring sale mint...');
         // Handle both old format (string) and new format (object with secretKey)
-        let restoredbaseMint: Keypair;
+        let restoredBaseMint: Keypair;
         if (typeof project.baseMint === 'string') {
           // Old format - only public key, create a dummy keypair
           addLog('WARNING: Project saved in old format, baseMint keypair cannot be fully restored');
-          restoredbaseMint = { publicKey: new PublicKey(project.baseMint) } as Keypair;
+          restoredBaseMint = { publicKey: new PublicKey(project.baseMint) } as Keypair;
         } else {
           // New format - full keypair with secret key
-          restoredbaseMint = Keypair.fromSecretKey(new Uint8Array(project.baseMint.secretKey));
+          restoredBaseMint = Keypair.fromSecretKey(new Uint8Array(project.baseMint.secretKey));
         }
-        setBaseMint(restoredbaseMint);
+        setBaseMint(restoredBaseMint);
       } catch (error) {
         addLog(`ERROR: Failed to restore sale mint - ${error}`);
         throw error;
