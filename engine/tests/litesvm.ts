@@ -14,7 +14,7 @@ import { assert } from "chai";
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 
-import { advanceTime, createAndFundAccount } from "./utils";
+import { advanceTime, createAndFundAccount, injectSlotHashesForRange } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 
 let client: LiteSVM;
@@ -900,40 +900,15 @@ describe("Full flow", () => {
     console.log("=== Finalizing Shard ===");
     await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
     console.log("=== Creating Pool (finalizes selection and opens claims) ===");
-    // Inject SlotHashes sysvar with a valid blockhash for this project's range (mirrors raydium test)
     {
-      const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey(
-        "SysvarS1otHashes111111111111111111111111111"
-      );
-      // Use latest launch state to compute personal range
       state = await sdk.fetchLaunch(testLaunchState);
       const projectId = state.projectId.toNumber();
       const unlock = Number((state as any).unlockTimeSec);
       const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
       const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
       const rangeStart = width * BigInt(projectId - 1);
-      const rangeEnd = rangeStart + width; // exclusive upper bound
-
-      const currentClock = client.getClock();
-      const numHashes = 512;
-      const slotHashesData = Buffer.alloc(8 + numHashes * 40);
-      slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
-      for (let i = 0; i < numHashes; i++) {
-        const offset = 8 + i * 40;
-        slotHashesData.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-        if (i === numHashes - 1) {
-          bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
-        } else {
-          bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
-        }
-      }
-
-      client.setAccount(SLOT_HASHES_SYSVAR, {
-        lamports: 1_000_000,
-        data: slotHashesData,
-        owner: anchor.web3.SystemProgram.programId,
-        executable: false,
-      });
+      const rangeEnd = rangeStart + width;
+      injectSlotHashesForRange(client, rangeStart, rangeEnd);
     }
     await sdk.createPool({ launch: testLaunchState });
 
