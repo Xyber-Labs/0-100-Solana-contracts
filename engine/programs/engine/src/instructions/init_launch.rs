@@ -100,7 +100,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     } else {
         params.num_partitions
     };
-    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidnumPartitions);
+    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumPartitions);
 
 
     let counter = &mut ctx.accounts.project_counter;

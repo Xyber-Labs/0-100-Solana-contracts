@@ -2580,7 +2580,7 @@ export type Engine = {
     },
     {
       "code": 6027,
-      "name": "invalidnumPartitions",
+      "name": "invalidNumPartitions",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {

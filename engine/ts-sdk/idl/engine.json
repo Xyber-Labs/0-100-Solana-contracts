@@ -2574,7 +2574,7 @@
     },
     {
       "code": 6027,
-      "name": "InvalidnumPartitions",
+      "name": "InvalidNumPartitions",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {
