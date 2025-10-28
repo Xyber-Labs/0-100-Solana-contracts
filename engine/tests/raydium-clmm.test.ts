@@ -2,8 +2,9 @@ import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { TOKEN_PROGRAM_ID, unpackAccount } from "@solana/spl-token";
+import { unpackAccount } from "@solana/spl-token";
 import { assert } from "chai";
+import bs58 from "bs58";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
@@ -208,10 +209,15 @@ describe("engine litesvm - raydium clmm", () => {
     });
 
     console.log("Adding liquidity...");
-    const liquiditySig = await provider.sendAndConfirm(
-      addLiquidityResultTx.transaction,
-      [admin.payer, ...addLiquidityResultTx.signers]
-    );
+    addLiquidityResultTx.transaction.feePayer = adminKeypair.publicKey;
+    addLiquidityResultTx.transaction.recentBlockhash = client.latestBlockhash();
+    addLiquidityResultTx.transaction.sign(adminKeypair, ...addLiquidityResultTx.signers);
+    const txResult = client.sendTransaction(addLiquidityResultTx.transaction);
+    if (txResult.err) {
+      console.log("Transaction logs:", txResult.meta().logs());
+      throw new Error(`Transaction failed: ${txResult.err()}`);
+    }
+    const liquiditySig = bs58.encode(addLiquidityResultTx.transaction.signature);
     console.log("✅ Liquidity added:", liquiditySig);
 
     const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
@@ -271,10 +277,51 @@ describe("engine litesvm - raydium clmm", () => {
     }
   });
 
-  it("Executes trader swaps to accumulate fees", async () => {
+  it.skip("Executes trader swaps to accumulate fees", async () => {
     console.log("=== Executing Trader Swaps ===");
-    console.log("Swaps are not implemented yet - tick array initialization needed");
-    return;
+
+    console.log("=== Checking Available Tick Arrays ===");
+    const tickSpacing = 60;
+    const TICK_ARRAY_SIZE = 60;
+    const tickArrayInterval = tickSpacing * TICK_ARRAY_SIZE;
+
+    const existingTickArrays = [];
+    for (let i = -442800; i <= 442800; i += tickArrayInterval) {
+      const buffer = Buffer.alloc(4);
+      buffer.writeInt32BE(i, 0);
+      const [tickArray] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("tick_array"), createPoolResultTx.poolState.toBuffer(), buffer],
+        raydiumProgramId
+      );
+      const account = client.getAccount(tickArray);
+      if (account && new anchor.web3.PublicKey(account.owner).equals(raydiumProgramId)) {
+        existingTickArrays.push(i);
+        console.log(`✅ Tick array at ${i} exists`);
+      }
+    }
+    console.log(`Found ${existingTickArrays.length} existing tick arrays:`, existingTickArrays);
+
+    const poolStateAccount = client.getAccount(createPoolResultTx.poolState);
+    let currentTick = 0;
+    let currentTickArrayIndex = 0;
+    if (poolStateAccount) {
+      const poolData = Buffer.from(poolStateAccount.data);
+      currentTick = poolData.readInt32LE(269);
+      console.log(`Pool current tick: ${currentTick}`);
+
+      let tickArrayStart = Math.trunc(currentTick / tickArrayInterval);
+      if (currentTick < 0 && currentTick % tickArrayInterval !== 0) {
+        tickArrayStart = tickArrayStart - 1;
+      }
+      currentTickArrayIndex = tickArrayStart * tickArrayInterval;
+      console.log(`Current tick should be in tick array: ${currentTickArrayIndex}`);
+
+      if (!existingTickArrays.includes(currentTickArrayIndex)) {
+        console.log(`⚠️ Missing tick array for current price at ${currentTickArrayIndex}`);
+        console.log(`Pool cannot execute swaps until this tick array is created.`);
+        console.log(`In production, the first trader will create this tick array.`);
+      }
+    }
 
     const quoteVaultBalanceBefore = client.getBalance(addLiquidityResultTx.quoteVault);
     const baseVaultAccountBefore = client.getAccount(addLiquidityResultTx.baseVault);

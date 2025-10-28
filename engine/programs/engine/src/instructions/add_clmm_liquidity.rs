@@ -116,8 +116,6 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     )
     .get_pool_params()?;
 
-    let liquidity = params.quote_volume / 10;
-
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
         SEED_ROOT,
@@ -189,17 +187,19 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         signers,
     );
 
+    let is_token_0_quote = order.amount_0 == params.quote_volume;
+
     raydium_amm_v3::cpi::open_position_v2(
         cpi_context,
         params.tick_lower_index,
         params.tick_upper_index,
         params.tick_array_lower_start_index,
         params.tick_array_upper_start_index,
-        u128::from(liquidity),
+        0,
         order.amount_0,
         order.amount_1,
         false,
-        None,
+        Some(is_token_0_quote),
     )?;
 
     Ok(())
@@ -231,15 +231,9 @@ impl StakingCalculator {
     }
 
     fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
-        let tick_lower_index = 0i32;
-        let tick_upper_index = 443580i32;
-
         let tick_spacing = 60i32;
         let tick_array_size = 60i32;
         let ticks_in_array = tick_spacing * tick_array_size;
-
-        let tick_array_lower_start_index = (tick_lower_index / ticks_in_array) * ticks_in_array;
-        let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
 
         let base_volume = self.lp_allocation;
         let quote_volume = u128::from(self.lp_allocation)
@@ -247,6 +241,32 @@ impl StakingCalculator {
             .and_then(|v| v.checked_div(u128::from(self.sale_allocation)))
             .and_then(|v| u64::try_from(v).ok())
             .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+        let price = (self.raised_lamports as f64) / (self.sale_allocation as f64);
+        let price_lower = price * 0.55;
+        let price_upper = price * 5.5;
+
+        let log_base = (1.0001_f64).ln();
+        let tick_current_raw = price.ln() / log_base;
+        let tick_lower_raw = price_lower.ln() / log_base;
+        let tick_upper_raw = price_upper.ln() / log_base;
+
+        let tick_current_index =
+            (tick_current_raw / tick_spacing as f64).round() as i32 * tick_spacing;
+        let tick_lower_index = (tick_lower_raw / tick_spacing as f64).floor() as i32 * tick_spacing;
+        let tick_upper_index = (tick_upper_raw / tick_spacing as f64).ceil() as i32 * tick_spacing;
+
+        let mut tick_array_lower_start = tick_lower_index / ticks_in_array;
+        if tick_lower_index < 0 && tick_lower_index % ticks_in_array != 0 {
+            tick_array_lower_start -= 1;
+        }
+        let tick_array_lower_start_index = tick_array_lower_start * ticks_in_array;
+
+        let mut tick_array_upper_start = tick_upper_index / ticks_in_array;
+        if tick_upper_index < 0 && tick_upper_index % ticks_in_array != 0 {
+            tick_array_upper_start -= 1;
+        }
+        let tick_array_upper_start_index = tick_array_upper_start * ticks_in_array;
 
         Ok(RaydiumPoolParams {
             tick_lower_index,

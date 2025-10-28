@@ -153,10 +153,10 @@ export async function swapTokens(params: SwapParams): Promise<string> {
 
   const tickSpacing = 60;
   const TICK_ARRAY_SIZE = 60;
-  const tickLowerIndex = 0;
+  const tickLowerIndex = -443580;
   const tickUpperIndex = 443580;
-  const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
-  const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+  const tickArrayLowerStartIndex = Math.trunc(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+  const tickArrayUpperStartIndex = Math.trunc(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
 
   const [tickArrayLower] = getRaydiumTickArrayPda(poolState, tickArrayLowerStartIndex, raydiumProgramId);
   const [tickArrayUpper] = getRaydiumTickArrayPda(poolState, tickArrayUpperStartIndex, raydiumProgramId);

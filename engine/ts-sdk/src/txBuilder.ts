@@ -879,7 +879,7 @@ export class TxBuilder {
     );
 
     const tickSpacing = 60;
-    const tickLowerIndex = 0;
+    const tickLowerIndex = -443580;
     const tickUpperIndex = 443580;
 
     const tickLowerBuffer = Buffer.alloc(4);
@@ -899,8 +899,19 @@ export class TxBuilder {
     );
 
     const TICK_ARRAY_SIZE = 60;
-    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
-    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+    const ticksInArray = tickSpacing * TICK_ARRAY_SIZE;
+
+    let tickArrayLowerStart = Math.trunc(tickLowerIndex / ticksInArray);
+    if (tickLowerIndex < 0 && tickLowerIndex % ticksInArray !== 0) {
+      tickArrayLowerStart = tickArrayLowerStart - 1;
+    }
+    const tickArrayLowerStartIndex = tickArrayLowerStart * ticksInArray;
+
+    let tickArrayUpperStart = Math.trunc(tickUpperIndex / ticksInArray);
+    if (tickUpperIndex < 0 && tickUpperIndex % ticksInArray !== 0) {
+      tickArrayUpperStart = tickArrayUpperStart - 1;
+    }
+    const tickArrayUpperStartIndex = tickArrayUpperStart * ticksInArray;
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
     tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);

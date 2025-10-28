@@ -8,15 +8,17 @@
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
     "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",
     "test:litesvm:raydium": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/raydium-clmm.test.ts",
+    "test:litesvm:raydium-sdk": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/raydium-sdk-test.ts",
     "test:litesvm:full": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'Full flow'",
     "test:litesvm:dispatcher": "ts-mocha -p ./tsconfig.json -t 1000000 tests/income-dispatcher.ts",
     "script:local-flow": "ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node --no-cache scripts/run-local-flow.ts",
     "script:remote-flow": "ANCHOR_PROVIDER_URL=http://10.186.0.84:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node scripts/run-local-flow.ts"
   },
   "dependencies": {
-    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "@coral-xyz/anchor": "^0.31.1",
+    "@raydium-io/raydium-sdk-v2": "^0.2.30-alpha",
     "@solana/spl-token": "^0.4.14",
+    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "bs58": "^6.0.0",
     "commander": "^14.0.1"
   },
