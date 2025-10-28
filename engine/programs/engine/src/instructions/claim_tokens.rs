@@ -19,10 +19,7 @@ pub struct ClaimTokens<'info> {
     #[account(constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
 
-    #[account(
-        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
-        bump,
-    )]
+    #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
     pub pool_state: Account<'info, PoolState>,
 
     #[account(address = launch_state.base_mint.unwrap())]
@@ -52,7 +49,10 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
     require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
-    require!(ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(), EngineErrorCode::Unauthorized);
+    require!(
+        ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(),
+        EngineErrorCode::Unauthorized
+    );
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
     // Tokens are claimed only if the raise was successful
@@ -86,8 +86,6 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let prefix_value = *shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?;
     let base =
         shard.shard_base.checked_add(prefix_value).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-    
 
     // Early exit to avoid permute on n==0 and when no public winners are possible
     if k_pub == 0 || n == 0 {
