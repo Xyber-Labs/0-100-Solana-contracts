@@ -18,7 +18,7 @@ pub struct LaunchState {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub num_blocks: u64, // N value for hash range calculation
+    pub num_partitions: u64, // N value for hash range calculation
 
     // Sale/LP (MVP)
     pub base_mint: Pubkey,

@@ -56,7 +56,7 @@ export class TxBuilder {
     saleAllocation: BN;
     lpAllocation: BN;
     fundingDurationSeconds: number;
-    numBlocks: number;
+    numPartitions: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
@@ -88,7 +88,7 @@ export class TxBuilder {
         saleAllocation: params.saleAllocation,
         lpAllocation: params.lpAllocation,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-        numBlocks: new BN(params.numBlocks),
+        numPartitions: new BN(params.numPartitions),
         rosterShardCap: params.rosterShardCap,
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
@@ -173,7 +173,7 @@ export class TxBuilder {
       saleAllocation: params.saleAllocation,
       lpAllocation: params.lpAllocation,
       fundingDurationSeconds: params.fundingDurationSeconds,
-      numBlocks: 0, // Default to 0, will be set to DEFAULT_N on-chain
+      numPartitions: 0, // Default to 0, will be set to DEFAULT_N on-chain
       rosterShardCap: params.rosterShardCap,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,

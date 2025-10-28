@@ -88,7 +88,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         if pool::is_blockhash_in_project_range(
             &blockhash,
             launch_state.project_id,
-            launch_state.num_blocks,
+            launch_state.num_partitions,
         ) {
             found_valid_hash = true;
             valid_slot = slot;
@@ -102,7 +102,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
 
     // Calculate and store the project's range
     let (range_start, range_end) =
-        pool::calculate_project_range(launch_state.project_id, launch_state.num_blocks);
+        pool::calculate_project_range(launch_state.project_id, launch_state.num_partitions);
     let mut range_start_bytes = [0u8; 32];
     range_start.to_big_endian(&mut range_start_bytes);
     let mut range_end_bytes = [0u8; 32];

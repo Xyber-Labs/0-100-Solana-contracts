@@ -125,7 +125,7 @@ const EngineSDK = {
       saleAllocation: BN;
       lpAllocation: BN;
       fundingDurationSeconds: number;
-      numBlocks?: number;
+      numPartitions?: number;
       rosterShardCap: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
@@ -151,7 +151,7 @@ const EngineSDK = {
           saleAllocation: args.saleAllocation,
           lpAllocation: args.lpAllocation,
           fundingDurationSeconds: args.fundingDurationSeconds,
-          numBlocks: args.numBlocks ?? 0,
+          numPartitions: args.numPartitions ?? 0,
           rosterShardCap: args.rosterShardCap,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,

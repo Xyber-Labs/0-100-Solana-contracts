@@ -19,7 +19,7 @@ interface LaunchConfig {
   saleAllocation: string;
   lpAllocation: number;
   fundingDurationSeconds: number; // New field for direct seconds
-  numBlocks: number;
+  numPartitions: number;
   rosterShardCap: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
@@ -206,7 +206,7 @@ export async function runFullFlow(
         saleAllocation: new BN(config.saleAllocation),
         lpAllocation: new BN(config.lpAllocation),
         fundingDurationSeconds: new BN(config.fundingDurationSeconds),
-        numBlocks: new BN(config.numBlocks),
+        numPartitions: new BN(config.numPartitions),
         rosterShardCap: config.rosterShardCap,
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),

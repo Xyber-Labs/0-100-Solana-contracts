@@ -65,7 +65,7 @@ pub struct InitLaunchParams {
     pub sale_allocation: u64, // number of sale tokens
     pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
     pub funding_duration_seconds: i64,
-    pub num_blocks: u64, // N value for hash range calculation
+    pub num_partitions: u64, // N value for hash range calculation
     pub roster_shard_cap: u16,
 
     // Creator grant parameters
@@ -95,12 +95,12 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         EngineErrorCode::InvalidFundingDuration
     );
 
-    let n = if params.num_blocks == 0 {
+    let n = if params.num_partitions == 0 {
         DEFAULT_N
     } else {
-        params.num_blocks
+        params.num_partitions
     };
-    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumBlocks);
+    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidnumPartitions);
 
 
     let counter = &mut ctx.accounts.project_counter;
@@ -117,7 +117,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.tau_lamports = params.tau_lamports;
     state.sale_allocation = params.sale_allocation;
     state.lp_allocation = params.lp_allocation;
-    state.num_blocks = n;
+    state.num_partitions = n;
     state.roster_shard_cap = params.roster_shard_cap;
 
     // Set funding period end time (current time + duration)
@@ -233,7 +233,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         tau_lamports: params.tau_lamports,
         sale_allocation: params.sale_allocation,
         lp_allocation: params.lp_allocation,
-        num_blocks: state.num_blocks,
+        num_partitions: state.num_partitions,
     });
 
     emit!(FundingPeriodStarted {

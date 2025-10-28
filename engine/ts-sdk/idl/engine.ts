@@ -2325,19 +2325,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "numBlocksUpdated",
-      "discriminator": [
-        169,
-        68,
-        39,
-        54,
-        104,
-        241,
-        228,
-        223
-      ]
-    },
-    {
       "name": "poolCreated",
       "discriminator": [
         202,
@@ -2593,7 +2580,7 @@ export type Engine = {
     },
     {
       "code": 6027,
-      "name": "invalidNumBlocks",
+      "name": "invalidnumPartitions",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {
@@ -3047,7 +3034,7 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "numBlocks",
+            "name": "numPartitions",
             "type": "u64"
           },
           {
@@ -3111,7 +3098,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "numBlocks",
+            "name": "numPartitions",
             "type": "u64"
           }
         ]
@@ -3147,7 +3134,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "numBlocks",
+            "name": "numPartitions",
             "type": "u64"
           },
           {
@@ -3260,22 +3247,6 @@ export type Engine = {
             "type": {
               "option": "pubkey"
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "numBlocksUpdated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "newNumBlocks",
-            "type": "u64"
           }
         ]
       }

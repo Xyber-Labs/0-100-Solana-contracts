@@ -492,8 +492,8 @@ describe("engine litesvm", () => {
 
     // Compute project's personal blockhash range and pick range_start (inclusive)
     const projectId = launchAccount.projectId.toNumber();
-    const numBlocks = launchAccount.numBlocks.toNumber();
-    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+    const numPartitions = launchAccount.numPartitions.toNumber();
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
 
@@ -623,7 +623,7 @@ describe("engine litesvm", () => {
         saleAllocation: SALE_ALLOCATION,
         lpAllocation: LP_ALLOCATION,
         fundingDurationSeconds: new anchor.BN(10),
-        numBlocks: new anchor.BN(1000),
+        numPartitions: new anchor.BN(1000),
         rosterShardCap: ROSTER_SHARD_CAP,
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
@@ -833,8 +833,8 @@ describe("engine litesvm - raydium clmm", () => {
       const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
       const state = await sdk.fetchLaunch(clmmLaunchState);
       const projectId = state.projectId.toNumber();
-      const numBlocks = state.numBlocks.toNumber();
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+      const numPartitions = state.numPartitions.toNumber();
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
       const rangeStart = width * BigInt(projectId - 1);
       const rangeEnd = rangeStart + width;
 
@@ -1052,7 +1052,7 @@ describe("Full flow", () => {
       saleAllocation: SALE_ALLOCATION,
       lpAllocation: LP_ALLOCATION,
       fundingDurationSeconds: new anchor.BN(11),
-      numBlocks: 1000,
+      numPartitions: 1000,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
@@ -1160,8 +1160,8 @@ describe("Full flow", () => {
       // Use latest launch state to compute personal range
       state = await sdk.fetchLaunch(testLaunchState);
       const projectId = state.projectId.toNumber();
-      const numBlocks = state.numBlocks.toNumber();
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numBlocks);
+      const numPartitions = state.numPartitions.toNumber();
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
       const rangeStart = width * BigInt(projectId - 1);
       const rangeEnd = rangeStart + width; // exclusive upper bound
 

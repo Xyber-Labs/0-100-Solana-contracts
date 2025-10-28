@@ -11,7 +11,7 @@ pub struct LaunchInitialized {
     pub tau_lamports: u64,
     pub sale_allocation: u64,
     pub lp_allocation: u64,
-    pub num_blocks: u64,
+    pub num_partitions: u64,
 }
 
 #[event]
@@ -95,12 +95,6 @@ pub struct PoolCreated {
     pub slot: u64,
     pub range_start: [u8; 32],
     pub range_end: [u8; 32],
-}
-
-#[event]
-pub struct NumBlocksUpdated {
-    pub launch: Pubkey,
-    pub new_num_blocks: u64,
 }
 
 #[event]
