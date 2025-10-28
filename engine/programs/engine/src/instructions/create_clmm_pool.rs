@@ -155,9 +155,10 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let open_time =
         Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
+    let base_mint = ctx.accounts.sale_mint.to_account_info();
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
-        &ctx.accounts.sale_mint.to_account_info(),
+        &base_mint,
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_program.to_account_info(),

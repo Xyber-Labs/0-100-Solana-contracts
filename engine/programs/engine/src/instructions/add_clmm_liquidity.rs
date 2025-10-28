@@ -121,6 +121,7 @@ pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
 }
 
 fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
+    let base_mint = ctx.accounts.sale_mint.to_account_info();
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
         ctx.accounts.launch_state.sale_allocation,
@@ -161,7 +162,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
 
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
-        &ctx.accounts.sale_mint.to_account_info(),
+        &base_mint,
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_ata.to_account_info(),
