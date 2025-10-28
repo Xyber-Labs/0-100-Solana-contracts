@@ -1,25 +1,20 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import EngineSDK from "@xyber-labs/0-100-sdk";
+
+import { getExplorerUrl, runWithSdk } from "./utils";
 
 async function main() {
-  const opts = parseArgs();
+  await runWithSdk(async ({ provider, sdk }) => {
+    const opts = parseArgs();
 
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  const engineProgram = anchor.workspace.engine;
-  const sdk = EngineSDK.create(provider, engineProgram);
-
-  printParameters(opts);
+    printParameters(opts);
 
   const baseMint = anchor.web3.Keypair.generate();
   const launchState = printPdas(sdk, baseMint.publicKey);
 
-  console.log("Sending transaction...");
+    console.log("Sending transaction...");
 
-  try {
     const result = await sdk.initLaunchTx({
       creator: provider.wallet.publicKey,
       baseMint: baseMint,
@@ -44,15 +39,7 @@ async function main() {
     console.log("Explorer:", getExplorerUrl(provider, signature));
 
     await printLaunchInfo(sdk, launchState);
-  } catch (error) {
-    console.error("❌ Transaction failed:");
-    console.error(error);
-    if (error.logs) {
-      console.error("Program logs:");
-      error.logs.forEach((log: string) => console.error(log));
-    }
-    process.exit(1);
-  }
+  });
 }
 
 function parseArgs() {
@@ -104,15 +91,6 @@ function printPdas(sdk: any, baseMint: anchor.web3.PublicKey) {
   console.log("  Mint authority:", mintAuth.toBase58());
 
   return launchState;
-}
-
-function getExplorerUrl(provider: anchor.AnchorProvider, signature: string): string {
-  const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
-    : provider.connection.rpcEndpoint.includes('testnet') ? 'testnet'
-      : provider.connection.rpcEndpoint.includes('localhost') || provider.connection.rpcEndpoint.includes('127.0.0.1') ? 'custom&customUrl=' + encodeURIComponent(provider.connection.rpcEndpoint)
-        : 'mainnet-beta';
-
-  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
 }
 
 async function printLaunchInfo(sdk: any, launchState: anchor.web3.PublicKey) {
