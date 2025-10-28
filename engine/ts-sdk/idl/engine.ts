@@ -3034,8 +3034,8 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "numPartitions",
-            "type": "u64"
+            "name": "unlockTimeSec",
+            "type": "i64"
           },
           {
             "name": "rosterShardCap",
@@ -3098,8 +3098,8 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "numPartitions",
-            "type": "u64"
+            "name": "unlockTimeSec",
+            "type": "i64"
           }
         ]
       }
@@ -3134,8 +3134,8 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "numPartitions",
-            "type": "u64"
+            "name": "unlockTimeSec",
+            "type": "i64"
           },
           {
             "name": "baseMint",

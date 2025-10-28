@@ -11,7 +11,7 @@ pub struct LaunchInitialized {
     pub tau_lamports: u64,
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,
-    pub num_partitions: u64,
+    pub unlock_time_sec: i64,
 }
 
 #[event]

@@ -84,12 +84,10 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
 
         // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
 
+        let num_partitions = pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec);
         // Check if this blockhash is within the project's personal range
-        if pool::is_blockhash_in_project_range(
-            &blockhash,
-            launch_state.project_id,
-            launch_state.num_partitions,
-        ) {
+        if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, num_partitions)
+        {
             found_valid_hash = true;
             valid_slot = slot;
             valid_hash = blockhash;
@@ -101,8 +99,10 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let (valid_slot, valid_hash) = (valid_slot, valid_hash);
 
     // Calculate and store the project's range
-    let (range_start, range_end) =
-        pool::calculate_project_range(launch_state.project_id, launch_state.num_partitions);
+    let (range_start, range_end) = pool::calculate_project_range(
+        launch_state.project_id,
+        pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec),
+    );
     let mut range_start_bytes = [0u8; 32];
     range_start.to_big_endian(&mut range_start_bytes);
     let mut range_end_bytes = [0u8; 32];
@@ -132,10 +132,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
             .checked_div(1_000_000)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        require!(
-            creator_reserved_u128 <= u32::MAX as u128,
-            EngineErrorCode::U64ConversionOverflow
-        );
+        require!(creator_reserved_u128 <= u32::MAX as u128, EngineErrorCode::U64ConversionOverflow);
         launch_state.creator_reserved_tickets = creator_reserved_u128 as u32;
     }
 
@@ -161,13 +158,11 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
 
     launch_state.tokens_per_ticket = Some(tokens_per_ticket);
     launch_state.selection_finalized = true;
-    
 
     emit!(SelectionFinalized {
         launch: launch_state.key(),
         k_capacity: launch_state.k_capacity,
     });
-    
 
     emit!(PoolCreated {
         launch: launch_state.key(),

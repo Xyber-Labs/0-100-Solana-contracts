@@ -1,8 +1,8 @@
 use crate::{
-    constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT},
+    constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
-    state::{CreatorGrant, LaunchState, ProjectCounter},
+    state::{CreatorGrant, LaunchState, ProjectCounter}
 };
 use anchor_lang::{
     prelude::*,
@@ -66,7 +66,7 @@ pub struct InitLaunchParams {
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,
     pub funding_duration_seconds: i64,
-    pub num_partitions: u64, // N value for hash range calculation
+    pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
 
     // Creator grant parameters
@@ -96,13 +96,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         EngineErrorCode::InvalidFundingDuration
     );
 
-    let n = if params.num_partitions == 0 {
-        DEFAULT_N
-    } else {
-        params.num_partitions
-    };
-    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumPartitions);
-
     let counter = &mut ctx.accounts.project_counter;
     let project_id =
         counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -117,7 +110,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.tau_lamports = params.tau_lamports;
     state.base_total_allocation = params.base_total_allocation;
     state.base_sale_basis_points = params.base_sale_basis_points;
-    state.num_partitions = n;
+    state.unlock_time_sec = params.unlock_time_sec;
     state.roster_shard_cap = params.roster_shard_cap;
 
     // Set funding period end time (current time + duration)
@@ -231,7 +224,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         tau_lamports: params.tau_lamports,
         base_total_allocation: params.base_total_allocation,
         base_sale_basis_points: params.base_sale_basis_points,
-        num_partitions: state.num_partitions,
+        unlock_time_sec: state.unlock_time_sec,
     });
 
     emit!(FundingPeriodStarted {

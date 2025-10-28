@@ -271,9 +271,10 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
+      unlockTimeSec: 60,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -304,9 +305,10 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
+      unlockTimeSec: 60,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -337,9 +339,10 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
+      unlockTimeSec: 60,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
@@ -494,8 +497,9 @@ describe("engine litesvm", () => {
 
     // Compute project's personal blockhash range and pick range_start (inclusive)
     const projectId = launchAccount.projectId.toNumber();
-    const numPartitions = launchAccount.numPartitions.toNumber();
-    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
+    const unlock = Number((launchAccount as any).unlockTimeSec);
+    const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
 
@@ -622,10 +626,10 @@ describe("engine litesvm", () => {
         minRaiseLamports: MIN_RAISE_LAMPORTS,
         perWalletCap: PER_WALLET_CAP,
         tauLamports: TAU_LAMPORTS,
-        saleAllocation: SALE_ALLOCATION,
-        lpAllocation: LP_ALLOCATION,
+        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+        baseSaleBasisPoints: BASE_SALE_BPS_F,
         fundingDurationSeconds: new anchor.BN(10),
-        numPartitions: new anchor.BN(1000),
+        unlockTimeSec: new anchor.BN(60),
         rosterShardCap: ROSTER_SHARD_CAP,
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
@@ -743,7 +747,7 @@ describe("Full flow", () => {
   let provider: LiteSVMProvider;
   let program: Program<Engine>;
   let admin: anchor.Wallet;
-  let sdk: any;
+  let sdk: ReturnType<typeof EngineSDK.create>;
   let adminKeypair: anchor.web3.Keypair;
 
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
@@ -763,7 +767,6 @@ describe("Full flow", () => {
     admin = provider.wallet;
     adminKeypair = (provider.wallet as any).payer;
     sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
-    sdk = EngineSDK.create(provider, program);
   });
 
 
@@ -797,8 +800,8 @@ describe("Full flow", () => {
       tauLamports: testTau,
       baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
       baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: new anchor.BN(11),
-      numPartitions: 1000,
+      fundingDurationSeconds: 11,
+      unlockTimeSec: 60,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
@@ -831,7 +834,6 @@ describe("Full flow", () => {
     console.log("=== Initializing Roster ===");
     const { rosterPda } = await sdk.initRoster({
       launch: testLaunchState,
-      payerKeypair: adminKeypair,
     });
     const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
     const initRosterShardTx = await program.methods
@@ -906,8 +908,9 @@ describe("Full flow", () => {
       // Use latest launch state to compute personal range
       state = await sdk.fetchLaunch(testLaunchState);
       const projectId = state.projectId.toNumber();
-      const numPartitions = state.numPartitions.toNumber();
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
+      const unlock = Number((state as any).unlockTimeSec);
+      const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
       const rangeStart = width * BigInt(projectId - 1);
       const rangeEnd = rangeStart + width; // exclusive upper bound
 
@@ -1004,7 +1007,8 @@ describe("Full flow", () => {
       // Verify creator token balance
       const tokenAccountInfo = client.getAccount(creatorAta);
       const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
-      const expectedTokens = Math.floor((state.tokensPerTicket * expectedFirstDayTickets) / 1_000_000);
+      const tpt = Number(state.tokensPerTicket);
+      const expectedTokens = Math.floor((tpt * expectedFirstDayTickets) / 1_000_000);
       assert.equal(Number(tokenAccount.amount), expectedTokens);
 
       console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedTokens} tokens`);

@@ -18,9 +18,8 @@ pub struct LaunchState {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub num_partitions: u64, // N value for hash range calculation
+    pub unlock_time_sec: i64,
 
-    // Sale/LP
     pub base_mint: Option<Pubkey>,
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,

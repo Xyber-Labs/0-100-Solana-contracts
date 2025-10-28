@@ -3028,8 +3028,8 @@
             "type": "i64"
           },
           {
-            "name": "num_partitions",
-            "type": "u64"
+            "name": "unlock_time_sec",
+            "type": "i64"
           },
           {
             "name": "roster_shard_cap",
@@ -3092,8 +3092,8 @@
             "type": "u64"
           },
           {
-            "name": "num_partitions",
-            "type": "u64"
+            "name": "unlock_time_sec",
+            "type": "i64"
           }
         ]
       }
@@ -3128,8 +3128,8 @@
             "type": "u64"
           },
           {
-            "name": "num_partitions",
-            "type": "u64"
+            "name": "unlock_time_sec",
+            "type": "i64"
           },
           {
             "name": "base_mint",

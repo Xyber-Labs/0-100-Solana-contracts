@@ -16,7 +16,7 @@ interface LaunchConfig {
   lpAllocation: number;
   fundingDurationDays: number; // Represents dropdown selection
   fundingDurationSeconds: number; // Represents custom input
-  numPartitions: number;
+  unlockTimeSec: number;
   rosterShardCap: number;
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
@@ -158,7 +158,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 10, // Default custom seconds
-    numPartitions: 1024, // ~1 minute window
+    unlockTimeSec: 60, // ~1 minute window
     rosterShardCap: 250, // Safe size for Solana account limits (250 * 40 bytes = 10,000 bytes)
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
@@ -385,7 +385,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           saleAllocation: new BN(launchConfig.saleAllocation),
           lpAllocation: new BN(launchConfig.lpAllocation),
           fundingDurationSeconds: new BN(getFundingDurationInSeconds()),
-          numPartitions: new BN(launchConfig.numPartitions),
+          unlockTimeSec: new BN(launchConfig.unlockTimeSec),
           rosterShardCap: launchConfig.rosterShardCap,
           creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
           creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
@@ -1169,40 +1169,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               </div>
             </div>
             <div>
-              <label className="block text-xs terminal-output mb-1">Num Blocks (Window)</label>
+              <label className="block text-xs terminal-output mb-1">Unlock Time (s)</label>
               <input
                 type="number"
-                value={launchConfig.numPartitions}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, numPartitions: parseInt(e.target.value) }))}
-                className="terminal-input w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-xs terminal-output mb-1">Creator Initial Deposit (SOL)</label>
-              <input
-                type="number"
-                value={launchConfig.creatorInitialDepositLamports / 1e9}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorInitialDepositLamports: parseFloat(e.target.value) * 1e9 }))}
-                className="terminal-input w-full"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-xs terminal-output mb-1">Creator Daily Limit (SOL)</label>
-              <input
-                type="number"
-                value={launchConfig.creatorDailyLamportsLimit / 1e9}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorDailyLamportsLimit: parseFloat(e.target.value) * 1e9 }))}
-                className="terminal-input w-full"
-                step="0.1"
-              />
-            </div>
-            <div>
-              <label className="block text-xs terminal-output mb-1">Creator Claim Lock (s)</label>
-              <input
-                type="number"
-                value={launchConfig.creatorClaimLockPeriodSec}
-                onChange={(e) => setLaunchConfig(prev => ({ ...prev, creatorClaimLockPeriodSec: parseInt(e.target.value) }))}
+                value={launchConfig.unlockTimeSec}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, unlockTimeSec: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
               />
             </div>

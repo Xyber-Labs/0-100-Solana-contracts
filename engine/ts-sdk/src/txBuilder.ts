@@ -56,7 +56,7 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
-    numPartitions: number;
+    unlockTimeSec?: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
@@ -74,8 +74,7 @@ export class TxBuilder {
     const [creatorGrant] = this.getPda(["creator", launchState]);
     // No ATA creation at init stage
 
-    const instruction = await this.program.methods
-      .initLaunch({
+    const initParams: any = {
         hardCapLamports: params.hardCapLamports,
         minRaiseLamports: params.minRaiseLamports,
         perWalletCap: params.perWalletCap,
@@ -83,12 +82,15 @@ export class TxBuilder {
         baseTotalAllocation: params.baseTotalAllocation,
         baseSaleBasisPoints: params.baseSaleBasisPoints,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-        numPartitions: new BN(params.numPartitions),
+        unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
         rosterShardCap: params.rosterShardCap,
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
         creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-      })
+      };
+
+    const instruction = await (this.program.methods as any)
+      .initLaunch(initParams)
       .accountsStrict({
         creator: params.creator,
         launchState: launchState,
@@ -120,6 +122,7 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
+    unlockTimeSec?: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
@@ -151,7 +154,7 @@ export class TxBuilder {
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
       fundingDurationSeconds: params.fundingDurationSeconds,
-      numPartitions: 0, // Default to 0, will be set to DEFAULT_N on-chain
+      unlockTimeSec: params.unlockTimeSec ?? 0,
       rosterShardCap: params.rosterShardCap,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
