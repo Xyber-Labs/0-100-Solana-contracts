@@ -8,7 +8,7 @@ use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock::Clock, Sysvar},
 };
-use anchor_spl::token::{Mint, Token};
+use anchor_spl::token::Token;
 
 #[derive(Accounts)]
 pub struct InitLaunch<'info> {
@@ -34,9 +34,10 @@ pub struct InitLaunch<'info> {
     )]
     pub launch_state: Account<'info, LaunchState>,
 
-    /// Mint for sale tokens (program's mint authority will be PDA)
-    #[account(mut)]
-    pub base_mint: Account<'info, Mint>,
+    /// Base mint pubkey is used only for seeding the launch_state PDA at init time.
+    /// The mint account itself will be created later in create_clmm_pool.
+    /// CHECK: Only the public key is used as a seed.
+    pub base_mint: UncheckedAccount<'info>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -62,8 +63,8 @@ pub struct InitLaunchParams {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub sale_allocation: u64, // number of sale tokens
-    pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub num_partitions: u64, // N value for hash range calculation
     pub roster_shard_cap: u16,
@@ -102,7 +103,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     };
     require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumPartitions);
 
-
     let counter = &mut ctx.accounts.project_counter;
     let project_id =
         counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -115,8 +115,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.min_raise_lamports = params.min_raise_lamports;
     state.per_wallet_cap = params.per_wallet_cap;
     state.tau_lamports = params.tau_lamports;
-    state.sale_allocation = params.sale_allocation;
-    state.lp_allocation = params.lp_allocation;
+    state.base_total_allocation = params.base_total_allocation;
+    state.base_sale_basis_points = params.base_sale_basis_points;
     state.num_partitions = n;
     state.roster_shard_cap = params.roster_shard_cap;
 
@@ -154,9 +154,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.claims_opened_at = None;
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
 
-    // save sale mint
-    state.base_mint = ctx.accounts.base_mint.key();
-
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
@@ -193,7 +190,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.creator_grant_present = amount > 0;
 
     // Total launch allocation will be calculated in open_claims
-    state.total_launch_allocation = params.sale_allocation;
+    state.base_total_allocation = params.base_total_allocation;
+    state.base_sale_basis_points = params.base_sale_basis_points;
 
     // Initialize creator grant
     let launch_key = state.key();
@@ -231,8 +229,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         min_raise_lamports: params.min_raise_lamports,
         per_wallet_cap: params.per_wallet_cap,
         tau_lamports: params.tau_lamports,
-        sale_allocation: params.sale_allocation,
-        lp_allocation: params.lp_allocation,
+        base_total_allocation: params.base_total_allocation,
+        base_sale_basis_points: params.base_sale_basis_points,
         num_partitions: state.num_partitions,
     });
 

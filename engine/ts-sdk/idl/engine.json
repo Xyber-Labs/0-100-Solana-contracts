@@ -1670,9 +1670,9 @@
         {
           "name": "base_mint",
           "docs": [
-            "Mint for sale tokens (program's mint authority will be PDA)"
-          ],
-          "writable": true
+            "Base mint pubkey is used only for seeding the launch_state PDA at init time.",
+            "The mint account itself will be created later in create_clmm_pool."
+          ]
         },
         {
           "name": "escrow_authority",
@@ -3016,11 +3016,11 @@
             "type": "u64"
           },
           {
-            "name": "sale_allocation",
+            "name": "base_total_allocation",
             "type": "u64"
           },
           {
-            "name": "lp_allocation",
+            "name": "base_sale_basis_points",
             "type": "u64"
           },
           {
@@ -3084,11 +3084,11 @@
             "type": "u64"
           },
           {
-            "name": "sale_allocation",
+            "name": "base_total_allocation",
             "type": "u64"
           },
           {
-            "name": "lp_allocation",
+            "name": "base_sale_basis_points",
             "type": "u64"
           },
           {
@@ -3133,18 +3133,16 @@
           },
           {
             "name": "base_mint",
-            "type": "pubkey"
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
-            "name": "sale_allocation",
+            "name": "base_total_allocation",
             "type": "u64"
           },
           {
-            "name": "total_launch_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "lp_allocation",
+            "name": "base_sale_basis_points",
             "type": "u64"
           },
           {

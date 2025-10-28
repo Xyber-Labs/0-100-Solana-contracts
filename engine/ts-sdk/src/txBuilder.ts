@@ -48,13 +48,13 @@ export class TxBuilder {
 
   async initLaunchIx(params: {
     creator: web3.PublicKey;
-    baseMint: web3.PublicKey;
+    baseMint: web3.PublicKey; // used only as seed at init time
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
     tauLamports: BN;
-    saleAllocation: BN;
-    lpAllocation: BN;
+    baseTotalAllocation: BN;
+    baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
     numPartitions: number;
     rosterShardCap: number;
@@ -67,17 +67,12 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     projectCounter: web3.PublicKey;
     creatorGrant: web3.PublicKey;
-    baseEscrowAta: web3.PublicKey;
   }> {
     const [launchState] = this.getPda(["launch", params.baseMint]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
     const [creatorGrant] = this.getPda(["creator", launchState]);
-    const baseEscrowAta = getAssociatedTokenAddressSync(
-      params.baseMint,
-      escrowAuthority,
-      true
-    );
+    // No ATA creation at init stage
 
     const instruction = await this.program.methods
       .initLaunch({
@@ -85,8 +80,8 @@ export class TxBuilder {
         minRaiseLamports: params.minRaiseLamports,
         perWalletCap: params.perWalletCap,
         tauLamports: params.tauLamports,
-        saleAllocation: params.saleAllocation,
-        lpAllocation: params.lpAllocation,
+        baseTotalAllocation: params.baseTotalAllocation,
+        baseSaleBasisPoints: params.baseSaleBasisPoints,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
         numPartitions: new BN(params.numPartitions),
         rosterShardCap: params.rosterShardCap,
@@ -99,12 +94,10 @@ export class TxBuilder {
         launchState: launchState,
         baseMint: params.baseMint,
         escrowAuthority: escrowAuthority,
-        baseEscrowAta: baseEscrowAta,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       } as any)
       .instruction();
 
@@ -114,19 +107,18 @@ export class TxBuilder {
       escrowAuthority,
       projectCounter,
       creatorGrant,
-      baseEscrowAta,
     };
   }
 
   async initLaunchTx(params: {
     creator: web3.PublicKey;
-    baseMint: web3.Keypair;
+    baseMint: web3.PublicKey | web3.Keypair; // used only as seed at init time
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
     tauLamports: BN;
-    saleAllocation: BN;
-    lpAllocation: BN;
+    baseTotalAllocation: BN;
+    baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
@@ -140,38 +132,24 @@ export class TxBuilder {
     creatorGrant: web3.PublicKey;
     signers: web3.Keypair[];
   }> {
-    const [launchPda] = this.getPda(["launch", params.baseMint.publicKey]);
-    const [mintAuth] = this.getPda(["mint_auth", launchPda]);
-    const createMintAccountIx = web3.SystemProgram.createAccount({
-      fromPubkey: params.creator,
-      newAccountPubkey: params.baseMint.publicKey,
-      space: 82,
-      lamports: 2039280, // Fixed rent exemption for 82 bytes
-      programId: TOKEN_PROGRAM_ID,
-    });
-
-    const initializeMintIx = createInitializeMintInstruction(
-      params.baseMint.publicKey,
-      6,
-      mintAuth,
-      params.creator
-    );
+    const baseMintPubkey = (params.baseMint as any).publicKey instanceof web3.PublicKey
+      ? (params.baseMint as web3.Keypair).publicKey
+      : (params.baseMint as web3.PublicKey);
 
     const {
       instruction: initLaunchIx,
       launchState,
       escrowAuthority,
       creatorGrant,
-      baseEscrowAta,
     } = await this.initLaunchIx({
       creator: params.creator,
-      baseMint: params.baseMint.publicKey,
+      baseMint: baseMintPubkey,
       hardCapLamports: params.hardCapLamports,
       minRaiseLamports: params.minRaiseLamports,
       perWalletCap: params.perWalletCap,
       tauLamports: params.tauLamports,
-      saleAllocation: params.saleAllocation,
-      lpAllocation: params.lpAllocation,
+      baseTotalAllocation: params.baseTotalAllocation,
+      baseSaleBasisPoints: params.baseSaleBasisPoints,
       fundingDurationSeconds: params.fundingDurationSeconds,
       numPartitions: 0, // Default to 0, will be set to DEFAULT_N on-chain
       rosterShardCap: params.rosterShardCap,
@@ -180,17 +158,14 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
     });
 
-    const initLaunchTx = new web3.Transaction()
-      .add(createMintAccountIx)
-      .add(initializeMintIx)
-      .add(initLaunchIx);
+    const initLaunchTx = new web3.Transaction().add(initLaunchIx);
 
     return {
       initLaunchTx,
       launchState,
       escrowAuthority,
       creatorGrant,
-      signers: [params.baseMint],
+      signers: [],
     };
   }
 
@@ -703,10 +678,11 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.Keypair; // unused now; kept for API compatibility
+    baseMint: web3.Keypair | web3.PublicKey; // create and initialize if Keypair provided
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
+    preIxs?: web3.TransactionInstruction[];
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
@@ -715,9 +691,32 @@ export class TxBuilder {
     poolState: web3.PublicKey;
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    // Fetch launch to get the sale mint
-    const launchState = await this.program.account.launchState.fetch(params.launch);
-    const baseMint = launchState.baseMint as web3.PublicKey;
+    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
+    const isKeypair = (params.baseMint as any).publicKey instanceof web3.PublicKey;
+    const baseMint = (isKeypair
+      ? (params.baseMint as web3.Keypair).publicKey
+      : (params.baseMint as web3.PublicKey)
+    );
+    const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
+    if (isKeypair) {
+      const existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      if (!existing) {
+        const createMintAccountIx = web3.SystemProgram.createAccount({
+          fromPubkey: params.payer,
+          newAccountPubkey: baseMint,
+          space: 82,
+          lamports: await this.program.provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        });
+        const initializeMintIx = createInitializeMintInstruction(
+          baseMint,
+          6,
+          mintAuth,
+          null
+        );
+        maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
+      }
+    }
 
     const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
@@ -795,13 +794,16 @@ export class TxBuilder {
       units: 400_000,
     });
 
-    const transaction = new web3.Transaction()
+    const transaction = new web3.Transaction();
+    if (params.preIxs?.length) transaction.add(...params.preIxs);
+    if (maybeCreateMintIxs.length) transaction.add(...maybeCreateMintIxs);
+    transaction
       .add(computeBudgetIx)
       .add(createClmmPoolIx);
 
     return {
       transaction,
-      signers: [],
+      signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
       baseMint: baseMint,
       baseTokenAta,
       poolState,

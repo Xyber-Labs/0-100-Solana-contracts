@@ -25,8 +25,7 @@ pub struct CreateClmmPool<'info> {
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    // Use the sale mint as base mint for pool
-    #[account(mut, address = launch_state.base_mint)]
+    #[account(mut)]
     pub base_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
@@ -89,6 +88,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
     invoke_raydium_create_pool(&ctx)?;
+    ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
 }
@@ -110,19 +110,16 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let to_mint = ctx
-        .accounts
-        .launch_state
-        .sale_allocation
-        .checked_add(ctx.accounts.launch_state.lp_allocation)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let to_mint = ctx.accounts.launch_state.base_total_allocation;
 
     // signer is mint_auth PDA [SEED_ROOT, "mint_auth", launch]
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"mint_auth",
         &ctx.accounts.launch_state.key().to_bytes(),
-        &[ctx.accounts.launch_state.mint_auth_bump()],
+        &[LaunchState::mint_auth_bump_for(
+            &ctx.accounts.launch_state.key(),
+        )],
     ];
     let signer_seeds = &[seeds];
     let mint_accounts = MintTo {
@@ -141,10 +138,23 @@ fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    let total_acclocation = ctx.accounts.launch_state.base_total_allocation;
+    let base_sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+    let sale_allocation = ctx
+        .accounts
+        .launch_state
+        .base_total_allocation
+        .checked_mul(base_sale_bps)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let lp_allocation =
+        total_acclocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
+
     let calculator = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
+        sale_allocation,
+        lp_allocation,
     );
 
     let mut sqrt_price_x64 = calculator.get_sqrt_price();

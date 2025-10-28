@@ -120,10 +120,20 @@ pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
 }
 
 fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
+    let total_allocation = ctx.accounts.launch_state.base_total_allocation;
+    let sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+    let sale_allocation = total_allocation
+        .checked_mul(sale_bps)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let lp_allocation = total_allocation
+        .checked_sub(sale_allocation)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
+        sale_allocation,
+        lp_allocation,
     )
     .get_pool_params()?;
 

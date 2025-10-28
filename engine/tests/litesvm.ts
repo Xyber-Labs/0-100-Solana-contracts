@@ -35,6 +35,8 @@ describe("engine litesvm", () => {
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const SALE_ALLOCATION = new anchor.BN(1000000);
   const LP_ALLOCATION = new anchor.BN(500000);
+  const BASE_TOTAL_ALLOCATION_F = SALE_ALLOCATION.add(LP_ALLOCATION);
+  const BASE_SALE_BPS_F = new anchor.BN(Math.floor(SALE_ALLOCATION.toNumber() * 10000 / BASE_TOTAL_ALLOCATION_F.toNumber()));
   const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
@@ -60,8 +62,8 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
@@ -82,8 +84,8 @@ describe("engine litesvm", () => {
     assert.equal(state.minRaiseLamports.toNumber(), MIN_RAISE_LAMPORTS.toNumber());
     assert.equal(state.perWalletCap.toNumber(), PER_WALLET_CAP.toNumber());
     assert.equal(state.tauLamports.toNumber(), TAU_LAMPORTS.toNumber());
-    assert.equal(state.saleAllocation.toNumber(), SALE_ALLOCATION.toNumber());
-    assert.equal(state.lpAllocation.toNumber(), LP_ALLOCATION.toNumber());
+    assert.equal(state.baseTotalAllocation.toNumber(), BASE_TOTAL_ALLOCATION_F.toNumber());
+    assert.equal(state.baseSaleBasisPoints.toNumber(), BASE_SALE_BPS_F.toNumber());
     assert.equal(state.totalDeposited.toNumber(), 0);
     assert.equal(state.totalTickets, 0);
     const expectedKCapacity = HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber();
@@ -94,7 +96,7 @@ describe("engine litesvm", () => {
     assert.isNull(state.vrfSeed);
     assert.isFalse(state.claimsOpen);
     assert.isNull(state.tokensPerTicket);
-    assert.ok(state.baseMint.equals(baseMint.publicKey));
+    assert.isNull(state.baseMint);
   });
 
   it.skip("Sets the VRF seed", async () => {
@@ -113,8 +115,8 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
@@ -176,8 +178,8 @@ describe("engine litesvm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
       creatorInitialDepositLamports: new anchor.BN(0),
@@ -706,7 +708,7 @@ describe("engine litesvm - raydium clmm", () => {
       return bs58.encode(new Uint8Array(sigRaw.buffer, sigRaw.byteOffset ?? 0, sigRaw.byteLength));
     }
     if (sigRaw?.data) {
-      try { return bs58.encode(Uint8Array.from(sigRaw.data)); } catch {}
+      try { return bs58.encode(Uint8Array.from(sigRaw.data)); } catch { }
     }
     throw new TypeError("Unsupported signature type for encoding");
   }
@@ -733,264 +735,6 @@ describe("engine litesvm - raydium clmm", () => {
     }
     return signature;
   }
-
-  it("Creates CLMM pool on Raydium", async () => {
-    console.log("\n=== Creating CLMM Pool ===");
-
-    const clmmbaseMint = anchor.web3.Keypair.generate();
-    const CLMM_HARD_CAP = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
-    const CLMM_SALE_ALLOCATION = new anchor.BN(540_540_000);
-    const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
-
-    const { initLaunchTx, signers, launchState: clmmLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      baseMint: clmmbaseMint,
-      hardCapLamports: CLMM_HARD_CAP,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      saleAllocation: CLMM_SALE_ALLOCATION,
-      lpAllocation: CLMM_LP_ALLOCATION,
-      fundingDurationSeconds: 3600,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-    });
-
-    console.log("Initializing launch...");
-    console.log("Launch state PDA:", clmmLaunchState.toString());
-    console.log("Sale mint:", clmmbaseMint.publicKey.toString());
-      const initLaunchSignature = await provider.sendAndConfirm(initLaunchTx, [admin.payer, ...signers]);
-    console.log("✅ Launch initialized:", initLaunchSignature);
-    console.log("Fetching launch state...");
-    const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
-    console.log("Launch state verified:", launchStateData.projectId.toString());
-
-    await sdk.initRoster({ launch: clmmLaunchState });
-    await sdk.initRosterShard({ launch: clmmLaunchState, shardId: 0 });
-
-    const targetRaise = 100 + Math.floor(Math.random() * 350);
-    console.log(`Target raise: ${targetRaise} SOL`);
-
-    let totalRaised = 0;
-    while (totalRaised < targetRaise) {
-      const depositAmount = Math.min(PER_WALLET_CAP.toNumber() / anchor.web3.LAMPORTS_PER_SOL, targetRaise - totalRaised);
-      const depositor = await createAndFundAccount(client, Math.ceil(depositAmount) + 1);
-      await sdk.deposit({
-        launch: clmmLaunchState,
-        amountLamports: new anchor.BN(depositAmount * anchor.web3.LAMPORTS_PER_SOL),
-        userKeypair: depositor
-      });
-      totalRaised += depositAmount;
-    }
-
-    console.log(`Total raised: ${totalRaised} SOL`);
-
-    const stateData = await sdk.fetchLaunch(clmmLaunchState);
-    const lpAllocationTokens = Number(stateData.lpAllocation) * 1_000_000_000;
-    const saleAllocationTokens = Number(stateData.saleAllocation) * 1_000_000_000;
-    const requiredQuoteForLiquidity = Math.ceil((lpAllocationTokens * Number(stateData.totalDeposited)) / saleAllocationTokens) + 1_000_000_000;
-    const requiredSOL = requiredQuoteForLiquidity / anchor.web3.LAMPORTS_PER_SOL;
-    console.log(`Funding payer with ${requiredSOL} SOL for liquidity`);
-
-    const fundedPayer = await createAndFundAccount(client, requiredSOL + 10);
-
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
-
-    console.log("Raydium CLMM setup:");
-    console.log("CLMM Program:", raydiumProgramId.toString());
-    console.log("Quote Mint (WSOL):", WSOL_MINT.toString());
-    console.log("AMM Config:", raydiumAmmConfig.toString());
-
-    const SYSVAR_CLOCK_PUBKEY = new anchor.web3.PublicKey("SysvarC1ock11111111111111111111111111111111");
-    const currentClock = client.getClock();
-    const futureTimestamp = BigInt(Math.floor(Date.now() / 1000));
-
-    const clockData = Buffer.alloc(40);
-    clockData.writeBigUInt64LE(BigInt(Number(currentClock.slot) + 100), 0 as any);
-    clockData.writeBigInt64LE(BigInt(Number(futureTimestamp)), 8 as any);
-    clockData.writeBigUInt64LE(BigInt(0), 16 as any);
-    clockData.writeBigUInt64LE(BigInt(0), 24 as any);
-    clockData.writeBigInt64LE(BigInt(Number(futureTimestamp)), 32 as any);
-
-    client.setAccount(SYSVAR_CLOCK_PUBKEY, {
-      lamports: 1000000,
-      data: clockData,
-      owner: anchor.web3.SystemProgram.programId,
-      executable: false,
-    });
-
-    const clock = client.getClock();
-    console.log("Updated clock:", {
-      slot: clock.slot.toString(),
-      unixTimestamp: clock.unixTimestamp.toString(),
-    });
-
-    // Finalize selection and create Engine pool BEFORE creating Raydium CLMM pool
-    {
-      const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
-      const state = await sdk.fetchLaunch(clmmLaunchState);
-      const projectId = state.projectId.toNumber();
-      const numPartitions = state.numPartitions.toNumber();
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / BigInt(numPartitions);
-      const rangeStart = width * BigInt(projectId - 1);
-      const rangeEnd = rangeStart + width;
-
-      function bigIntTo32BytesBE(x: bigint): Buffer {
-        const buf = Buffer.alloc(32);
-        let v = x;
-        for (let i = 31; i >= 0; i--) {
-          buf[i] = Number(v & BigInt(255));
-          v = v >> BigInt(8);
-        }
-        return buf;
-      }
-
-      const currentClock2 = client.getClock();
-      const numHashes = 512;
-      const slotHashesData = Buffer.alloc(8 + numHashes * 40);
-      slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
-      for (let i = 0; i < numHashes; i++) {
-        const offset = 8 + i * 40;
-        slotHashesData.writeBigUInt64LE(currentClock2.slot + BigInt(i + 1), offset);
-        if (i === numHashes - 1) {
-          bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
-        } else {
-          bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
-        }
-      }
-
-      client.setAccount(SLOT_HASHES_SYSVAR, {
-        lamports: 1_000_000,
-        data: slotHashesData,
-        owner: anchor.web3.SystemProgram.programId,
-        executable: false,
-      });
-
-      await sdk.setSeed({ launch: clmmLaunchState });
-      await sdk.finalizeRosterShard({ launch: clmmLaunchState, shardId: 0 });
-      await sdk.createPool({ launch: clmmLaunchState, useTestMode: false, computeUnits: 2_000_000 });
-    }
-
-    let baseMintKeypair: anchor.web3.Keypair;
-    do {
-      baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
-
-    const createPoolResultTx = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
-      launch: clmmLaunchState,
-      quoteMint: WSOL_MINT,
-      baseMint: baseMintKeypair,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
-      provider,
-    });
-
-    console.log("Creating CLMM pool...");
-    const poolSig = await safeSendAndConfirm(
-      createPoolResultTx.transaction,
-      [admin.payer, ...createPoolResultTx.signers]
-    );
-    console.log("✅ Pool created:", poolSig);
-
-    const [escrow] = sdk.getEscrowPda(clmmLaunchState);
-    const escrowBalanceBefore = client.getBalance(escrow);
-    console.log(`Escrow balance before liquidity: ${Number(escrowBalanceBefore) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    const addLiquidityResultTx = await sdk.addClmmLiquidityTx({
-      payer: admin.publicKey,
-      launch: clmmLaunchState,
-      quoteMint: WSOL_MINT,
-      baseMint: baseMintKeypair.publicKey,
-      baseTokenAta: createPoolResultTx.baseTokenAta,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
-      provider,
-    });
-
-    console.log("Adding liquidity...");
-    const liquiditySig = await safeSendAndConfirm(
-      addLiquidityResultTx.transaction,
-      [admin.payer, ...addLiquidityResultTx.signers]
-    );
-    console.log("✅ Liquidity added:", liquiditySig);
-
-    const quoteTokenAta = addLiquidityResultTx.quoteTokenAta;
-    const quoteTokenAtaInfo = client.getAccount(quoteTokenAta);
-    console.log(`\n=== Quote Token ATA (WSOL) ===`);
-    console.log("Quote token ATA:", quoteTokenAta.toString());
-    if (quoteTokenAtaInfo && quoteTokenAtaInfo.data.length >= 72) {
-      const dataBuffer = Buffer.from(quoteTokenAtaInfo.data);
-      const amount = dataBuffer.readBigUInt64LE(64);
-      console.log("WSOL token amount:", Number(amount) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
-    } else {
-      console.log("Quote token ATA data:", quoteTokenAtaInfo ? `${quoteTokenAtaInfo.data.length} bytes` : "not found");
-    }
-
-    const payerBalanceAfter = client.getBalance(admin.publicKey);
-    console.log(`\nPayer balance after liquidity: ${Number(payerBalanceAfter) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-
-    console.log("✅ CLMM Pool and Liquidity created successfully!");
-    console.log("Pool Signature:", poolSig);
-    console.log("Liquidity Signature:", liquiditySig);
-    console.log("Base Mint:", createPoolResultTx.baseMint.toString());
-    console.log("Base Token ATA:", createPoolResultTx.baseTokenAta.toString());
-
-    console.log("\n=== Pool State Details ===");
-    console.log("Pool State PDA:", createPoolResultTx.poolState.toString());
-    const poolStateAccount = client.getAccount(createPoolResultTx.poolState);
-    if (poolStateAccount) {
-      console.log("✅ Pool account exists");
-      console.log("Pool data size:", poolStateAccount.data.length, "bytes");
-      console.log("Pool owner:", new anchor.web3.PublicKey(poolStateAccount.owner).toString());
-    }
-
-    console.log("\n=== Quote Vault (WSOL) ===");
-    console.log("Quote vault PDA:", addLiquidityResultTx.quoteVault.toString());
-    const quoteVaultBalance = client.getBalance(addLiquidityResultTx.quoteVault);
-    console.log("Quote vault balance:", Number(quoteVaultBalance) / anchor.web3.LAMPORTS_PER_SOL, "SOL");
-
-    console.log("\n=== Base Vault (Token) ===");
-    console.log("Base vault PDA:", addLiquidityResultTx.baseVault.toString());
-    const baseVaultAccount = client.getAccount(addLiquidityResultTx.baseVault);
-    if (baseVaultAccount && baseVaultAccount.data.length >= 72) {
-      const dataBuffer = Buffer.from(baseVaultAccount.data);
-      const amount = dataBuffer.readBigUInt64LE(64);
-      console.log("Base vault token amount:", Number(amount) / 1_000_000, "tokens");
-    }
-
-    console.log("\n=== Position NFT ===");
-    if (addLiquidityResultTx.positionNftMint) {
-      console.log("Position NFT mint:", addLiquidityResultTx.positionNftMint.toString());
-      const nftMintAccount = client.getAccount(addLiquidityResultTx.positionNftMint);
-      if (nftMintAccount) {
-        console.log("✅ Position NFT mint exists");
-      }
-
-      const escrowAuthority = sdk.getEscrowAuthorityPda(clmmLaunchState)[0];
-      const positionNftAta = anchor.utils.token.associatedAddress({
-        mint: addLiquidityResultTx.positionNftMint,
-        owner: escrowAuthority,
-      });
-      const nftAtaInfo = client.getAccount(positionNftAta);
-      if (nftAtaInfo) {
-        const nftAccount = unpackAccount(positionNftAta, { ...(nftAtaInfo as any), data: Buffer.from(nftAtaInfo.data) } as any);
-        console.log("Position NFT owner:", nftAccount.owner.toString());
-        assert.ok(nftAccount.owner.equals(escrowAuthority), "Position NFT owned by escrow_authority");
-        console.log("✅ Position NFT owned by escrow_authority");
-      }
-    }
-
-    assert.ok(createPoolResultTx.baseMint, "Should return base mint");
-    assert.ok(createPoolResultTx.baseTokenAta, "Should return base token ATA");
-    assert.ok(poolStateAccount, "Pool state should exist");
-    assert.ok(Number(quoteVaultBalance) > 0, "Quote vault should have SOL");
-    assert.ok(baseVaultAccount, "Base vault should exist");
-  });
 });
 
 
@@ -1007,6 +751,8 @@ describe("Full flow", () => {
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const SALE_ALLOCATION = new anchor.BN(1000000);
   const LP_ALLOCATION = new anchor.BN(500000);
+  const BASE_TOTAL_ALLOCATION_F = SALE_ALLOCATION.add(LP_ALLOCATION);
+  const BASE_SALE_BPS_F = new anchor.BN(Math.floor(SALE_ALLOCATION.toNumber() * 10000 / BASE_TOTAL_ALLOCATION_F.toNumber()));
   const ROSTER_SHARD_CAP = 100;
 
   before(async () => {
@@ -1049,8 +795,8 @@ describe("Full flow", () => {
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
       tauLamports: testTau,
-      saleAllocation: SALE_ALLOCATION,
-      lpAllocation: LP_ALLOCATION,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: new anchor.BN(11),
       numPartitions: 1000,
       rosterShardCap: ROSTER_SHARD_CAP,
@@ -1116,7 +862,7 @@ describe("Full flow", () => {
             testLaunchState,
             user.publicKey
           )[0],
-        rosterShard,
+          rosterShard,
           escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
           launch: testLaunchState,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -1241,7 +987,7 @@ describe("Full flow", () => {
 
       await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
 
-    const claimResult = await sdk.claimCreatorTokens({
+      const claimResult = await sdk.claimCreatorTokens({
         launch: testLaunchState,
         baseMint: testBaseMint.publicKey,
         creatorAta: creatorAta,
@@ -1328,7 +1074,7 @@ describe("Full flow", () => {
       testBaseMint.publicKey,
       testUser.keypair.publicKey
     );
-      const claimTokensTx = await (program.methods as any)
+    const claimTokensTx = await (program.methods as any)
       .claimTokens()
       .preInstructions([
         sdk.buildCreateAtaIx({

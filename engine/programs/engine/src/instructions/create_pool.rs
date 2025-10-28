@@ -139,7 +139,12 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
         launch_state.creator_reserved_tickets = creator_reserved_u128 as u32;
     }
 
-    launch_state.total_launch_allocation = launch_state.sale_allocation;
+    let total_allocation = launch_state.base_total_allocation;
+    let sale_bps = launch_state.base_sale_basis_points;
+    let sale_allocation = total_allocation
+        .checked_mul(sale_bps)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     // tokens_per_ticket
     let grand_total_tickets = (launch_state.public_total_tickets as u64)
@@ -148,7 +153,7 @@ pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
     let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
-    let tokens_per_ticket = (launch_state.sale_allocation as u128)
+    let tokens_per_ticket = (sale_allocation as u128)
         .checked_mul(1_000_000)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?
         .checked_div(divisor as u128)

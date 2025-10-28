@@ -1676,9 +1676,9 @@ export type Engine = {
         {
           "name": "baseMint",
           "docs": [
-            "Mint for sale tokens (program's mint authority will be PDA)"
-          ],
-          "writable": true
+            "Base mint pubkey is used only for seeding the launch_state PDA at init time.",
+            "The mint account itself will be created later in create_clmm_pool."
+          ]
         },
         {
           "name": "escrowAuthority",
@@ -3022,11 +3022,11 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "saleAllocation",
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {
@@ -3090,11 +3090,11 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "saleAllocation",
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {
@@ -3139,18 +3139,16 @@ export type Engine = {
           },
           {
             "name": "baseMint",
-            "type": "pubkey"
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
-            "name": "saleAllocation",
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "totalLaunchAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {

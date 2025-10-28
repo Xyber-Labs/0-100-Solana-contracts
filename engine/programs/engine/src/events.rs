@@ -9,8 +9,8 @@ pub struct LaunchInitialized {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub sale_allocation: u64,
-    pub lp_allocation: u64,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
     pub num_partitions: u64,
 }
 

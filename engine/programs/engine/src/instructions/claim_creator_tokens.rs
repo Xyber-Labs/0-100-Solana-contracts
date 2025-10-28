@@ -27,7 +27,7 @@ pub struct ClaimCreatorTokens<'info> {
     )]
     pub creator_grant: Account<'info, CreatorGrant>,
 
-    #[account(address = launch_state.base_mint)]
+    #[account(address = launch_state.base_mint.unwrap())]
     pub base_mint: Account<'info, Mint>,
 
     /// CHECK: PDA owning the escrow ATA for base_mint
@@ -53,7 +53,8 @@ pub struct ClaimCreatorTokens<'info> {
 
 pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(ctx.accounts.base_mint.key() == launch_state.base_mint, EngineErrorCode::Unauthorized);
+    require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
+    require!(ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(), EngineErrorCode::Unauthorized);
     require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
 
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;

@@ -20,11 +20,10 @@ pub struct LaunchState {
     pub tau_lamports: u64,
     pub num_partitions: u64, // N value for hash range calculation
 
-    // Sale/LP (MVP)
-    pub base_mint: Pubkey,
-    pub sale_allocation: u64,
-    pub total_launch_allocation: u64, // sale_allocation + creator allocation
-    pub lp_allocation: u64,
+    // Sale/LP
+    pub base_mint: Option<Pubkey>,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
 
     // Funding
     pub funding_period_end: i64, // Unix timestamp when funding period ends
@@ -58,22 +57,7 @@ pub struct LaunchState {
 }
 
 impl LaunchState {
-    pub fn mint_auth_seeds<'a>(&'a self, launch_key: &'a Pubkey) -> [&'a [u8]; 2] {
-        [b"mint_auth", launch_key.as_ref()]
-    }
-
-    pub fn mint_auth_bump(&self) -> u8 {
-        // Get the canonical bump for the mint authority PDA
-        // We need to derive the launch state key first
-        let launch_key = Pubkey::find_program_address(
-            &[
-                crate::constants::SEED_ROOT,
-                b"launch",
-                self.base_mint.as_ref(),
-            ],
-            &crate::ID,
-        )
-        .0;
+    pub fn mint_auth_bump_for(launch_key: &Pubkey) -> u8 {
         let (_, bump) = Pubkey::find_program_address(
             &[
                 crate::constants::SEED_ROOT,

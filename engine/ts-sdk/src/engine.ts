@@ -122,8 +122,8 @@ const EngineSDK = {
       minRaiseLamports: BN;
       perWalletCap: BN;
       tauLamports: BN;
-      saleAllocation: BN;
-      lpAllocation: BN;
+      baseTotalAllocation: BN;
+      baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
       numPartitions?: number;
       rosterShardCap: number;
@@ -148,8 +148,8 @@ const EngineSDK = {
           minRaiseLamports: args.minRaiseLamports,
           perWalletCap: args.perWalletCap,
           tauLamports: args.tauLamports,
-          saleAllocation: args.saleAllocation,
-          lpAllocation: args.lpAllocation,
+          baseTotalAllocation: args.baseTotalAllocation,
+          baseSaleBasisPoints: args.baseSaleBasisPoints,
           fundingDurationSeconds: args.fundingDurationSeconds,
           numPartitions: args.numPartitions ?? 0,
           rosterShardCap: args.rosterShardCap,
