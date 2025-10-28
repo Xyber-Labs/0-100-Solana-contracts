@@ -21,24 +21,19 @@ export class TxBuilder {
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
 
-  getPda(seeds: (string | Buffer | web3.PublicKey)[]): [web3.PublicKey, number] {
-    const seedBuffers = [
-      this.seedRoot,
-      ...seeds.map((seed) => {
-        if (typeof seed === "string") {
-          return Buffer.from(seed);
-        } else if (typeof seed === "object" && "toBuffer" in seed) {
-          return seed.toBuffer();
-        } else {
-          return seed as Buffer;
-        }
-      }),
-    ];
+  getPda(seeds: (string | Buffer | web3.PublicKey | { publicKey?: web3.PublicKey } | Uint8Array)[]): [web3.PublicKey, number] {
+    const toSeedBuffer = (seed: any): Buffer => {
+      if (typeof seed === "string") return Buffer.from(seed);
+      if (Buffer.isBuffer(seed)) return seed;
+      if (seed instanceof Uint8Array) return Buffer.from(seed);
+      if (seed && typeof seed.toBuffer === "function") return seed.toBuffer();
+      if (seed && seed.publicKey && typeof seed.publicKey.toBuffer === "function") return seed.publicKey.toBuffer();
+      throw new TypeError("Unsupported PDA seed type");
+    };
 
-    return web3.PublicKey.findProgramAddressSync(
-      seedBuffers,
-      this.program.programId
-    );
+    const seedBuffers = [this.seedRoot, ...seeds.map(toSeedBuffer)];
+
+    return web3.PublicKey.findProgramAddressSync(seedBuffers, this.program.programId);
   }
 
   getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
@@ -135,8 +130,9 @@ export class TxBuilder {
     creatorGrant: web3.PublicKey;
     signers: web3.Keypair[];
   }> {
-    const baseMintPubkey = (params.baseMint as any).publicKey instanceof web3.PublicKey
-      ? (params.baseMint as web3.Keypair).publicKey
+    const baseMintPubkey: web3.PublicKey = (params as any).baseMint?.publicKey &&
+      typeof (params as any).baseMint.publicKey?.toBuffer === "function"
+      ? (params.baseMint as any).publicKey
       : (params.baseMint as web3.PublicKey);
 
     const {
@@ -695,9 +691,9 @@ export class TxBuilder {
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
-    const isKeypair = (params.baseMint as any).publicKey instanceof web3.PublicKey;
+    const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
     const baseMint = (isKeypair
-      ? (params.baseMint as web3.Keypair).publicKey
+      ? (params.baseMint as any).publicKey
       : (params.baseMint as web3.PublicKey)
     );
     const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
@@ -714,7 +710,7 @@ export class TxBuilder {
         const initializeMintIx = createInitializeMintInstruction(
           baseMint,
           6,
-          mintAuth,
+          escrowAuthority,
           null
         );
         maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
@@ -775,6 +771,7 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         escrowAuthority: escrowAuthority,
+        mintAuth: mintAuth,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
         quoteMint: params.quoteMint,
