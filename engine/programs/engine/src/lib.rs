@@ -115,4 +115,12 @@ pub mod engine {
             tick_array_upper_start_index,
         )
     }
+
+    pub fn calculate_liquidity_range(
+        ctx: Context<CalculateLiquidityRange>,
+        base_amount: u64,
+        quote_amount: u64,
+    ) -> Result<LiquidityRangeResult> {
+        instructions::calculate_liquidity_range(ctx, base_amount, quote_amount)
+    }
 }

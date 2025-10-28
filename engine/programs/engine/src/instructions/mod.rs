@@ -1,4 +1,5 @@
 pub use add_clmm_liquidity::*;
+pub use calculate_liquidity_range::*;
 pub use claim_creator_refund::*;
 pub use claim_creator_tokens::*;
 pub use claim_refund::*;
@@ -16,6 +17,7 @@ pub use set_seed::*;
 pub use withdraw::*;
 
 mod add_clmm_liquidity;
+mod calculate_liquidity_range;
 mod claim_creator_refund;
 mod claim_creator_tokens;
 mod claim_refund;
