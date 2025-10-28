@@ -80,7 +80,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [sdk, setSdk] = useState<any>(null);
   const [program, setProgram] = useState<any>(null);
   const [launchState, setLaunchState] = useState<PublicKey | null>(null);
-  const [baseMint, setbaseMint] = useState<Keypair | null>(null);
+  const [baseMint, setBaseMint] = useState<Keypair | null>(null);
   const [escrow, setEscrow] = useState<PublicKey | null>(null);
   const [roster, setRoster] = useState<PublicKey | null>(null);
   const [selection, setSelection] = useState<PublicKey | null>(null);
@@ -467,7 +467,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       }
       
       setLaunchState(launchPda);
-      setbaseMint(baseMintKeypair);
+      setBaseMint(baseMintKeypair);
       setEscrow(escrowPda);
       
       if (!signature) {
@@ -678,7 +678,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   const resetState = () => {
     setLaunchState(null);
-    setbaseMint(null);
+    setBaseMint(null);
     setEscrow(null);
     setRoster(null);
     setSelection(null);
@@ -714,7 +714,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           // New format - full keypair with secret key
           restoredbaseMint = Keypair.fromSecretKey(new Uint8Array(project.baseMint.secretKey));
         }
-        setbaseMint(restoredbaseMint);
+        setBaseMint(restoredbaseMint);
       } catch (error) {
         addLog(`ERROR: Failed to restore sale mint - ${error}`);
         throw error;
@@ -867,7 +867,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       // Set the project data
       setLaunchState(project.launchPda);
-      setbaseMint({ publicKey: project.baseMint } as Keypair); // We can't restore the full keypair, but we can use the public key
+      setBaseMint({ publicKey: project.baseMint } as Keypair); // We can't restore the full keypair, but we can use the public key
       
       // Derive other PDAs
       addLog('Deriving PDAs...');
