@@ -60,10 +60,6 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub raydium_tick_array_bitmap: UncheckedAccount<'info>,
 
-    /// CHECK: PDA mint authority for base_mint
-    #[account(seeds = [SEED_ROOT, b"mint_auth", launch_state.key().as_ref()], bump)]
-    pub mint_auth: UncheckedAccount<'info>,
-
     pub raydium_program: Program<'info, AmmV3>,
     pub quote_token_program: Interface<'info, TokenInterface>,
     pub base_token_program: Program<'info, Token>,
@@ -112,10 +108,10 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
 fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let to_mint = ctx.accounts.launch_state.base_total_allocation;
 
-    // signer is mint_auth PDA [SEED_ROOT, "mint_auth", launch]
+    // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
-        b"mint_auth",
+        b"escrow_authority",
         &ctx.accounts.launch_state.key().to_bytes(),
         &[LaunchState::mint_auth_bump_for(
             &ctx.accounts.launch_state.key(),
@@ -125,7 +121,7 @@ fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let mint_accounts = MintTo {
         mint: ctx.accounts.base_mint.to_account_info(),
         to: ctx.accounts.base_escrow_ata.to_account_info(),
-        authority: ctx.accounts.mint_auth.to_account_info(),
+        authority: ctx.accounts.escrow_authority.to_account_info(),
     };
     let mint_ctx = CpiContext::new_with_signer(
         ctx.accounts.base_token_program.to_account_info(),

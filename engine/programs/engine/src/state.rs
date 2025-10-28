@@ -60,7 +60,7 @@ impl LaunchState {
         let (_, bump) = Pubkey::find_program_address(
             &[
                 crate::constants::SEED_ROOT,
-                b"mint_auth",
+                b"escrow_authority",
                 launch_key.as_ref(),
             ],
             &crate::ID,

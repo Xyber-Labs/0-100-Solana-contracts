@@ -1204,48 +1204,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "mintAuth",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "raydiumProgram",
           "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },

@@ -404,7 +404,7 @@ describe("engine litesvm", () => {
     const [directEscrow] = sdk.getEscrowPda(directLaunch);
     const [directRoster] = sdk.getRosterPda(directLaunch);
     const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 0);
-    const [directMintAuth] = sdk.getMintAuthPda(directLaunch);
+    const [directMintAuth] = sdk.getEscrowAuthorityPda(directLaunch);
     const [directProjectCounter] = sdk.getProjectCounterPda();
 
     assert.ok(sdkPdas.launch.equals(directLaunch));
@@ -412,7 +412,7 @@ describe("engine litesvm", () => {
     assert.ok(sdkPdas.roster.equals(directRoster));
     // selection PDA deprecated; verify roster shard PDA derivation works
     assert.ok(directRosterShard.equals(sdk.getRosterShardPda(directLaunch, 0)[0]));
-    assert.ok(sdkPdas.mintAuth.equals(directMintAuth));
+    assert.ok(sdkPdas.escrow.equals(directMintAuth));
     assert.ok(sdkPdas.projectCounter.equals(directProjectCounter));
 
     console.log(
@@ -592,7 +592,7 @@ describe("engine litesvm", () => {
 
     const testBaseMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
-    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
+    const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
     const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
 
     const dailyLimit = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
@@ -782,7 +782,7 @@ describe("Full flow", () => {
 
     const testBaseMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
-    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
+    const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
 
     const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
     const testMinRaise = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
