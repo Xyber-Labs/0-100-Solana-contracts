@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Raydium } from "@raydium-io/raydium-sdk-v2";
+import BN from "bn.js";
 const Decimal = require("decimal.js");
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -22,6 +23,9 @@ type Args = {
   tickSpacing: number;
   feeRateBps: number;
   initPrice: string;
+  liquidityBaseAmount: string;
+  swapDirection: string;
+  swapAmount: string;
 };
 
 function parseArgs(): Args {
@@ -53,6 +57,9 @@ function parseArgs(): Args {
     tickSpacing: toNumber(get("--tickSpacing"), 60),
     feeRateBps: toNumber(get("--feeRateBps"), 2500),
     initPrice: toString(get("--initPrice"), "1"),
+    liquidityBaseAmount: toString(get("--liquidityBaseAmount"), "0"),
+    swapDirection: toString(get("--swapDirection"), ""),
+    swapAmount: toString(get("--swapAmount"), "0"),
   };
 }
 
@@ -180,6 +187,76 @@ async function createClmmPoolWithSdk(provider: anchor.AnchorProvider, params: {
   return txId;
 }
 
+async function addLiquidityWithSdk(provider: anchor.AnchorProvider, params: {
+  poolId: anchor.web3.PublicKey;
+  tickSpacing: number;
+  baseDecimals: number;
+  baseAmount: BN;
+}) {
+  const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+  const ray: any = await Raydium.load({ connection: provider.connection, owner });
+  const poolIdStr = params.poolId.toBase58();
+  const { poolInfo, poolKeys } = await ray.clmm.getPoolInfoFromRpc(poolIdStr);
+
+  const width = params.tickSpacing * 10;
+  const tickLower = -width;
+  const tickUpper = width;
+
+  const tx = await ray.clmm.openPositionFromBase({
+    poolInfo,
+    poolKeys,
+    ownerInfo: { useSOLBalance: true },
+    tickLower,
+    tickUpper,
+    base: "MintA",
+    baseAmount: params.baseAmount,
+    otherAmountMax: new BN("1000000000000"),
+    withMetadata: "create",
+  });
+  const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
+  console.log(`addLiquidity tx ${txId}`);
+  return txId;
+}
+
+async function swapWithSdk(provider: anchor.AnchorProvider, params: {
+  poolId: anchor.web3.PublicKey;
+  inputMint: anchor.web3.PublicKey;
+  amountIn: BN;
+  slippageBps: number;
+}) {
+  const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+  const ray: any = await Raydium.load({ connection: provider.connection, owner });
+  const poolIdStr = params.poolId.toBase58();
+  const { poolInfo, poolKeys, computePoolInfo, tickData } = await ray.clmm.getPoolInfoFromRpc(poolIdStr);
+  const { PoolUtils } = await import("@raydium-io/raydium-sdk-v2/lib/raydium/clmm/utils/pool.js");
+  const epochInfo = await provider.connection.getEpochInfo();
+  const plan = PoolUtils.computeAmountOut({
+    poolInfo: computePoolInfo,
+    tickArrayCache: tickData[poolIdStr],
+    baseMint: params.inputMint,
+    amountIn: params.amountIn,
+    slippage: params.slippageBps / 10_000,
+    epochInfo,
+    priceLimit: new Decimal(0),
+    catchLiquidityInsufficient: false,
+  });
+
+  const tx = await ray.clmm.swap({
+    poolInfo,
+    poolKeys,
+    inputMint: params.inputMint,
+    amountIn: params.amountIn,
+    amountOutMin: plan.minAmountOut.amount,
+    priceLimit: new Decimal(0),
+    observationId: new anchor.web3.PublicKey(poolKeys.observationId),
+    ownerInfo: { useSOLBalance: true },
+    remainingAccounts: plan.remainingAccounts,
+  });
+  const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
+  console.log(`swap tx ${txId}`);
+  return txId;
+}
+
 async function swapClmm(provider: anchor.AnchorProvider, params: {
   ray: any;
   poolId: anchor.web3.PublicKey;
@@ -226,7 +303,7 @@ async function main() {
   console.log(`Raydium tick bitmap ${pdas.tickArrayBitmap.toBase58()}`);
 
   if (!args.ammConfig) {
-    console.log("--ammConfig обязателен для создания пула Raydium");
+    console.log("--ammConfig need for pool creation");
     return;
   }
 
@@ -244,6 +321,23 @@ async function main() {
       quoteDecimals: isWsol ? 9 : undefined,
     });
     console.log(`createPool signature ${sig}`);
+    if (args.liquidityBaseAmount !== "0") {
+      await addLiquidityWithSdk(provider, {
+        poolId: pdas.pool,
+        tickSpacing: args.tickSpacing,
+        baseDecimals: args.baseDecimals,
+        baseAmount: new BN(args.liquidityBaseAmount),
+      });
+    }
+    if (args.swapAmount !== "0" && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
+      const inputMint = args.swapDirection === "a2b" ? baseMint.publicKey : quoteMint;
+      await swapWithSdk(provider, {
+        poolId: pdas.pool,
+        inputMint,
+        amountIn: new BN(args.swapAmount),
+        slippageBps: 100,
+      });
+    }
   } catch (e) {
     console.error("Raydium SDK call failed. Ensure @raydium-io/raydium-sdk is installed and your local validator has CLMM + AmmConfig.");
     throw e;

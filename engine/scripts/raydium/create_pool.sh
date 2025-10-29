@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ANCHOR_PROVIDER_URL=${ANCHOR_PROVIDER_URL:-http://127.0.0.1:8899}
-ANCHOR_WALLET=${ANCHOR_WALLET:-$HOME/.config/solana/id.json}
+ANCHOR_PROVIDER_URL=http://127.0.0.1:8899
+ANCHOR_WALLET=$HOME/.config/solana/id.json
 
 AMM_CONFIG="CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu"
 QUOTE_MINT="So11111111111111111111111111111111111111112"
-# Use Raydium CLMM devnet program by default; override via env CLMM_PROGRAM if needed
-CLMM_PROGRAM="${CLMM_PROGRAM:-DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH}"
-AIRDROP="10"
+CLMM_PROGRAM="DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+AIRDROP="500"
 BASE_DECIMALS="6"
-MINT_AMOUNT="0"
+MINT_AMOUNT="451000000"
 TICK_SPACING="60"
 FEE_RATE_BPS="2500"
 INIT_PRICE="1"
+# Toggles: set to 1 to enable
+DO_LIQUIDITY="1"
+DO_SWAP="1"
+
+# Amounts (used only if toggles are enabled)
+LIQUIDITY_BASE_AMOUNT="450000000"
+SWAP_DIRECTION="a2b"
+SWAP_AMOUNT="1000000"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -31,6 +38,9 @@ yarn ts-node scripts/raydium/raydium.ts \
   --mintAmount "${MINT_AMOUNT}" \
   --tickSpacing "${TICK_SPACING}" \
   --feeRateBps "${FEE_RATE_BPS}" \
-  --initPrice "${INIT_PRICE}"
+  --initPrice "${INIT_PRICE}" \
+  --liquidityBaseAmount "$([ "$DO_LIQUIDITY" = "1" ] && echo "${LIQUIDITY_BASE_AMOUNT}" || echo "0")" \
+  --swapDirection "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_DIRECTION}" || echo "")" \
+  --swapAmount "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_AMOUNT}" || echo "0")"
 
 
