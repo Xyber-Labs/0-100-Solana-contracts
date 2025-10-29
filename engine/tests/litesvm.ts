@@ -434,10 +434,10 @@ describe("engine litesvm", () => {
         launch: existingLaunchPda,
       });
       await provider.simulate(transaction);
-      assert.fail("createPool should fail before deposits/claims/blockhash setup");
+      assert.fail("preparePoolCreation should fail before deposits/claims/blockhash setup");
     } catch (err) {
       const msg = (err as any)?.message ?? String(err);
-      console.log("Expected failure (early createPool):", msg);
+      console.log("Expected failure (early preparePoolCreation):", msg);
     }
 
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
@@ -470,7 +470,7 @@ describe("engine litesvm", () => {
           launch: existingLaunchPda,
         });
         await provider.simulate(transaction);
-        assert.fail("createPool should fail before claims opened/blockhash setup");
+        assert.fail("preparePoolCreation should fail before claims opened/blockhash setup");
       } catch (err) {
         const msg = (err as any)?.message ?? String(err);
         console.log("Expected failure (after deposits):", msg);
@@ -482,7 +482,7 @@ describe("engine litesvm", () => {
       // 4) Set VRF seed, finalize shard
       await sdk.setSeed({ launch: existingLaunchPda });
       await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 0 });
-      // claims are opened in createPool now
+      // claims are opened in preparePoolCreation now
 
       // Refresh state
       launchAccount = await sdk.fetchLaunch(existingLaunchPda);
@@ -503,7 +503,7 @@ describe("engine litesvm", () => {
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
 
-    // Write incorrect SlotHashes and simulate createPool (should fail)
+    // Write incorrect SlotHashes and simulate preparePoolCreation (should fail)
     const invalidNumHashes = 512;
     const slotHashesDataInvalid = Buffer.alloc(8 + invalidNumHashes * 40);
     slotHashesDataInvalid.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
@@ -526,7 +526,7 @@ describe("engine litesvm", () => {
         launch: existingLaunchPda,
       });
       await provider.simulate(transaction);
-      assert.fail("createPool should fail with incorrect slot hashes");
+      assert.fail("preparePoolCreation should fail with incorrect slot hashes");
     } catch (err) {
       const msg = (err as any)?.message ?? String(err);
       console.log("Expected failure (invalid SlotHashes):", msg);
@@ -553,7 +553,7 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    const { signature } = await sdk.createPool({
+    const { signature } = await sdk.preparePoolCreation({
       launch: existingLaunchPda,
       useTestMode: false,
       computeUnits: 2_000_000
@@ -910,7 +910,7 @@ describe("Full flow", () => {
       const rangeEnd = rangeStart + width;
       injectSlotHashesForRange(client, rangeStart, rangeEnd);
     }
-    await sdk.createPool({ launch: testLaunchState });
+    await sdk.preparePoolCreation({ launch: testLaunchState });
 
     // Create Raydium CLMM pool and add liquidity to open claims and initialize escrow ATA
     const { raydiumProgramId, ammConfig: raydiumAmmConfig } = await setupRaydiumCLMM(client);
@@ -939,7 +939,7 @@ describe("Full flow", () => {
     });
     await provider.sendAndConfirm(clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
 
-    // Verify tokens_per_ticket set after createPool later
+    // Verify tokens_per_ticket set after preparePoolCreation later
 
     console.log("=== Testing Creator Token Claiming ===");
     // Test creator token claiming (only if creator deposit > 0)

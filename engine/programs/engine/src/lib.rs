@@ -51,8 +51,8 @@ pub mod engine {
     // -------------------------------
 
     /// Create AMM pool
-    pub fn create_pool(ctx: Context<CreatePool>) -> Result<()> {
-        instructions::create_pool(ctx)
+    pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
+        instructions::prepare_pool_creation(ctx)
     }
 
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.

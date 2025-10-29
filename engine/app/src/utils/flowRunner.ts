@@ -430,7 +430,7 @@ export async function runFullFlow(
     // 8. Create Pool
     addLog(`\n[8/10] Creating Pool...`);
     try {
-      await sdk.createPool({ launch: testLaunchState, computeUnits: 2_000_000 });
+      await sdk.preparePoolCreation({ launch: testLaunchState, computeUnits: 2_000_000 });
       addLog("   -> Pool created successfully!");
       const poolState = await sdk.fetchPoolState(testLaunchState);
       addLog(`      - Pool ID: ${poolState.poolId.toString()}`);

@@ -213,7 +213,7 @@ const EngineSDK = {
 
     // processBatch deprecated in on-chain program; keep for compatibility but will fail
     async function processBatch(_: any): Promise<{ signature: string }> {
-      throw new Error("processBatch deprecated; use finalizeRosterShard + createPool");
+      throw new Error("processBatch deprecated; use finalizeRosterShard + preparePoolCreation");
     }
 
     async function deposit(args: {
@@ -421,7 +421,7 @@ const EngineSDK = {
      * 2) userAta (user's ATA for baseMint) must exist. If
      *    createAtaIfMissing = true, the SDK will add an ix for creation.
      */
-    async function createPool(args: {
+    async function preparePoolCreation(args: {
       launch: anchor.web3.PublicKey;
       payerKeypair?: anchor.web3.Keypair;
       useTestMode?: boolean;
@@ -569,7 +569,7 @@ const EngineSDK = {
       return { signature };
     }
 
-    // openClaims removed; createPool now finalizes and opens claims
+    // openClaims removed; preparePoolCreation now finalizes and opens claims
 
     async function claimCreatorTokens(args: {
       launch: anchor.web3.PublicKey;
@@ -787,7 +787,7 @@ const EngineSDK = {
       claimCreatorTokensTx,
       claimCreatorRefund,
       claimCreatorRefundTx,
-      createPool,
+      preparePoolCreation,
       createClmmPool,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),

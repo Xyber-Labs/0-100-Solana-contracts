@@ -83,7 +83,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
 
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
-    invoke_raydium_create_pool(&ctx)?;
+    invoke_raydium_prepare_pool_creation(&ctx)?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
@@ -133,7 +133,7 @@ fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
     Ok(())
 }
 
-fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
+fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let total_acclocation = ctx.accounts.launch_state.base_total_allocation;
     let base_sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
     let sale_allocation = ctx

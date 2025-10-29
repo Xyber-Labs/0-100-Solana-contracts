@@ -523,7 +523,7 @@ export class TxBuilder {
     return { instruction, rosterShard };
   }
 
-  // openClaimsIx removed; createPool now handles finalization + claims opening
+  // openClaimsIx removed; preparePoolCreation now handles finalization + claims opening
 
   async fetchUserContribution(launch: web3.PublicKey, user: web3.PublicKey) {
     const [pda] = this.getPda(["user", launch, user]);
@@ -646,7 +646,7 @@ export class TxBuilder {
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const ix = await this.program.methods
-      .createPool()
+      .preparePoolCreation()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
