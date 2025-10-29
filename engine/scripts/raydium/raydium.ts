@@ -27,6 +27,11 @@ type Args = {
   swapDirection: string;
   swapAmount: string;
   fullRange: string;
+  swapCount: number;
+  swapParallel: string;
+  swapConcurrency: number;
+  swapSlippageBps: number;
+  swapNoMinOut: string;
 };
 
 function parseArgs(): Args {
@@ -62,6 +67,11 @@ function parseArgs(): Args {
     swapDirection: toString(get("--swapDirection"), ""),
     swapAmount: toString(get("--swapAmount"), "0"),
     fullRange: toString(get("--fullRange"), "1"),
+    swapCount: toNumber(get("--swapCount"), 1),
+    swapParallel: toString(get("--swapParallel"), "0"),
+    swapConcurrency: toNumber(get("--swapConcurrency"), 8),
+    swapSlippageBps: toNumber(get("--swapSlippageBps"), 100),
+    swapNoMinOut: toString(get("--swapNoMinOut"), "0"),
   };
 }
 
@@ -248,9 +258,11 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
   inputMint: anchor.web3.PublicKey;
   amountIn: BN;
   slippageBps: number;
+  ray?: any;
+  noMinOut?: boolean;
 }) {
   const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
-  const ray: any = await Raydium.load({ connection: provider.connection, owner });
+  const ray: any = params.ray ?? (await Raydium.load({ connection: provider.connection, owner }));
   const poolIdStr = params.poolId.toBase58();
   const { poolInfo, poolKeys, computePoolInfo, tickData } = await ray.clmm.getPoolInfoFromRpc(poolIdStr);
   const { PoolUtils } = await import("@raydium-io/raydium-sdk-v2/lib/raydium/clmm/utils/pool.js");
@@ -263,7 +275,7 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
     slippage: params.slippageBps / 10_000,
     epochInfo,
     priceLimit: new Decimal(0),
-    catchLiquidityInsufficient: false,
+    catchLiquidityInsufficient: true,
   });
 
   const tx = await ray.clmm.swap({
@@ -271,7 +283,7 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
     poolKeys,
     inputMint: params.inputMint,
     amountIn: params.amountIn,
-    amountOutMin: plan.minAmountOut.amount,
+    amountOutMin: params.noMinOut ? new BN(0) : plan.minAmountOut.amount,
     priceLimit: new Decimal(0),
     observationId: new anchor.web3.PublicKey(poolKeys.observationId),
     ownerInfo: { useSOLBalance: true },
@@ -280,6 +292,20 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
   const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
   console.log(`swap tx ${txId}`);
   return txId;
+}
+
+async function runWithConcurrency<T>(factories: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
+  const results: T[] = [];
+  let next = 0;
+  async function worker() {
+    while (next < factories.length) {
+      const i = next++;
+      results[i] = await factories[i]();
+    }
+  }
+  const workers = Array.from({ length: Math.max(1, concurrency) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 async function swapClmm(provider: anchor.AnchorProvider, params: {
@@ -357,12 +383,44 @@ async function main() {
     }
     if (args.swapAmount !== "0" && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
       const inputMint = args.swapDirection === "a2b" ? baseMint.publicKey : quoteMint;
-      await swapWithSdk(provider, {
-        poolId: pdas.pool,
-        inputMint,
-        amountIn: new BN(args.swapAmount),
-        slippageBps: 100,
-      });
+      const count = Math.max(1, args.swapCount);
+      const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+      const sharedRay: any = await Raydium.load({ connection: provider.connection, owner });
+      const noMinOut = args.swapNoMinOut === "1";
+      if (args.swapParallel === "1") {
+        const factories = Array.from({ length: count }, (_, i) => async () => {
+          console.log(`swap ${i + 1}/${count}`);
+          let lastErr: any = null;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              return await swapWithSdk(provider, {
+                ray: sharedRay,
+                poolId: pdas.pool,
+                inputMint,
+                amountIn: new BN(args.swapAmount),
+                slippageBps: args.swapSlippageBps,
+                noMinOut,
+              });
+            } catch (e) {
+              lastErr = e;
+            }
+          }
+          throw lastErr;
+        });
+        await runWithConcurrency(factories, Math.max(1, args.swapConcurrency));
+      } else {
+        for (let i = 0; i < count; i++) {
+          console.log(`swap ${i + 1}/${count}`);
+          await swapWithSdk(provider, {
+            ray: sharedRay,
+            poolId: pdas.pool,
+            inputMint,
+            amountIn: new BN(args.swapAmount),
+            slippageBps: args.swapSlippageBps,
+            noMinOut,
+          });
+        }
+      }
     }
   } catch (e) {
     console.error("Raydium SDK call failed. Ensure @raydium-io/raydium-sdk is installed and your local validator has CLMM + AmmConfig.");
