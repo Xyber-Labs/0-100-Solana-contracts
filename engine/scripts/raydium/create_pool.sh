@@ -30,6 +30,7 @@ SWAP_PARALLEL="1"
 SWAP_CONCURRENCY="8"
 SWAP_SLIPPAGE_BPS="500"
 SWAP_NO_MIN_OUT="1"
+SWAP_SPLIT_HALF="1"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -57,6 +58,7 @@ yarn ts-node scripts/raydium/raydium.ts \
   --swapConcurrency "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_CONCURRENCY}" || echo "8")" \
   --swapSlippageBps "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_SLIPPAGE_BPS}" || echo "100")" \
   --swapNoMinOut "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_NO_MIN_OUT}" || echo "0")" \
+  --swapSplitHalf "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_SPLIT_HALF}" || echo "0")" \
   --doCollect "$([ "$DO_COLLECT" = "1" ] && echo "1" || echo "0")"
 
 

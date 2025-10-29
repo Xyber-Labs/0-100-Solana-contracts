@@ -33,6 +33,7 @@ type Args = {
   swapSlippageBps: number;
   swapNoMinOut: string;
   doCollect: string;
+  swapSplitHalf: string;
 };
 
 function parseArgs(): Args {
@@ -74,6 +75,7 @@ function parseArgs(): Args {
     swapSlippageBps: toNumber(get("--swapSlippageBps"), 100),
     swapNoMinOut: toString(get("--swapNoMinOut"), "0"),
     doCollect: toString(get("--doCollect"), "1"),
+    swapSplitHalf: toString(get("--swapSplitHalf"), "0"),
   };
 }
 
@@ -260,7 +262,7 @@ async function collectFeesWithSdk(provider: anchor.AnchorProvider, params: {
   poolId: anchor.web3.PublicKey;
   expectedTickLower?: number;
   expectedTickUpper?: number;
-}) {
+}): Promise<{ txId: string; collectedA: BN; collectedB: BN } | null> {
   const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
   const poolIdStr = params.poolId.toBase58();
   const { poolInfo, poolKeys, computePoolInfo, tickData } = await params.ray.clmm.getPoolInfoFromRpc(poolIdStr);
@@ -326,7 +328,7 @@ async function collectFeesWithSdk(provider: anchor.AnchorProvider, params: {
   const deltaBHuman = new Decimal(deltaB.toString()).div(new Decimal(10).pow(poolInfo.mintB.decimals)).toString();
   console.log(`collected A raw ${deltaA.toString()} human ${deltaAHuman}`);
   console.log(`collected B raw ${deltaB.toString()} human ${deltaBHuman}`);
-  return txId;
+  return { txId, collectedA: deltaA, collectedB: deltaB };
 }
 
 async function swapWithSdk(provider: anchor.AnchorProvider, params: {
@@ -336,7 +338,7 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
   slippageBps: number;
   ray?: any;
   noMinOut?: boolean;
-}) {
+}): Promise<{ txId: string; amountIn: BN; amountOutPlanned: BN; inputIsA: boolean }> {
   const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
   const ray: any = params.ray ?? (await Raydium.load({ connection: provider.connection, owner }));
   const poolIdStr = params.poolId.toBase58();
@@ -367,7 +369,8 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
   });
   const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
   console.log(`swap tx ${txId}`);
-  return txId;
+  const inputIsA = poolInfo.mintA.address === params.inputMint.toString();
+  return { txId, amountIn: params.amountIn, amountOutPlanned: plan.amountOut.amount, inputIsA };
 }
 
 async function printBaseMintSupply(provider: anchor.AnchorProvider, params: {
@@ -470,11 +473,18 @@ async function main() {
       });
     }
     if (args.swapAmount !== "0" && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
-      const inputMint = args.swapDirection === "a2b" ? baseMint.publicKey : quoteMint;
+      const inputMintPrimary = args.swapDirection === "a2b" ? baseMint.publicKey : quoteMint;
+      const inputMintSecondary = args.swapDirection === "a2b" ? quoteMint : baseMint.publicKey;
       const count = Math.max(1, args.swapCount);
       const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
       const sharedRay: any = await Raydium.load({ connection: provider.connection, owner });
       const noMinOut = args.swapNoMinOut === "1";
+      const useSplit = args.swapSplitHalf === "1" && count > 1;
+      const half = Math.floor(count / 2);
+      let totalInA = new BN(0);
+      let totalInB = new BN(0);
+      let totalOutA = new BN(0);
+      let totalOutB = new BN(0);
       if (args.swapParallel === "1") {
         const factories = Array.from({ length: count }, (_, i) => async () => {
           console.log(`swap ${i + 1}/${count}`);
@@ -484,7 +494,7 @@ async function main() {
               return await swapWithSdk(provider, {
                 ray: sharedRay,
                 poolId: pdas.pool,
-                inputMint,
+                inputMint: useSplit && i >= half ? inputMintSecondary : inputMintPrimary,
                 amountIn: new BN(args.swapAmount),
                 slippageBps: args.swapSlippageBps,
                 noMinOut,
@@ -495,33 +505,79 @@ async function main() {
           }
           throw lastErr;
         });
-        await runWithConcurrency(factories, Math.max(1, args.swapConcurrency));
+        const res = await runWithConcurrency(factories, Math.max(1, args.swapConcurrency));
+        for (const r of res) {
+          if (!r) continue;
+          if (r.inputIsA) {
+            totalInA = totalInA.add(r.amountIn);
+            totalOutB = totalOutB.add(r.amountOutPlanned);
+          } else {
+            totalInB = totalInB.add(r.amountIn);
+            totalOutA = totalOutA.add(r.amountOutPlanned);
+          }
+        }
       } else {
         for (let i = 0; i < count; i++) {
           console.log(`swap ${i + 1}/${count}`);
-          await swapWithSdk(provider, {
+          const r = await swapWithSdk(provider, {
             ray: sharedRay,
             poolId: pdas.pool,
-            inputMint,
+            inputMint: useSplit && i >= half ? inputMintSecondary : inputMintPrimary,
             amountIn: new BN(args.swapAmount),
             slippageBps: args.swapSlippageBps,
             noMinOut,
           });
+          if (r.inputIsA) {
+            totalInA = totalInA.add(r.amountIn);
+            totalOutB = totalOutB.add(r.amountOutPlanned);
+          } else {
+            totalInB = totalInB.add(r.amountIn);
+            totalOutA = totalOutA.add(r.amountOutPlanned);
+          }
         }
       }
+      // expose totals to summary via closure scope variables
+      (global as any).__swapTotals__ = { totalInA, totalInB, totalOutA, totalOutB };
     }
 
+    let collected: { a: BN; b: BN } | null = null;
     if (args.doCollect === "1") {
       const ray = await Raydium.load({ connection: provider.connection, owner: (provider as any).wallet?.payer || (provider as any).wallet });
-      await collectFeesWithSdk(provider, {
+      const res = await collectFeesWithSdk(provider, {
         ray,
         poolId: pdas.pool,
         expectedTickLower: added?.tickLower,
         expectedTickUpper: added?.tickUpper,
       });
+      if (res) collected = { a: res.collectedA, b: res.collectedB };
     }
 
     await printBaseMintSupply(provider, { mint: baseMint.publicKey, decimals: args.baseDecimals });
+
+    const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+    const ray: any = await Raydium.load({ connection: provider.connection, owner });
+    const { poolInfo } = await ray.clmm.getPoolInfoFromRpc(pdas.pool.toBase58());
+    const aDec = poolInfo.mintA.decimals;
+    const bDec = poolInfo.mintB.decimals;
+    const aAddr = poolInfo.mintA.address;
+    const bAddr = poolInfo.mintB.address;
+    const aHuman = collected ? new Decimal(collected.a.toString()).div(new Decimal(10).pow(aDec)).toString() : "0";
+    const bHuman = collected ? new Decimal(collected.b.toString()).div(new Decimal(10).pow(bDec)).toString() : "0";
+    const splitInfo = args.swapSplitHalf === "1" ? `, splitHalf: ${Math.floor(Math.max(1, args.swapCount)/2)}/${Math.ceil(Math.max(1, args.swapCount)/2)}` : "";
+    console.log("=== SUMMARY ===");
+    console.log(`pool ${pdas.pool.toBase58()} tickLower ${added?.tickLower ?? "-"} tickUpper ${added?.tickUpper ?? "-"} fullRange ${args.fullRange === "1"}`);
+    console.log(`swaps count ${Math.max(1, args.swapCount)} dir ${args.swapDirection}${splitInfo} parallel ${args.swapParallel}`);
+    const totals = (global as any).__swapTotals__ as { totalInA: BN; totalInB: BN; totalOutA: BN; totalOutB: BN } | undefined;
+    if (totals) {
+      const inAH = new Decimal(totals.totalInA.toString()).div(new Decimal(10).pow(aDec)).toString();
+      const inBH = new Decimal(totals.totalInB.toString()).div(new Decimal(10).pow(bDec)).toString();
+      const outAH = new Decimal(totals.totalOutA.toString()).div(new Decimal(10).pow(aDec)).toString();
+      const outBH = new Decimal(totals.totalOutB.toString()).div(new Decimal(10).pow(bDec)).toString();
+      console.log(`volume in A raw ${totals.totalInA.toString()} (${inAH}), in B raw ${totals.totalInB.toString()} (${inBH})`);
+      console.log(`volume out A raw ${totals.totalOutA.toString()} (${outAH}), out B raw ${totals.totalOutB.toString()} (${outBH})`);
+    }
+    console.log(`mintA ${aAddr} collected ${collected ? collected.a.toString() : "0"} (${aHuman})`);
+    console.log(`mintB ${bAddr} collected ${collected ? collected.b.toString() : "0"} (${bHuman})`);
   } catch (e) {
     console.error("Raydium SDK call failed. Ensure @raydium-io/raydium-sdk is installed and your local validator has CLMM + AmmConfig.");
     throw e;
