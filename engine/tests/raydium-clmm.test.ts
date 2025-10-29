@@ -197,7 +197,7 @@ describe("engine litesvm - raydium clmm", () => {
 
     const launchData = await program.account.launchState.fetch(clmmLaunchState);
 
-    const LP_POOL_ALLOCATION = 440_000_000;
+    const LP_POOL_ALLOCATION = 440_000_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION);
 
     const quoteAmountLamports = launchData.totalDeposited instanceof anchor.BN
@@ -247,18 +247,21 @@ describe("engine litesvm - raydium clmm", () => {
     console.log("\n=== Transaction Result ===");
     console.log("Error:", txResult.err ? txResult.err() : "none");
 
-    // const logs = txResult.logs();
-    // console.log("\n=== Transaction Logs ===");
-    // logs.forEach((log: string) => console.log(log));
-
     if (txResult.err) {
       console.log("\nTransaction failed!");
+      const errorLogs = txResult.logs ? txResult.logs() : [];
+      console.log("\n=== Error Logs ===");
+      errorLogs.forEach((log: string) => console.log(log));
       throw new Error(`Transaction failed: ${txResult.err()}`);
     }
 
+    const logs = txResult.logs();
+    console.log("\n=== Transaction Logs ===");
+    logs.forEach((log: string) => console.log(log));
+
     console.log("\n✅ Liquidity transaction sent");
 
-    
+
   });
 
   it.skip("Executes trader swaps to accumulate fees", async () => {

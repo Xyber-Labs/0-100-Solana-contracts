@@ -1106,7 +1106,7 @@ export class TxBuilder {
       await this.addClmmLiquidityIx(params);
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
+      units: 1_000_000,
     });
 
     const transaction = new web3.Transaction()
