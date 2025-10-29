@@ -32,6 +32,7 @@ type Args = {
   swapConcurrency: number;
   swapSlippageBps: number;
   swapNoMinOut: string;
+  doCollect: string;
 };
 
 function parseArgs(): Args {
@@ -72,6 +73,7 @@ function parseArgs(): Args {
     swapConcurrency: toNumber(get("--swapConcurrency"), 8),
     swapSlippageBps: toNumber(get("--swapSlippageBps"), 100),
     swapNoMinOut: toString(get("--swapNoMinOut"), "0"),
+    doCollect: toString(get("--doCollect"), "1"),
   };
 }
 
@@ -250,6 +252,80 @@ async function addLiquidityWithSdk(provider: anchor.AnchorProvider, params: {
   });
   const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
   console.log(`addLiquidity tx ${txId}`);
+  return { txId, tickLower, tickUpper };
+}
+
+async function collectFeesWithSdk(provider: anchor.AnchorProvider, params: {
+  ray: any;
+  poolId: anchor.web3.PublicKey;
+  expectedTickLower?: number;
+  expectedTickUpper?: number;
+}) {
+  const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+  const poolIdStr = params.poolId.toBase58();
+  const { poolInfo, poolKeys, computePoolInfo, tickData } = await params.ray.clmm.getPoolInfoFromRpc(poolIdStr);
+  const positions = await params.ray.clmm.getOwnerPositionInfo({ programId: poolKeys.programId });
+  let target = positions.find((p: any) => (p.poolId?.toBase58?.() || p.poolId?.toString?.()) === params.poolId.toBase58());
+  if (params.expectedTickLower !== undefined && params.expectedTickUpper !== undefined) {
+    const specific = positions.find((p: any) => (p.poolId?.toBase58?.() || p.poolId?.toString?.()) === params.poolId.toBase58() && Number(p.tickLower) === params.expectedTickLower && Number(p.tickUpper) === params.expectedTickUpper);
+    if (specific) target = specific;
+  }
+  if (!target) {
+    console.log("No owner position found for pool; skipping collect");
+    return null;
+  }
+  const mintA = new anchor.web3.PublicKey(poolInfo.mintA.address);
+  const mintB = new anchor.web3.PublicKey(poolInfo.mintB.address);
+  const ataA = getAssociatedTokenAddressSync(mintA, owner.publicKey, true);
+  const ataB = getAssociatedTokenAddressSync(mintB, owner.publicKey, true);
+  const getBal = async (acc: anchor.web3.PublicKey) => {
+    try {
+      const r = await provider.connection.getTokenAccountBalance(acc);
+      return new BN(r.value.amount);
+    } catch {
+      return new BN(0);
+    }
+  };
+  const beforeA = await getBal(ataA);
+  const beforeB = await getBal(ataB);
+  try {
+    const { PositionUtils } = await import("@raydium-io/raydium-sdk-v2/lib/raydium/clmm/utils/position.js");
+    const { TickUtils } = await import("@raydium-io/raydium-sdk-v2/lib/raydium/clmm/utils/tick.js");
+    const lowerStart = TickUtils.getTickArrayStartIndexByTick(Number(target.tickLower), poolInfo.config.tickSpacing);
+    const upperStart = TickUtils.getTickArrayStartIndexByTick(Number(target.tickUpper), poolInfo.config.tickSpacing);
+    const lowerArr = tickData[poolIdStr][String(lowerStart)];
+    const upperArr = tickData[poolIdStr][String(upperStart)];
+    const lowerTick = lowerArr?.ticks?.find((t: any) => Number(t.tick) === Number(target.tickLower));
+    const upperTick = upperArr?.ticks?.find((t: any) => Number(t.tick) === Number(target.tickUpper));
+    if (lowerTick && upperTick) {
+      const owed = PositionUtils.GetPositionFeesV2(computePoolInfo[poolIdStr], target, lowerTick, upperTick);
+      const aRaw = owed.tokenFeeAmountA.toString();
+      const bRaw = owed.tokenFeeAmountB.toString();
+      const aHuman = new Decimal(aRaw).div(new Decimal(10).pow(poolInfo.mintA.decimals)).toString();
+      const bHuman = new Decimal(bRaw).div(new Decimal(10).pow(poolInfo.mintB.decimals)).toString();
+      console.log(`claimable fees A raw ${aRaw} human ${aHuman}`);
+      console.log(`claimable fees B raw ${bRaw} human ${bHuman}`);
+    }
+  } catch {}
+  const ix = await params.ray.clmm.decreaseLiquidity({
+    poolInfo,
+    poolKeys,
+    ownerPosition: target,
+    ownerInfo: { useSOLBalance: false },
+    amountMinA: new BN(0),
+    amountMinB: new BN(0),
+    liquidity: new BN(0),
+  });
+  const { txId } = await ix.execute({ sendAndConfirm: true, skipPreflight: true });
+  console.log(`collectFees tx ${txId}`);
+  const afterA = await getBal(ataA);
+  const afterB = await getBal(ataB);
+  const deltaA = afterA.sub(beforeA);
+  const deltaB = afterB.sub(beforeB);
+  const deltaAHuman = new Decimal(deltaA.toString()).div(new Decimal(10).pow(poolInfo.mintA.decimals)).toString();
+  const deltaBHuman = new Decimal(deltaB.toString()).div(new Decimal(10).pow(poolInfo.mintB.decimals)).toString();
+  console.log(`collected A raw ${deltaA.toString()} human ${deltaAHuman}`);
+  console.log(`collected B raw ${deltaB.toString()} human ${deltaBHuman}`);
   return txId;
 }
 
@@ -292,6 +368,17 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
   const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
   console.log(`swap tx ${txId}`);
   return txId;
+}
+
+async function printBaseMintSupply(provider: anchor.AnchorProvider, params: {
+  mint: anchor.web3.PublicKey;
+  decimals: number;
+}) {
+  const supply = await provider.connection.getTokenSupply(params.mint);
+  const raw = supply.value.amount;
+  const human = new Decimal(raw).div(new Decimal(10).pow(params.decimals)).toString();
+  console.log(`base mint ${params.mint.toBase58()} supply raw ${raw}`);
+  console.log(`base mint ${params.mint.toBase58()} supply ${human}`);
 }
 
 async function runWithConcurrency<T>(factories: Array<() => Promise<T>>, concurrency: number): Promise<T[]> {
@@ -372,8 +459,9 @@ async function main() {
       quoteDecimals: isWsol ? 9 : undefined,
     });
     console.log(`createPool signature ${sig}`);
+    let added: { txId: string; tickLower: number; tickUpper: number } | null = null;
     if (args.liquidityBaseAmount !== "0") {
-      await addLiquidityWithSdk(provider, {
+      added = await addLiquidityWithSdk(provider, {
         poolId: pdas.pool,
         tickSpacing: args.tickSpacing,
         baseDecimals: args.baseDecimals,
@@ -422,6 +510,18 @@ async function main() {
         }
       }
     }
+
+    if (args.doCollect === "1") {
+      const ray = await Raydium.load({ connection: provider.connection, owner: (provider as any).wallet?.payer || (provider as any).wallet });
+      await collectFeesWithSdk(provider, {
+        ray,
+        poolId: pdas.pool,
+        expectedTickLower: added?.tickLower,
+        expectedTickUpper: added?.tickUpper,
+      });
+    }
+
+    await printBaseMintSupply(provider, { mint: baseMint.publicKey, decimals: args.baseDecimals });
   } catch (e) {
     console.error("Raydium SDK call failed. Ensure @raydium-io/raydium-sdk is installed and your local validator has CLMM + AmmConfig.");
     throw e;

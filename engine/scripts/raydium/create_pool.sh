@@ -16,6 +16,7 @@ INIT_PRICE="1"
 # Toggles: set to 1 to enable
 DO_LIQUIDITY="1"
 DO_SWAP="1"
+DO_COLLECT="1"
 
 # Range config
 FULL_RANGE="1"
@@ -55,6 +56,7 @@ yarn ts-node scripts/raydium/raydium.ts \
   --swapParallel "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_PARALLEL}" || echo "0")" \
   --swapConcurrency "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_CONCURRENCY}" || echo "8")" \
   --swapSlippageBps "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_SLIPPAGE_BPS}" || echo "100")" \
-  --swapNoMinOut "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_NO_MIN_OUT}" || echo "0")"
+  --swapNoMinOut "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_NO_MIN_OUT}" || echo "0")" \
+  --doCollect "$([ "$DO_COLLECT" = "1" ] && echo "1" || echo "0")"
 
 
