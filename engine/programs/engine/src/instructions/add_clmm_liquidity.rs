@@ -4,7 +4,7 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::program::AmmV3;
+use raydium_amm_v3::{libraries::tick_math, program::AmmV3};
 
 use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT};
 
@@ -132,7 +132,7 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     )
     .get_pool_params()?;
 
-    let liquidity = params.quote_volume / 10;
+    let liquidity = 0u128;
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -211,11 +211,11 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         params.tick_upper_index,
         params.tick_array_lower_start_index,
         params.tick_array_upper_start_index,
-        u128::from(liquidity),
+        liquidity,
         order.amount_0,
         order.amount_1,
         false,
-        None,
+        Some(true),
     )?;
 
     Ok(())
@@ -246,15 +246,19 @@ impl StakingCalculator {
     }
 
     fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
-        let tick_lower_index = 0i32;
-        let tick_upper_index = 443580i32;
-
         let tick_spacing = 60i32;
+        let min_tick = tick_math::MIN_TICK;
+        let max_tick = tick_math::MAX_TICK;
+        let tick_lower_index = (min_tick.div_euclid(tick_spacing) + 1) * tick_spacing;
+        let tick_upper_index = (max_tick.div_euclid(tick_spacing)) * tick_spacing;
+
         let tick_array_size = 60i32;
         let ticks_in_array = tick_spacing * tick_array_size;
 
-        let tick_array_lower_start_index = (tick_lower_index / ticks_in_array) * ticks_in_array;
-        let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
+        let tick_array_lower_start_index =
+            (tick_lower_index.div_euclid(ticks_in_array)) * ticks_in_array;
+        let tick_array_upper_start_index =
+            (tick_upper_index.div_euclid(ticks_in_array)) * ticks_in_array;
 
         let base_volume = self.lp_allocation;
         let quote_volume = u128::from(self.lp_allocation)

@@ -717,12 +717,15 @@ export class TxBuilder {
       }
     }
 
+    const quoteVsBaseOrder = params.quoteMint.toBuffer().compare(baseMint.toBuffer());
+    const tokenMint0ForPool = quoteVsBaseOrder < 0 ? params.quoteMint : baseMint;
+    const tokenMint1ForPool = quoteVsBaseOrder < 0 ? baseMint : params.quoteMint;
     const [poolState] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        baseMint.toBuffer(),
+        tokenMint0ForPool.toBuffer(),
+        tokenMint1ForPool.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -832,12 +835,15 @@ export class TxBuilder {
     const launchState = await this.program.account.launchState.fetch(params.launch);
     const baseMint = launchState.baseMint as web3.PublicKey;
 
+    const quoteVsBaseOrder = params.quoteMint.toBuffer().compare(baseMint.toBuffer());
+    const tokenMint0ForPool = quoteVsBaseOrder < 0 ? params.quoteMint : baseMint;
+    const tokenMint1ForPool = quoteVsBaseOrder < 0 ? baseMint : params.quoteMint;
     const [raydiumPoolPda] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        baseMint.toBuffer(),
+        tokenMint0ForPool.toBuffer(),
+        tokenMint1ForPool.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -891,8 +897,10 @@ export class TxBuilder {
     );
 
     const tickSpacing = 60;
-    const tickLowerIndex = 0;
-    const tickUpperIndex = 443580;
+    const MIN_TICK = -443_636;
+    const MAX_TICK = 443_636;
+    const tickLowerIndex = Math.ceil(MIN_TICK / tickSpacing) * tickSpacing;
+    const tickUpperIndex = Math.floor(MAX_TICK / tickSpacing) * tickSpacing;
 
     const tickLowerBuffer = Buffer.alloc(4);
     tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
@@ -911,8 +919,9 @@ export class TxBuilder {
     );
 
     const TICK_ARRAY_SIZE = 60;
-    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
-    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+    const ticksInArray = tickSpacing * TICK_ARRAY_SIZE;
+    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / ticksInArray) * ticksInArray;
+    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / ticksInArray) * ticksInArray;
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
     tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
