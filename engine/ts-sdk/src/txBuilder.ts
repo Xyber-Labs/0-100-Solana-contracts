@@ -383,7 +383,9 @@ export class TxBuilder {
       params.rosterShard ??
       (params.shardId !== undefined
         ? this.getRosterShardPda(params.launch, params.shardId)[0]
-        : (() => { throw new Error("Provide shardId or rosterShard for claimRefund"); })());
+        : (() => {
+          throw new Error("Provide shardId or rosterShard for claimRefund");
+        })());
     const escrow = params.escrow ?? this.getPda(["escrow", params.launch])[0];
 
     const instruction = await this.program.methods
@@ -430,7 +432,9 @@ export class TxBuilder {
       params.rosterShard ??
       (params.shardId !== undefined
         ? this.getRosterShardPda(params.launch, params.shardId)[0]
-        : (() => { throw new Error("Provide shardId or rosterShard for claimTokens"); })());
+        : (() => {
+          throw new Error("Provide shardId or rosterShard for claimTokens");
+        })());
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
     const userAta =
       params.userAta ??
@@ -651,7 +655,6 @@ export class TxBuilder {
   }
 
 
-
   async createPoolTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
@@ -800,7 +803,114 @@ export class TxBuilder {
     };
   }
 
-  async addClmmLiquidityTx(params: {
+  async calculateLiquidityRange(params: {
+    launch: web3.PublicKey;
+    baseAmount: BN;
+    quoteAmount: BN;
+  }): Promise<{
+    tickLower: number;
+    tickUpper: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
+    tickCurrent: number;
+  }> {
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 2_000_000,
+    });
+
+    const tx = await this.program.methods
+      .calculateLiquidityRange(
+        params.baseAmount,
+        params.quoteAmount
+      )
+      .accountsStrict({
+        launchState: params.launch
+      })
+      .preInstructions([computeBudgetIx])
+      .transaction();
+
+    const provider = this.program.provider as any;
+
+    if (provider.client && provider.client.latestBlockhash) {
+      const wallet = provider.wallet as any;
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = provider.client.latestBlockhash();
+
+      if (wallet.payer) {
+        tx.sign(wallet.payer);
+      } else {
+        tx.sign(wallet);
+      }
+
+      let simulation;
+      try {
+        simulation = await provider.simulate(tx);
+      } catch (error: any) {
+        console.error("Simulation error:", error);
+        throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
+      }
+
+      if (!simulation || !simulation.returnData) {
+        throw new Error("No return data from calculateLiquidityRange simulation");
+      }
+
+      let returnDataStr: string;
+      if (typeof simulation.returnData === 'string') {
+        returnDataStr = simulation.returnData;
+      } else if (Array.isArray(simulation.returnData.data)) {
+        returnDataStr = simulation.returnData.data[0];
+      } else {
+        returnDataStr = simulation.returnData.data || simulation.returnData;
+      }
+
+      const buffer = Buffer.from(returnDataStr, "base64");
+
+      const tickLower = buffer.readInt32LE(0);
+      const tickUpper = buffer.readInt32LE(4);
+      const tickArrayLowerStartIndex = buffer.readInt32LE(8);
+      const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+      const tickCurrent = buffer.readInt32LE(16);
+
+      return {
+        tickLower,
+        tickUpper,
+        tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex,
+        tickCurrent,
+      };
+    }
+
+    tx.feePayer = this.program.provider.publicKey;
+    const { blockhash } = await this.program.provider.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const simulation = await this.program.provider.connection.simulateTransaction(tx);
+
+    if (simulation.value.err) {
+      throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+    }
+
+    const returnData = simulation.value.returnData;
+    if (!returnData || !returnData.data) {
+      throw new Error("No return data from calculateLiquidityRange");
+    }
+
+    const [data, encoding] = returnData.data;
+    const decoded = this.program.coder.types.decode(
+      "LiquidityRangeResult",
+      Buffer.from(data, encoding as BufferEncoding)
+    );
+
+    return {
+      tickLower: decoded.tickLower,
+      tickUpper: decoded.tickUpper,
+      tickArrayLowerStartIndex: decoded.tickArrayLowerStartIndex,
+      tickArrayUpperStartIndex: decoded.tickArrayUpperStartIndex,
+      tickCurrent: decoded.tickCurrent,
+    };
+  }
+
+  async addClmmLiquidityIx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
@@ -808,16 +918,17 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
-    provider: any;
     tickLowerIndex: number;
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
+    positionNftMint?: web3.Keypair;
   }): Promise<{
-    transaction: web3.Transaction;
+    instruction: web3.TransactionInstruction;
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
+    poolState: web3.PublicKey;
     positionNftMint: web3.PublicKey;
     quoteTokenAta: web3.PublicKey;
   }> {
@@ -858,7 +969,7 @@ export class TxBuilder {
       true
     );
 
-    const positionNftMint = web3.Keypair.generate();
+    const positionNftMint = params.positionNftMint ?? web3.Keypair.generate();
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
       escrowAuthority,
@@ -959,21 +1070,149 @@ export class TxBuilder {
       })
       .instruction();
 
+    return {
+      instruction: addLiquidityIx,
+      signers: [positionNftMint],
+      quoteVault,
+      baseVault,
+      poolState,
+      positionNftMint: positionNftMint.publicKey,
+      quoteTokenAta,
+    };
+  }
+
+  async addClmmLiquidityTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    clmmProgram: web3.PublicKey;
+    provider: any;
+    tickLowerIndex: number;
+    tickUpperIndex: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
+  }): Promise<{
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    quoteVault: web3.PublicKey;
+    baseVault: web3.PublicKey;
+    positionNftMint: web3.PublicKey;
+    quoteTokenAta: web3.PublicKey;
+  }> {
+    const { instruction, signers, quoteVault, baseVault, positionNftMint, quoteTokenAta } =
+      await this.addClmmLiquidityIx(params);
+
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
       units: 400_000,
     });
 
     const transaction = new web3.Transaction()
       .add(computeBudgetIx)
-      .add(addLiquidityIx);
+      .add(instruction);
 
     return {
       transaction,
-      signers: [positionNftMint],
+      signers,
       quoteVault,
       baseVault,
-      positionNftMint: positionNftMint.publicKey,
+      positionNftMint,
       quoteTokenAta,
     };
+  }
+
+  async getAddLiquidityInfo(params: {
+    launch: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    clmmProgram: web3.PublicKey;
+    payer: web3.PublicKey;
+    tickLowerIndex: number;
+    tickUpperIndex: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
+  }): Promise<{
+    quoteTokenAtaAmount: BN;
+    baseEscrowAtaAmount: BN;
+    expectedQuoteAmount: BN;
+    expectedBaseAmount: BN;
+  }> {
+    const positionNftMint = web3.Keypair.generate();
+    const { instruction } = await this.addClmmLiquidityIx({
+      ...params,
+      positionNftMint,
+    });
+
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 400_000,
+    });
+
+    const tx = new web3.Transaction()
+      .add(computeBudgetIx)
+      .add(instruction);
+
+    const provider = this.program.provider as any;
+
+    if (provider.client && provider.client.latestBlockhash) {
+      const wallet = provider.wallet as any;
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = provider.client.latestBlockhash();
+
+      if (wallet.payer) {
+        tx.sign(wallet.payer);
+      } else {
+        tx.sign(wallet);
+      }
+      tx.partialSign(positionNftMint);
+
+      let simulation;
+      try {
+        simulation = provider.client.simulateTransaction(tx);
+      } catch (error: any) {
+        console.error("Simulation error:", error);
+        throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
+      }
+
+      if (simulation.err) {
+        const errorMsg = simulation.err();
+        console.error("Transaction simulation failed:", errorMsg);
+        throw new Error(`Simulation failed: ${errorMsg}`);
+      }
+
+      const returnData = simulation?.returnData;
+      if (!returnData) {
+        console.error("Full simulation:", simulation);
+        throw new Error("No return data from addClmmLiquidity simulation");
+      }
+
+      let returnDataStr: string;
+      if (typeof simulation.returnData === 'string') {
+        returnDataStr = simulation.returnData;
+      } else if (Array.isArray(simulation.returnData.data)) {
+        returnDataStr = simulation.returnData.data[0];
+      } else {
+        returnDataStr = simulation.returnData.data || simulation.returnData;
+      }
+
+      const buffer = Buffer.from(returnDataStr, "base64");
+
+      const quoteTokenAtaAmount = buffer.readBigUInt64LE(0);
+      const baseEscrowAtaAmount = buffer.readBigUInt64LE(8);
+      const expectedQuoteAmount = buffer.readBigUInt64LE(16);
+      const expectedBaseAmount = buffer.readBigUInt64LE(24);
+
+      return {
+        quoteTokenAtaAmount: new BN(quoteTokenAtaAmount.toString()),
+        baseEscrowAtaAmount: new BN(baseEscrowAtaAmount.toString()),
+        expectedQuoteAmount: new BN(expectedQuoteAmount.toString()),
+        expectedBaseAmount: new BN(expectedBaseAmount.toString()),
+      };
+    }
+
+    throw new Error("Only litesvm provider supported for getAddLiquidityInfo");
   }
 }

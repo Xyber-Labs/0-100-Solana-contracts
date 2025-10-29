@@ -316,7 +316,62 @@ export type Engine = {
           "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "tickLowerIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickUpperIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayLowerStartIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayUpperStartIndex",
+          "type": "i32"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "liquidityAccountsEvent"
+        }
+      }
+    },
+    {
+      "name": "calculateLiquidityRange",
+      "discriminator": [
+        93,
+        36,
+        132,
+        201,
+        111,
+        222,
+        36,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "launchState"
+        }
+      ],
+      "args": [
+        {
+          "name": "baseAmount",
+          "type": "u64"
+        },
+        {
+          "name": "quoteAmount",
+          "type": "u64"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "liquidityRangeResult"
+        }
+      }
     },
     {
       "name": "claimCreatorRefund",
@@ -3016,6 +3071,58 @@ export type Engine = {
             "type": {
               "option": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityAccountsEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quoteTokenAtaAmount",
+            "type": "u64"
+          },
+          {
+            "name": "baseEscrowAtaAmount",
+            "type": "u64"
+          },
+          {
+            "name": "expectedQuoteAmount",
+            "type": "u64"
+          },
+          {
+            "name": "expectedBaseAmount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "liquidityRangeResult",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tickLower",
+            "type": "i32"
+          },
+          {
+            "name": "tickUpper",
+            "type": "i32"
+          },
+          {
+            "name": "tickArrayLowerStartIndex",
+            "type": "i32"
+          },
+          {
+            "name": "tickArrayUpperStartIndex",
+            "type": "i32"
+          },
+          {
+            "name": "tickCurrent",
+            "type": "i32"
           }
         ]
       }

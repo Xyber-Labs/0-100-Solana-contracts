@@ -115,15 +115,15 @@ pub fn add_clmm_liquidity(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<()> {
-    add_initial_liquidity(
+) -> Result<LiquidityAccountsEvent> {
+    let result = add_initial_liquidity(
         &ctx,
         tick_lower_index,
         tick_upper_index,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
     )?;
-    Ok(())
+    Ok(result)
 }
 
 const RENT_RESERVE: u64 = 200_000_000;
@@ -134,11 +134,13 @@ fn add_initial_liquidity(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<()> {
+) -> Result<LiquidityAccountsEvent> {
     let quote_volume = ctx.accounts.launch_state.total_deposited;
+    msg!("Total deposited: {}", quote_volume);
     let base_volume = LP_POOL_ALLOCATION;
 
     let transfer_amount = quote_volume.saturating_sub(RENT_RESERVE);
+    msg!("Transfer amount: {}", quote_volume);
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -148,6 +150,9 @@ fn add_initial_liquidity(
         &[ctx.bumps.escrow_authority],
     ];
     let signers = &[&escrow_authority_seeds[..]];
+
+    let quote_ata_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
+    msg!("escwrow_authority_token_ata balance before transfer: {} lamports", quote_ata_balance);
 
     anchor_lang::system_program::transfer(
         CpiContext::new_with_signer(
@@ -161,6 +166,9 @@ fn add_initial_liquidity(
         transfer_amount,
     )?;
 
+    let quote_ata_balance = ctx.accounts.quote_token_ata.to_account_info().lamports();
+    msg!("quote_token_ata balance after transfer: {} lamports", quote_ata_balance);
+
     anchor_lang::solana_program::program::invoke(
         &anchor_spl::token::spl_token::instruction::sync_native(
             &ctx.accounts.quote_token_program.key(),
@@ -168,6 +176,56 @@ fn add_initial_liquidity(
         )?,
         &[ctx.accounts.quote_token_ata.to_account_info()],
     )?;
+
+    let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
+    msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
+
+    let quote_ata_info = ctx.accounts.quote_token_ata.to_account_info();
+    let quote_ata_data = quote_ata_info.try_borrow_data()?;
+    let quote_ata_amount = u64::from_le_bytes([
+        quote_ata_data[64],
+        quote_ata_data[65],
+        quote_ata_data[66],
+        quote_ata_data[67],
+        quote_ata_data[68],
+        quote_ata_data[69],
+        quote_ata_data[70],
+        quote_ata_data[71],
+    ]);
+    drop(quote_ata_data);
+
+    let base_ata_info = ctx.accounts.base_escrow_ata.to_account_info();
+    let base_ata_data = base_ata_info.try_borrow_data()?;
+    let base_ata_amount = u64::from_le_bytes([
+        base_ata_data[64],
+        base_ata_data[65],
+        base_ata_data[66],
+        base_ata_data[67],
+        base_ata_data[68],
+        base_ata_data[69],
+        base_ata_data[70],
+        base_ata_data[71],
+    ]);
+    drop(base_ata_data);
+
+    msg!("=== Token Accounts Before Raydium ===");
+    msg!("quote_token_ata amount: {} lamports", quote_ata_amount);
+    msg!("base_escrow_ata amount: {} tokens", base_ata_amount);
+    msg!("Expected quote: {} lamports", transfer_amount);
+    msg!("Expected base: {} tokens", base_volume);
+
+    let result = LiquidityAccountsEvent {
+        quote_token_ata_amount: quote_ata_amount,
+        base_escrow_ata_amount: base_ata_amount,
+        expected_quote_amount: transfer_amount,
+        expected_base_amount: base_volume,
+    };
+
+    msg!("=== Preparing Raydium CPI ===");
+    msg!("Quote vault: {}", ctx.accounts.raydium_quote_vault.key());
+    msg!("Base vault: {}", ctx.accounts.raydium_base_vault.key());
+    msg!("Quote ATA: {}", ctx.accounts.quote_token_ata.key());
+    msg!("Base ATA: {}", ctx.accounts.base_escrow_ata.key());
 
     let order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -179,6 +237,8 @@ fn add_initial_liquidity(
         transfer_amount,
         base_volume,
     );
+
+    msg!("Token order - amount_0: {}, amount_1: {}", order.amount_0, order.amount_1);
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
         payer: ctx.accounts.escrow_authority.to_account_info(),
@@ -226,7 +286,15 @@ fn add_initial_liquidity(
         Some(is_base_token_0),
     )?;
 
-    Ok(())
+    Ok(result)
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct LiquidityAccountsEvent {
+    pub quote_token_ata_amount: u64,
+    pub base_escrow_ata_amount: u64,
+    pub expected_quote_amount: u64,
+    pub expected_base_amount: u64,
 }
 
 struct TokenOrder<'info> {

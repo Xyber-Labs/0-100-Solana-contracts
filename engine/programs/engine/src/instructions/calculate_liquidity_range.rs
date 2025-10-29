@@ -11,8 +11,6 @@ const TICK_ARRAY_SIZE: i32 = 60;
 #[derive(Accounts)]
 pub struct CalculateLiquidityRange<'info> {
     pub launch_state: Account<'info, LaunchState>,
-    /// CHECK: Raydium pool state account
-    pub raydium_pool_state: UncheckedAccount<'info>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
@@ -24,16 +22,15 @@ pub struct LiquidityRangeResult {
     pub tick_current: i32,
 }
 
-pub fn calculate_range(
-    tick_current: i32,
-    base_amount: u64,
-    quote_amount: u64,
-) -> LiquidityRangeResult {
+pub fn calculate_range(base_amount: u64, quote_amount: u64) -> LiquidityRangeResult {
+    let ratio = quote_amount as f64 / base_amount as f64;
+    let tick_current = (ratio.ln() / 1.0001_f64.ln()).round() as i32;
+
     let mut tick_lower = tick_current - 20000;
     let mut tick_upper = tick_current + 20000;
 
     let tolerance = 0.001;
-    let max_iterations = 200;
+    let max_iterations = 50;
 
     for iteration in 0..max_iterations {
         let sqrt_price_current = tick_math::get_sqrt_price_at_tick(tick_current).unwrap_or(0);
@@ -96,15 +93,25 @@ pub fn calculate_range(
         }
     }
 
-    tick_lower = (tick_lower / TICK_SPACING) * TICK_SPACING;
-    tick_upper = ((tick_upper + TICK_SPACING - 1) / TICK_SPACING) * TICK_SPACING;
-
     tick_lower = tick_lower.max(MIN_TICK);
     tick_upper = tick_upper.min(MAX_TICK);
 
+    tick_lower = (tick_lower / TICK_SPACING) * TICK_SPACING;
+    tick_upper = (tick_upper / TICK_SPACING) * TICK_SPACING;
+
     let ticks_in_array = TICK_SPACING * TICK_ARRAY_SIZE;
-    let tick_array_lower_start_index = (tick_lower / ticks_in_array) * ticks_in_array;
-    let tick_array_upper_start_index = (tick_upper / ticks_in_array) * ticks_in_array;
+
+    let tick_array_lower_start_index = if tick_lower < 0 && tick_lower % ticks_in_array != 0 {
+        ((tick_lower / ticks_in_array) - 1) * ticks_in_array
+    } else {
+        (tick_lower / ticks_in_array) * ticks_in_array
+    };
+
+    let tick_array_upper_start_index = if tick_upper < 0 && tick_upper % ticks_in_array != 0 {
+        ((tick_upper / ticks_in_array) - 1) * ticks_in_array
+    } else {
+        (tick_upper / ticks_in_array) * ticks_in_array
+    };
 
     LiquidityRangeResult {
         tick_lower,
@@ -120,11 +127,8 @@ pub fn calculate_liquidity_range(
     base_amount: u64,
     quote_amount: u64,
 ) -> Result<LiquidityRangeResult> {
-    let data = ctx.accounts.raydium_pool_state.try_borrow_data()?;
-    let tick_current = i32::from_le_bytes([data[269], data[270], data[271], data[272]]);
-
-    let result = calculate_range(tick_current, base_amount, quote_amount);
-
+    msg!("base_amount: {}, quote_amount: {}", base_amount, quote_amount);
+    let result = calculate_range(base_amount, quote_amount);
     msg!("Calculated range: [{}, {}]", result.tick_lower, result.tick_upper);
     msg!(
         "Tick arrays: [{}, {}]",
@@ -143,13 +147,13 @@ mod tests {
 
     #[test]
     fn test_range_utilizes_both_tokens() {
-        let base_amount = 440_000_00064;
+        let base_amount = 440_000_000u64;
         let quote_amount = 300u64;
 
         let ratio = quote_amount as f64 / base_amount as f64;
         let tick_current = (ratio.ln() / 1.0001_f64.ln()).round() as i32;
 
-        let result = calculate_range(tick_current, base_amount, quote_amount);
+        let result = calculate_range(base_amount, quote_amount);
 
         let sqrt_price_current = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
         let sqrt_price_lower = tick_math::get_sqrt_price_at_tick(result.tick_lower).unwrap();

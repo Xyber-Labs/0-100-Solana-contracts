@@ -310,7 +310,62 @@
           "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "tick_lower_index",
+          "type": "i32"
+        },
+        {
+          "name": "tick_upper_index",
+          "type": "i32"
+        },
+        {
+          "name": "tick_array_lower_start_index",
+          "type": "i32"
+        },
+        {
+          "name": "tick_array_upper_start_index",
+          "type": "i32"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "LiquidityAccountsEvent"
+        }
+      }
+    },
+    {
+      "name": "calculate_liquidity_range",
+      "discriminator": [
+        93,
+        36,
+        132,
+        201,
+        111,
+        222,
+        36,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "launch_state"
+        }
+      ],
+      "args": [
+        {
+          "name": "base_amount",
+          "type": "u64"
+        },
+        {
+          "name": "quote_amount",
+          "type": "u64"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "LiquidityRangeResult"
+        }
+      }
     },
     {
       "name": "claim_creator_refund",
@@ -3010,6 +3065,58 @@
             "type": {
               "option": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityAccountsEvent",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quote_token_ata_amount",
+            "type": "u64"
+          },
+          {
+            "name": "base_escrow_ata_amount",
+            "type": "u64"
+          },
+          {
+            "name": "expected_quote_amount",
+            "type": "u64"
+          },
+          {
+            "name": "expected_base_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiquidityRangeResult",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tick_lower",
+            "type": "i32"
+          },
+          {
+            "name": "tick_upper",
+            "type": "i32"
+          },
+          {
+            "name": "tick_array_lower_start_index",
+            "type": "i32"
+          },
+          {
+            "name": "tick_array_upper_start_index",
+            "type": "i32"
+          },
+          {
+            "name": "tick_current",
+            "type": "i32"
           }
         ]
       }
