@@ -17,6 +17,9 @@ INIT_PRICE="1"
 DO_LIQUIDITY="1"
 DO_SWAP="1"
 
+# Range config
+FULL_RANGE="1"
+
 # Amounts (used only if toggles are enabled)
 LIQUIDITY_BASE_AMOUNT="450000000"
 SWAP_DIRECTION="a2b"
@@ -39,6 +42,7 @@ yarn ts-node scripts/raydium/raydium.ts \
   --tickSpacing "${TICK_SPACING}" \
   --feeRateBps "${FEE_RATE_BPS}" \
   --initPrice "${INIT_PRICE}" \
+  --fullRange "${FULL_RANGE}" \
   --liquidityBaseAmount "$([ "$DO_LIQUIDITY" = "1" ] && echo "${LIQUIDITY_BASE_AMOUNT}" || echo "0")" \
   --swapDirection "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_DIRECTION}" || echo "")" \
   --swapAmount "$([ "$DO_SWAP" = "1" ] && echo "${SWAP_AMOUNT}" || echo "0")"

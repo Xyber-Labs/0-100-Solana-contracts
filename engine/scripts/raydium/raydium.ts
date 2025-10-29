@@ -26,6 +26,7 @@ type Args = {
   liquidityBaseAmount: string;
   swapDirection: string;
   swapAmount: string;
+  fullRange: string;
 };
 
 function parseArgs(): Args {
@@ -60,6 +61,7 @@ function parseArgs(): Args {
     liquidityBaseAmount: toString(get("--liquidityBaseAmount"), "0"),
     swapDirection: toString(get("--swapDirection"), ""),
     swapAmount: toString(get("--swapAmount"), "0"),
+    fullRange: toString(get("--fullRange"), "1"),
   };
 }
 
@@ -187,20 +189,43 @@ async function createClmmPoolWithSdk(provider: anchor.AnchorProvider, params: {
   return txId;
 }
 
+function computeFullRangeTicks(tickSpacing: number) {
+  const MIN_TICK = -443636;
+  const MAX_TICK = 443636;
+  const lower = Math.ceil(MIN_TICK / tickSpacing) * tickSpacing;
+  const upper = Math.floor(MAX_TICK / tickSpacing) * tickSpacing;
+  return { lower, upper };
+}
+
 async function addLiquidityWithSdk(provider: anchor.AnchorProvider, params: {
   poolId: anchor.web3.PublicKey;
   tickSpacing: number;
   baseDecimals: number;
   baseAmount: BN;
+  fullRange: boolean;
 }) {
   const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
   const ray: any = await Raydium.load({ connection: provider.connection, owner });
   const poolIdStr = params.poolId.toBase58();
   const { poolInfo, poolKeys } = await ray.clmm.getPoolInfoFromRpc(poolIdStr);
 
-  const width = params.tickSpacing * 10;
-  const tickLower = -width;
-  const tickUpper = width;
+  let tickLower: number;
+  let tickUpper: number;
+  if (params.fullRange) {
+    const r = computeFullRangeTicks(params.tickSpacing);
+    tickLower = r.lower;
+    tickUpper = r.upper;
+  } else {
+    const width = params.tickSpacing * 10;
+    tickLower = -width;
+    tickUpper = width;
+  }
+
+  const isFullRange = (() => {
+    const r = computeFullRangeTicks(params.tickSpacing);
+    return r.lower === tickLower && r.upper === tickUpper;
+  })();
+  console.log(`liquidity range tickLower ${tickLower} tickUpper ${tickUpper} fullRange ${isFullRange}`);
 
   const tx = await ray.clmm.openPositionFromBase({
     poolInfo,
@@ -327,6 +352,7 @@ async function main() {
         tickSpacing: args.tickSpacing,
         baseDecimals: args.baseDecimals,
         baseAmount: new BN(args.liquidityBaseAmount),
+        fullRange: args.fullRange === "1",
       });
     }
     if (args.swapAmount !== "0" && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
