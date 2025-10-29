@@ -13,11 +13,13 @@
     "script:remote-flow": "ANCHOR_PROVIDER_URL=http://10.186.0.84:8899 ANCHOR_WALLET=~/.config/solana/id.json ts-node scripts/run-local-flow.ts"
   },
   "dependencies": {
-    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "@coral-xyz/anchor": "^0.31.1",
+    "@raydium-io/raydium-sdk-v2": "^0.2.30-alpha",
     "@solana/spl-token": "^0.4.14",
+    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "bs58": "^6.0.0",
-    "commander": "^14.0.1"
+    "commander": "^14.0.1",
+    "decimal.js": "^10.6.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
