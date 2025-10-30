@@ -723,6 +723,14 @@ export class TxBuilder {
       params.clmmProgram
     );
 
+    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_tick_array_bitmap_extension"),
+        poolState.toBuffer()
+      ],
+      params.clmmProgram
+    );
+
     const [observationState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("observation"), poolState.toBuffer()],
       params.clmmProgram
@@ -1100,6 +1108,14 @@ export class TxBuilder {
       params.clmmProgram
     );
 
+    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("pool_tick_array_bitmap_extension"),
+        poolState.toBuffer()
+      ],
+      params.clmmProgram
+    );
+
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity(
         params.tickLowerIndex,
@@ -1135,7 +1151,7 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
       }).remainingAccounts([{
-        pubkey: new web3.PublicKey("G8nXeE7ZArnMgBpMFkTKxKmJzaxg9njfbQJJdRhCfoPQ"),
+        pubkey: bitmapExtension,
         isSigner: false,
         isWritable: true
       }])

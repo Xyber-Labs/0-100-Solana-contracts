@@ -103,8 +103,8 @@ pub struct AddClmmLiquidity<'info> {
 /// * `tick_upper_index` - Upper tick boundary (must be aligned to tick_spacing)
 /// * `tick_array_lower_start_index` - Start index of tick array covering lower tick
 /// * `tick_array_upper_start_index` - Start index of tick array covering upper tick
-pub fn add_clmm_liquidity(
-    ctx: Context<AddClmmLiquidity>,
+pub fn add_clmm_liquidity<'info>(
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     tick_lower_index: i32,
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
@@ -113,7 +113,7 @@ pub fn add_clmm_liquidity(
     quote_amount: u64,
 ) -> Result<()> {
     add_initial_liquidity(
-        &ctx,
+        ctx,
         tick_lower_index,
         tick_upper_index,
         tick_array_lower_start_index,
@@ -125,8 +125,8 @@ pub fn add_clmm_liquidity(
 
 const RENT_RESERVE: u64 = 200_000_000;
 
-fn add_initial_liquidity(
-    ctx: &Context<AddClmmLiquidity>,
+fn add_initial_liquidity<'info>(
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     tick_lower_index: i32,
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
@@ -224,7 +224,8 @@ fn add_initial_liquidity(
         ctx.accounts.raydium_program.to_account_info(),
         cpi_accounts,
         signers,
-    );
+    )
+    .with_remaining_accounts(ctx.remaining_accounts.to_vec());
 
     // let tick_spacing = 60i32;
     // let min_tick = tick_math::MIN_TICK;
