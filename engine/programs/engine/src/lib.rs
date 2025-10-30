@@ -106,13 +106,17 @@ pub mod engine {
         tick_upper_index: i32,
         tick_array_lower_start_index: i32,
         tick_array_upper_start_index: i32,
-    ) -> Result<instructions::LiquidityAccountsEvent> {
+        base_amount: u64,
+        quote_amount: u64,
+    ) -> Result<()> {
         instructions::add_clmm_liquidity(
             ctx,
             tick_lower_index,
             tick_upper_index,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
+            base_amount,
+            quote_amount,
         )
     }
 

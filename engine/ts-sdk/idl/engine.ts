@@ -270,10 +270,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "raydiumMetadataAccount",
-          "writable": true
-        },
-        {
           "name": "raydiumPersonalPosition",
           "writable": true
         },
@@ -288,9 +284,6 @@ export type Engine = {
         {
           "name": "raydiumTickArrayUpper",
           "writable": true
-        },
-        {
-          "name": "metadataProgram"
         },
         {
           "name": "token2022Program",
@@ -332,13 +325,16 @@ export type Engine = {
         {
           "name": "tickArrayUpperStartIndex",
           "type": "i32"
+        },
+        {
+          "name": "baseAmount",
+          "type": "u64"
+        },
+        {
+          "name": "quoteAmount",
+          "type": "u64"
         }
-      ],
-      "returns": {
-        "defined": {
-          "name": "liquidityAccountsEvent"
-        }
-      }
+      ]
     },
     {
       "name": "calculateLiquidityRange",
@@ -3071,30 +3067,6 @@ export type Engine = {
             "type": {
               "option": "pubkey"
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "liquidityAccountsEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "quoteTokenAtaAmount",
-            "type": "u64"
-          },
-          {
-            "name": "baseEscrowAtaAmount",
-            "type": "u64"
-          },
-          {
-            "name": "expectedQuoteAmount",
-            "type": "u64"
-          },
-          {
-            "name": "expectedBaseAmount",
-            "type": "u64"
           }
         ]
       }

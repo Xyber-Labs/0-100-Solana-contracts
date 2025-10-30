@@ -6,7 +6,9 @@ use anchor_spl::{
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
-use crate::{errors::ErrorCode, EscrowAccount, LP_POOL_ALLOCATION, LaunchState, SEED_ROOT, TOTAL_SUPPLY};
+use crate::{
+    errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT, TOTAL_SUPPLY,
+};
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -124,12 +126,14 @@ fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let calculator = StakingCalculator::new(
-        ctx.accounts.launch_state.total_deposited,
-        LP_POOL_ALLOCATION,
-    );
+    msg!("total_deposited: {}", ctx.accounts.launch_state.total_deposited);
+    msg!("LP_POOL_ALLOCATION: {}", LP_POOL_ALLOCATION);
+
+    let calculator =
+        StakingCalculator::new(ctx.accounts.launch_state.total_deposited, LP_POOL_ALLOCATION);
 
     let sqrt_price_x64 = calculator.get_sqrt_price();
+    msg!("sqrt_price_x64: {}", sqrt_price_x64);
     let open_time =
         Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
@@ -159,7 +163,7 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
         rent: ctx.accounts.rent.to_account_info(),
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
-    cpi::create_pool(cpi_context, order.sqrt_price, open_time)?;
+    cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
 
     Ok(())
 }
@@ -178,9 +182,10 @@ impl StakingCalculator {
     }
 
     fn get_sqrt_price(&self) -> u128 {
-        let price_ratio = ((self.raised_lamports as u128) << 64) / self.lp_allocation as u128;
-        let sqrt_price = Self::integer_sqrt(price_ratio);
-        sqrt_price << 32
+        14478050214835493
+        // let price_ratio = ((self.raised_lamports as u128) << 64) / self.lp_allocation as u128;
+        // let sqrt_price = Self::integer_sqrt(price_ratio);
+        // sqrt_price << 32
     }
 
     fn integer_sqrt(n: u128) -> u128 {

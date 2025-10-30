@@ -5,9 +5,9 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::program::AmmV3;
+use raydium_amm_v3::{libraries::tick_math, program::AmmV3};
 
-use crate::{EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT};
+use crate::{EscrowAccount, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -71,9 +71,6 @@ pub struct AddClmmLiquidity<'info> {
     /// CHECK: Position NFT account
     #[account(mut)]
     pub raydium_position_nft_account: UncheckedAccount<'info>,
-    /// CHECK: Position metadata account
-    #[account(mut)]
-    pub raydium_metadata_account: UncheckedAccount<'info>,
     /// CHECK: Personal position state
     #[account(mut)]
     pub raydium_personal_position: UncheckedAccount<'info>,
@@ -86,9 +83,6 @@ pub struct AddClmmLiquidity<'info> {
     /// CHECK: Tick array upper
     #[account(mut)]
     pub raydium_tick_array_upper: UncheckedAccount<'info>,
-
-    /// CHECK: Metadata program
-    pub metadata_program: UncheckedAccount<'info>,
 
     pub token_2022_program: Program<'info, Token2022>,
 
@@ -115,15 +109,18 @@ pub fn add_clmm_liquidity(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<LiquidityAccountsEvent> {
-    let result = add_initial_liquidity(
+    base_amount: u64,
+    quote_amount: u64,
+) -> Result<()> {
+    add_initial_liquidity(
         &ctx,
         tick_lower_index,
         tick_upper_index,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
-    )?;
-    Ok(result)
+        base_amount,
+        quote_amount,
+    )
 }
 
 const RENT_RESERVE: u64 = 200_000_000;
@@ -134,13 +131,21 @@ fn add_initial_liquidity(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<LiquidityAccountsEvent> {
-    let quote_volume = ctx.accounts.launch_state.total_deposited;
-    msg!("Total deposited: {}", quote_volume);
-    let base_volume = LP_POOL_ALLOCATION;
+    base_amount: u64,
+    quote_amount: u64,
+) -> Result<()> {
+    msg!("=== Input Parameters ===");
+    msg!("Base amount: {}", base_amount);
+    msg!("Quote amount: {}", quote_amount);
+    msg!("Tick lower index: {}", tick_lower_index);
+    msg!("Tick upper index: {}", tick_upper_index);
+    msg!("Tick array lower start index: {}", tick_array_lower_start_index);
+    msg!("Tick array upper start index: {}", tick_array_upper_start_index);
 
-    let transfer_amount = quote_volume.saturating_sub(RENT_RESERVE);
-    msg!("Transfer amount: {}", quote_volume);
+    let available_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
+    let transfer_amount = available_balance.saturating_sub(RENT_RESERVE);
+    msg!("Available balance on escrow_authority: {}", available_balance);
+    msg!("Transfer amount (after rent reserve): {}", transfer_amount);
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -158,7 +163,7 @@ fn add_initial_liquidity(
         CpiContext::new_with_signer(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
-                from: ctx.accounts.escrow_authority.to_account_info(),
+                from: ctx.accounts.payer.to_account_info(),
                 to: ctx.accounts.quote_token_ata.to_account_info(),
             },
             signers,
@@ -180,72 +185,23 @@ fn add_initial_liquidity(
     let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
     msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
 
-    let quote_ata_info = ctx.accounts.quote_token_ata.to_account_info();
-    let quote_ata_data = quote_ata_info.try_borrow_data()?;
-    let quote_ata_amount = u64::from_le_bytes([
-        quote_ata_data[64],
-        quote_ata_data[65],
-        quote_ata_data[66],
-        quote_ata_data[67],
-        quote_ata_data[68],
-        quote_ata_data[69],
-        quote_ata_data[70],
-        quote_ata_data[71],
-    ]);
-    drop(quote_ata_data);
-
-    let base_ata_info = ctx.accounts.base_escrow_ata.to_account_info();
-    let base_ata_data = base_ata_info.try_borrow_data()?;
-    let base_ata_amount = u64::from_le_bytes([
-        base_ata_data[64],
-        base_ata_data[65],
-        base_ata_data[66],
-        base_ata_data[67],
-        base_ata_data[68],
-        base_ata_data[69],
-        base_ata_data[70],
-        base_ata_data[71],
-    ]);
-    drop(base_ata_data);
-
-    msg!("=== Token Accounts Before Raydium ===");
-    msg!("quote_token_ata amount: {} lamports", quote_ata_amount);
-    msg!("base_escrow_ata amount: {} tokens", base_ata_amount);
-    msg!("Expected quote: {} lamports", transfer_amount);
-    msg!("Expected base: {} tokens", base_volume);
-
-    let result = LiquidityAccountsEvent {
-        quote_token_ata_amount: quote_ata_amount,
-        base_escrow_ata_amount: base_ata_amount,
-        expected_quote_amount: transfer_amount,
-        expected_base_amount: base_volume,
-    };
-
-    msg!("=== Preparing Raydium CPI ===");
-    msg!("Quote vault: {}", ctx.accounts.raydium_quote_vault.key());
-    msg!("Base vault: {}", ctx.accounts.raydium_base_vault.key());
-    msg!("Quote ATA: {}", ctx.accounts.quote_token_ata.key());
-    msg!("Base ATA: {}", ctx.accounts.base_escrow_ata.key());
-
-    let order = TokenOrder::new(
+    let mut order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_ata.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
-        transfer_amount,
-        base_volume,
+        quote_amount,
+        base_amount,
     );
-
     msg!("Token order - amount_0: {}, amount_1: {}", order.amount_0, order.amount_1);
 
-    let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
-        payer: ctx.accounts.escrow_authority.to_account_info(),
+    let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
+        payer: ctx.accounts.payer.to_account_info(),
         position_nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
-        metadata_account: ctx.accounts.raydium_metadata_account.to_account_info(),
         pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
         protocol_position: ctx.accounts.raydium_protocol_position.to_account_info(),
         tick_array_lower: ctx.accounts.raydium_tick_array_lower.to_account_info(),
@@ -259,7 +215,6 @@ fn add_initial_liquidity(
         system_program: ctx.accounts.system_program.to_account_info(),
         token_program: ctx.accounts.base_token_program.to_account_info(),
         associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        metadata_program: ctx.accounts.metadata_program.to_account_info(),
         token_program_2022: ctx.accounts.token_2022_program.to_account_info(),
         vault_0_mint: order.token_mint_0,
         vault_1_mint: order.token_mint_1,
@@ -271,22 +226,39 @@ fn add_initial_liquidity(
         signers,
     );
 
-    let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
+    // let tick_spacing = 60i32;
+    // let min_tick = tick_math::MIN_TICK;
+    // let max_tick = tick_math::MAX_TICK;
+    // let tick_lower_index = (min_tick.div_euclid(tick_spacing) + 1) * tick_spacing;
+    // let tick_upper_index = (max_tick.div_euclid(tick_spacing)) * tick_spacing;
+    //
+    // let tick_array_size = 60i32;
+    // let ticks_in_array = tick_spacing * tick_array_size;
+    //
+    // let tick_array_lower_start_index =
+    //     (tick_lower_index.div_euclid(ticks_in_array)) * ticks_in_array;
+    // let tick_array_upper_start_index =
+    //     (tick_upper_index.div_euclid(ticks_in_array)) * ticks_in_array;
 
-    raydium_amm_v3::cpi::open_position_v2(
+    let token_0_value = order.amount_0;
+    let token_1_value = order.amount_1;
+
+    let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
+    msg!("is_base_token_0: {}", is_base_token_0);
+    raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
-        tick_lower_index,
-        tick_upper_index,
-        tick_array_lower_start_index,
-        tick_array_upper_start_index,
+        -443636,
+        443636,
+        -443640,
+        443580,
         0,
-        order.amount_0,
-        order.amount_1,
-        false,
+        token_0_value,
+        token_1_value,
+        true,
         Some(is_base_token_0),
     )?;
 
-    Ok(result)
+    Ok(())
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]

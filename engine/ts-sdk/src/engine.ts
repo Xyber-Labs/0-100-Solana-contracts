@@ -241,7 +241,7 @@ const EngineSDK = {
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, signers, { commitment: "processed" });
       return { userPda: userContribution, signature };
     }
 
@@ -829,6 +829,15 @@ const EngineSDK = {
     };
   },
 };
+
+export function getExplorerUrl(provider: anchor.Provider, signature: string): string {
+  const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
+    : provider.connection.rpcEndpoint.includes('testnet') ? 'testnet'
+      : provider.connection.rpcEndpoint.includes('localhost') || provider.connection.rpcEndpoint.includes('127.0.0.1') ? 'custom&customUrl=' + encodeURIComponent(provider.connection.rpcEndpoint)
+        : 'mainnet-beta';
+
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+}
 
 export default EngineSDK;
 export type { EngineIDL };

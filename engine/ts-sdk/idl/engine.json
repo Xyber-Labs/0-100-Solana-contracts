@@ -264,10 +264,6 @@
           "writable": true
         },
         {
-          "name": "raydium_metadata_account",
-          "writable": true
-        },
-        {
           "name": "raydium_personal_position",
           "writable": true
         },
@@ -282,9 +278,6 @@
         {
           "name": "raydium_tick_array_upper",
           "writable": true
-        },
-        {
-          "name": "metadata_program"
         },
         {
           "name": "token_2022_program",
@@ -326,13 +319,16 @@
         {
           "name": "tick_array_upper_start_index",
           "type": "i32"
+        },
+        {
+          "name": "base_amount",
+          "type": "u64"
+        },
+        {
+          "name": "quote_amount",
+          "type": "u64"
         }
-      ],
-      "returns": {
-        "defined": {
-          "name": "LiquidityAccountsEvent"
-        }
-      }
+      ]
     },
     {
       "name": "calculate_liquidity_range",
@@ -3065,30 +3061,6 @@
             "type": {
               "option": "pubkey"
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "LiquidityAccountsEvent",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "quote_token_ata_amount",
-            "type": "u64"
-          },
-          {
-            "name": "base_escrow_ata_amount",
-            "type": "u64"
-          },
-          {
-            "name": "expected_quote_amount",
-            "type": "u64"
-          },
-          {
-            "name": "expected_base_amount",
-            "type": "u64"
           }
         ]
       }

@@ -1,6 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
 
-import EngineSDK from "@xyber-labs/0-100-sdk";
+import EngineSDK, { getExplorerUrl } from "@xyber-labs/0-100-sdk";
+
+export { getExplorerUrl };
 
 export function initializeSdk() {
   const provider = anchor.AnchorProvider.env();
@@ -8,15 +10,6 @@ export function initializeSdk() {
   const engineProgram = anchor.workspace.engine;
   const sdk = EngineSDK.create(provider, engineProgram);
   return { provider, sdk };
-}
-
-export function getExplorerUrl(provider: anchor.AnchorProvider, signature: string): string {
-  const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
-    : provider.connection.rpcEndpoint.includes('testnet') ? 'testnet'
-      : provider.connection.rpcEndpoint.includes('localhost') || provider.connection.rpcEndpoint.includes('127.0.0.1') ? 'custom&customUrl=' + encodeURIComponent(provider.connection.rpcEndpoint)
-        : 'mainnet-beta';
-
-  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
 }
 
 export async function runWithSdk(

@@ -807,6 +807,7 @@ export class TxBuilder {
     launch: web3.PublicKey;
     baseAmount: BN;
     quoteAmount: BN;
+    useSimulation?: boolean;
   }): Promise<{
     tickLower: number;
     tickUpper: number;
@@ -814,6 +815,8 @@ export class TxBuilder {
     tickArrayUpperStartIndex: number;
     tickCurrent: number;
   }> {
+    const useSimulation = params.useSimulation !== false;
+
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
       units: 2_000_000,
     });
@@ -842,42 +845,102 @@ export class TxBuilder {
         tx.sign(wallet);
       }
 
-      let simulation;
-      try {
-        simulation = await provider.simulate(tx);
-      } catch (error: any) {
-        console.error("Simulation error:", error);
-        throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
-      }
+      if (useSimulation) {
+        let simulation;
+        try {
+          simulation = await provider.simulate(tx);
+        } catch (error: any) {
+          console.error("Simulation error:", error);
+          throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
+        }
 
-      if (!simulation || !simulation.returnData) {
-        throw new Error("No return data from calculateLiquidityRange simulation");
-      }
+        if (!simulation || !simulation.returnData) {
+          throw new Error("No return data from calculateLiquidityRange simulation");
+        }
 
-      let returnDataStr: string;
-      if (typeof simulation.returnData === 'string') {
-        returnDataStr = simulation.returnData;
-      } else if (Array.isArray(simulation.returnData.data)) {
-        returnDataStr = simulation.returnData.data[0];
+        let returnDataStr: string;
+        if (typeof simulation.returnData === 'string') {
+          returnDataStr = simulation.returnData;
+        } else if (Array.isArray(simulation.returnData.data)) {
+          returnDataStr = simulation.returnData.data[0];
+        } else {
+          returnDataStr = simulation.returnData.data || simulation.returnData;
+        }
+
+        const buffer = Buffer.from(returnDataStr, "base64");
+
+        const tickLower = buffer.readInt32LE(0);
+        const tickUpper = buffer.readInt32LE(4);
+        const tickArrayLowerStartIndex = buffer.readInt32LE(8);
+        const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+        const tickCurrent = buffer.readInt32LE(16);
+
+        return {
+          tickLower,
+          tickUpper,
+          tickArrayLowerStartIndex,
+          tickArrayUpperStartIndex,
+          tickCurrent,
+        };
       } else {
-        returnDataStr = simulation.returnData.data || simulation.returnData;
+        const txResult = provider.client.sendTransaction(tx);
+
+        if (txResult.err) {
+          throw new Error(`Transaction failed: ${txResult.err()}`);
+        }
+
+        const logs = txResult.logs();
+        console.log("=== calculateLiquidityRange logs ===");
+        logs.forEach((log: string) => console.log(log));
+
+        if (!txResult.returnData) {
+          throw new Error("No return data from calculateLiquidityRange");
+        }
+
+        const returnData = txResult.returnData();
+
+        // Extract base64 data from logs as fallback
+        let buffer: Buffer;
+
+        // Try to get data from returnData object
+        if (returnData && typeof returnData === 'object') {
+          // Check if it has data property or method
+          let dataBytes;
+          if (typeof returnData.data === 'function') {
+            dataBytes = returnData.data();
+          } else if (returnData.data instanceof Buffer || returnData.data instanceof Uint8Array) {
+            dataBytes = returnData.data;
+          } else if (typeof returnData.data === 'string') {
+            dataBytes = Buffer.from(returnData.data, "base64");
+          } else {
+            // Fallback: parse from logs
+            const returnLog = logs.find((log: string) => log.includes("Program return:"));
+            if (returnLog) {
+              const base64Data = returnLog.split(" ").pop();
+              dataBytes = Buffer.from(base64Data!, "base64");
+            } else {
+              throw new Error("Could not extract return data from transaction");
+            }
+          }
+          buffer = Buffer.from(dataBytes);
+        } else {
+          throw new Error("No return data from calculateLiquidityRange");
+        }
+
+        const tickLower = buffer.readInt32LE(0);
+        const tickUpper = buffer.readInt32LE(4);
+        const tickArrayLowerStartIndex = buffer.readInt32LE(8);
+        const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+        const tickCurrent = buffer.readInt32LE(16);
+
+        return {
+          tickLower,
+          tickUpper,
+          tickArrayLowerStartIndex,
+          tickArrayUpperStartIndex,
+          tickCurrent,
+        };
       }
-
-      const buffer = Buffer.from(returnDataStr, "base64");
-
-      const tickLower = buffer.readInt32LE(0);
-      const tickUpper = buffer.readInt32LE(4);
-      const tickArrayLowerStartIndex = buffer.readInt32LE(8);
-      const tickArrayUpperStartIndex = buffer.readInt32LE(12);
-      const tickCurrent = buffer.readInt32LE(16);
-
-      return {
-        tickLower,
-        tickUpper,
-        tickArrayLowerStartIndex,
-        tickArrayUpperStartIndex,
-        tickCurrent,
-      };
     }
 
     tx.feePayer = this.program.provider.publicKey;
@@ -896,17 +959,20 @@ export class TxBuilder {
     }
 
     const [data, encoding] = returnData.data;
-    const decoded = this.program.coder.types.decode(
-      "LiquidityRangeResult",
-      Buffer.from(data, encoding as BufferEncoding)
-    );
+    const buffer = Buffer.from(data, encoding as BufferEncoding);
+
+    const tickLower = buffer.readInt32LE(0);
+    const tickUpper = buffer.readInt32LE(4);
+    const tickArrayLowerStartIndex = buffer.readInt32LE(8);
+    const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+    const tickCurrent = buffer.readInt32LE(16);
 
     return {
-      tickLower: decoded.tickLower,
-      tickUpper: decoded.tickUpper,
-      tickArrayLowerStartIndex: decoded.tickArrayLowerStartIndex,
-      tickArrayUpperStartIndex: decoded.tickArrayUpperStartIndex,
-      tickCurrent: decoded.tickCurrent,
+      tickLower,
+      tickUpper,
+      tickArrayLowerStartIndex,
+      tickArrayUpperStartIndex,
+      tickCurrent,
     };
   }
 
@@ -922,6 +988,8 @@ export class TxBuilder {
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
+    baseAmount: BN;
+    quoteAmount: BN;
     positionNftMint?: web3.Keypair;
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -930,6 +998,9 @@ export class TxBuilder {
     baseVault: web3.PublicKey;
     poolState: web3.PublicKey;
     positionNftMint: web3.PublicKey;
+    positionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
     quoteTokenAta: web3.PublicKey;
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
@@ -973,16 +1044,8 @@ export class TxBuilder {
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
       escrowAuthority,
-      true
-    );
-
-    const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("metadata"),
-        METADATA_PROGRAM_ID.toBuffer(),
-        positionNftMint.publicKey.toBuffer(),
-      ],
-      METADATA_PROGRAM_ID
+      true,
+      TOKEN_2022_PROGRAM_ID
     );
 
     const [personalPosition] = web3.PublicKey.findProgramAddressSync(
@@ -994,10 +1057,12 @@ export class TxBuilder {
     );
 
     const tickLowerBuffer = Buffer.alloc(4);
-    tickLowerBuffer.writeInt32BE(params.tickLowerIndex, 0);
+    //tickLowerBuffer.writeInt32BE(params.tickLowerIndex, 0);
+    tickLowerBuffer.writeInt32BE(-443636, 0);
 
     const tickUpperBuffer = Buffer.alloc(4);
-    tickUpperBuffer.writeInt32BE(params.tickUpperIndex, 0);
+//    tickUpperBuffer.writeInt32BE(params.tickUpperIndex, 0);
+    tickUpperBuffer.writeInt32BE(443636, 0);
 
     const [protocolPosition] = web3.PublicKey.findProgramAddressSync(
       [
@@ -1010,10 +1075,12 @@ export class TxBuilder {
     );
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
-    tickArrayLowerBuffer.writeInt32BE(params.tickArrayLowerStartIndex, 0);
+//    tickArrayLowerBuffer.writeInt32BE(params.tickArrayLowerStartIndex, 0);
+    tickArrayLowerBuffer.writeInt32BE(-443640, 0);
 
     const tickArrayUpperBuffer = Buffer.alloc(4);
-    tickArrayUpperBuffer.writeInt32BE(params.tickArrayUpperStartIndex, 0);
+//    tickArrayUpperBuffer.writeInt32BE(params.tickArrayUpperStartIndex, 0);
+    tickArrayUpperBuffer.writeInt32BE(443580, 0);
 
     const [tickArrayLower] = web3.PublicKey.findProgramAddressSync(
       [
@@ -1038,7 +1105,9 @@ export class TxBuilder {
         params.tickLowerIndex,
         params.tickUpperIndex,
         params.tickArrayLowerStartIndex,
-        params.tickArrayUpperStartIndex
+        params.tickArrayUpperStartIndex,
+        params.baseAmount,
+        params.quoteAmount
       )
       .accountsStrict({
         payer: params.payer,
@@ -1054,20 +1123,22 @@ export class TxBuilder {
         raydiumBaseVault: baseVault,
         raydiumPositionNftMint: positionNftMint.publicKey,
         raydiumPositionNftAccount: positionNftAccount,
-        raydiumMetadataAccount: metadataAccount,
         raydiumPersonalPosition: personalPosition,
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
         quoteTokenAta: quoteTokenAta,
-        metadataProgram: METADATA_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
-      })
+      }).remainingAccounts([{
+        pubkey: new web3.PublicKey("G8nXeE7ZArnMgBpMFkTKxKmJzaxg9njfbQJJdRhCfoPQ"),
+        isSigner: false,
+        isWritable: true
+      }])
       .instruction();
 
     return {
@@ -1077,6 +1148,9 @@ export class TxBuilder {
       baseVault,
       poolState,
       positionNftMint: positionNftMint.publicKey,
+      positionNftAccount,
+      personalPosition,
+      protocolPosition,
       quoteTokenAta,
     };
   }
@@ -1094,19 +1168,34 @@ export class TxBuilder {
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
+    baseAmount: BN;
+    quoteAmount: BN;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
     positionNftMint: web3.PublicKey;
+    positionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
     quoteTokenAta: web3.PublicKey;
   }> {
-    const { instruction, signers, quoteVault, baseVault, positionNftMint, quoteTokenAta } =
+    const {
+      instruction,
+      signers,
+      quoteVault,
+      baseVault,
+      positionNftMint,
+      positionNftAccount,
+      personalPosition,
+      protocolPosition,
+      quoteTokenAta
+    } =
       await this.addClmmLiquidityIx(params);
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_000_000,
+      units: 1_400_000,
     });
 
     const transaction = new web3.Transaction()
@@ -1119,6 +1208,9 @@ export class TxBuilder {
       quoteVault,
       baseVault,
       positionNftMint,
+      positionNftAccount,
+      personalPosition,
+      protocolPosition,
       quoteTokenAta,
     };
   }
@@ -1135,6 +1227,8 @@ export class TxBuilder {
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
+    baseAmount: BN;
+    quoteAmount: BN;
   }): Promise<{
     quoteTokenAtaAmount: BN;
     baseEscrowAtaAmount: BN;

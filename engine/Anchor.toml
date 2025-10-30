@@ -10,7 +10,7 @@ engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-income-dispatcher = "5RBTApVVa2JYk2w5WhjxXPseWb4uCDMnBbtGCSVf4b2p"
+#income-dispatcher = "5RBTApVVa2JYk2w5WhjxXPseWb4uCDMnBbtGCSVf4b2p"
 
 [registry]
 url = "https://api.apr.dev"
@@ -20,6 +20,7 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.test.ts'"
 create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"
 deposit = "ts-node scripts/deposit.ts"
 init-launch = "ts-node scripts/init-launch.ts"
