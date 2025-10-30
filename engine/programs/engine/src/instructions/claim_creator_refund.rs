@@ -4,7 +4,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::RefundClaimed,
-    state::{CreatorGrant, EscrowAccount, LaunchState},
+    state::{CreatorGrant, LaunchState},
 };
 
 #[derive(Accounts)]
@@ -21,13 +21,10 @@ pub struct ClaimCreatorRefund<'info> {
     )]
     pub creator_grant: Account<'info, CreatorGrant>,
 
-    /// CHECK: Escrow account
-    #[account(
-        mut,
-        address = crate::utils::pool::escrow_address(launch_state.key()),
-        constraint = escrow.launch == launch_state.key()
-    )]
-    pub escrow: Account<'info, EscrowAccount>,
+    /// CHECK: SOL held on escrow_authority PDA
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
@@ -49,8 +46,25 @@ pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
 
     let refund = creator_grant.locked_lamports;
     if refund > 0 {
-        **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= refund;
-        **ctx.accounts.creator.to_account_info().try_borrow_mut_lamports()? += refund;
+        let launch_key = launch_state.key();
+        let seeds = [
+            SEED_ROOT,
+            b"escrow_authority",
+            launch_key.as_ref(),
+            &[ctx.bumps.escrow_authority],
+        ];
+        let signer = &[&seeds[..]];
+        anchor_lang::system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.escrow_authority.to_account_info(),
+                    to: ctx.accounts.creator.to_account_info(),
+                },
+                signer,
+            ),
+            refund,
+        )?;
     }
 
     creator_grant.refunded = true;

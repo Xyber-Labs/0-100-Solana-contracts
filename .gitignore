@@ -3,3 +3,4 @@ lightpaper/*
 .DS_Store
 CLAUDE.md
 .cursor
+engine/tests/resources/*

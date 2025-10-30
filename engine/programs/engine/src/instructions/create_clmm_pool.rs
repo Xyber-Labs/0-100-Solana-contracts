@@ -6,10 +6,9 @@ use anchor_spl::{
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
-use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, utils::U256, LaunchState, SEED_ROOT};
 
-// TODO (@xykeeper): total_supply to the EngineConfig
-const TOTAL_SUPPLY: u64 = 1_000_000_000u64;
+// Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -22,20 +21,11 @@ pub struct CreateClmmPool<'info> {
     )]
     pub launch_state: Account<'info, LaunchState>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
-    pub escrow: Account<'info, EscrowAccount>,
-
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    #[account(
-        init,
-        payer = payer,
-        mint::decimals = 9,
-        mint::authority = escrow_authority,
-        mint::token_program = base_token_program
-    )]
+    #[account(mut)]
     pub base_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Escrow ATA for base token (ATA of escrow_authority for base_mint)
@@ -79,9 +69,22 @@ pub struct CreateClmmPool<'info> {
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
+    require!(ctx.accounts.launch_state.selection_finalized, ErrorCode::NotFinalized);
+    require!(
+        ctx.accounts.launch_state.total_deposited >= ctx.accounts.launch_state.min_raise_lamports,
+        ErrorCode::MinRaiseNotMet
+    );
+    require!(
+        ctx.accounts.launch_state.roster_shards > 0
+            && ctx.accounts.launch_state.roster_finalized_up_to + 1
+                == ctx.accounts.launch_state.roster_shards as i32,
+        ErrorCode::ShardsNotFullyFinalized
+    );
+
     create_base_escrow_ata(&ctx)?;
-    mint_base_tokens(&ctx)?;
-    invoke_raydium_create_pool(&ctx)?;
+    mint_sale_tokens_to_escrow(&ctx)?;
+    invoke_raydium_prepare_pool_creation(&ctx)?;
+    ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
 }
@@ -102,15 +105,19 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
     Ok(())
 }
 
-fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let launch_key = ctx.accounts.launch_state.key();
-    let seeds = &[
+fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    let to_mint = ctx.accounts.launch_state.base_total_allocation;
+
+    // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]
+    let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"escrow_authority",
-        launch_key.as_ref(),
-        &[ctx.bumps.escrow_authority],
+        &ctx.accounts.launch_state.key().to_bytes(),
+        &[LaunchState::mint_auth_bump_for(
+            &ctx.accounts.launch_state.key(),
+        )],
     ];
-    let seeds_binding = [&seeds[..]];
+    let signer_seeds = &[seeds];
     let mint_accounts = MintTo {
         mint: ctx.accounts.base_mint.to_account_info(),
         to: ctx.accounts.base_escrow_ata.to_account_info(),
@@ -119,21 +126,38 @@ fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let mint_ctx = CpiContext::new_with_signer(
         ctx.accounts.base_token_program.to_account_info(),
         mint_accounts,
-        &seeds_binding,
+        signer_seeds,
     );
-    token::mint_to(mint_ctx, TOTAL_SUPPLY)?;
+    token::mint_to(mint_ctx, to_mint)?;
 
     Ok(())
 }
 
-fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
+fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    let total_acclocation = ctx.accounts.launch_state.base_total_allocation;
+    let base_sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+    let sale_allocation = ctx
+        .accounts
+        .launch_state
+        .base_total_allocation
+        .checked_mul(base_sale_bps)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let lp_allocation =
+        total_acclocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
+
     let calculator = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
+        sale_allocation,
+        lp_allocation,
     );
 
-    let sqrt_price_x64 = calculator.get_sqrt_price();
+    let mut sqrt_price_x64 = calculator.get_sqrt_price();
+    if sqrt_price_x64 == 0 {
+        // Avoid division by zero in inverted-price branch
+        sqrt_price_x64 = 1;
+    }
     let open_time =
         Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
@@ -231,11 +255,15 @@ impl<'info> TokenOrderForPool<'info> {
                 sqrt_price: sqrt_price_x64,
             })
         } else {
-            let inverted_sqrt_price = (1u128 << 64)
-                .checked_mul(1u128 << 64)
-                .and_then(|v| v.checked_div(sqrt_price_x64))
-                .and_then(|v| v.checked_shr(64))
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            // Compute inverted_sqrt_price = floor((2^128 / sqrt_price_x64) >> 64)
+            // using 256-bit arithmetic to avoid overflow
+            let numerator = U256::from(1u128) << 128;
+            let denom = U256::from(sqrt_price_x64);
+            require!(denom > U256::zero(), ErrorCode::ArithmeticOverflow);
+            let mut inv = numerator.checked_div(denom).ok_or(ErrorCode::ArithmeticOverflow)?;
+            inv >>= 64;
+            let inverted_sqrt_price: u128 =
+                inv.try_into().map_err(|_| ErrorCode::ArithmeticOverflow)?;
             Ok(Self {
                 token_mint_0: base_mint.clone(),
                 token_mint_1: quote_mint.clone(),

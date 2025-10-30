@@ -9,4 +9,4 @@ ts-sdk/dist
 deploy-keypair.json
 .venv
 log*.txt
-engine/tests/resources
+engine/tests/resources/*

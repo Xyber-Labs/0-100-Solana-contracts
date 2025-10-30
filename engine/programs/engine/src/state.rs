@@ -18,13 +18,11 @@ pub struct LaunchState {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub num_blocks: u64, // N value for hash range calculation
+    pub unlock_time_sec: i64,
 
-    // Sale/LP (MVP)
-    pub sale_mint: Pubkey,
-    pub sale_allocation: u64,
-    pub total_launch_allocation: u64, // sale_allocation + creator allocation
-    pub lp_allocation: u64,
+    pub base_mint: Option<Pubkey>,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
 
     // Funding
     pub funding_period_end: i64, // Unix timestamp when funding period ends
@@ -34,7 +32,7 @@ pub struct LaunchState {
 
     // Selection
     pub vrf_seed: Option<[u8; 32]>,
-    pub selection_processed: u32, // mirror, not used in MVP (kept in SelectionState)
+    pub selection_processed: u32,
     pub selection_finalized: bool,
     pub threshold_score: Option<u128>,
 
@@ -58,26 +56,11 @@ pub struct LaunchState {
 }
 
 impl LaunchState {
-    pub fn mint_auth_seeds<'a>(&'a self, launch_key: &'a Pubkey) -> [&'a [u8]; 2] {
-        [b"mint_auth", launch_key.as_ref()]
-    }
-
-    pub fn mint_auth_bump(&self) -> u8 {
-        // Get the canonical bump for the mint authority PDA
-        // We need to derive the launch state key first
-        let launch_key = Pubkey::find_program_address(
-            &[
-                crate::constants::SEED_ROOT,
-                b"launch",
-                self.sale_mint.as_ref(),
-            ],
-            &crate::ID,
-        )
-        .0;
+    pub fn mint_auth_bump_for(launch_key: &Pubkey) -> u8 {
         let (_, bump) = Pubkey::find_program_address(
             &[
                 crate::constants::SEED_ROOT,
-                b"mint_auth",
+                b"escrow_authority",
                 launch_key.as_ref(),
             ],
             &crate::ID,
@@ -114,9 +97,9 @@ pub struct Roster {
 
     // built at close
     #[max_len(100)]
-    pub prefix: Vec<u32>, // prefix[u] = Σ counts[k], k<u
+    pub prefix: Vec<u32>,
     pub total_in_shard: u32,
-    pub shard_base: u32, // 0 in MVP
+    pub shard_base: u32,
 }
 
 // New sharded roster account
@@ -129,25 +112,6 @@ pub struct RosterShard {
     pub prefix: Vec<u32>,
     pub total_in_shard: u32,
     pub shard_base: u32,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct EscrowAccount {
-    pub launch: Pubkey,
-    pub balance: u64,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct SelectionState {
-    pub launch: Pubkey,
-    pub vrf_seed: [u8; 32],
-    pub processed: u32,
-    pub finalized: bool,
-    pub threshold: Option<u128>,
-    #[max_len(100)]
-    pub heap: Vec<crate::types::HeapEntry>, // size ≤ K
 }
 
 #[account]
@@ -167,6 +131,7 @@ pub struct PoolState {
     pub range_start: [u8; 32],
     pub range_end: [u8; 32],
     pub created: bool,
+    pub claims_ready: bool,
 }
 
 #[account]

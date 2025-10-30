@@ -1,12 +1,5 @@
 use super::U256;
-use anchor_lang::prelude::*;
-
-/// Calculate escrow address for a launch
-pub fn escrow_address(launch: Pubkey) -> Pubkey {
-    let (address, _) =
-        Pubkey::find_program_address(&[crate::SEED_ROOT, b"escrow", launch.as_ref()], &crate::ID);
-    address
-}
+use crate::constants::DEFAULT_N;
 
 /// Check if a blockhash is within the project's personal range.
 pub fn is_blockhash_in_project_range(
@@ -20,16 +13,20 @@ pub fn is_blockhash_in_project_range(
     hash_as_u256 >= range_start && hash_as_u256 < range_end
 }
 
-/// Calculate the personal range for a project based on its ID (0-based, modulo).
+/// Calculate the personal range for a project based on its 1-based ID.
 /// Range width = floor((2^256 - 1) / N) using U256::MAX / N.
-/// Segment index: seg = project_id % num_partitions.
+/// Segment index: seg = (project_id - 1) % num_partitions (1-based → 0-based).
 /// Range is half-open: [seg * width, (seg + 1) * width)
 pub fn calculate_project_range(project_id: u64, num_partitions: u64) -> (U256, U256) {
     if num_partitions == 0 {
         return (U256::zero(), U256::zero());
     }
 
-    let seg = project_id % num_partitions;
+    let seg = if project_id == 0 {
+        0
+    } else {
+        (project_id - 1) % num_partitions
+    };
     let seg_u256 = U256::from(seg);
     let n_u256 = U256::from(num_partitions);
 
@@ -41,9 +38,27 @@ pub fn calculate_project_range(project_id: u64, num_partitions: u64) -> (U256, U
     (start, end_exclusive)
 }
 
+/// Map an unlock time window (in seconds) to an internal partition count N.
+/// Logic: N ≈ number of blocks expected in T seconds. With block time ~0.4s,
+/// N = floor(T * 5 / 2). Fallback to DEFAULT_N if T <= 0.
+pub fn derive_num_partitions_from_unlock(unlock_time_sec: i64) -> u64 {
+    if unlock_time_sec <= 0 {
+        return DEFAULT_N;
+    }
+    let seconds = unlock_time_sec as u64;
+    let approx_blocks = seconds.saturating_mul(5).saturating_div(2);
+    approx_blocks.max(1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_derive_num_partitions() {
+        let num_partitions = derive_num_partitions_from_unlock(7200);
+        assert_eq!(num_partitions, 18000);
+    }
 
     #[test]
     fn test_calculate_project_range() {

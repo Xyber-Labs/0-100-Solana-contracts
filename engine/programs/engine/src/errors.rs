@@ -57,7 +57,7 @@ pub enum ErrorCode {
     #[msg("No valid blockhash found in recent blocks")]
     NoValidBlockhash,
     #[msg("Invalid N value for hash range calculation (must be between MIN_N and MAX_N)")]
-    InvalidNumBlocks,
+    InvalidNumPartitions,
     #[msg("Invalid slot hashes data")]
     InvalidSlotHashesData,
     #[msg("Roster is full")]
@@ -117,4 +117,7 @@ pub enum ErrorCode {
     InvalidShareSum,
     #[msg("Base token decimals must be less than 18")]
     InvalidBaseDecimals,
+
+    #[msg("Pool not created yet")]
+    PoolNotCreated,
 }

@@ -47,8 +47,7 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
     let counts = shard.counts.clone();
     shard.prefix.reserve(counts.len());
 
-    // Debug logging
-    msg!("DEBUG: Shard {} has {} users with counts: {:?}", shard_id, counts.len(), counts);
+    
 
     for &c in counts.iter() {
         shard.prefix.push(run);
@@ -56,8 +55,7 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
     }
     shard.total_in_shard = run;
 
-    // Debug logging
-    msg!("DEBUG: Shard {} calculated total_in_shard={}", shard_id, shard.total_in_shard);
+    
 
     // Assign shard base and update public_total_tickets
     shard.shard_base = launch_state.public_total_tickets;
@@ -66,14 +64,7 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
         .checked_add(shard.total_in_shard)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    // Debug logging (remove in production)
-    msg!(
-        "DEBUG: Shard {} finalized: shard_base={}, total_in_shard={}, public_total_tickets={}",
-        shard_id,
-        shard.shard_base,
-        shard.total_in_shard,
-        launch_state.public_total_tickets
-    );
+    
 
     launch_state.roster_finalized_up_to = shard_id as i32;
 

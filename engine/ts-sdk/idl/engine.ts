@@ -43,45 +43,6 @@ export type Engine = {
           "name": "baseMint"
         },
         {
-          "name": "escrow",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -186,6 +147,44 @@ export type Engine = {
                 89
               ]
             }
+          }
+        },
+        {
+          "name": "poolState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
           }
         },
         {
@@ -300,8 +299,7 @@ export type Engine = {
           "name": "quoteTokenProgram"
         },
         {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "baseTokenProgram"
         },
         {
           "name": "associatedTokenProgram",
@@ -384,8 +382,58 @@ export type Engine = {
           }
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -413,6 +461,43 @@ export type Engine = {
         },
         {
           "name": "launchState"
+        },
+        {
+          "name": "poolState",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
         },
         {
           "name": "creatorGrant",
@@ -456,11 +541,10 @@ export type Engine = {
           }
         },
         {
-          "name": "saleMint",
-          "writable": true
+          "name": "baseMint"
         },
         {
-          "name": "mintAuth",
+          "name": "escrowAuthority",
           "pda": {
             "seeds": [
               {
@@ -483,15 +567,22 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
-                  109,
-                  105,
-                  110,
-                  116,
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
                   95,
                   97,
                   117,
                   116,
-                  104
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               },
               {
@@ -499,6 +590,96 @@ export type Engine = {
                 "path": "launchState"
               }
             ]
+          }
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
           }
         },
         {
@@ -582,8 +763,58 @@ export type Engine = {
           "name": "rosterShard"
         },
         {
-          "name": "escrow",
-          "writable": true
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -658,14 +889,7 @@ export type Engine = {
           "name": "rosterShard"
         },
         {
-          "name": "saleMint",
-          "writable": true
-        },
-        {
-          "name": "mintAuth",
-          "docs": [
-            "Seeds: [\"mint_auth\", launch_state]"
-          ],
+          "name": "poolState",
           "pda": {
             "seeds": [
               {
@@ -688,15 +912,10 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104
+                  112,
+                  111,
+                  111,
+                  108
                 ]
               },
               {
@@ -704,6 +923,148 @@ export type Engine = {
                 "path": "launchState"
               }
             ]
+          }
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "escrowAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
           }
         },
         {
@@ -738,46 +1099,6 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
-        },
-        {
-          "name": "escrow",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
         },
         {
           "name": "escrowAuthority",
@@ -830,8 +1151,7 @@ export type Engine = {
         },
         {
           "name": "baseMint",
-          "writable": true,
-          "signer": true
+          "writable": true
         },
         {
           "name": "baseEscrowAta",
@@ -910,79 +1230,6 @@ export type Engine = {
       "args": []
     },
     {
-      "name": "createPool",
-      "docs": [
-        "Create AMM pool"
-      ],
-      "discriminator": [
-        233,
-        146,
-        209,
-        142,
-        207,
-        104,
-        64,
-        188
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState"
-        },
-        {
-          "name": "poolState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "slotHashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "deposit",
       "docs": [
         "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -1051,13 +1298,6 @@ export type Engine = {
         },
         {
           "name": "rosterShard",
-          "writable": true
-        },
-        {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
           "writable": true
         },
         {
@@ -1312,23 +1552,20 @@ export type Engine = {
               },
               {
                 "kind": "account",
-                "path": "saleMint"
+                "path": "baseMint"
               }
             ]
           }
         },
         {
-          "name": "saleMint",
+          "name": "baseMint",
           "docs": [
-            "Mint for sale tokens (program's mint authority will be PDA)"
-          ],
-          "writable": true
+            "Base mint pubkey is used only for seeding the launch_state PDA at init time.",
+            "The mint account itself will be created later in create_clmm_pool."
+          ]
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
+          "name": "escrowAuthority",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1357,7 +1594,17 @@ export type Engine = {
                   99,
                   114,
                   111,
-                  119
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
               },
               {
@@ -1414,6 +1661,10 @@ export type Engine = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": [
@@ -1587,19 +1838,19 @@ export type Engine = {
       ]
     },
     {
-      "name": "openClaims",
+      "name": "preparePoolCreation",
       "docs": [
-        "Open claims after all shards finalized"
+        "Create AMM pool"
       ],
       "discriminator": [
-        111,
-        108,
-        90,
-        115,
-        178,
-        90,
-        24,
-        228
+        38,
+        193,
+        253,
+        218,
+        109,
+        225,
+        56,
+        59
       ],
       "accounts": [
         {
@@ -1612,7 +1863,7 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "creatorGrant",
+          "name": "poolState",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1636,13 +1887,10 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
+                  112,
                   111,
-                  114
+                  111,
+                  108
                 ]
               },
               {
@@ -1651,32 +1899,17 @@ export type Engine = {
               }
             ]
           }
+        },
+        {
+          "name": "slotHashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
-    },
-    {
-      "name": "processBatch",
-      "docs": [
-        "Permissionless crank: process up to max_items tickets (t = processed ..)."
-      ],
-      "discriminator": [
-        82,
-        138,
-        120,
-        1,
-        122,
-        136,
-        206,
-        67
-      ],
-      "accounts": [],
-      "args": [
-        {
-          "name": "maxItems",
-          "type": "u16"
-        }
-      ]
     },
     {
       "name": "setSeed",
@@ -1786,13 +2019,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "escrow",
-          "docs": [
-            "Escrow account (PDA off launch_state)"
-          ],
-          "writable": true
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -1883,19 +2109,6 @@ export type Engine = {
         50,
         10,
         157
-      ]
-    },
-    {
-      "name": "escrowAccount",
-      "discriminator": [
-        36,
-        69,
-        48,
-        18,
-        128,
-        225,
-        125,
-        135
       ]
     },
     {
@@ -2067,19 +2280,6 @@ export type Engine = {
         166,
         10,
         63
-      ]
-    },
-    {
-      "name": "numBlocksUpdated",
-      "discriminator": [
-        169,
-        68,
-        39,
-        54,
-        104,
-        241,
-        228,
-        223
       ]
     },
     {
@@ -2338,7 +2538,7 @@ export type Engine = {
     },
     {
       "code": 6027,
-      "name": "invalidNumBlocks",
+      "name": "invalidNumPartitions",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {
@@ -2480,6 +2680,11 @@ export type Engine = {
       "code": 6055,
       "name": "invalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
+    },
+    {
+      "code": 6056,
+      "name": "poolNotCreated",
+      "msg": "Pool not created yet"
     }
   ],
   "types": [
@@ -2738,22 +2943,6 @@ export type Engine = {
       }
     },
     {
-      "name": "escrowAccount",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "balance",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "fundingPeriodStarted",
       "type": {
         "kind": "struct",
@@ -2791,11 +2980,11 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "saleAllocation",
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {
@@ -2803,8 +2992,8 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "numBlocks",
-            "type": "u64"
+            "name": "unlockTimeSec",
+            "type": "i64"
           },
           {
             "name": "rosterShardCap",
@@ -2839,7 +3028,7 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "saleMint",
+            "name": "baseMint",
             "type": "pubkey"
           },
           {
@@ -2859,16 +3048,16 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "saleAllocation",
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {
-            "name": "numBlocks",
-            "type": "u64"
+            "name": "unlockTimeSec",
+            "type": "i64"
           }
         ]
       }
@@ -2903,23 +3092,21 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "numBlocks",
+            "name": "unlockTimeSec",
+            "type": "i64"
+          },
+          {
+            "name": "baseMint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "baseTotalAllocation",
             "type": "u64"
           },
           {
-            "name": "saleMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "saleAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "totalLaunchAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "lpAllocation",
+            "name": "baseSaleBasisPoints",
             "type": "u64"
           },
           {
@@ -3016,22 +3203,6 @@ export type Engine = {
             "type": {
               "option": "pubkey"
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "numBlocksUpdated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "newNumBlocks",
-            "type": "u64"
           }
         ]
       }
@@ -3137,6 +3308,10 @@ export type Engine = {
           },
           {
             "name": "created",
+            "type": "bool"
+          },
+          {
+            "name": "claimsReady",
             "type": "bool"
           }
         ]

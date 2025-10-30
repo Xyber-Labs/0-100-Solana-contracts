@@ -1,14 +1,14 @@
 use crate::{
-    constants::{DEFAULT_N, MAX_N, MIN_N, SEED_ROOT},
+    constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
-    state::{CreatorGrant, EscrowAccount, LaunchState, ProjectCounter},
+    state::{CreatorGrant, LaunchState, ProjectCounter}
 };
 use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock::Clock, Sysvar},
 };
-use anchor_spl::token::Mint;
+use anchor_spl::token::Token;
 
 #[derive(Accounts)]
 pub struct InitLaunch<'info> {
@@ -29,24 +29,19 @@ pub struct InitLaunch<'info> {
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", sale_mint.key().as_ref()],
+        seeds = [SEED_ROOT, b"launch", base_mint.key().as_ref()],
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
 
-    /// Mint for sale tokens (program's mint authority will be PDA)
-    #[account(mut)]
-    pub sale_mint: Account<'info, Mint>,
+    /// Base mint pubkey is used only for seeding the launch_state PDA at init time.
+    /// The mint account itself will be created later in create_clmm_pool.
+    /// CHECK: Only the public key is used as a seed.
+    pub base_mint: UncheckedAccount<'info>,
 
-    /// Escrow account (PDA off launch_state)
-    #[account(
-        init,
-        payer = creator,
-        space = 8 + EscrowAccount::INIT_SPACE,
-        seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()],
-        bump
-    )]
-    pub escrow: Account<'info, EscrowAccount>,
+    /// CHECK: Escrow authority PDA without data for SOL storage
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
 
     /// Creator grant account (PDA off launch_state)
     #[account(
@@ -59,6 +54,7 @@ pub struct InitLaunch<'info> {
     pub creator_grant: Account<'info, CreatorGrant>,
 
     pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -67,10 +63,10 @@ pub struct InitLaunchParams {
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub sale_allocation: u64, // number of sale tokens
-    pub lp_allocation: u64,   // number of LP tokens to allocate (informational for MVP)
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
     pub funding_duration_seconds: i64,
-    pub num_blocks: u64, // N value for hash range calculation
+    pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
 
     // Creator grant parameters
@@ -100,15 +96,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
         EngineErrorCode::InvalidFundingDuration
     );
 
-    let n = if params.num_blocks == 0 {
-        DEFAULT_N
-    } else {
-        params.num_blocks
-    };
-    require!((MIN_N..=MAX_N).contains(&n), EngineErrorCode::InvalidNumBlocks);
-
-    let launch_key = ctx.accounts.launch_state.key();
-
     let counter = &mut ctx.accounts.project_counter;
     let project_id =
         counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -121,9 +108,9 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.min_raise_lamports = params.min_raise_lamports;
     state.per_wallet_cap = params.per_wallet_cap;
     state.tau_lamports = params.tau_lamports;
-    state.sale_allocation = params.sale_allocation;
-    state.lp_allocation = params.lp_allocation;
-    state.num_blocks = n;
+    state.base_total_allocation = params.base_total_allocation;
+    state.base_sale_basis_points = params.base_sale_basis_points;
+    state.unlock_time_sec = params.unlock_time_sec;
     state.roster_shard_cap = params.roster_shard_cap;
 
     // Set funding period end time (current time + duration)
@@ -160,9 +147,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.claims_opened_at = None;
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
 
-    // save sale mint
-    state.sale_mint = ctx.accounts.sale_mint.key();
-
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
@@ -171,17 +155,17 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
             amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
 
-        // Transfer creator deposit to escrow using system program
+        // Transfer creator deposit to escrow_authority PDA using system program
         let transfer_ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.creator.key(),
-            &ctx.accounts.escrow.key(),
+            &ctx.accounts.escrow_authority.key(),
             amount,
         );
         anchor_lang::solana_program::program::invoke(
             &transfer_ix,
             &[
                 ctx.accounts.creator.to_account_info(),
-                ctx.accounts.escrow.to_account_info(),
+                ctx.accounts.escrow_authority.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
@@ -190,11 +174,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.total_deposited = amount;
     state.creator_initial_deposit = amount; // Store the initial deposit
 
-    // Initialize escrow account
-    let escrow = &mut ctx.accounts.escrow;
     let funding_end = state.funding_period_end;
-    escrow.launch = launch_key;
-    escrow.balance = amount;
 
     // Creator grant reserved_tickets will be calculated in open_claims
     let reserved_tickets = 0;
@@ -203,7 +183,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.creator_grant_present = amount > 0;
 
     // Total launch allocation will be calculated in open_claims
-    state.total_launch_allocation = params.sale_allocation;
+    state.base_total_allocation = params.base_total_allocation;
+    state.base_sale_basis_points = params.base_sale_basis_points;
 
     // Initialize creator grant
     let launch_key = state.key();
@@ -236,14 +217,14 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     emit!(LaunchInitialized {
         project_id,
         creator: ctx.accounts.creator.key(),
-        sale_mint: ctx.accounts.sale_mint.key(),
+        base_mint: ctx.accounts.base_mint.key(),
         hard_cap_lamports: params.hard_cap_lamports,
         min_raise_lamports: params.min_raise_lamports,
         per_wallet_cap: params.per_wallet_cap,
         tau_lamports: params.tau_lamports,
-        sale_allocation: params.sale_allocation,
-        lp_allocation: params.lp_allocation,
-        num_blocks: state.num_blocks,
+        base_total_allocation: params.base_total_allocation,
+        base_sale_basis_points: params.base_sale_basis_points,
+        unlock_time_sec: state.unlock_time_sec,
     });
 
     emit!(FundingPeriodStarted {

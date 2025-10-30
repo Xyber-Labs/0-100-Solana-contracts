@@ -10,14 +10,14 @@ async function main() {
 
     printParameters(opts);
 
-    const saleMint = anchor.web3.Keypair.generate();
-    const launchState = printPdas(sdk, saleMint.publicKey);
+  const baseMint = anchor.web3.Keypair.generate();
+  const launchState = printPdas(sdk, baseMint.publicKey);
 
     console.log("Sending transaction...");
 
     const result = await sdk.initLaunchTx({
       creator: provider.wallet.publicKey,
-      saleMint: saleMint,
+      baseMint: baseMint,
       hardCapLamports: new BN(opts.hardCap),
       minRaiseLamports: new BN(opts.minRaise),
       perWalletCap: new BN(opts.perWalletCap),
@@ -77,13 +77,13 @@ function printParameters(opts: any) {
   console.log("  Creator lock period (sec):", opts.creatorLockPeriod);
 }
 
-function printPdas(sdk: any, saleMint: anchor.web3.PublicKey) {
-  const [launchState] = sdk.getLaunchPda(saleMint);
+function printPdas(sdk: any, baseMint: anchor.web3.PublicKey) {
+  const [launchState] = sdk.getLaunchPda(baseMint);
   const [escrow] = sdk.getEscrowPda(launchState);
   const [projectCounter] = sdk.getProjectCounterPda();
   const [mintAuth] = sdk.getMintAuthPda(launchState);
 
-  console.log("Generated sale mint:", saleMint.toBase58());
+  console.log("Generated sale mint:", baseMint.toBase58());
   console.log("PDAs:");
   console.log("  Launch state:", launchState.toBase58());
   console.log("  Escrow:", escrow.toBase58());

@@ -4,14 +4,14 @@ use anchor_lang::prelude::*;
 pub struct LaunchInitialized {
     pub project_id: u64,
     pub creator: Pubkey,
-    pub sale_mint: Pubkey,
+    pub base_mint: Pubkey,
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,
     pub tau_lamports: u64,
-    pub sale_allocation: u64,
-    pub lp_allocation: u64,
-    pub num_blocks: u64,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
+    pub unlock_time_sec: i64,
 }
 
 #[event]
@@ -95,12 +95,6 @@ pub struct PoolCreated {
     pub slot: u64,
     pub range_start: [u8; 32],
     pub range_end: [u8; 32],
-}
-
-#[event]
-pub struct NumBlocksUpdated {
-    pub launch: Pubkey,
-    pub new_num_blocks: u64,
 }
 
 #[event]

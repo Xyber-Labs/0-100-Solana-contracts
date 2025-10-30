@@ -42,12 +42,12 @@ const EngineSDK = {
     const txBuilder = new TxBuilder(program, admin);
 
     // -------------- PDA helpers --------------
-    function getLaunchPda(saleMint: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["launch", saleMint]);
+    function getLaunchPda(baseMint: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+      return txBuilder.getPda(["launch", baseMint]);
     }
 
     function getEscrowPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["escrow", launch]);
+      return txBuilder.getPda(["escrow_authority", launch]);
     }
 
     function getEscrowAuthorityPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -112,20 +112,20 @@ const EngineSDK = {
     // =============================
 
     /**
-     * IMPORTANT: For claimTokens to work, the mint authority of saleMint
+     * IMPORTANT: For claimTokens to work, the mint authority of baseMint
      * must be PDA ["mint_auth", launch_state]. This can be computed in advance,
-     * because launch = PDA(["launch", saleMint]).
+     * because launch = PDA(["launch", baseMint]).
      */
     async function initLaunch(args: {
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       hardCapLamports: BN;
       minRaiseLamports: BN;
       perWalletCap: BN;
       tauLamports: BN;
-      saleAllocation: BN;
-      lpAllocation: BN;
+      baseTotalAllocation: BN;
+      baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
-      numBlocks?: number;
+      unlockTimeSec?: number;
       rosterShardCap: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
@@ -140,18 +140,18 @@ const EngineSDK = {
       signature: string;
     }> {
       const creatorPayer = args.creator?.publicKey ?? payer;
-      const { instruction, launchState, escrow } = await txBuilder.initLaunchIx(
+      const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
-          saleMint: args.saleMint,
+          baseMint: args.baseMint,
           hardCapLamports: args.hardCapLamports,
           minRaiseLamports: args.minRaiseLamports,
           perWalletCap: args.perWalletCap,
           tauLamports: args.tauLamports,
-          saleAllocation: args.saleAllocation,
-          lpAllocation: args.lpAllocation,
+          baseTotalAllocation: args.baseTotalAllocation,
+          baseSaleBasisPoints: args.baseSaleBasisPoints,
           fundingDurationSeconds: args.fundingDurationSeconds,
-          numBlocks: args.numBlocks ?? 0,
+          unlockTimeSec: args.unlockTimeSec ?? 0,
           rosterShardCap: args.rosterShardCap,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
@@ -176,7 +176,7 @@ const EngineSDK = {
         throw new Error("Provider does not support sendAndConfirm");
       }
       const signature = await provider.sendAndConfirm(tx, signers);
-      return { launchPda: launchState, escrowPda: escrow, signature };
+      return { launchPda: launchState, escrowPda: escrowAuthority, signature };
     }
 
     async function initRoster(args: {
@@ -213,7 +213,7 @@ const EngineSDK = {
 
     // processBatch deprecated in on-chain program; keep for compatibility but will fail
     async function processBatch(_: any): Promise<{ signature: string }> {
-      throw new Error("processBatch deprecated; use finalizeRosterShard + openClaims");
+      throw new Error("processBatch deprecated; use finalizeRosterShard + preparePoolCreation");
     }
 
     async function deposit(args: {
@@ -417,11 +417,11 @@ const EngineSDK = {
 
     /**
      * Important:
-     * 1) saleMint must have mintAuthority = PDA ["mint_auth", launch].
-     * 2) userAta (user's ATA for saleMint) must exist. If
+     * 1) baseMint must have mintAuthority = PDA ["mint_auth", launch].
+     * 2) userAta (user's ATA for baseMint) must exist. If
      *    createAtaIfMissing = true, the SDK will add an ix for creation.
      */
-    async function createPool(args: {
+    async function preparePoolCreation(args: {
       launch: anchor.web3.PublicKey;
       payerKeypair?: anchor.web3.Keypair;
       useTestMode?: boolean;
@@ -480,7 +480,7 @@ const EngineSDK = {
 
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       userKeypair?: anchor.web3.Keypair;
       rosterShard?: anchor.web3.PublicKey;
       shardId?: number;
@@ -490,7 +490,7 @@ const EngineSDK = {
       const userPubkey = args.userKeypair?.publicKey ?? payer;
       const { transaction, userAta } = await txBuilder.claimTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         user: userPubkey,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -511,7 +511,7 @@ const EngineSDK = {
 
     async function claimTokensTx(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       userPubkey: anchor.web3.PublicKey;
       rosterShard?: anchor.web3.PublicKey;
       shardId?: number;
@@ -520,7 +520,7 @@ const EngineSDK = {
     }): Promise<{ transaction: anchor.web3.Transaction; userAta: anchor.web3.PublicKey }> {
       return txBuilder.claimTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         user: args.userPubkey,
         // @ts-ignore
         rosterShard: args.rosterShard,
@@ -569,21 +569,11 @@ const EngineSDK = {
       return { signature };
     }
 
-    async function openClaims(args: { launch: anchor.web3.PublicKey }): Promise<{ signature: string }> {
-      const ix = await txBuilder.openClaimsIx({ launch: args.launch, payer });
-      const tx = new anchor.web3.Transaction().add(ix);
-      tx.feePayer = payer;
-      const signers = adminKeypair ? [adminKeypair] : [];
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(tx, signers);
-      return { signature };
-    }
+    // openClaims removed; preparePoolCreation now finalizes and opens claims
 
     async function claimCreatorTokens(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       creatorKeypair?: anchor.web3.Keypair;
       creatorAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
@@ -591,7 +581,7 @@ const EngineSDK = {
       const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
       const { transaction, creatorAta } = await txBuilder.claimCreatorTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         creator: creatorPubkey,
         creatorAta: args.creatorAta,
         createAtaIfMissing: args.createAtaIfMissing,
@@ -608,14 +598,14 @@ const EngineSDK = {
 
     async function claimCreatorTokensTx(args: {
       launch: anchor.web3.PublicKey;
-      saleMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
       creator: anchor.web3.PublicKey;
       creatorAta?: anchor.web3.PublicKey;
       createAtaIfMissing?: boolean;
     }): Promise<{ transaction: anchor.web3.Transaction; creatorAta: anchor.web3.PublicKey }> {
       return txBuilder.claimCreatorTokensTx({
         launch: args.launch,
-        saleMint: args.saleMint,
+        baseMint: args.baseMint,
         creator: args.creator,
         creatorAta: args.creatorAta,
         createAtaIfMissing: args.createAtaIfMissing,
@@ -699,7 +689,7 @@ const EngineSDK = {
               launchPda: account.publicKey,
               account: account.account,
               // Try to derive sale mint from launch PDA
-              saleMint: account.account.saleMint,
+              baseMint: account.account.baseMint,
             };
           })
           .sort((a, b) => a.projectId - b.projectId);
@@ -736,7 +726,7 @@ const EngineSDK = {
           projectId: launchData.projectId.toNumber(),
           launchPda,
           account: launchData,
-          saleMint: launchData.saleMint,
+          baseMint: launchData.baseMint,
         };
       } catch (error) {
         console.error("Error getting project by launch PDA:", error);
@@ -748,9 +738,9 @@ const EngineSDK = {
     //        HIGH-LEVEL flows
     // =============================
 
-    /** Returns all PDAs for a given saleMint. Convenient for initialization. */
-    function deriveAllPdas(saleMint: anchor.web3.PublicKey) {
-      const [launch] = getLaunchPda(saleMint);
+    /** Returns all PDAs for a given baseMint. Convenient for initialization. */
+    function deriveAllPdas(baseMint: anchor.web3.PublicKey) {
+      const [launch] = getLaunchPda(baseMint);
       const [escrow] = getEscrowPda(launch);
       const [roster] = getRosterPda(launch);
       const [mintAuth] = getMintAuthPda(launch);
@@ -791,14 +781,13 @@ const EngineSDK = {
       claimTokens,
       initRosterShard,
       finalizeRosterShard,
-      openClaims,
       claimRefundTx,
       claimTokensTx,
       claimCreatorTokens,
       claimCreatorTokensTx,
       claimCreatorRefund,
       claimCreatorRefundTx,
-      createPool,
+      preparePoolCreation,
       createClmmPool,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),

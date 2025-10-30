@@ -1,13 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::Token,
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -25,9 +24,6 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    #[account(seeds = [SEED_ROOT, b"escrow", launch_state.key().as_ref()], bump)]
-    pub escrow: Account<'info, EscrowAccount>,
-
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -39,6 +35,9 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::token_program = base_token_program,
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
+    pub pool_state: Account<'info, PoolState>,
 
     #[account(
         mint::token_program = quote_token_program,
@@ -93,7 +92,7 @@ pub struct AddClmmLiquidity<'info> {
     pub token_2022_program: Program<'info, Token2022>,
 
     pub quote_token_program: Interface<'info, TokenInterface>,
-    pub base_token_program: Program<'info, Token>,
+    pub base_token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -105,14 +104,31 @@ pub struct AddClmmLiquidity<'info> {
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
 pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
     add_initial_liquidity(&ctx)?;
+    let now = Clock::get()?.unix_timestamp;
+    let launch_state = &mut ctx.accounts.launch_state;
+    launch_state.claims_opened_at = Some(now);
+    ctx.accounts.pool_state.claims_ready = true;
+    emit!(ClaimsOpened {
+        launch: launch_state.key(),
+        opened_at: now,
+    });
     Ok(())
 }
 
 fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
+    let total_allocation = ctx.accounts.launch_state.base_total_allocation;
+    let sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+    let sale_allocation = total_allocation
+        .checked_mul(sale_bps)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let lp_allocation =
+        total_allocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
+
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,
-        ctx.accounts.launch_state.sale_allocation,
-        ctx.accounts.launch_state.lp_allocation,
+        sale_allocation,
+        lp_allocation,
     )
     .get_pool_params()?;
 
@@ -205,7 +221,6 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     Ok(())
 }
 
-// TODO (@xykeeper) to be refined within the other issue processing
 struct StakingCalculator {
     raised_lamports: u64,
     sale_allocation: u64,

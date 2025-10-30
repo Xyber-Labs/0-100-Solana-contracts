@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
-    state::{EscrowAccount, LaunchState, RosterShard, UserContribution},
+    state::{LaunchState, RosterShard, UserContribution},
 };
 use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
@@ -14,13 +14,9 @@ pub struct Withdraw<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    // Legacy roster removed from new flow
+    
     #[account(mut, constraint = roster_shard.launch == launch_state.key())]
     pub roster_shard: Account<'info, RosterShard>,
-    /// Escrow account (PDA off launch_state)
-    #[account(mut, address = crate::utils::pool::escrow_address(launch_state.key()), constraint = escrow.launch == launch_state.key())]
-    pub escrow: Account<'info, EscrowAccount>,
-
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
