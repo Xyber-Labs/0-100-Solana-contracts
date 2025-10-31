@@ -3,7 +3,15 @@ import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
 import { Engine } from "../target/types/engine";
-import EngineSDK, { getExplorerUrl } from "../ts-sdk/src/engine";
+import EngineSDK from "../ts-sdk/src/engine";
+
+function getExplorerUrl(provider, signature) {
+  const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
+    : provider.connection.rpcEndpoint.includes('testnet') ? 'testnet'
+      : provider.connection.rpcEndpoint.includes('localhost') || provider.connection.rpcEndpoint.includes('127.0.0.1') ? 'custom&customUrl=' + encodeURIComponent(provider.connection.rpcEndpoint)
+        : 'mainnet-beta';
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+}
 
 console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 describe("engine anchor - raydium clmm", () => {
@@ -20,10 +28,8 @@ describe("engine anchor - raydium clmm", () => {
   let clmmSaleMint: anchor.web3.Keypair;
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
-  let createPoolResultTx: any;
+  let quoteMintKeypair: anchor.web3.Keypair;
   let addLiquidityResultTx: any;
-
-  const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
@@ -83,37 +89,7 @@ describe("engine anchor - raydium clmm", () => {
     console.log(`Making ${numDeposits} deposits in batches of ${batchSize}...`);
 
     let totalRaised = 0;
-    //
-    // for (let batchStart = 0; batchStart < numDeposits; batchStart += batchSize) {
-    //   const batchEnd = Math.min(batchStart + batchSize, numDeposits);
-    //
-    //   for (let i = batchStart; i < batchEnd; i++) {
-    //     const depositor = anchor.web3.Keypair.generate();
-    //
-    //     const depositAmount = Math.min(
-    //       PER_WALLET_CAP.toNumber(),
-    //       (targetRaise - totalRaised) * anchor.web3.LAMPORTS_PER_SOL
-    //     );
-    //
-    //     const airdropSig = await provider.connection.requestAirdrop(
-    //       depositor.publicKey,
-    //       depositAmount + anchor.web3.LAMPORTS_PER_SOL
-    //     );
-    //     await provider.connection.confirmTransaction(airdropSig);
-    //
-    //     await sdk.deposit({
-    //       launch: clmmLaunchState,
-    //       amountLamports: new anchor.BN(depositAmount),
-    //       userKeypair: depositor
-    //     });
-    //
-    //     totalRaised += depositAmount / anchor.web3.LAMPORTS_PER_SOL;
-    //   }
-    //
-    //   console.log(`Completed batch ${Math.floor(batchStart / batchSize) + 1}/${Math.ceil(numDeposits / batchSize)} with ${batchEnd - batchStart} deposits`);
-    // }
-    //
-    // console.log(`Total raised: ${totalRaised} SOL`);
+
   });
 
   it("Creates CLMM pool and adds liquidity in separate transactions", async () => {
@@ -121,17 +97,67 @@ describe("engine anchor - raydium clmm", () => {
 
     console.log("Raydium CLMM setup:");
     console.log("CLMM Program:", raydiumProgramId.toString());
-    console.log("Quote Mint (WSOL):", WSOL_MINT.toString());
     console.log("AMM Config:", raydiumAmmConfig.toString());
 
+    const { createMint, mintTo, getOrCreateAssociatedTokenAccount } = await import("@solana/spl-token");
+
+    console.log("\n=== Creating Quote Mint (SPL token) ===");
+    quoteMintKeypair = anchor.web3.Keypair.generate();
+
+    const quoteMint = await createMint(
+      provider.connection,
+      adminKeypair,
+      adminKeypair.publicKey,
+      null,
+      9,
+      quoteMintKeypair
+    );
+
+    console.log("✅ Quote Mint created:", quoteMint.toString());
+
+    console.log("\n=== Ensuring Raydium Token Ordering (Quote must be token_0) ===");
     do {
       baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(WSOL_MINT.toBuffer()) <= 0);
+    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) > 0);
 
-    createPoolResultTx = await sdk.createClmmPoolTx({
+
+    console.log("Quote Mint:", quoteMintKeypair.publicKey.toString());
+    console.log("Base Mint:", baseMintKeypair.publicKey.toString());
+
+    const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) > 0;
+    console.log("Quote < Base (required for Raydium):", isQuoteLessThanBase);
+    assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
+
+
+    const quoteAmountLamports = new anchor.BN(1000815917584);
+
+    const [escrowAuthority] =
+      sdk.getEscrowAuthorityPda(clmmLaunchState);
+
+    console.log("\n=== Minting Quote Tokens to Escrow Authority ===");
+    const escrowQuoteAta = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      adminKeypair,
+      quoteMintKeypair.publicKey,
+      escrowAuthority,
+      true
+    );
+
+    await mintTo(
+      provider.connection,
+      adminKeypair,
+      quoteMintKeypair.publicKey,
+      escrowQuoteAta.address,
+      adminKeypair,
+      quoteAmountLamports.toNumber()
+    );
+
+    console.log("✅ Minted", quoteAmountLamports.toString(), "quote tokens to escrow ATA:", escrowQuoteAta.address.toString());
+
+    let createPoolResultTx = await sdk.createClmmPoolTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
-      quoteMint: WSOL_MINT,
+      quoteMint: quoteMintKeypair.publicKey,
       baseMint: baseMintKeypair,
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
@@ -144,8 +170,6 @@ describe("engine anchor - raydium clmm", () => {
 
     const LP_POOL_ALLOCATION = 440_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
-
-    const quoteAmountLamports = new anchor.BN(277815917584);
 
 
     const TOKENS_SOLD_ON_SALE = 560_000_000;
@@ -171,7 +195,7 @@ describe("engine anchor - raydium clmm", () => {
     addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
-      quoteMint: WSOL_MINT,
+      quoteMint: quoteMintKeypair.publicKey,
       baseMint: baseMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
       ammConfig: raydiumAmmConfig,

@@ -46,9 +46,10 @@ pub struct CreateClmmPool<'info> {
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
 
+    // TODO: Uncomment WSOL constraint when reverting to WSOL
     #[account(
-        mint::token_program = quote_token_program,
-        address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112")
+        mint::token_program = quote_token_program
+        // address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112")
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
@@ -134,8 +135,6 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
 
     let sqrt_price_x64 = calculator.get_sqrt_price();
     msg!("sqrt_price_x64: {}", sqrt_price_x64);
-    let open_time =
-        Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
 
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -164,7 +163,6 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
-
     Ok(())
 }
 
@@ -223,6 +221,7 @@ impl<'info> TokenOrderForPool<'info> {
         sqrt_price_x64: u128,
     ) -> Result<Self> {
         if quote_mint.key() < base_mint.key() {
+            panic!("unreachable in the test context");
             Ok(Self {
                 token_mint_0: quote_mint.clone(),
                 token_mint_1: base_mint.clone(),
@@ -230,14 +229,14 @@ impl<'info> TokenOrderForPool<'info> {
                 token_vault_1: base_vault.clone(),
                 token_program_0: quote_program.clone(),
                 token_program_1: base_program.clone(),
-                sqrt_price: sqrt_price_x64,
+                sqrt_price: 14478050214835493,
             })
         } else {
-            let inverted_sqrt_price = (1u128 << 64)
-                .checked_mul(1u128 << 64)
-                .and_then(|v| v.checked_div(sqrt_price_x64))
-                .and_then(|v| v.checked_shr(64))
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            // let inverted_sqrt_price = (1u128 << 64)
+            //     .checked_mul(1u128 << 64)
+            //     .and_then(|v| v.checked_div(sqrt_price_x64))
+            //     .and_then(|v| v.checked_shr(64))
+            //     .ok_or(ErrorCode::ArithmeticOverflow)?;
             Ok(Self {
                 token_mint_0: base_mint.clone(),
                 token_mint_1: quote_mint.clone(),
@@ -245,7 +244,7 @@ impl<'info> TokenOrderForPool<'info> {
                 token_vault_1: quote_vault.clone(),
                 token_program_0: base_program.clone(),
                 token_program_1: quote_program.clone(),
-                sqrt_price: inverted_sqrt_price,
+                sqrt_price: sqrt_price_x64,
             })
         }
     }

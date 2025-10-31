@@ -40,14 +40,16 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    // TODO: Uncomment WSOL constraint when reverting to WSOL
     #[account(
-        mint::token_program = quote_token_program,
-        address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
+        mint::token_program = quote_token_program
+        // address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
+    // TODO: Change back to `init` when reverting to WSOL (for SPL tokens, ATA must exist with tokens)
     #[account(
-        init,
+        init_if_needed,
         payer = payer,
         associated_token::mint = quote_mint,
         associated_token::authority = escrow_authority,
@@ -156,34 +158,36 @@ fn add_initial_liquidity<'info>(
     ];
     let signers = &[&escrow_authority_seeds[..]];
 
-    let quote_ata_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
-    msg!("escwrow_authority_token_ata balance before transfer: {} lamports", quote_ata_balance);
+    // TODO: Uncomment SOL transfer for WSOL when reverting
+    // let quote_ata_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
+    // msg!("escwrow_authority_token_ata balance before transfer: {} lamports", quote_ata_balance);
 
     anchor_lang::system_program::transfer(
         CpiContext::new_with_signer(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
                 from: ctx.accounts.payer.to_account_info(),
-                to: ctx.accounts.quote_token_ata.to_account_info(),
+                to: ctx.accounts.escrow_authority.to_account_info(),
             },
             signers,
         ),
-        transfer_amount,
+        5000000000,
     )?;
 
-    let quote_ata_balance = ctx.accounts.quote_token_ata.to_account_info().lamports();
-    msg!("quote_token_ata balance after transfer: {} lamports", quote_ata_balance);
+    // let quote_ata_balance = ctx.accounts.quote_token_ata.to_account_info().lamports();
+    // msg!("quote_token_ata balance after transfer: {} lamports", quote_ata_balance);
 
-    anchor_lang::solana_program::program::invoke(
-        &anchor_spl::token::spl_token::instruction::sync_native(
-            &ctx.accounts.quote_token_program.key(),
-            &ctx.accounts.quote_token_ata.key(),
-        )?,
-        &[ctx.accounts.quote_token_ata.to_account_info()],
-    )?;
+    // NOTE: sync_native commented out for SPL token pairs (not WSOL)
+    // anchor_lang::solana_program::program::invoke(
+    //     &anchor_spl::token::spl_token::instruction::sync_native(
+    //         &ctx.accounts.quote_token_program.key(),
+    //         &ctx.accounts.quote_token_ata.key(),
+    //     )?,
+    //     &[ctx.accounts.quote_token_ata.to_account_info()],
+    // )?;
 
-    let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
-    msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
+    // let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
+    // msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
 
     let mut order = TokenOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -198,7 +202,7 @@ fn add_initial_liquidity<'info>(
     msg!("Token order - amount_0: {}, amount_1: {}", order.amount_0, order.amount_1);
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
-        payer: ctx.accounts.payer.to_account_info(),
+        payer: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),

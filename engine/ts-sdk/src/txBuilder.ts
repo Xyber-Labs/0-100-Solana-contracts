@@ -695,6 +695,7 @@ export class TxBuilder {
     return { transaction, poolState };
   }
 
+  // TODO:     baseMint: web3.Keypair;
   async createClmmPoolTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
@@ -717,8 +718,8 @@ export class TxBuilder {
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
         params.baseMint.publicKey.toBuffer(),
+        params.quoteMint.toBuffer(),
       ],
       params.clmmProgram
     );
@@ -794,12 +795,8 @@ export class TxBuilder {
       })
       .instruction();
 
-    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
-    });
 
     const transaction = new web3.Transaction()
-      .add(computeBudgetIx)
       .add(createClmmPoolIx);
 
     return {
@@ -1018,8 +1015,8 @@ export class TxBuilder {
       [
         Buffer.from("pool"),
         params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
         params.baseMint.toBuffer(),
+        params.quoteMint.toBuffer(),
       ],
       params.clmmProgram
     );
