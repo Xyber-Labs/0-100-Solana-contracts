@@ -8,7 +8,6 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
-  createInitializeMintInstruction,
 } from "@solana/spl-token";
 
 interface LaunchConfig {
@@ -24,6 +23,10 @@ interface LaunchConfig {
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
   creatorClaimLockPeriodSec: number;
+  // Optional Raydium CLMM config for pool creation
+  quoteMint?: string; // defaults to WSOL if not provided
+  ammConfig?: string; // required to actually create pool
+  clmmProgram?: string; // required to actually create pool
 }
 
 // A simplified SDK type, as we don't have the full type in this context
@@ -158,7 +161,6 @@ export async function runFullFlow(
 
     const testBaseMint = Keypair.generate();
     [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
-    const [mintAuth] = sdk.getMintAuthPda(testLaunchState);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
 
@@ -177,35 +179,38 @@ export async function runFullFlow(
     });
     tx.add(cuInstruction);
 
-    // Add pre-instructions
-    tx.add(
-      SystemProgram.createAccount({
-        fromPubkey: admin.publicKey,
-        newAccountPubkey: testBaseMint.publicKey,
-        space: 82,
-        lamports: 2039280, // Fixed rent exemption for 82 bytes
-        programId: TOKEN_PROGRAM_ID,
-      })
-    );
-    tx.add(
-      createInitializeMintInstruction(
-        testBaseMint.publicKey,
-        6,
-        mintAuth,
-        admin.publicKey
-      )
-    );
+    // Note: base mint account will be created during CLMM pool creation; only pass its pubkey as seed here
+
+    // Ensure funding period is long enough for simulated deposits (dynamic estimate)
+    const estFundingBatches = Math.ceil(simConfig.numUsers / 50); // FUNDING_BATCH_SIZE
+    const estDepositBatches = Math.ceil(simConfig.numUsers / 50); // BATCH_SIZE
+    const estSec = estFundingBatches * 2 + estDepositBatches * 3 + 5; // ~2s per funding batch, ~3s per deposit batch + overhead
+    const estClamped = Math.max(15, Math.min(estSec, 90));
+    const cfgSec = typeof config.fundingDurationSeconds === 'number' ? config.fundingDurationSeconds : 0;
+    const fundingDurationSeconds = Math.max(15, Math.min(cfgSec || estClamped, estClamped));
 
     // Add main instruction
+    // Mirror LiteSVM: derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
+    const saleAllocBN = new BN(config.saleAllocation);
+    const lpAllocBN = new BN(String(config.lpAllocation));
+    const baseTotalAllocationBN = saleAllocBN.add(lpAllocBN);
+    const baseSaleBpsBN = baseTotalAllocationBN.isZero()
+      ? new BN(0)
+      : new BN(Math.floor(saleAllocBN.toNumber() * 10000 / baseTotalAllocationBN.toNumber()));
+
+    if (lpAllocBN.isZero()) {
+      throw new Error("Invalid config: lpAllocation is zero; LP must be > 0");
+    }
+
     const initLaunchIx = await program.methods
       .initLaunch({
         hardCapLamports: new BN(config.hardCapLamports),
         minRaiseLamports: new BN(config.minRaiseLamports),
         perWalletCap: new BN(config.perWalletCap),
         tauLamports: new BN(config.tauLamports),
-        saleAllocation: new BN(config.saleAllocation),
-        lpAllocation: new BN(config.lpAllocation),
-        fundingDurationSeconds: new BN(config.fundingDurationSeconds),
+        baseTotalAllocation: baseTotalAllocationBN,
+        baseSaleBasisPoints: baseSaleBpsBN,
+        fundingDurationSeconds: new BN(fundingDurationSeconds),
         unlockTimeSec: new BN(config.unlockTimeSec),
         rosterShardCap: config.rosterShardCap,
         creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
@@ -217,9 +222,10 @@ export async function runFullFlow(
         projectCounter,
         launchState: testLaunchState,
         baseMint: testBaseMint.publicKey,
-        escrow,
+        escrowAuthority: escrow,
         creatorGrant,
         systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .instruction();
 
@@ -232,7 +238,7 @@ export async function runFullFlow(
     ).blockhash;
 
     // Send transaction using provider's sendAndConfirm method
-    const signature = await provider.sendAndConfirm(tx, [testBaseMint]);
+    const signature = await provider.sendAndConfirm(tx, []);
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
     const grossLaunchCost = balanceBeforeLaunch - balanceAfterLaunch;
@@ -417,39 +423,118 @@ export async function runFullFlow(
       addLog(`   -> Shard ${i} finalized.`);
     }
 
-    // 7. Open Claims
-    addLog(`\n[7/10] Opening claims...`);
-    await sdk.openClaims({ launch: testLaunchState });
+    // 7. Create Pool (prepare, Raydium CLMM creation, add liquidity)
+    addLog(`\n[7/10] Creating Pool...`);
+    let prepared = false;
+    for (let i = 0; i < 60; i++) {
+      try {
+        await sdk.preparePoolCreation({ launch: testLaunchState, computeUnits: 2_000_000 });
+        prepared = true;
+        addLog("   -> preparePoolCreation succeeded (valid recent blockhash found). ");
+        break;
+      } catch (e: any) {
+        const msg = (e && e.message) ? String(e.message) : "";
+        if (msg.includes("NoValidBlockhash")) {
+          if (i === 0) addLog("   -> Waiting for a valid recent blockhash (retrying up to 60s)...");
+          await new Promise(r => setTimeout(r, 1000));
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!prepared) throw new Error("No valid recent blockhash observed within retry window");
+
+    // If Raydium config is provided, create CLMM pool and add liquidity
+    const wsolMint = new PublicKey("So11111111111111111111111111111111111111112");
+    const quoteMintPk = config.quoteMint ? new PublicKey(config.quoteMint) : wsolMint;
+
+    // Auto-select Raydium IDs when not provided
+    const endpoint = (provider as any)?.connection?.rpcEndpoint || "";
+    const isMainnet = /mainnet/i.test(endpoint);
+    const defaultClmm = isMainnet
+      ? new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK")
+      : new PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+    const defaultAmm = isMainnet
+      ? new PublicKey("2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv")
+      : new PublicKey("CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu");
+
+    let ammConfigPk = new PublicKey(config.ammConfig || defaultAmm);
+    let clmmProgramPk = new PublicKey(config.clmmProgram || defaultClmm);
+
+    if (!config.ammConfig || !config.clmmProgram) {
+      addLog("   -> Raydium config not provided; using defaults for network.");
+      addLog(`      - CLMM Program: ${clmmProgramPk.toBase58()}`);
+      addLog(`      - AmmConfig:   ${ammConfigPk.toBase58()}`);
+    }
+
+    // Preflight: ensure AmmConfig exists and owner matches CLMM program id. If not, try alt defaults.
+    const tryResolveAmmConfig = async () => {
+      const info = await provider.connection.getAccountInfo(ammConfigPk);
+      if (info && info.owner.equals(clmmProgramPk)) return;
+      // Try alternate pair (switch mainnet/devnet defaults)
+      const altClmm = clmmProgramPk.equals(defaultClmm) ? (isMainnet ? defaultClmm : new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK")) : defaultClmm;
+      const altAmm = ammConfigPk.equals(defaultAmm) ? (isMainnet ? defaultAmm : new PublicKey("2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv")) : defaultAmm;
+      const altInfo = await provider.connection.getAccountInfo(altAmm);
+      if (altInfo && altInfo.owner.equals(altClmm)) {
+        addLog("   -> Switching to alternate Raydium IDs based on on-chain owner match.");
+        clmmProgramPk = altClmm;
+        ammConfigPk = altAmm;
+        addLog(`      - CLMM Program: ${clmmProgramPk.toBase58()}`);
+        addLog(`      - AmmConfig:   ${ammConfigPk.toBase58()}`);
+        return;
+      }
+      // If still mismatch, emit guidance and abort
+      const observedOwner = info ? info.owner.toBase58() : "<missing>";
+      const expectedOwner = clmmProgramPk.toBase58();
+      const msg = `AmmConfig owner mismatch: owner=${observedOwner}, expected=${expectedOwner}. Ensure your local validator loads Raydium program and AmmConfig for the same network (use NET=mainnet-beta or NET=devnet in validator scripts), or pass matching ammConfig/clmmProgram in config.`;
+      addLog(`   -> ${msg}`);
+      throw new Error(msg);
+    };
+    await tryResolveAmmConfig();
+
+    addLog("   -> Creating Raydium CLMM pool via SDK...");
+    const clmm = await sdk.createClmmPool({
+      launch: testLaunchState,
+      quoteMint: quoteMintPk,
+      baseMint: testBaseMint,
+      ammConfig: ammConfigPk,
+      clmmProgram: clmmProgramPk,
+    });
+    addLog(`      - CLMM create signature: ${clmm.signature}`);
+    addLog("   -> Adding initial liquidity to CLMM pool...");
+    const addLiq = await sdk.addClmmLiquidityTx({
+      payer: admin.publicKey,
+      launch: testLaunchState,
+      quoteMint: quoteMintPk,
+      baseMint: testBaseMint.publicKey,
+      baseTokenAta: clmm.baseTokenAta,
+      ammConfig: ammConfigPk,
+      clmmProgram: clmmProgramPk,
+      provider,
+    });
+    const addLiqSig = await provider.sendAndConfirm(addLiq.transaction, addLiq.signers || []);
+    addLog(`      - Liquidity add signature: ${addLiqSig}`);
+
+    // 8. Verify claims (opened by pool liquidity); if Raydium was skipped, abort before claims
+    addLog(`\n[8/10] Verifying claims availability...`);
     const finalLaunchState = await sdk.fetchLaunch(testLaunchState);
+    if (!config.ammConfig || !config.clmmProgram) {
+      if (!finalLaunchState.claimsOpen) {
+        const msg = "Raydium config missing; claims stay closed until pool is created and liquidity is added.";
+        addLog(`   -> ${msg}`);
+        return { success: false, message: msg };
+      }
+    }
     if (finalLaunchState.claimsOpen) {
       addLog("   -> Claims are open.");
     } else {
-      throw new Error("Verification failed: Claims not open.");
-    }
-
-    // 8. Create Pool
-    addLog(`\n[8/10] Creating Pool...`);
-    try {
-      await sdk.preparePoolCreation({ launch: testLaunchState, computeUnits: 2_000_000 });
-      addLog("   -> Pool created successfully!");
-      const poolState = await sdk.fetchPoolState(testLaunchState);
-      addLog(`      - Pool ID: ${poolState.poolId.toString()}`);
-    } catch (error: any) {
-      if (error.message && error.message.includes("NoValidBlockhash")) {
-        addLog(
-          "   -> Pool creation failed as expected: No valid blockhash found."
-        );
-        addLog("   -> This is the correct and expected behavior.");
-      } else {
-        // Re-throw if it's a different error
-        throw error;
-      }
+      throw new Error("Verification failed: Claims not open after pool/liquidity.");
     }
 
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
     const crankingCost = balanceBeforeCranking - balanceAfterCranking;
 
-    // 9. Test User Token & Refund Claiming
+    // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
 
     const allUsersData = Array.from(usersWithDeposits.values());

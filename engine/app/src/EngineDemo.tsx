@@ -21,6 +21,10 @@ interface LaunchConfig {
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
   creatorClaimLockPeriodSec: number;
+  // Raydium CLMM (optional; required to auto-open claims)
+  quoteMint?: string;
+  ammConfig?: string;
+  clmmProgram?: string;
 }
 
 // --- New interface for simulation parameters ---
@@ -163,11 +167,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
+    // Raydium defaults (WSOL; ammConfig/clmmProgram optional)
+    quoteMint: 'So11111111111111111111111111111111111111112',
+    ammConfig: '',
+    clmmProgram: '',
   };
 
   // --- New state for simulation config ---
   const defaultSimConfig: SimulationConfig = {
-    numUsers: 300,
+    numUsers: 100,
     maxTicketsPerUser: 3,
   };
   
@@ -1184,6 +1192,39 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 value={launchConfig.rosterShardCap}
                 onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.target.value) }))}
                 className="terminal-input w-full"
+              />
+            </div>
+            <div className="col-span-full mt-4">
+              <h3 className="text-sm font-bold terminal-glow mb-2">Raydium Pool (optional)</h3>
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">Quote Mint</label>
+              <input
+                type="text"
+                value={launchConfig.quoteMint || ''}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, quoteMint: e.target.value }))}
+                className="terminal-input w-full"
+                placeholder="So1111... (WSOL)"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">AmmConfig</label>
+              <input
+                type="text"
+                value={launchConfig.ammConfig || ''}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, ammConfig: e.target.value }))}
+                className="terminal-input w-full"
+                placeholder="Raydium AmmConfig pubkey"
+              />
+            </div>
+            <div>
+              <label className="block text-xs terminal-output mb-1">CLMM Program</label>
+              <input
+                type="text"
+                value={launchConfig.clmmProgram || ''}
+                onChange={(e) => setLaunchConfig(prev => ({ ...prev, clmmProgram: e.target.value }))}
+                className="terminal-input w-full"
+                placeholder="Raydium CLMM program id"
               />
             </div>
             {/* --- Simulation Parameters --- */}
