@@ -1,0 +1,1 @@
+yarn ts-node scripts/raydium/cpmm.ts

@@ -23,9 +23,17 @@ type Args = {
   tickSpacing: number;
   feeRateBps: number;
   initPrice: string;
+  initPricePctAbove: number;
+  initPriceNum: string;
+  initPriceDen: string;
   liquidityBaseAmount: string;
+  liquidityBaseAmountHuman: string;
+  liquidityQuoteAmountSol: string;
+  liquidityUseQuoteExact: string;
   swapDirection: string;
   swapAmount: string;
+  swapAmountSol: string;
+  swapBudgetSol: string;
   fullRange: string;
   swapCount: number;
   swapParallel: string;
@@ -34,6 +42,8 @@ type Args = {
   swapNoMinOut: string;
   doCollect: string;
   swapSplitHalf: string;
+  initFracIsQuoteOverBase: string;
+  initFracHuman: string;
 };
 
 function parseArgs(): Args {
@@ -65,9 +75,17 @@ function parseArgs(): Args {
     tickSpacing: toNumber(get("--tickSpacing"), 60),
     feeRateBps: toNumber(get("--feeRateBps"), 2500),
     initPrice: toString(get("--initPrice"), "1"),
+    initPricePctAbove: toNumber(get("--initPricePctAbove"), 0),
+    initPriceNum: toString(get("--initPriceNum"), "0"),
+    initPriceDen: toString(get("--initPriceDen"), "0"),
     liquidityBaseAmount: toString(get("--liquidityBaseAmount"), "0"),
+    liquidityBaseAmountHuman: toString(get("--liquidityBaseAmountHuman"), "0"),
+    liquidityQuoteAmountSol: toString(get("--liquidityQuoteAmountSol"), "0"),
+    liquidityUseQuoteExact: toString(get("--liquidityUseQuoteExact"), "0"),
     swapDirection: toString(get("--swapDirection"), ""),
     swapAmount: toString(get("--swapAmount"), "0"),
+    swapAmountSol: toString(get("--swapAmountSol"), "0"),
+    swapBudgetSol: toString(get("--swapBudgetSol"), "0"),
     fullRange: toString(get("--fullRange"), "1"),
     swapCount: toNumber(get("--swapCount"), 1),
     swapParallel: toString(get("--swapParallel"), "0"),
@@ -76,6 +94,8 @@ function parseArgs(): Args {
     swapNoMinOut: toString(get("--swapNoMinOut"), "0"),
     doCollect: toString(get("--doCollect"), "1"),
     swapSplitHalf: toString(get("--swapSplitHalf"), "0"),
+    initFracIsQuoteOverBase: toString(get("--initFracIsQuoteOverBase"), "1"),
+    initFracHuman: toString(get("--initFracHuman"), "1"),
   };
 }
 
@@ -198,9 +218,24 @@ async function createClmmPoolWithSdk(provider: anchor.AnchorProvider, params: {
     initialPrice: new Decimal(params.initPrice),
   });
 
-  const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
-  console.log(`Raydium pool created tx ${txId}`);
-  return txId;
+  try {
+    if (typeof (tx as any).simulate === "function") {
+      const sim = await (tx as any).simulate();
+      const logs = sim?.value?.logs || sim?.logs || [];
+      if (Array.isArray(logs) && logs.length) {
+        console.log("simulate logs (createPool):");
+        for (const l of logs) console.log(l);
+      }
+    }
+    const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: false });
+    console.log(`Raydium pool created tx ${txId}`);
+    return txId;
+  } catch (e: any) {
+    const sig = e?.signature || e?.txId;
+    printErrorDetails(e);
+    if (sig) await printTxLogs((anchor.getProvider() as anchor.AnchorProvider), sig);
+    throw e;
+  }
 }
 
 function computeFullRangeTicks(tickSpacing: number) {
@@ -217,6 +252,9 @@ async function addLiquidityWithSdk(provider: anchor.AnchorProvider, params: {
   baseDecimals: number;
   baseAmount: BN;
   fullRange: boolean;
+  otherAmountMax?: BN;
+  baseMint: anchor.web3.PublicKey;
+  quoteExact?: boolean;
 }) {
   const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
   const ray: any = await Raydium.load({ connection: provider.connection, owner });
@@ -241,20 +279,73 @@ async function addLiquidityWithSdk(provider: anchor.AnchorProvider, params: {
   })();
   console.log(`liquidity range tickLower ${tickLower} tickUpper ${tickUpper} fullRange ${isFullRange}`);
 
-  const tx = await ray.clmm.openPositionFromBase({
-    poolInfo,
-    poolKeys,
-    ownerInfo: { useSOLBalance: true },
-    tickLower,
-    tickUpper,
-    base: "MintA",
-    baseAmount: params.baseAmount,
-    otherAmountMax: new BN("1000000000000"),
-    withMetadata: "create",
-  });
-  const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
-  console.log(`addLiquidity tx ${txId}`);
-  return { txId, tickLower, tickUpper };
+  const baseIsMintA = poolInfo.mintA.address === params.baseMint.toBase58();
+  let tx: any;
+  if (params.quoteExact && params.otherAmountMax && typeof (ray.clmm as any).openPositionFromQuote === "function") {
+    const quoteIsA = !baseIsMintA;
+    tx = await (ray.clmm as any).openPositionFromQuote({
+      poolInfo,
+      poolKeys,
+      ownerInfo: { useSOLBalance: true },
+      tickLower,
+      tickUpper,
+      quote: quoteIsA ? "MintA" : "MintB",
+      quoteAmount: params.otherAmountMax,
+      baseAmountMax: new BN("1000000000000000000"),
+      withMetadata: "create",
+    });
+  } else if (params.quoteExact && params.otherAmountMax) {
+    const sqrtStr = (poolInfo.sqrtPriceX64?.toString?.()) || String(poolInfo.sqrtPriceX64 ?? poolInfo.state?.sqrtPriceX64 ?? "0");
+    const sqrt = new Decimal(sqrtStr);
+    const aDec = poolInfo.mintA.decimals;
+    const bDec = poolInfo.mintB.decimals;
+    const priceAinB = sqrt.eq(0) ? new Decimal(0) : sqrt.mul(sqrt).div(new Decimal(2).pow(128)).mul(new Decimal(10).pow(bDec - aDec));
+    const priceBaseInQuote = baseIsMintA ? priceAinB : (priceAinB.eq(0) ? new Decimal(0) : new Decimal(1).div(priceAinB));
+    const quoteHuman = new Decimal(params.otherAmountMax.toString()).div(new Decimal(10).pow(baseIsMintA ? bDec : aDec));
+    const baseHuman = priceBaseInQuote.gt(0) ? quoteHuman.div(priceBaseInQuote) : new Decimal(0);
+    const baseRaw = new BN(baseHuman.mul(new Decimal(10).pow(params.baseDecimals)).toFixed(0));
+    tx = await ray.clmm.openPositionFromBase({
+      poolInfo,
+      poolKeys,
+      ownerInfo: { useSOLBalance: true },
+      tickLower,
+      tickUpper,
+      base: baseIsMintA ? "MintA" : "MintB",
+      baseAmount: baseRaw,
+      otherAmountMax: params.otherAmountMax,
+      withMetadata: "create",
+    });
+  } else {
+    tx = await ray.clmm.openPositionFromBase({
+      poolInfo,
+      poolKeys,
+      ownerInfo: { useSOLBalance: true },
+      tickLower,
+      tickUpper,
+      base: baseIsMintA ? "MintA" : "MintB",
+      baseAmount: params.baseAmount,
+      otherAmountMax: params.otherAmountMax ?? new BN("1000000000000"),
+      withMetadata: "create",
+    });
+  }
+  try {
+    if (typeof (tx as any).simulate === "function") {
+      const sim = await (tx as any).simulate();
+      const logs = sim?.value?.logs || sim?.logs || [];
+      if (Array.isArray(logs) && logs.length) {
+        console.log("simulate logs (addLiquidity):");
+        for (const l of logs) console.log(l);
+      }
+    }
+    const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: false });
+    console.log(`addLiquidity tx ${txId}`);
+    return { txId, tickLower, tickUpper };
+  } catch (e: any) {
+    const sig = e?.signature || e?.txId;
+    printErrorDetails(e);
+    if (sig) await printTxLogs((anchor.getProvider() as anchor.AnchorProvider), sig);
+    throw e;
+  }
 }
 
 async function collectFeesWithSdk(provider: anchor.AnchorProvider, params: {
@@ -318,8 +409,24 @@ async function collectFeesWithSdk(provider: anchor.AnchorProvider, params: {
     amountMinB: new BN(0),
     liquidity: new BN(0),
   });
-  const { txId } = await ix.execute({ sendAndConfirm: true, skipPreflight: true });
-  console.log(`collectFees tx ${txId}`);
+  let txId = "";
+  try {
+    if (typeof (ix as any).simulate === "function") {
+      const sim = await (ix as any).simulate();
+      const logs = sim?.value?.logs || sim?.logs || [];
+      if (Array.isArray(logs) && logs.length) {
+        console.log("simulate logs (collect):");
+        for (const l of logs) console.log(l);
+      }
+    }
+    ({ txId } = await ix.execute({ sendAndConfirm: true, skipPreflight: false }));
+    console.log(`collectFees tx ${txId}`);
+  } catch (e: any) {
+    const sig = e?.signature || e?.txId;
+    printErrorDetails(e);
+    if (sig) await printTxLogs((anchor.getProvider() as anchor.AnchorProvider), sig);
+    throw e;
+  }
   const afterA = await getBal(ataA);
   const afterB = await getBal(ataB);
   const deltaA = afterA.sub(beforeA);
@@ -367,10 +474,25 @@ async function swapWithSdk(provider: anchor.AnchorProvider, params: {
     ownerInfo: { useSOLBalance: true },
     remainingAccounts: plan.remainingAccounts,
   });
-  const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: true });
-  console.log(`swap tx ${txId}`);
-  const inputIsA = poolInfo.mintA.address === params.inputMint.toString();
-  return { txId, amountIn: params.amountIn, amountOutPlanned: plan.amountOut.amount, inputIsA };
+  try {
+    if (typeof (tx as any).simulate === "function") {
+      const sim = await (tx as any).simulate();
+      const logs = sim?.value?.logs || sim?.logs || [];
+      if (Array.isArray(logs) && logs.length) {
+        console.log("simulate logs (swap):");
+        for (const l of logs) console.log(l);
+      }
+    }
+    const { txId } = await tx.execute({ sendAndConfirm: true, skipPreflight: false });
+    console.log(`swap tx ${txId}`);
+    const inputIsA = poolInfo.mintA.address === params.inputMint.toString();
+    return { txId, amountIn: params.amountIn, amountOutPlanned: plan.amountOut.amount, inputIsA };
+  } catch (e: any) {
+    const sig = e?.signature || e?.txId;
+    printErrorDetails(e);
+    if (sig) await printTxLogs((anchor.getProvider() as anchor.AnchorProvider), sig);
+    throw e;
+  }
 }
 
 async function printBaseMintSupply(provider: anchor.AnchorProvider, params: {
@@ -396,6 +518,83 @@ async function runWithConcurrency<T>(factories: Array<() => Promise<T>>, concurr
   const workers = Array.from({ length: Math.max(1, concurrency) }, () => worker());
   await Promise.all(workers);
   return results;
+}
+
+async function getLamportsSpentByPayerForTx(provider: anchor.AnchorProvider, txId: string) {
+  const resp: any = await provider.connection.getTransaction(txId, { commitment: "confirmed", maxSupportedTransactionVersion: 0 } as any);
+  if (!resp || !resp.meta) return 0;
+  const meta = resp.meta;
+  const message: any = resp.transaction?.message;
+  const keys: any[] = (message && (message.accountKeys || message.staticAccountKeys)) || [];
+  const payer = provider.publicKey!.toBase58();
+  const keyStrs = keys.map((k: any) => {
+    const pk = k?.pubkey ? k.pubkey : k;
+    return typeof pk?.toBase58 === "function" ? pk.toBase58() : pk?.toString?.();
+  });
+  const idx = Math.max(0, keyStrs.findIndex((s: any) => s === payer));
+  const pre: number[] = meta.preBalances || [];
+  const post: number[] = meta.postBalances || [];
+  if (pre[idx] === undefined || post[idx] === undefined) return meta.fee || 0;
+  const diff = pre[idx] - post[idx];
+  return diff >= 0 ? diff : meta.fee || 0;
+}
+
+function lamportsToSolString(lamports: number) {
+  return new Decimal(lamports).div(new Decimal(anchor.web3.LAMPORTS_PER_SOL)).toString();
+}
+
+async function printTxLogs(provider: anchor.AnchorProvider, sig: string) {
+  try {
+    const tx = await provider.connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 } as any);
+    const logs = tx?.meta?.logMessages || [];
+    if (logs.length) {
+      console.log(`tx logs for ${sig}:`);
+      for (const l of logs) console.log(l);
+    } else {
+      console.log(`no logs found for ${sig}`);
+    }
+  } catch (err) {
+    console.log(`failed to fetch logs for ${sig}`);
+  }
+}
+
+function printErrorDetails(e: any) {
+  try {
+    if (!e) return;
+    if (e.transactionLogs && Array.isArray(e.transactionLogs)) {
+      console.log("transactionLogs:");
+      for (const l of e.transactionLogs) console.log(l);
+    }
+    if (e.logs && Array.isArray(e.logs)) {
+      console.log("logs:");
+      for (const l of e.logs) console.log(l);
+    }
+    if (typeof e.getLogs === "function") {
+      const l = e.getLogs();
+      if (Array.isArray(l)) {
+        console.log("getLogs():");
+        for (const x of l) console.log(x);
+      }
+    }
+    if (e.transactionMessage) console.log(String(e.transactionMessage));
+    if (e.message) console.log(String(e.message));
+  } catch {}
+}
+
+async function getPoolPriceAinB(provider: anchor.AnchorProvider, poolId: anchor.web3.PublicKey) {
+  const owner: any = (provider as any).wallet?.payer || (provider as any).wallet;
+  const ray: any = await Raydium.load({ connection: provider.connection, owner });
+  const { poolInfo } = await ray.clmm.getPoolInfoFromRpc(poolId.toBase58());
+  const aDec = poolInfo.mintA.decimals;
+  const bDec = poolInfo.mintB.decimals;
+  const sqrtStr = (poolInfo.sqrtPriceX64?.toString?.()) || String(poolInfo.sqrtPriceX64 ?? poolInfo.state?.sqrtPriceX64 ?? "0");
+  const sqrt = new Decimal(sqrtStr);
+  if (sqrt.eq(0)) return { priceAinB: "0", priceBinA: "0" };
+  const base = sqrt.mul(sqrt).div(new Decimal(2).pow(128));
+  const scale = new Decimal(10).pow(bDec - aDec);
+  const priceAinB = base.mul(scale);
+  const priceBinA = new Decimal(1).div(priceAinB);
+  return { priceAinB: priceAinB.toString(), priceBinA: priceBinA.toString() };
 }
 
 async function swapClmm(provider: anchor.AnchorProvider, params: {
@@ -425,6 +624,21 @@ async function main() {
   const baseMint = await createBaseMint(provider, args.baseDecimals);
   const ownerAta = await ensureAtaAndMint(provider, baseMint.publicKey, provider.publicKey!, args.mintAmount);
 
+  const balStartSol = await provider.connection.getBalance(provider.publicKey!);
+  const getTokenBal = async (acc: anchor.web3.PublicKey) => {
+    try {
+      const r = await provider.connection.getTokenAccountBalance(acc);
+      return new BN(r.value.amount);
+    } catch {
+      return new BN(0);
+    }
+  };
+  const balStartA = await getTokenBal(ownerAta);
+  const quoteMintPk = new anchor.web3.PublicKey(args.quoteMint);
+  const isWsolQuote = args.quoteMint === "So11111111111111111111111111111111111111112";
+  const ownerQuoteAta = isWsolQuote ? null : getAssociatedTokenAddressSync(quoteMintPk, provider.publicKey!, true);
+  const balStartQuoteToken = ownerQuoteAta ? await getTokenBal(ownerQuoteAta) : new BN(0);
+
   if (!args.ammConfig || !args.ammConfig.trim()) {
     console.error("Missing --ammConfig. Set Raydium AmmConfig pubkey and rerun.");
     return;
@@ -450,6 +664,15 @@ async function main() {
 
   try {
     const isWsol = args.quoteMint === "So11111111111111111111111111111111111111112";
+    const preBalance = await provider.connection.getBalance(provider.publicKey!);
+    const initPriceFromFrac =
+      (args.initPriceNum !== "0" && args.initPriceDen !== "0")
+        ? (args.initFracIsQuoteOverBase === "1"
+            ? new Decimal(args.initPriceNum).div(new Decimal(args.initPriceDen)) // QUOTE / BASE (human units)
+            : new Decimal(args.initPriceDen).div(new Decimal(args.initPriceNum))) // BASE / QUOTE (human units)
+        : null;
+    const initPriceBase = initPriceFromFrac ?? new Decimal(args.initPrice);
+    const initPriceEffective = initPriceBase.mul(new Decimal(1).add(new Decimal(args.initPricePctAbove).div(100)));
     const sig = await createClmmPoolWithSdk(provider, {
       baseMint: baseMint.publicKey,
       quoteMint,
@@ -457,22 +680,37 @@ async function main() {
       clmmProgram,
       tickSpacing: args.tickSpacing,
       feeRateBps: args.feeRateBps,
-      initPrice: args.initPrice,
+      initPrice: initPriceEffective.toString(),
       baseDecimals: args.baseDecimals,
       quoteDecimals: isWsol ? 9 : undefined,
     });
     console.log(`createPool signature ${sig}`);
+    const postBalance = await provider.connection.getBalance(provider.publicKey!);
+    const spentByBalance = Math.max(0, preBalance - postBalance);
+    const spentByTx = await getLamportsSpentByPayerForTx(provider, sig);
+    const createPoolLamportsSpent = spentByBalance > 0 ? spentByBalance : spentByTx;
+    let startPriceStr = "";
+    try {
+      const p = await getPoolPriceAinB(provider, pdas.pool);
+      startPriceStr = p.priceAinB;
+      console.log(`start price BASE/QUOTE ${startPriceStr}`);
+    } catch {}
     let added: { txId: string; tickLower: number; tickUpper: number } | null = null;
-    if (args.liquidityBaseAmount !== "0") {
+    if (args.liquidityBaseAmount !== "0" || args.liquidityBaseAmountHuman !== "0" || args.liquidityQuoteAmountSol !== "0") {
+      const baseRaw = args.liquidityBaseAmountHuman !== "0" ? new BN(new Decimal(args.liquidityBaseAmountHuman).mul(new Decimal(10).pow(args.baseDecimals)).toFixed(0)) : new BN(args.liquidityBaseAmount);
+      const quoteMax = args.liquidityQuoteAmountSol !== "0" ? new BN(new Decimal(args.liquidityQuoteAmountSol).mul(new Decimal(anchor.web3.LAMPORTS_PER_SOL)).toFixed(0)) : null;
       added = await addLiquidityWithSdk(provider, {
         poolId: pdas.pool,
         tickSpacing: args.tickSpacing,
         baseDecimals: args.baseDecimals,
-        baseAmount: new BN(args.liquidityBaseAmount),
+        baseAmount: baseRaw,
         fullRange: args.fullRange === "1",
+        otherAmountMax: quoteMax ?? undefined,
+        baseMint: baseMint.publicKey,
+        quoteExact: args.liquidityUseQuoteExact === "1",
       });
     }
-    if (args.swapAmount !== "0" && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
+    if ((args.swapAmount !== "0" || args.swapAmountSol !== "0" || args.swapBudgetSol !== "0") && (args.swapDirection === "a2b" || args.swapDirection === "b2a")) {
       const inputMintPrimary = args.swapDirection === "a2b" ? baseMint.publicKey : quoteMint;
       const inputMintSecondary = args.swapDirection === "a2b" ? quoteMint : baseMint.publicKey;
       const count = Math.max(1, args.swapCount);
@@ -481,6 +719,13 @@ async function main() {
       const noMinOut = args.swapNoMinOut === "1";
       const useSplit = args.swapSplitHalf === "1" && count > 1;
       const half = Math.floor(count / 2);
+      const wsolAddr = "So11111111111111111111111111111111111111112";
+      const inputPrimaryIsWsol = inputMintPrimary.toBase58() === wsolAddr;
+      const inputSecondaryIsWsol = inputMintSecondary.toBase58() === wsolAddr;
+      const wsolSwapsCount = useSplit ? (inputPrimaryIsWsol ? count - half : 0) + (inputSecondaryIsWsol ? half : 0) : (inputPrimaryIsWsol ? count : 0);
+      const budgetLamportsBN = args.swapBudgetSol !== "0" ? new BN(new Decimal(args.swapBudgetSol).mul(new Decimal(anchor.web3.LAMPORTS_PER_SOL)).toFixed(0)) : null;
+      const amountSolBN = args.swapAmountSol !== "0" ? new BN(new Decimal(args.swapAmountSol).mul(new Decimal(anchor.web3.LAMPORTS_PER_SOL)).toFixed(0)) : null;
+      const perWsolAmountBN = budgetLamportsBN && wsolSwapsCount > 0 ? budgetLamportsBN.divn(wsolSwapsCount) : null;
       let totalInA = new BN(0);
       let totalInB = new BN(0);
       let totalOutA = new BN(0);
@@ -491,11 +736,15 @@ async function main() {
           let lastErr: any = null;
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
+              const useSecondary = useSplit && i >= half;
+              const chosenInput = useSecondary ? inputMintSecondary : inputMintPrimary;
+              const chosenIsWsol = chosenInput.toBase58() === wsolAddr;
+              const amountIn = chosenIsWsol ? (perWsolAmountBN ?? amountSolBN ?? new BN(args.swapAmount)) : new BN(args.swapAmount);
               return await swapWithSdk(provider, {
                 ray: sharedRay,
                 poolId: pdas.pool,
-                inputMint: useSplit && i >= half ? inputMintSecondary : inputMintPrimary,
-                amountIn: new BN(args.swapAmount),
+                inputMint: chosenInput,
+                amountIn,
                 slippageBps: args.swapSlippageBps,
                 noMinOut,
               });
@@ -519,14 +768,11 @@ async function main() {
       } else {
         for (let i = 0; i < count; i++) {
           console.log(`swap ${i + 1}/${count}`);
-          const r = await swapWithSdk(provider, {
-            ray: sharedRay,
-            poolId: pdas.pool,
-            inputMint: useSplit && i >= half ? inputMintSecondary : inputMintPrimary,
-            amountIn: new BN(args.swapAmount),
-            slippageBps: args.swapSlippageBps,
-            noMinOut,
-          });
+          const useSecondary = useSplit && i >= half;
+          const chosenInput = useSecondary ? inputMintSecondary : inputMintPrimary;
+          const chosenIsWsol = chosenInput.toBase58() === wsolAddr;
+          const amountIn = chosenIsWsol ? (perWsolAmountBN ?? amountSolBN ?? new BN(args.swapAmount)) : new BN(args.swapAmount);
+          const r = await swapWithSdk(provider, { ray: sharedRay, poolId: pdas.pool, inputMint: chosenInput, amountIn, slippageBps: args.swapSlippageBps, noMinOut });
           if (r.inputIsA) {
             totalInA = totalInA.add(r.amountIn);
             totalOutB = totalOutB.add(r.amountOutPlanned);
@@ -561,11 +807,59 @@ async function main() {
     const bDec = poolInfo.mintB.decimals;
     const aAddr = poolInfo.mintA.address;
     const bAddr = poolInfo.mintB.address;
+    const baseAddr = baseMint.publicKey.toBase58();
+    const quoteAddr = quoteMint.toBase58();
+    const baseDec = baseAddr === aAddr ? aDec : (baseAddr === bAddr ? bDec : args.baseDecimals);
+    const quoteDec = quoteAddr === aAddr ? aDec : (quoteAddr === bAddr ? bDec : (isWsol ? 9 : 0));
     const aHuman = collected ? new Decimal(collected.a.toString()).div(new Decimal(10).pow(aDec)).toString() : "0";
     const bHuman = collected ? new Decimal(collected.b.toString()).div(new Decimal(10).pow(bDec)).toString() : "0";
     const splitInfo = args.swapSplitHalf === "1" ? `, splitHalf: ${Math.floor(Math.max(1, args.swapCount)/2)}/${Math.ceil(Math.max(1, args.swapCount)/2)}` : "";
     console.log("=== SUMMARY ===");
+    if (initPriceFromFrac) {
+      console.log(`expected init price BASE/QUOTE ${initPriceFromFrac.toString()}`);
+    }
+    console.log(`createPool lamportsSpent ${createPoolLamportsSpent} (${lamportsToSolString(createPoolLamportsSpent)} SOL)`);
     console.log(`pool ${pdas.pool.toBase58()} tickLower ${added?.tickLower ?? "-"} tickUpper ${added?.tickUpper ?? "-"} fullRange ${args.fullRange === "1"}`);
+    try {
+      const baseVaultBal = await provider.connection.getTokenAccountBalance(pdas.baseVault);
+      const quoteVaultBal = await provider.connection.getTokenAccountBalance(pdas.quoteVault);
+      const baseVaultRaw = baseVaultBal.value.amount;
+      const quoteVaultRaw = quoteVaultBal.value.amount;
+      const baseVaultHuman = new Decimal(baseVaultRaw).div(new Decimal(10).pow(args.baseDecimals)).toString();
+      const quoteDecimals = isWsol ? 9 : (new anchor.web3.PublicKey(poolInfo.mintA.address).toBase58() === quoteMint.toBase58() ? aDec : bDec);
+      const quoteVaultHuman = new Decimal(quoteVaultRaw).div(new Decimal(10).pow(quoteDecimals)).toString();
+      console.log(`pool baseVault ${pdas.baseVault.toBase58()} balance raw ${baseVaultRaw} (${baseVaultHuman})`);
+      console.log(`pool quoteVault ${pdas.quoteVault.toBase58()} balance raw ${quoteVaultRaw} (${quoteVaultHuman})`);
+    } catch {}
+    try {
+      const end = await getPoolPriceAinB(provider, pdas.pool);
+      if (startPriceStr) console.log(`start price BASE/QUOTE ${startPriceStr}`);
+      console.log(`end price BASE/QUOTE ${end.priceAinB}`);
+    } catch {}
+    const balEndSol = await provider.connection.getBalance(provider.publicKey!);
+    const balEndA = await getTokenBal(ownerAta);
+    const aStartHuman = new Decimal(balStartA.toString()).div(new Decimal(10).pow(baseDec)).toString();
+    const aEndHuman = new Decimal(balEndA.toString()).div(new Decimal(10).pow(baseDec)).toString();
+    console.log(`owner BASE start ${balStartA.toString()} (${aStartHuman}) end ${balEndA.toString()} (${aEndHuman})`);
+    const aDeltaRaw = balEndA.sub(balStartA);
+    const aDeltaHuman = new Decimal(aDeltaRaw.toString()).div(new Decimal(10).pow(baseDec)).toString();
+    console.log(`owner BASE delta ${aDeltaRaw.toString()} (${aDeltaHuman})`);
+    if (isWsol) {
+      console.log(`owner SOL start ${balStartSol} (${lamportsToSolString(balStartSol)} SOL) end ${balEndSol} (${lamportsToSolString(balEndSol)} SOL)`);
+      const solDelta = balEndSol - balStartSol;
+      console.log(`owner QUOTE(SOL) delta ${solDelta} (${lamportsToSolString(solDelta)} SOL)`);
+      console.log(`final wallet BASE ${aEndHuman}, QUOTE(SOL) ${lamportsToSolString(balEndSol)} SOL`);
+    } else {
+      const ownerQuoteAta2 = ownerQuoteAta!;
+      const balEndQuote = await getTokenBal(ownerQuoteAta2);
+      const qStartHuman = new Decimal(balStartQuoteToken.toString()).div(new Decimal(10).pow(quoteDec)).toString();
+      const qEndHuman = new Decimal(balEndQuote.toString()).div(new Decimal(10).pow(quoteDec)).toString();
+      console.log(`owner QUOTE start ${balStartQuoteToken.toString()} (${qStartHuman}) end ${balEndQuote.toString()} (${qEndHuman})`);
+      const qDeltaRaw = balEndQuote.sub(balStartQuoteToken);
+      const qDeltaHuman = new Decimal(qDeltaRaw.toString()).div(new Decimal(10).pow(quoteDec)).toString();
+      console.log(`owner QUOTE delta ${qDeltaRaw.toString()} (${qDeltaHuman})`);
+      console.log(`final wallet BASE ${aEndHuman}, QUOTE ${qEndHuman}`);
+    }
     console.log(`swaps count ${Math.max(1, args.swapCount)} dir ${args.swapDirection}${splitInfo} parallel ${args.swapParallel}`);
     const totals = (global as any).__swapTotals__ as { totalInA: BN; totalInB: BN; totalOutA: BN; totalOutB: BN } | undefined;
     if (totals) {

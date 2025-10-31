@@ -18,8 +18,12 @@ engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 [registry]
 url = "https://api.apr.dev"
 
+# [provider]
+# cluster = "localnet"
+# wallet = "~/.config/solana/id.json"
+
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

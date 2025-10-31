@@ -4,7 +4,12 @@ use anchor_spl::{
     token::{self, Mint, MintTo, Token},
     token_interface::{Mint as InterfaceMint, TokenInterface},
 };
-use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
+use raydium_amm_v3::{
+    cpi,
+    libraries::tick_math::{MAX_SQRT_PRICE_X64, MIN_SQRT_PRICE_X64},
+    program::AmmV3,
+    states::AmmConfig,
+};
 
 use crate::{errors::ErrorCode, utils::U256, LaunchState, SEED_ROOT};
 
@@ -154,9 +159,10 @@ fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result
     );
 
     let mut sqrt_price_x64 = calculator.get_sqrt_price();
-    if sqrt_price_x64 == 0 {
-        // Avoid division by zero in inverted-price branch
-        sqrt_price_x64 = 1;
+    if sqrt_price_x64 < MIN_SQRT_PRICE_X64 {
+        sqrt_price_x64 = MIN_SQRT_PRICE_X64;
+    } else if sqrt_price_x64 >= MAX_SQRT_PRICE_X64 {
+        sqrt_price_x64 = MAX_SQRT_PRICE_X64 - 1;
     }
     let open_time =
         Clock::get()?.unix_timestamp.checked_sub(1).ok_or(ErrorCode::ArithmeticOverflow)? as u64;
@@ -195,19 +201,27 @@ fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result
 struct StakingCalculator {
     raised_lamports: u64,
     sale_allocation: u64,
+    lp_allocation: u64,
 }
 
 impl StakingCalculator {
-    fn new(raised_lamports: u64, sale_allocation: u64, _lp_allocation: u64) -> Self {
+    fn new(raised_lamports: u64, sale_allocation: u64, lp_allocation: u64) -> Self {
         Self {
             raised_lamports,
             sale_allocation,
+            lp_allocation,
         }
     }
 
     fn get_sqrt_price(&self) -> u128 {
-        let price = ((self.raised_lamports as u128) << 64) / self.sale_allocation as u128;
-        Self::integer_sqrt(price)
+        let a = (self.raised_lamports as u128).checked_shl(64);
+        let b = a.and_then(|v| v.checked_mul(115));
+        let d = (self.lp_allocation as u128).checked_mul(100);
+        let price_x64 = match (b, d) {
+            (Some(n), Some(den)) => n.checked_div(den).unwrap_or(0),
+            _ => 0,
+        };
+        Self::integer_sqrt(price_x64)
     }
 
     fn integer_sqrt(n: u128) -> u128 {

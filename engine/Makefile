@@ -33,6 +33,7 @@ ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
 ANCHOR_WALLET := ~/.config/solana/id.json
 SOLANA_URL := http://127.0.0.1:8899
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
+DEVNET_SOLANA_URL := https://api.devnet.solana.com
 
 # Test commands
 .PHONY: test
@@ -143,8 +144,8 @@ config-remote:
 
 .PHONY: config-devnet
 config-devnet:
-	@echo "Setting Solana config to devnet..."
-	solana config set --url https://api.devnet.solana.com
+	@echo "Setting Solana config to devnet ($(DEVNET_SOLANA_URL))..."
+	solana config set --url $(DEVNET_SOLANA_URL)
 
 # Clean commands
 .PHONY: clean
@@ -211,6 +212,42 @@ test-remote-flow:
 .PHONY: build-deploy-remote
 build-deploy-remote: build deploy-remote
 
+.PHONY: deploy-devnet
+deploy-devnet: config-devnet
+	@echo "Deploying to devnet..."
+	bash -c 'set -euo pipefail; \
+	  mkdir -p ./tmp; \
+	  BUFFER_SIGNER=./tmp/devnet-buffer-signer.json; \
+	  if [ ! -f "$$BUFFER_SIGNER" ]; then \
+	    echo "Creating persistent buffer signer..."; \
+	    solana-keygen new --no-passphrase --outfile "$$BUFFER_SIGNER" >/dev/null; \
+	  fi; \
+	  attempts=0; max_attempts=10; \
+	  until [ $$attempts -ge $$max_attempts ]; do \
+	    attempts=$$((attempts+1)); \
+	    echo "Attempt $$attempts/$$max_attempts"; \
+	    if solana program deploy target/deploy/engine.so "$$BUFFER_SIGNER" \
+	        --program-id ./deploy-keypair.json \
+	        --url $(DEVNET_SOLANA_URL) \
+	        --commitment processed \
+	        --upgrade-authority ~/.config/solana/id.json; then \
+	      echo "Deploy succeeded"; \
+	      exit 0; \
+	    fi; \
+	    echo "Deploy failed, retrying in 5s..."; \
+	    sleep 5; \
+	  done; \
+	  echo "Deploy failed after $$max_attempts attempts"; \
+	  exit 1'
+
+.PHONY: airdrop-devnet
+airdrop-devnet: config-devnet
+	@echo "Requesting 5 SOL airdrop on devnet..."
+	solana airdrop 5 --url $(DEVNET_SOLANA_URL)
+
+.PHONY: build-deploy-devnet
+build-deploy-devnet: build deploy-devnet
+
 .PHONY: setup-remote
 setup-remote: build-deploy-remote test-remote
 	@echo "Remote setup completed!"
@@ -235,3 +272,6 @@ litesvm:
 
 # Default target
 .DEFAULT_GOAL := help
+
+check-amm-config:
+	solana account 5MxLgy9oPdTC3YgkiePHqr3EoCRD9uLVYRQS2ANAs7wy --url http://127.0.0.1:8899
