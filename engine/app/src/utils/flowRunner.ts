@@ -3,13 +3,13 @@ import type { LaunchConfig } from "../types/launch";
 import {
   Keypair,
   PublicKey,
-  SystemProgram,
   Transaction,
   ComputeBudgetProgram,
 } from "@solana/web3.js";
 
 // import type EngineSDK from "../../../ts-sdk/src/engine";
 import type EngineSDK from "@xyber-labs/0-100-sdk";
+import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
 
 
 // A simplified SDK type, as we don't have the full type in this context
@@ -58,35 +58,7 @@ export async function runFullFlow(
   // --- End Simulation Parameters ---
 
   try {
-    // Helper to wait
-    async function waitForFundingPeriodEnd(launchPda: PublicKey) {
-      addLog("Fetching launch state to check funding period...");
-      const state = await sdk.fetchLaunch(launchPda);
-      const fundingEndTime = state.fundingPeriodEnd.toNumber();
-
-      async function getChainTimeSec(): Promise<number> {
-        try {
-          const slot = await provider.connection.getSlot();
-          const ts = await provider.connection.getBlockTime(slot);
-          if (typeof ts === "number") return ts;
-        } catch {}
-        return Math.floor(Date.now() / 1000);
-      }
-
-      let chainNow = await getChainTimeSec();
-      if (chainNow >= fundingEndTime) {
-        addLog("Funding period has already ended (chain time).");
-        return;
-      }
-
-      const initialWait = Math.max(0, fundingEndTime - chainNow);
-      addLog(`Waiting ~${initialWait} seconds for funding period to end (chain time)...`);
-      while (true) {
-        await new Promise((r) => setTimeout(r, 1000));
-        chainNow = await getChainTimeSec();
-        if (chainNow >= fundingEndTime) break;
-      }
-    }
+    // waitForFundingPeriodEnd moved to helpers
 
     let adminBalance: number;
     try {
@@ -304,60 +276,24 @@ export async function runFullFlow(
       ).toFixed(4)} SOL`
     );
 
-    async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T, index: number) => Promise<void>) {
-      let index = 0;
-      const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-        while (true) {
-          const current = index++;
-          if (current >= items.length) break;
-          await worker(items[current], current);
-        }
-      });
-      await Promise.all(runners);
-    }
+    // concurrency runner moved to helpers
 
     addLog(`   -> Funding ${numUsersToSimulate} users with transfers from admin (parallel)...`);
-    const FUNDING_CONCURRENCY = Math.min(200, users.length);
-    await runWithConcurrency(users, FUNDING_CONCURRENCY, async (user) => {
-      const fundingAmount = user.depositAmount.toNumber() + feeBufferPerUser;
-      const transferIx = SystemProgram.transfer({
-        fromPubkey: admin.publicKey,
-        toPubkey: user.keypair.publicKey,
-        lamports: fundingAmount,
-      });
-      const tx = new Transaction().add(transferIx);
-      tx.feePayer = admin.publicKey;
-      tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
-      await provider.sendAndConfirm(tx, []);
-    });
+    await fundUsersParallel({ provider, admin: admin.publicKey, users, addLog });
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, using pre-calculated shard IDs
     addLog(`   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`);
-    const DEPOSIT_CONCURRENCY = Math.min(200, users.length);
-    await runWithConcurrency(users, DEPOSIT_CONCURRENCY, async (user) => {
-      try {
-        await sdk.deposit({
-          launch: testLaunchState,
-          amountLamports: user.depositAmount,
-          userKeypair: user.keypair,
-          shardId: user.shardId,
-        });
-        usersWithDeposits.set(user.keypair.publicKey.toBase58(), {
-          keypair: user.keypair,
-          tickets: user.tickets,
-          shardId: user.shardId,
-        });
-      } catch (error: any) {
-        addLog(`   -> ❌ Deposit failed for user in shard ${user.shardId}: ${error.message}`);
-        throw new Error(`Deposit failed for user ${user.keypair.publicKey.toBase58()} in shard ${user.shardId}: ${error.message}`);
-      }
-    });
+    // record for later claims
+    for (const user of users) {
+      usersWithDeposits.set(user.keypair.publicKey.toBase58(), { keypair: user.keypair, tickets: user.tickets, shardId: user.shardId });
+    }
+    await depositUsersParallel({ sdk, launchPda: testLaunchState, users, addLog });
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End
     addLog(`\n[4/10] Waiting for funding period to end...`);
-    await waitForFundingPeriodEnd(testLaunchState);
+    await waitForFundingPeriodEndHelper({ provider, sdk, launchPda: testLaunchState, addLog });
     addLog("   -> Funding period closed.");
 
     const balanceBeforeCranking = await provider.connection.getBalance(admin.publicKey);
@@ -396,31 +332,10 @@ export async function runFullFlow(
 
     // 7. Create Pool (prepare, Raydium CLMM creation, add liquidity)
     addLog(`\n[7/10] Prepare Pool Creation...`);
-    let prepared = false;
-    for (let i = 0; i < 5; i++) {
-      try {
-        await sdk.preparePoolCreation({ launch: testLaunchState, computeUnits: 2_000_000 });
-        prepared = true;
-        addLog("   -> preparePoolCreation succeeded (valid recent blockhash found). ");
-        break;
-      } catch (e: any) {
-        const msg = (e && e.message) ? String(e.message) : "";
-        if (msg.includes("NoValidBlockhash")) {
-          if (i === 0) addLog("   -> Waiting for a valid recent blockhash (retrying up to 60s)...");
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
-        throw e;
-      }
-    }
-    if (!prepared) throw new Error("No valid recent blockhash observed within retry window");
+    await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
 
-
-    const mintResult = await sdk.mintForTest({
-      launch: testLaunchState,
-      baseMint: testBaseMint,
-    });
-    addLog(`      - Mint signature: ${mintResult.signature}`);
+    const mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
+    addLog(`      - Minted base mint: ${mintedBaseMint.toBase58()}`);
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
