@@ -1046,20 +1046,11 @@ export class TxBuilder {
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-
-    const [poolState] = this.getRaydiumPoolPda(
-      params.baseMint,
-      params.quoteMint
-    );
-
+    const [poolState] = this.getRaydiumPoolPda(params.baseMint, params.quoteMint);
     const [quoteVault] = this.getRaydiumVaultPda(poolState, params.quoteMint);
     const [baseVault] = this.getRaydiumVaultPda(poolState, params.baseMint);
 
-    const quoteTokenAta = getAssociatedTokenAddressSync(
-      params.quoteMint,
-      escrowAuthority,
-      true
-    );
+    const quoteTokenAta = getAssociatedTokenAddressSync(params.quoteMint, escrowAuthority, true);
 
     const positionNftMint = params.positionNftMint ?? web3.Keypair.generate();
     const positionNftAccount = getAssociatedTokenAddressSync(

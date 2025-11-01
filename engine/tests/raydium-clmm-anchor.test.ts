@@ -13,7 +13,6 @@ function getExplorerUrl(provider, signature) {
   return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
 }
 
-console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 describe("engine anchor - raydium clmm", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
