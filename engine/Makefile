@@ -89,6 +89,11 @@ build-sdk:
 build-all: build sync-idl build-sdk
 	@echo "Full build completed (program + IDL sync + SDK)!"
 
+.PHONY: build-all-test
+build-all-test: build-test sync-idl build-sdk
+	@echo "Full build completed (program + IDL sync + SDK)!"
+
+
 .PHONY: deploy
 deploy:
 	@echo "Deploying program..."
@@ -235,3 +240,7 @@ litesvm:
 
 # Default target
 .DEFAULT_GOAL := help
+
+build-test:
+	anchor build -- --features test
+	make sync-idl

@@ -8,10 +8,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "zero-hundred-engine-sdk": path.resolve(
-        __dirname,
-        "../ts-sdk/dist/src/engine.js"
-      ),
+      "@xyber-labs/0-100-sdk": path.resolve(__dirname, "../ts-sdk/src/engine.ts"),
+      "zero-hundred-engine-sdk": path.resolve(__dirname, "../ts-sdk/src/engine.ts"),
     },
+  },
+  optimizeDeps: {
+    exclude: ["@xyber-labs/0-100-sdk", "zero-hundred-engine-sdk"],
+  },
+  ssr: {
+    noExternal: ["@xyber-labs/0-100-sdk", "zero-hundred-engine-sdk"],
   },
 });

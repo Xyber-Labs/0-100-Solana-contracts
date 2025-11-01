@@ -104,7 +104,6 @@ describe("engine litesvm", () => {
     assert.equal(state.selectionProcessed, 0);
     assert.isNull(state.thresholdScore);
     assert.isNull(state.vrfSeed);
-    assert.isFalse(state.claimsOpen);
     assert.isNull(state.tokensPerTicket);
     assert.isNull(state.baseMint);
   });

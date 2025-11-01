@@ -810,6 +810,79 @@ export class TxBuilder {
     };
   }
 
+  async mintForTestTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    baseMint: web3.Keypair | web3.PublicKey; // create and initialize if Keypair provided
+    preIxs?: web3.TransactionInstruction[];
+  }): Promise<{
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
+  }> {
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+
+    const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
+    const baseMint = (isKeypair
+      ? (params.baseMint as any).publicKey
+      : (params.baseMint as web3.PublicKey)
+    );
+
+    const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
+    if (isKeypair) {
+      const existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      if (!existing) {
+        const createMintAccountIx = web3.SystemProgram.createAccount({
+          fromPubkey: params.payer,
+          newAccountPubkey: baseMint,
+          space: 82,
+          lamports: await this.program.provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        });
+        const initializeMintIx = createInitializeMintInstruction(
+          baseMint,
+          6,
+          escrowAuthority,
+          null
+        );
+        maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
+      }
+    }
+
+    const baseTokenAta = getAssociatedTokenAddressSync(
+      baseMint,
+      escrowAuthority,
+      true
+    );
+
+    const ix = await (this.program.methods as any)
+      .mintForTest()
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrowAuthority: escrowAuthority,
+        baseMint: baseMint,
+        baseEscrowAta: baseTokenAta,
+        baseTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      } as any)
+      .instruction();
+
+    const transaction = new web3.Transaction();
+    if (params.preIxs?.length) transaction.add(...params.preIxs);
+    if (maybeCreateMintIxs.length) transaction.add(...maybeCreateMintIxs);
+    transaction.add(ix);
+
+    return {
+      transaction,
+      signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
+      baseMint,
+      baseTokenAta,
+    };
+  }
+
   async addClmmLiquidityTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;

@@ -478,6 +478,34 @@ const EngineSDK = {
       };
     }
 
+    async function mintForTest(args: {
+      launch: anchor.web3.PublicKey;
+      baseMint?: anchor.web3.Keypair;
+    }): Promise<{
+      signature: string;
+      baseMint: anchor.web3.PublicKey;
+      baseTokenAta: anchor.web3.PublicKey;
+    }> {
+      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
+
+      const result = await txBuilder.mintForTestTx({
+        payer,
+        launch: args.launch,
+        baseMint,
+      });
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      // Note: observationKeypair is NOT a signer, it's just a writable account
+      const signature = await provider.sendAndConfirm(result.transaction, result.signers);
+      return {
+        signature,
+        baseMint: result.baseMint,
+        baseTokenAta: result.baseTokenAta,
+      };
+    }
+
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
       baseMint: anchor.web3.PublicKey;
@@ -789,6 +817,7 @@ const EngineSDK = {
       claimCreatorRefundTx,
       preparePoolCreation,
       createClmmPool,
+      mintForTest,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),

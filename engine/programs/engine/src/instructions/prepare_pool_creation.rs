@@ -159,6 +159,12 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     launch_state.tokens_per_ticket = Some(tokens_per_ticket);
     launch_state.selection_finalized = true;
 
+    // for claims and withdrawal testing, without pool creation
+    #[cfg(feature = "test")]
+    {
+        ctx.accounts.pool_state.claims_ready = true;
+    }
+
     emit!(SelectionFinalized {
         launch: launch_state.key(),
         k_capacity: launch_state.k_capacity,

@@ -42,7 +42,6 @@ pub struct LaunchState {
     pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
 
     // Claims
-    pub claims_open: bool,
     pub tokens_per_ticket: Option<u64>,
 
     // Creator grant fields

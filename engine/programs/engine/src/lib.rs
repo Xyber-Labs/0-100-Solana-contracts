@@ -92,4 +92,9 @@ pub mod engine {
     pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
     }
+
+    #[cfg(feature = "test")]
+    pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
+        instructions::mint_for_test(ctx)
+    }
 }

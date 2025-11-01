@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
-    state::{CreatorGrant, LaunchState, ProjectCounter}
+    state::{CreatorGrant, LaunchState, ProjectCounter},
 };
 use anchor_lang::{
     prelude::*,
@@ -138,7 +138,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.roster_finalized_up_to = -1;
     state.public_total_tickets = 0;
 
-    state.claims_open = false;
     state.tokens_per_ticket = None;
 
     // Initialize creator grant fields
