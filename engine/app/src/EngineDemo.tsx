@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey, Keypair, SystemProgram, Transaction, VersionedTransaction, ComputeBudgetProgram } from '@solana/web3.js';
+import { PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import EngineSDK from '../../ts-sdk/src/engine';
 import type { LaunchConfig } from './types/launch';
+import { depositUsersParallel, fundUsersParallel, getChainTimeSec, preparePoolCreationWithRetry, mintForTestSafe, type SimUser } from './utils/flowHelpers';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
-import { createInitializeMintInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { runFullFlow } from './utils/flowRunner';
 
 // Launch configuration interface
@@ -143,7 +143,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     saleAllocation: '459460000000000', // 45.946% of 1B supply with 6 decimals
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
-    fundingDurationSeconds: 10, // Default custom seconds
+    fundingDurationSeconds: 15, // Default custom seconds
     unlockTimeSec: 1, // 1 sec for fast test
     rosterShardCap: 250, // Safe size for Solana account limits (250 * 40 bytes = 10,000 bytes)
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
@@ -324,159 +324,33 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       const baseMintKeypair = Keypair.generate();
       const [launchPda] = sdk.getLaunchPda(baseMintKeypair.publicKey);
-      const [escrowPda] = sdk.getEscrowPda(launchPda);
 
-      // Get mint authority PDA
-      const [mintAuth] = sdk.getMintAuthPda(launchPda);
-      const [creatorGrant] = sdk.getCreatorGrantPda(launchPda);
-      const [projectCounter] = sdk.getProjectCounterPda();
+      const baseTotalAllocationBN = new BN(launchConfig.saleAllocation).add(new BN(String(launchConfig.lpAllocation)));
+      const baseSaleBpsBN = baseTotalAllocationBN.isZero()
+        ? new BN(0)
+        : new BN(Math.floor(new BN(launchConfig.saleAllocation).toNumber() * 10000 / baseTotalAllocationBN.toNumber()));
 
-      console.log('Creating initLaunch transaction with:');
-      console.log('baseMint:', baseMintKeypair.publicKey.toString());
-      console.log('signers:', [baseMintKeypair].map(kp => kp.publicKey.toString()));
-
-      // Create the transaction manually to handle signers properly
-      const transaction = new Transaction();
-
-      // Add compute unit limit
-      transaction.add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
-      );
-
-      addLog(`Creating transaction for baseMint: ${baseMintKeypair.publicKey.toString()}`);
-
-      // Add pre-instructions
-      transaction.add(
-        SystemProgram.createAccount({
-          fromPubkey: (testWallet?.publicKey || publicKey)!,
-          newAccountPubkey: baseMintKeypair.publicKey,
-          space: 82,
-          lamports: await connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        })
-      );
-
-      transaction.add(
-        createInitializeMintInstruction(
-          baseMintKeypair.publicKey,
-          6,
-          mintAuth,
-          (testWallet?.publicKey || publicKey)!
-        )
-      );
-
-      // Add the main instruction
-      const initLaunchIx = await program.methods
-        .initLaunch({
-          hardCapLamports: new BN(launchConfig.hardCapLamports),
-          minRaiseLamports: new BN(launchConfig.minRaiseLamports),
-          perWalletCap: new BN(launchConfig.perWalletCap),
-          tauLamports: new BN(launchConfig.tauLamports),
-          saleAllocation: new BN(launchConfig.saleAllocation),
-          lpAllocation: new BN(launchConfig.lpAllocation),
-          fundingDurationSeconds: new BN(getFundingDurationInSeconds()),
-          unlockTimeSec: new BN(launchConfig.unlockTimeSec),
-          rosterShardCap: launchConfig.rosterShardCap,
-          creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
-          creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
-          creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
-        })
-        .accountsStrict({
-          creator: (testWallet?.publicKey || publicKey)!,
-          projectCounter,
-          launchState: launchPda,
-          baseMint: baseMintKeypair.publicKey,
-          escrow: escrowPda,
-          creatorGrant,
-          systemProgram: SystemProgram.programId,
-        })
-        .instruction();
-
-      transaction.add(initLaunchIx);
-
-      addLog(`Transaction instructions count: ${transaction.instructions.length}`);
-
-      // Get recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = (testWallet?.publicKey || publicKey)!;
-
-      addLog(`Transaction prepared with blockhash: ${blockhash}`);
-      addLog(`Fee payer: ${(testWallet?.publicKey || publicKey)!.toString()}`);
-      addLog(`Transaction signers: ${transaction.signatures.map(sig => sig.publicKey.toString()).join(', ')}`);
-
-      let signature: string;
-
-      if (testWallet) {
-        // For TestWallet, sign manually
-        addLog(`Signing with TestWallet: ${testWallet.publicKey.toString()}`);
-        transaction.sign(testWallet, baseMintKeypair);
-        const signers = [testWallet, baseMintKeypair].filter(Boolean) as Keypair[];
-        addLog(`Sending transaction with signers: ${signers.map(s => s.publicKey.toString()).join(', ')}`);
-        signature = await connection.sendTransaction(transaction, signers);
-      } else {
-        // For browser wallet, use signTransaction
-        if (!signTransaction) {
-          throw new Error('No signTransaction function available');
-        }
-
-        addLog(`Signing with browser wallet: ${publicKey?.toString()}`);
-        // Sign with browser wallet first
-        const signedTransaction = await signTransaction(transaction);
-        addLog(`Browser wallet signed transaction`);
-        addLog(`Signed transaction signatures: ${signedTransaction.signatures.map(sig => sig.publicKey.toString()).join(', ')}`);
-
-        // Send the transaction with baseMintKeypair as additional signer
-        addLog(`Sending transaction with additional signer: ${baseMintKeypair.publicKey.toString()}`);
-        addLog(`Transaction feePayer: ${signedTransaction.feePayer?.toString()}`);
-        addLog(`Transaction recentBlockhash: ${signedTransaction.recentBlockhash}`);
-        addLog(`Transaction instructions count: ${signedTransaction.instructions.length}`);
-
-        // Check if baseMintKeypair is already signed
-        const isBaseMintSigned = signedTransaction.signatures.some(sig =>
-          sig.publicKey.equals(baseMintKeypair.publicKey) && sig.signature !== null
-        );
-        addLog(`baseMint already signed: ${isBaseMintSigned}`);
-
-        try {
-          if (isBaseMintSigned) {
-            // If already signed, send without additional signers
-            addLog(`Sending transaction without additional signers (already signed)`);
-            signature = await connection.sendRawTransaction(signedTransaction.serialize());
-          } else {
-            // If not signed, send with additional signer
-            addLog(`Sending transaction with additional signer`);
-            signature = await connection.sendTransaction(signedTransaction, [baseMintKeypair]);
-          }
-          addLog(`Transaction sent, signature: ${signature}`);
-        } catch (sendError) {
-          addLog(`ERROR: Failed to send transaction - ${sendError}`);
-          addLog(`Error details: ${JSON.stringify(sendError)}`);
-          throw sendError;
-        }
-      }
+      const res = await sdk.initLaunch({
+        baseMint: baseMintKeypair.publicKey,
+        hardCapLamports: new BN(launchConfig.hardCapLamports),
+        minRaiseLamports: new BN(launchConfig.minRaiseLamports),
+        perWalletCap: new BN(launchConfig.perWalletCap),
+        tauLamports: new BN(launchConfig.tauLamports),
+        baseTotalAllocation: baseTotalAllocationBN,
+        baseSaleBasisPoints: baseSaleBpsBN,
+        fundingDurationSeconds: getFundingDurationInSeconds(),
+        unlockTimeSec: launchConfig.unlockTimeSec,
+        rosterShardCap: launchConfig.rosterShardCap,
+        creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
+        creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
+        creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
+      });
 
       setLaunchState(launchPda);
       setBaseMint(baseMintKeypair);
-      setEscrow(escrowPda);
-
-      if (!signature) {
-        throw new Error('Transaction signature is empty');
-      }
-
-      addLog(`SUCCESS: Launch initialized - Signature: ${signature}`);
+      addLog(`SUCCESS: Launch initialized - Signature: ${res.signature}`);
       addLog(`Launch PDA: ${launchPda.toString()}`);
       addLog(`Sale Mint: ${baseMintKeypair.publicKey.toString()}`);
-      addLog(`Transaction sent successfully`);
-
-      // Wait for transaction confirmation and account creation
-      addLog('Waiting for transaction confirmation...');
-      await connection.confirmTransaction(signature, 'confirmed');
-
-      // Wait a bit more for account to be fully created
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Fetch initial launch data
       await fetchLaunchData();
     } catch (error) {
       addLog(`ERROR: Failed to initialize launch - ${error}`);
@@ -484,6 +358,41 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setIsLoading(false);
     }
   }, [sdk, program, publicKey, launchConfig, fetchLaunchData]);
+  const simulateUsers = useCallback(async () => {
+    if (!sdk || !launchState) {
+      addLog('ERROR: Launch not initialized');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const provider = sdk.program.provider as any;
+      const admin = provider.publicKey!;
+      // Guard: ensure funding period still active
+      const launch = await sdk.fetchLaunch(launchState);
+      const now = await getChainTimeSec(provider);
+      const fundingEnd = (launch.fundingPeriodEnd as any).toNumber?.() ?? Number(launch.fundingPeriodEnd);
+      const remaining = Math.max(0, fundingEnd - now);
+      if (remaining <= 0) {
+        addLog('ERROR: Funding period has ended. Increase Funding Duration and Init Launch again.');
+        return;
+      }
+      addLog(`Funding window remaining ~${remaining}s`);
+      const users: SimUser[] = Array.from({ length: simConfig.numUsers }, (_, i) => {
+        const keypair = Keypair.generate();
+        const tickets = Math.floor(Math.random() * simConfig.maxTicketsPerUser) + 1;
+        const depositAmount = new BN(launchConfig.tauLamports * tickets);
+        const shardId = Math.floor(i / launchConfig.rosterShardCap);
+        return { keypair, tickets, depositAmount, shardId };
+      });
+      await fundUsersParallel({ provider, admin, users, addLog });
+      await depositUsersParallel({ sdk, launchPda: launchState, users, addLog });
+      addLog('SUCCESS: Users funded and deposited');
+    } catch (e) {
+      addLog(`ERROR: Simulation failed - ${e}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sdk, launchState, launchConfig, simConfig]);
 
 
 
@@ -571,8 +480,20 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     try {
       setIsLoading(true);
       addLog('Claiming refund...');
-      const { signature } = await sdk.claimRefund({ launch: launchState });
+      const beforeLamports = await connection.getBalance((testWallet?.publicKey || publicKey)!);
+      const activePublicKey = testWallet?.publicKey || publicKey;
+      let shardId: number | undefined = undefined;
+      try {
+        if (activePublicKey) {
+          const uc = await sdk.fetchUserContribution(launchState, activePublicKey);
+          shardId = (uc as any).shardId ?? (uc as any).shard_id ?? undefined;
+        }
+      } catch {}
+      const { signature } = await sdk.claimRefund({ launch: launchState, shardId });
+      const afterLamports = await connection.getBalance((testWallet?.publicKey || publicKey)!);
+      const netDelta = (afterLamports - beforeLamports) / 1e9;
       addLog(`SUCCESS: Refund claimed - Signature: ${signature}`);
+      addLog(`Refund received (approx, net of fee): ${netDelta.toFixed(6)} SOL`);
       await fetchUserData();
     } catch (error) {
       addLog(`ERROR: Failed to claim refund - ${error}`);
@@ -590,20 +511,41 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     try {
       setIsLoading(true);
       addLog('Claiming tokens...');
-      const { userAta, signature } = await sdk.claimTokens({
+      const userAta = sdk.getUserAta(baseMint.publicKey, (testWallet?.publicKey || publicKey)!);
+      let before = 0;
+      try {
+        const b = await connection.getTokenAccountBalance(userAta);
+        before = parseFloat(b.value.uiAmountString || '0');
+      } catch {}
+      const activePublicKey = testWallet?.publicKey || publicKey;
+      let shardId: number | undefined = undefined;
+      try {
+        if (activePublicKey) {
+          const uc = await sdk.fetchUserContribution(launchState, activePublicKey);
+          shardId = (uc as any).shardId ?? (uc as any).shard_id ?? undefined;
+        }
+      } catch {}
+      const { userAta: ata, signature } = await sdk.claimTokens({
         launch: launchState,
         baseMint: baseMint.publicKey,
+        shardId,
         createAtaIfMissing: true,
       });
       addLog(`SUCCESS: Tokens claimed - Signature: ${signature}`);
-      addLog(`User ATA: ${userAta.toString()}`);
+      addLog(`User ATA: ${ata.toString()}`);
+      try {
+        const a = await connection.getTokenAccountBalance(ata);
+        const after = parseFloat(a.value.uiAmountString || '0');
+        const delta = after - before;
+        addLog(`Claimed tokens: ${delta.toFixed(6)}`);
+      } catch {}
       await fetchUserData();
     } catch (error) {
       addLog(`ERROR: Failed to claim tokens - ${error}`);
     } finally {
       setIsLoading(false);
     }
-  }, [sdk, launchState, baseMint, fetchUserData]);
+  }, [sdk, launchState, baseMint, fetchUserData, publicKey, testWallet]);
 
   const requestFaucet = useCallback(async () => {
     const activePublicKey = testWallet?.publicKey || publicKey;
@@ -774,6 +716,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     }
   }, [defaultConfig]);
 
+  // Derived flags
+  const activePublicKey = testWallet?.publicKey || publicKey;
+  const creatorPk = (launchData && (launchData as any).creator) ? new PublicKey((launchData as any).creator) : null;
+  const isCreator = !!(creatorPk && activePublicKey && creatorPk.equals(activePublicKey));
+
   const deleteProject = useCallback((projectId: string) => {
     const updatedProjects = savedProjects.filter(p => p.id !== projectId);
     setSavedProjects(updatedProjects);
@@ -853,22 +800,39 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       addLog(`Found project #${projectId}, loading...`);
       addLog(`Launch PDA: ${project.launchPda.toString()}`);
-      addLog(`Sale Mint: ${project.baseMint.toString()}`);
+      addLog(`Sale Mint: ${project.baseMint ? project.baseMint.toString() : 'N/A'}`);
 
       // Set the project data
       setLaunchState(project.launchPda);
-      setBaseMint({ publicKey: project.baseMint } as Keypair); // We can't restore the full keypair, but we can use the public key
+      if (project.baseMint) {
+        setBaseMint({ publicKey: project.baseMint } as Keypair);
+      } else {
+        setBaseMint(null);
+      }
 
-      // Derive other PDAs
+      // Derive other PDAs (fallback by launch if baseMint is missing)
       addLog('Deriving PDAs...');
-      const pdas = sdk.deriveAllPdas(project.baseMint);
-      setEscrow(pdas.escrow);
-      setRoster(pdas.roster);
-      setSelection(pdas.selection);
-
-      addLog(`Escrow PDA: ${pdas.escrow.toString()}`);
-      addLog(`Roster PDA: ${pdas.roster.toString()}`);
-      addLog(`Selection PDA: ${pdas.selection.toString()}`);
+      try {
+        if (project.baseMint && sdk.deriveAllPdas) {
+          const pdas = sdk.deriveAllPdas(project.baseMint);
+          setEscrow(pdas.escrow);
+          setRoster(pdas.roster);
+          setSelection(pdas.selection);
+          addLog(`Escrow PDA: ${pdas.escrow.toString()}`);
+          addLog(`Roster PDA: ${pdas.roster.toString()}`);
+          addLog(`Selection PDA: ${pdas.selection.toString()}`);
+        } else {
+          const [escrowPda] = sdk.getEscrowPda(project.launchPda);
+          const [rosterPda] = sdk.getRosterPda(project.launchPda);
+          setEscrow(escrowPda);
+          setRoster(rosterPda);
+          setSelection(null);
+          addLog(`Escrow PDA: ${escrowPda.toString()}`);
+          addLog(`Roster PDA: ${rosterPda.toString()}`);
+        }
+      } catch (e) {
+        addLog(`ERROR: Failed to derive PDAs - ${e}`);
+      }
 
       // Fetch current data
       addLog('Fetching launch data...');
@@ -1318,7 +1282,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                               Launch PDA: {project.launchPda.toString().slice(0, 8)}...
                             </div>
                             <div className="text-xs terminal-output">
-                              Sale Mint: {project.baseMint.toString().slice(0, 8)}...
+                              Sale Mint: {project.baseMint ? project.baseMint.toString().slice(0, 8) + '...' : 'N/A'}
                             </div>
                             <div className="text-xs terminal-output">
                               Funding Period End: {new Date(safeToNumber(project.account.fundingPeriodEnd) * 1000).toLocaleString()}
@@ -1547,6 +1511,11 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                       shardId: 0,
                     });
                     addLog(`SUCCESS: Roster shard 0 initialized - Signature: ${signature}`);
+                    try {
+                      const [rosterPda] = sdk.getRosterPda(launchState);
+                      setRoster(rosterPda);
+                      addLog(`Roster PDA set: ${rosterPda.toString()}`);
+                    } catch {}
                   } catch (error) {
                     addLog(`ERROR: Failed to initialize roster shard - ${error}`);
                   } finally {
@@ -1596,14 +1565,17 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   if (!sdk || !launchState) return;
                   try {
                     setIsLoading(true);
-                    addLog('Opening claims...');
-                    const { signature } = await sdk.openClaims({
-                      launch: launchState,
-                    });
-                    addLog(`SUCCESS: Claims opened - Signature: ${signature}`);
+                    addLog('Preparing pool creation (will finalize selection and open claims)...');
+                    await preparePoolCreationWithRetry({ sdk, launchPda: launchState, addLog });
+                    addLog('Minting base tokens to escrow (test)...');
+                    const mintedBaseMint = await mintForTestSafe({ sdk, launchPda: launchState, baseMintKeypair: baseMint, addLog });
+                    if (!baseMint || !('secretKey' in (baseMint as any))) {
+                      setBaseMint({ publicKey: mintedBaseMint } as Keypair);
+                    }
                     await fetchLaunchData();
+                    addLog('SUCCESS: Pool prepared and test mint complete. Claims should be open.');
                   } catch (error) {
-                    addLog(`ERROR: Failed to open claims - ${error}`);
+                    addLog(`ERROR: Failed to prepare pool + test mint - ${error}`);
                   } finally {
                     setIsLoading(false);
                   }
@@ -1611,8 +1583,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 className="terminal-button w-full text-left"
                 disabled={!launchState || isLoading || isFlowRunning}
               >
-                <span className="terminal-prompt">$</span> Open Claims
+                <span className="terminal-prompt">$</span> Prepare Pool + Test Mint
               </button>
+
 
 
               <div className="my-4 border-t-2 border-dashed border-gray-600"></div>
@@ -1623,6 +1596,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 disabled={!sdk || isLoading || isFlowRunning}
               >
                 <span className="terminal-prompt">$</span> ▶️ Run Full E2E Flow
+              </button>
+
+              <button
+                onClick={simulateUsers}
+                className="terminal-button w-full text-left bg-purple-700 hover:bg-purple-600 disabled:bg-gray-600"
+                disabled={!sdk || !launchState || isLoading || isFlowRunning}
+              >
+                <span className="terminal-prompt">$</span> 👥 Simulate Users Deposits ({simConfig.numUsers})
               </button>
             </div>
           </div>
@@ -1665,6 +1646,42 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 disabled={!launchState || !baseMint || isLoading || isFlowRunning}
               >
                 <span className="terminal-prompt">$</span> Claim Tokens
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (!sdk || !launchState || !baseMint) {
+                    addLog('ERROR: Launch or base mint not initialized');
+                    return;
+                  }
+                  try {
+                    setIsLoading(true);
+                    addLog('Claiming Creator Tokens...');
+                    try {
+                      const grant = await sdk.fetchCreatorGrant(launchState);
+                      addLog(`Creator grant state: reserved=${(grant as any).reservedTickets}, claimed=${(grant as any).claimedTickets}, dailyCap=${(grant as any).dailyTicketCap}`);
+                      if ((grant as any).claimedTickets >= (grant as any).reservedTickets) {
+                        addLog('Nothing to claim: all reserved tickets already claimed.');
+                      }
+                    } catch {}
+                    const { signature, creatorAta } = await sdk.claimCreatorTokens({
+                      launch: launchState,
+                      baseMint: baseMint.publicKey,
+                      createAtaIfMissing: true,
+                    });
+                    addLog(`SUCCESS: Creator tokens claimed - Signature: ${signature}`);
+                    addLog(`Creator ATA: ${creatorAta.toString()}`);
+                    await fetchLaunchData();
+                  } catch (error) {
+                    addLog(`ERROR: Failed to claim creator tokens - ${error}`);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                className="terminal-button w-full text-left"
+                disabled={!launchState || !baseMint || !isCreator || isLoading || isFlowRunning}
+              >
+                <span className="terminal-prompt">$</span> Claim Creator Tokens
               </button>
             </div>
 
