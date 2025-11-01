@@ -22,7 +22,7 @@ pub struct GetLiquidityRange<'info> {
 
 pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
-    Ok(get_liquidity_range_impl(tick_spacing, 0, 0))
+    Ok(get_liquidity_range_impl(tick_spacing, 6.16 * 10f64.powi(-7), true))
 }
 
 #[cfg(test)]
@@ -41,7 +41,7 @@ mod tests {
             tick_array_upper,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
-        } = get_liquidity_range_impl(1, base_amount, quote_amount);
+        } = get_liquidity_range_impl(1, 6.16 * 10f64.powi(-7), true);
 
         assert_eq!(tick_array_lower, tick_math::MIN_TICK);
         assert_eq!(tick_array_upper, tick_math::MAX_TICK);

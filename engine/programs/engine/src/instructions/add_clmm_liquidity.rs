@@ -231,8 +231,8 @@ fn add_initial_liquidity<'info>(
         tick_array_upper_start_index,
     } = get_liquidity_range_impl(
         ctx.accounts.raydium_amm_config.tick_spacing,
-        token_0_value,
-        token_1_value,
+        6.16 * 10f64.powi(-7),
+        true,
     );
 
     raydium_amm_v3::cpi::open_position_with_token22_nft(
