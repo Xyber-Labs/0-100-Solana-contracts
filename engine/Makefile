@@ -151,6 +151,11 @@ config-devnet:
 	@echo "Setting Solana config to devnet..."
 	solana config set --url https://api.devnet.solana.com
 
+.PHONY: config-local
+config-local:
+	@echo "Setting Solana config to localnet..."
+	solana config set --url http://127.0.0.1:8899
+
 # Clean commands
 .PHONY: clean
 clean:
