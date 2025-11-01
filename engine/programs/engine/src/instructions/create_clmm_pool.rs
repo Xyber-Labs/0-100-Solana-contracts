@@ -4,10 +4,11 @@ use anchor_spl::{
     token::{self, Mint, MintTo, Token},
     token_interface::{Mint as InterfaceMint, TokenInterface},
 };
-use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
+use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::AmmConfig};
 
 use crate::{
-    errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT, TOTAL_SUPPLY, AMM_CONFIG_INDEX,
+    AMM_CONFIG_INDEX, errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT,
+    TOTAL_SUPPLY,
 };
 
 #[derive(Accounts)]
@@ -79,10 +80,10 @@ pub struct CreateClmmPool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
+pub fn create_clmm_pool(mut ctx: Context<CreateClmmPool>) -> Result<()> {
     create_base_escrow_ata(&ctx)?;
     mint_base_tokens(&ctx)?;
-    invoke_raydium_create_pool(&ctx)?;
+    raydium_create_pool_impl(&mut ctx)?;
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
 }
@@ -127,15 +128,9 @@ fn mint_base_tokens(ctx: &Context<CreateClmmPool>) -> Result<()> {
     Ok(())
 }
 
-fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
+fn raydium_create_pool_impl(ctx: &mut Context<CreateClmmPool>) -> Result<()> {
     msg!("total_deposited: {}", ctx.accounts.launch_state.total_deposited);
     msg!("LP_POOL_ALLOCATION: {}", LP_POOL_ALLOCATION);
-
-    let calculator =
-        StakingCalculator::new(ctx.accounts.launch_state.total_deposited, LP_POOL_ALLOCATION);
-
-    let sqrt_price_x64 = calculator.get_sqrt_price();
-    msg!("sqrt_price_x64: {}", sqrt_price_x64);
 
     let order = TokenOrderForPool::new(
         &ctx.accounts.quote_mint.to_account_info(),
@@ -144,9 +139,9 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_program.to_account_info(),
         &ctx.accounts.base_token_program.to_account_info(),
-        sqrt_price_x64,
+        6.16 * 10f64.powi(-7),
     )?;
-
+    msg!("Order straight: {}", order.straight);
     let cpi_accounts = cpi::accounts::CreatePool {
         pool_creator: ctx.accounts.payer.to_account_info(),
         amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
@@ -163,42 +158,15 @@ fn invoke_raydium_create_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
         rent: ctx.accounts.rent.to_account_info(),
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
+    msg!("Sqrt price: {}", order.sqrt_price);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
+    ctx.accounts.launch_state.straight = order.straight;
     Ok(())
 }
 
 struct StakingCalculator {
     raised_lamports: u64,
     lp_allocation: u64,
-}
-
-impl StakingCalculator {
-    fn new(raised_lamports: u64, lp_allocation: u64) -> Self {
-        Self {
-            raised_lamports,
-            lp_allocation,
-        }
-    }
-
-    fn get_sqrt_price(&self) -> u128 {
-        14478050214835493
-        // let price_ratio = ((self.raised_lamports as u128) << 64) / self.lp_allocation as u128;
-        // let sqrt_price = Self::integer_sqrt(price_ratio);
-        // sqrt_price << 32
-    }
-
-    fn integer_sqrt(n: u128) -> u128 {
-        if n == 0 {
-            return 0;
-        }
-        let mut x = n;
-        let mut y = (x + 1) / 2;
-        while y < x {
-            x = y;
-            y = (x + n / x) / 2;
-        }
-        x
-    }
 }
 
 struct TokenOrderForPool<'info> {
@@ -209,6 +177,7 @@ struct TokenOrderForPool<'info> {
     token_program_0: AccountInfo<'info>,
     token_program_1: AccountInfo<'info>,
     sqrt_price: u128,
+    straight: bool,
 }
 
 impl<'info> TokenOrderForPool<'info> {
@@ -219,10 +188,11 @@ impl<'info> TokenOrderForPool<'info> {
         base_vault: &AccountInfo<'info>,
         quote_program: &AccountInfo<'info>,
         base_program: &AccountInfo<'info>,
-        sqrt_price_x64: u128,
+        price: f64,
     ) -> Result<Self> {
         if quote_mint.key() < base_mint.key() {
-            panic!("unreachable in the test context");
+            let reverse_price = 1f64 / price;
+            msg!("Order reverse price: {}", reverse_price);
             Ok(Self {
                 token_mint_0: quote_mint.clone(),
                 token_mint_1: base_mint.clone(),
@@ -230,14 +200,12 @@ impl<'info> TokenOrderForPool<'info> {
                 token_vault_1: base_vault.clone(),
                 token_program_0: quote_program.clone(),
                 token_program_1: base_program.clone(),
-                sqrt_price: 14478050214835493,
+
+                sqrt_price: Self::get_sqrt_price(reverse_price),
+                straight: false,
             })
         } else {
-            // let inverted_sqrt_price = (1u128 << 64)
-            //     .checked_mul(1u128 << 64)
-            //     .and_then(|v| v.checked_div(sqrt_price_x64))
-            //     .and_then(|v| v.checked_shr(64))
-            //     .ok_or(ErrorCode::ArithmeticOverflow)?;
+            msg!("Order price: {}", price);
             Ok(Self {
                 token_mint_0: base_mint.clone(),
                 token_mint_1: quote_mint.clone(),
@@ -245,107 +213,13 @@ impl<'info> TokenOrderForPool<'info> {
                 token_vault_1: quote_vault.clone(),
                 token_program_0: base_program.clone(),
                 token_program_1: quote_program.clone(),
-                sqrt_price: sqrt_price_x64,
+                sqrt_price: Self::get_sqrt_price(price),
+                straight: true,
             })
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const MIN_SQRT_PRICE_X64: u128 = 4295048016;
-    const MAX_SQRT_PRICE_X64: u128 = 79226673521066979257578248091;
-
-    #[test]
-    fn test_sqrt_price_small_raise() {
-        let calc = StakingCalculator::new(1_000_000_000, 500_000_000);
-        let sqrt_price = calc.get_sqrt_price();
-        assert!(
-            sqrt_price >= MIN_SQRT_PRICE_X64,
-            "sqrt_price {} < MIN {}",
-            sqrt_price,
-            MIN_SQRT_PRICE_X64
-        );
-        assert!(
-            sqrt_price <= MAX_SQRT_PRICE_X64,
-            "sqrt_price {} > MAX {}",
-            sqrt_price,
-            MAX_SQRT_PRICE_X64
-        );
-    }
-
-    #[test]
-    fn test_sqrt_price_medium_raise() {
-        let calc = StakingCalculator::new(191_000_000_000, 459_460_000);
-        let sqrt_price = calc.get_sqrt_price();
-        assert!(
-            sqrt_price >= MIN_SQRT_PRICE_X64,
-            "sqrt_price {} < MIN {}",
-            sqrt_price,
-            MIN_SQRT_PRICE_X64
-        );
-        assert!(
-            sqrt_price <= MAX_SQRT_PRICE_X64,
-            "sqrt_price {} > MAX {}",
-            sqrt_price,
-            MAX_SQRT_PRICE_X64
-        );
-    }
-
-    #[test]
-    fn test_sqrt_price_large_raise() {
-        let calc = StakingCalculator::new(500_000_000_000, 1_000_000_000);
-        let sqrt_price = calc.get_sqrt_price();
-        assert!(
-            sqrt_price >= MIN_SQRT_PRICE_X64,
-            "sqrt_price {} < MIN {}",
-            sqrt_price,
-            MIN_SQRT_PRICE_X64
-        );
-        assert!(
-            sqrt_price <= MAX_SQRT_PRICE_X64,
-            "sqrt_price {} > MAX {}",
-            sqrt_price,
-            MAX_SQRT_PRICE_X64
-        );
-    }
-
-    #[test]
-    fn test_sqrt_price_max_hardcap() {
-        let calc = StakingCalculator::new(1_000 * 1_000_000_000, 10_000_000_000);
-        let sqrt_price = calc.get_sqrt_price();
-        assert!(
-            sqrt_price >= MIN_SQRT_PRICE_X64,
-            "sqrt_price {} < MIN {}",
-            sqrt_price,
-            MIN_SQRT_PRICE_X64
-        );
-        assert!(
-            sqrt_price <= MAX_SQRT_PRICE_X64,
-            "sqrt_price {} > MAX {}",
-            sqrt_price,
-            MAX_SQRT_PRICE_X64
-        );
-    }
-
-    #[test]
-    fn test_integer_sqrt_basic() {
-        assert_eq!(StakingCalculator::integer_sqrt(0), 0);
-        assert_eq!(StakingCalculator::integer_sqrt(1), 1);
-        assert_eq!(StakingCalculator::integer_sqrt(4), 2);
-        assert_eq!(StakingCalculator::integer_sqrt(9), 3);
-        assert_eq!(StakingCalculator::integer_sqrt(16), 4);
-        assert_eq!(StakingCalculator::integer_sqrt(100), 10);
-    }
-
-    #[test]
-    fn test_integer_sqrt_non_perfect() {
-        assert_eq!(StakingCalculator::integer_sqrt(2), 1);
-        assert_eq!(StakingCalculator::integer_sqrt(3), 1);
-        assert_eq!(StakingCalculator::integer_sqrt(5), 2);
-        assert_eq!(StakingCalculator::integer_sqrt(8), 2);
-        assert_eq!(StakingCalculator::integer_sqrt(15), 3);
+    fn get_sqrt_price(price: f64) -> u128 {
+        (price.sqrt() * fixed_point_64::Q64 as f64) as u128
     }
 }

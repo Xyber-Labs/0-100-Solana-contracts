@@ -107,13 +107,13 @@ describe("engine anchor - raydium clmm", () => {
     console.log("\n=== Ensuring Raydium Token Ordering (Quote must be token_0) ===");
     do {
       baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) > 0);
+    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) < 0);
 
 
     console.log("Quote Mint:", quoteMintKeypair.publicKey.toString());
     console.log("Base Mint:", baseMintKeypair.publicKey.toString());
 
-    const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) > 0;
+    const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) < 0;
     console.log("Quote < Base (required for Raydium):", isQuoteLessThanBase);
     assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
 
@@ -153,19 +153,17 @@ describe("engine anchor - raydium clmm", () => {
 
     console.log("Pool will be created at:", createPoolResultTx.poolState.toString());
 
-    const launchData = await program.account.launchState.fetch(clmmLaunchState);
 
-    const LP_POOL_ALLOCATION = 440_000_000;
-    const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
+    console.log("\n=== Sending CreatePool transaction ===");
+    console.log(`Instructions: ${createPoolResultTx.transaction.instructions.length}`);
+    console.log(`Signers: ${createPoolResultTx.signers.length + 1}`);
 
+    const createPoolSig = await provider.sendAndConfirm(
+      createPoolResultTx.transaction,
+      [adminKeypair, ...createPoolResultTx.signers],
+      { skipPreflight: true }
+    );
 
-    const TOKENS_SOLD_ON_SALE = 560_000_000;
-    const tokensSoldOnSale = new anchor.BN(TOKENS_SOLD_ON_SALE).mul(new anchor.BN(1_000_000_000));
-    const currentPrice = Number(quoteAmountLamports) / Number(tokensSoldOnSale);
-    console.log(`Current price (quote/base from sale): ${currentPrice.toExponential(15)}`);
-
-    const tickCurrent = Math.round(Math.log(currentPrice) / Math.log(1.0001));
-    console.log(`Current tick: ${tickCurrent}`);
 
     console.log("\n=== Getting Liquidity Range ===");
     const liquidityRange = await sdk.getLiquidityRange({
@@ -173,6 +171,13 @@ describe("engine anchor - raydium clmm", () => {
     });
     console.log(`Liquidity range: tickArrayLower=${liquidityRange.tickArrayLower}, tickArrayUpper=${liquidityRange.tickArrayUpper}`);
     console.log(`Tick array indices: lower=${liquidityRange.tickArrayLowerStartIndex}, upper=${liquidityRange.tickArrayUpperStartIndex}`);
+
+
+    const launchData = await program.account.launchState.fetch(clmmLaunchState);
+    console.log("Straight in the state: ", launchData.straight);
+    const LP_POOL_ALLOCATION = 440_000_000;
+    const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
+
 
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
@@ -186,15 +191,6 @@ describe("engine anchor - raydium clmm", () => {
       liquidityRange: liquidityRange,
     });
 
-    console.log("\n=== Sending CreatePool transaction ===");
-    console.log(`Instructions: ${createPoolResultTx.transaction.instructions.length}`);
-    console.log(`Signers: ${createPoolResultTx.signers.length + 1}`);
-
-    const createPoolSig = await provider.sendAndConfirm(
-      createPoolResultTx.transaction,
-      [adminKeypair, ...createPoolResultTx.signers],
-      { skipPreflight: true }
-    );
 
     console.log("✅ Pool created:", createPoolSig);
     console.log("Explorer:", getExplorerUrl(provider, createPoolSig));

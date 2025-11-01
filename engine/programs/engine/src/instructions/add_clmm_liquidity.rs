@@ -221,14 +221,14 @@ fn add_initial_liquidity<'info>(
     let token_0_value = order.amount_0;
     let token_1_value = order.amount_1;
 
-    let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
-    msg!("is_base_token_0: {}", is_base_token_0);
+    msg!("Order base flag: {}", order.base_flag.unwrap());
 
     let range = get_liquidity_range_impl(
         ctx.accounts.raydium_amm_config.tick_spacing,
         6.16 * 10f64.powi(-7),
-        true,
+        order.base_flag.unwrap(),
     );
+    msg!("range: {:?}", range);
 
     raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,

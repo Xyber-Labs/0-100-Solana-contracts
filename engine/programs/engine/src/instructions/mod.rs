@@ -43,7 +43,7 @@ mod withdraw;
 
 struct RaydiumPositionCalculator;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+#[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidityRange {
     tick_array_lower: i32,
     tick_array_lower_start_index: i32,
@@ -64,23 +64,18 @@ fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64, straight: bool)
 
     let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
-    let sqrt_price_middle_x64 = (price.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
     let tick_lower_raw = tick_math::get_tick_at_sqrt_price(sqrt_price_lower_x64).unwrap();
     let tick_upper_raw = tick_math::get_tick_at_sqrt_price(sqrt_price_upper_x64).unwrap();
-    let tick_middle_raw = tick_math::get_tick_at_sqrt_price(sqrt_price_middle_x64).unwrap();
 
     let spacing = tick_spacing as i32;
     let tick_array_lower = (tick_lower_raw / spacing) * spacing;
     let tick_array_upper = ((tick_upper_raw + spacing - 1) / spacing) * spacing;
-    let tick_array_middle = (tick_middle_raw / spacing) * spacing;
 
     let tick_array_lower_start_index =
         TickArrayState::get_array_start_index(tick_lower_raw, tick_spacing);
     let tick_array_upper_start_index =
         TickArrayState::get_array_start_index(tick_upper_raw, tick_spacing);
-    let tick_array_middle_start_index =
-        TickArrayState::get_array_start_index(tick_middle_raw, tick_spacing);
 
     LiquidityRange {
         tick_array_lower,
