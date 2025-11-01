@@ -27,7 +27,6 @@ describe("engine anchor - raydium clmm", () => {
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
   let quoteMintKeypair: anchor.web3.Keypair;
-  let addLiquidityResultTx: any;
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
@@ -171,7 +170,7 @@ describe("engine anchor - raydium clmm", () => {
 
     console.log("\n=== Full-Range Parameters (calculated on-chain) ===");
 
-    addLiquidityResultTx = await sdk.addClmmLiquidityTx({
+    let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
       quoteMint: quoteMintKeypair.publicKey,

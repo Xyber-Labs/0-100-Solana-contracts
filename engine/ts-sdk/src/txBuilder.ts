@@ -53,6 +53,51 @@ export class TxBuilder {
       [Buffer.from("pool"), RAYDIUM_AMM_CONFIG.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], RAYDIUM_CLMM_PROGRAM_ID);
   }
 
+  getRaydiumVaultPda(poolState: web3.PublicKey, mint: web3.PublicKey): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_vault"), poolState.toBuffer(), mint.toBuffer()],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
+  getRaydiumPersonalPositionPda(nftMint: web3.PublicKey): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("position"), nftMint.toBuffer()],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
+  getRaydiumProtocolPositionPda(
+    poolState: web3.PublicKey,
+    tickLower: number,
+    tickUpper: number
+  ): [web3.PublicKey, number] {
+    const tickLowerBuffer = Buffer.alloc(4);
+    tickLowerBuffer.writeInt32BE(tickLower, 0);
+    const tickUpperBuffer = Buffer.alloc(4);
+    tickUpperBuffer.writeInt32BE(tickUpper, 0);
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("protocol_position"), poolState.toBuffer(), tickLowerBuffer, tickUpperBuffer],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
+  getRaydiumTickArrayPda(poolState: web3.PublicKey, startIndex: number): [web3.PublicKey, number] {
+    const buffer = Buffer.alloc(4);
+    buffer.writeInt32BE(startIndex, 0);
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("tick_array"), poolState.toBuffer(), buffer],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
+  getRaydiumBitmapExtensionPda(poolState: web3.PublicKey): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
   getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
     const le = Buffer.from(Uint8Array.of(shardId & 0xff, (shardId >> 8) & 0xff));
     return this.getPda(["roster_shard", launch, le]);
@@ -1007,23 +1052,8 @@ export class TxBuilder {
       params.quoteMint
     );
 
-    const [quoteVault] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_vault"),
-        poolState.toBuffer(),
-        params.quoteMint.toBuffer(),
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
-
-    const [baseVault] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_vault"),
-        poolState.toBuffer(),
-        params.baseMint.toBuffer(),
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
+    const [quoteVault] = this.getRaydiumVaultPda(poolState, params.quoteMint);
+    const [baseVault] = this.getRaydiumVaultPda(poolState, params.baseMint);
 
     const quoteTokenAta = getAssociatedTokenAddressSync(
       params.quoteMint,
@@ -1039,65 +1069,13 @@ export class TxBuilder {
       TOKEN_2022_PROGRAM_ID
     );
 
-    const [personalPosition] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("position"),
-        positionNftMint.publicKey.toBuffer(),
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
+    const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint.publicKey);
 
-    const tickLowerBuffer = Buffer.alloc(4);
-    //tickLowerBuffer.writeInt32BE(params.tickLowerIndex, 0);
-    tickLowerBuffer.writeInt32BE(-443636, 0);
+    const [protocolPosition] = this.getRaydiumProtocolPositionPda(poolState, -443636, 443636);
 
-    const tickUpperBuffer = Buffer.alloc(4);
-//    tickUpperBuffer.writeInt32BE(params.tickUpperIndex, 0);
-    tickUpperBuffer.writeInt32BE(443636, 0);
-
-    const [protocolPosition] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("protocol_position"),
-        poolState.toBuffer(),
-        tickLowerBuffer,
-        tickUpperBuffer,
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
-
-    const tickArrayLowerBuffer = Buffer.alloc(4);
-//    tickArrayLowerBuffer.writeInt32BE(params.tickArrayLowerStartIndex, 0);
-    tickArrayLowerBuffer.writeInt32BE(-443640, 0);
-
-    const tickArrayUpperBuffer = Buffer.alloc(4);
-//    tickArrayUpperBuffer.writeInt32BE(params.tickArrayUpperStartIndex, 0);
-    tickArrayUpperBuffer.writeInt32BE(443580, 0);
-
-    const [tickArrayLower] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("tick_array"),
-        poolState.toBuffer(),
-        tickArrayLowerBuffer,
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
-
-    const [tickArrayUpper] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("tick_array"),
-        poolState.toBuffer(),
-        tickArrayUpperBuffer,
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
-
-    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_tick_array_bitmap_extension"),
-        poolState.toBuffer()
-      ],
-      RAYDIUM_CLMM_PROGRAM_ID
-    );
+    const [tickArrayLower] = this.getRaydiumTickArrayPda(poolState, -443640);
+    const [tickArrayUpper] = this.getRaydiumTickArrayPda(poolState, 443580);
+    const [bitmapExtension] = this.getRaydiumBitmapExtensionPda(poolState);
 
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity(
