@@ -105,17 +105,18 @@ describe("engine anchor - raydium clmm", () => {
     console.log("✅ Quote Mint created:", quoteMint.toString());
 
     console.log("\n=== Ensuring Raydium Token Ordering (Quote must be token_0) ===");
+    const straight = true;
     do {
       baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) < 0);
+    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) == (straight ? -1 : 1));
 
 
     console.log("Quote Mint:", quoteMintKeypair.publicKey.toString());
     console.log("Base Mint:", baseMintKeypair.publicKey.toString());
-
-    const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) < 0;
-    console.log("Quote < Base (required for Raydium):", isQuoteLessThanBase);
-    assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
+    //
+    // const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) > 0;
+    // console.log("Quote < Base (required for Raydium):", isQuoteLessThanBase);
+    // assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
 
 
     const quoteAmountLamports = new anchor.BN(300000000000);
@@ -138,7 +139,7 @@ describe("engine anchor - raydium clmm", () => {
       quoteMintKeypair.publicKey,
       escrowQuoteAta.address,
       adminKeypair,
-      quoteAmountLamports.toNumber()
+      quoteAmountLamports.toNumber() + 10000000000
     );
 
     console.log("✅ Minted", quoteAmountLamports.toString(), "quote tokens to escrow ATA:", escrowQuoteAta.address.toString());

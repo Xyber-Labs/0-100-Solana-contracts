@@ -60,7 +60,7 @@ fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64, straight: bool)
         1f64 / price_ratio
     } * 1.15;
     let price_lower = price * 10f64.powi(-4);
-    let price_upper = price * 10f64.powi(10);
+    let price_upper = price * 10f64.powi(5);
 
     let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
