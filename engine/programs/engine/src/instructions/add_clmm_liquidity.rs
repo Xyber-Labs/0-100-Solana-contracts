@@ -260,7 +260,7 @@ fn add_initial_liquidity<'info>(
         token_0_value,
         token_1_value,
         true,
-        Some(is_base_token_0),
+        order.base_flag,
     )?;
 
     Ok(())
@@ -283,6 +283,7 @@ struct TokenOrder<'info> {
     token_account_1: AccountInfo<'info>,
     amount_0: u64,
     amount_1: u64,
+    base_flag: Option<bool>,
 }
 
 impl<'info> TokenOrder<'info> {
@@ -306,6 +307,7 @@ impl<'info> TokenOrder<'info> {
                 token_account_1: base_account.clone(),
                 amount_0: quote_amount,
                 amount_1: base_amount,
+                base_flag: Some(false),
             }
         } else {
             Self {
@@ -317,6 +319,7 @@ impl<'info> TokenOrder<'info> {
                 token_account_1: quote_account.clone(),
                 amount_0: base_amount,
                 amount_1: quote_amount,
+                base_flag: Some(true),
             }
         }
     }
