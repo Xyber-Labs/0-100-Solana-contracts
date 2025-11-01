@@ -8,18 +8,19 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
-import { getConstant } from "./utils";
+import { getConstant, getConstantRaw } from "./utils";
 
 const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-const RAYDIUM_AMM_CONFIG = new web3.PublicKey("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
+  private ammConfigIndex: number;
 
   constructor(program: Program<EngineIDL>, admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
+    this.ammConfigIndex = getConstantRaw("ammConfigIndex", program.idl as any) as number;
   }
 
   getPda(seeds: (string | Buffer | web3.PublicKey)[]): [web3.PublicKey, number] {
@@ -42,6 +43,15 @@ export class TxBuilder {
     );
   }
 
+  private getRaydiumAmmConfigPda(): [web3.PublicKey, number] {
+    const indexBuffer = Buffer.alloc(2);
+    indexBuffer.writeUInt16BE(this.ammConfigIndex, 0);
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("amm_config"), indexBuffer],
+      RAYDIUM_CLMM_PROGRAM_ID
+    );
+  }
+
   getRaydiumPoolPda(
     baseMint: web3.PublicKey,
     quoteMint: web3.PublicKey
@@ -49,8 +59,9 @@ export class TxBuilder {
     const baseMintBn = new BN(baseMint.toBuffer());
     const quoteMintBn = new BN(quoteMint.toBuffer());
     const [mint0, mint1] = baseMintBn.lt(quoteMintBn) ? [baseMint, quoteMint] : [quoteMint, baseMint];
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
     return web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), RAYDIUM_AMM_CONFIG.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], RAYDIUM_CLMM_PROGRAM_ID);
+      [Buffer.from("pool"), ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], RAYDIUM_CLMM_PROGRAM_ID);
   }
 
   getRaydiumVaultPda(poolState: web3.PublicKey, mint: web3.PublicKey): [web3.PublicKey, number] {
@@ -811,6 +822,8 @@ export class TxBuilder {
       true // allowOwnerOffCurve for PDA
     );
 
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
+    console.log(`Raydium AMM config: index=${this.ammConfigIndex}, PDA=${ammConfig.toString()}`);
 
     const createClmmPoolIx = await this.program.methods
       .createClmmPool()
@@ -822,7 +835,7 @@ export class TxBuilder {
         baseEscrowAta: baseTokenAta,
         baseMint: params.baseMint.publicKey,
         quoteMint: params.quoteMint,
-        raydiumAmmConfig: RAYDIUM_AMM_CONFIG,
+        raydiumAmmConfig: ammConfig,
         raydiumPoolState: poolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
@@ -1068,6 +1081,9 @@ export class TxBuilder {
     const [tickArrayUpper] = this.getRaydiumTickArrayPda(poolState, 443580);
     const [bitmapExtension] = this.getRaydiumBitmapExtensionPda(poolState);
 
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
+    console.log(`Raydium AMM config: index=${this.ammConfigIndex}, PDA=${ammConfig.toString()}`);
+
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity(
         params.baseAmount,
@@ -1082,6 +1098,8 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
         quoteMint: params.quoteMint,
+        quoteTokenAta: quoteTokenAta,
+        raydiumAmmConfig: ammConfig,
         raydiumPoolState: poolState,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
@@ -1091,7 +1109,6 @@ export class TxBuilder {
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
-        quoteTokenAta: quoteTokenAta,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,

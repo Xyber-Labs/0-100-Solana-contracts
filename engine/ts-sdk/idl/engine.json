@@ -243,6 +243,39 @@
           }
         },
         {
+          "name": "raydium_amm_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydium_program"
+            }
+          }
+        },
+        {
           "name": "raydium_pool_state",
           "writable": true
         },
@@ -890,7 +923,37 @@
           "name": "quote_mint"
         },
         {
-          "name": "raydium_amm_config"
+          "name": "raydium_amm_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydium_program"
+            }
+          }
         },
         {
           "name": "raydium_pool_state",
@@ -3513,6 +3576,11 @@
     }
   ],
   "constants": [
+    {
+      "name": "AMM_CONFIG_INDEX",
+      "type": "u16",
+      "value": "4"
+    },
     {
       "name": "SEED_ROOT",
       "type": "bytes",

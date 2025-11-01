@@ -5,9 +5,9 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::{libraries::tick_math, program::AmmV3, states::TickArrayState};
+use raydium_amm_v3::{libraries::tick_math, program::AmmV3, states::{AmmConfig, TickArrayState}};
 
-use crate::{EscrowAccount, LaunchState, SEED_ROOT};
+use crate::{EscrowAccount, instructions::get_liquidity_range, LaunchState, SEED_ROOT, AMM_CONFIG_INDEX};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -57,6 +57,8 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub quote_token_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
+    pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
     /// CHECK: Pool state PDA (created by Raydium)
     #[account(mut)]
     pub raydium_pool_state: UncheckedAccount<'info>,
@@ -108,11 +110,7 @@ pub fn add_clmm_liquidity<'info>(
     base_amount: u64,
     quote_amount: u64,
 ) -> Result<()> {
-    add_initial_liquidity(
-        ctx,
-        base_amount,
-        quote_amount,
-    )
+    add_initial_liquidity(ctx, base_amount, quote_amount)
 }
 
 const RENT_RESERVE: u64 = 200_000_000;
@@ -221,8 +219,7 @@ fn add_initial_liquidity<'info>(
 
     const TICK_SPACING: u16 = 1;
 
-    let tick_lower = tick_math::MIN_TICK;
-    let tick_upper = tick_math::MAX_TICK;
+    let (tick_lower, tick_upper) = get_liquidity_range(token_0_value, token_1_value);
 
     let tick_array_lower_start_index =
         TickArrayState::get_array_start_index(tick_lower, TICK_SPACING);

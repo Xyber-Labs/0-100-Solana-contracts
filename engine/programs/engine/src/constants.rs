@@ -7,6 +7,9 @@ use anchor_lang::prelude::*;
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
+#[constant]
+pub const AMM_CONFIG_INDEX: u16 = 4;
+
 // -------------------------------
 // Configuration Constants
 // -------------------------------

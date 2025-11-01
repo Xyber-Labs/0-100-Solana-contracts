@@ -7,7 +7,7 @@ use anchor_spl::{
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{
-    errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT, TOTAL_SUPPLY,
+    errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT, TOTAL_SUPPLY, AMM_CONFIG_INDEX,
 };
 
 #[derive(Accounts)]
@@ -53,6 +53,7 @@ pub struct CreateClmmPool<'info> {
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
+    #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
     /// CHECK: Pool state PDA
     #[account(mut)]

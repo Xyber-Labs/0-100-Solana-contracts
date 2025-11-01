@@ -1,3 +1,5 @@
+use raydium_amm_v3::libraries::tick_math;
+
 pub use add_clmm_liquidity::*;
 pub use calculate_liquidity_range::*;
 pub use claim_creator_refund::*;
@@ -33,3 +35,11 @@ mod open_claims;
 mod process_batch;
 mod set_seed;
 mod withdraw;
+
+struct RaydiumPositionCalculator;
+
+fn get_liquidity_range(amount_0: u64, amount_1: u64) -> (i32, i32) {
+    let tick_lower = tick_math::MIN_TICK;
+    let tick_upper = tick_math::MAX_TICK;
+    (tick_lower, tick_upper)
+}

@@ -249,6 +249,39 @@ export type Engine = {
           }
         },
         {
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydiumProgram"
+            }
+          }
+        },
+        {
           "name": "raydiumPoolState",
           "writable": true
         },
@@ -896,7 +929,37 @@ export type Engine = {
           "name": "quoteMint"
         },
         {
-          "name": "raydiumAmmConfig"
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydiumProgram"
+            }
+          }
         },
         {
           "name": "raydiumPoolState",
@@ -3519,6 +3582,11 @@ export type Engine = {
     }
   ],
   "constants": [
+    {
+      "name": "ammConfigIndex",
+      "type": "u16",
+      "value": "4"
+    },
     {
       "name": "seedRoot",
       "type": "bytes",
