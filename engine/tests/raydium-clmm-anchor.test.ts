@@ -23,8 +23,6 @@ describe("engine anchor - raydium clmm", () => {
   const adminKeypair = (provider.wallet as any).payer;
   const sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
-  let raydiumProgramId: anchor.web3.PublicKey;
-  let raydiumAmmConfig: anchor.web3.PublicKey;
   let clmmSaleMint: anchor.web3.Keypair;
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
@@ -39,10 +37,6 @@ describe("engine anchor - raydium clmm", () => {
   const CLMM_LP_ALLOCATION = new anchor.BN(459_460_000);
 
   before(async () => {
-    raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-    raydiumAmmConfig = new anchor.web3.PublicKey("E64NGkDLLCdQ2yFNPcavaKptrEgmiQaNykUuLC1Qgwyp");
-    raydiumAmmConfig = new anchor.web3.PublicKey("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x");
-
   });
 
   it("Initializes launch and collects deposits", async () => {
@@ -96,9 +90,6 @@ describe("engine anchor - raydium clmm", () => {
     console.log("=== Creating CLMM Pool and Adding Liquidity (Separate Transactions) ===");
 
     console.log("Raydium CLMM setup:");
-    console.log("CLMM Program:", raydiumProgramId.toString());
-    console.log("AMM Config:", raydiumAmmConfig.toString());
-
     const { createMint, mintTo, getOrCreateAssociatedTokenAccount } = await import("@solana/spl-token");
 
     console.log("\n=== Creating Quote Mint (SPL token) ===");
@@ -159,8 +150,6 @@ describe("engine anchor - raydium clmm", () => {
       launch: clmmLaunchState,
       quoteMint: quoteMintKeypair.publicKey,
       baseMint: baseMintKeypair,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
       provider,
     });
 
@@ -198,8 +187,6 @@ describe("engine anchor - raydium clmm", () => {
       quoteMint: quoteMintKeypair.publicKey,
       baseMint: baseMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
       provider,
       tickLowerIndex: tickLower,
       tickUpperIndex: tickUpper,

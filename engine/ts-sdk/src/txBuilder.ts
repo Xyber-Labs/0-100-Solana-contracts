@@ -10,7 +10,8 @@ import {
 } from "@solana/spl-token";
 import { getConstant } from "./utils";
 
-const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+const RAYDIUM_AMM_CONFIG = new web3.PublicKey("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -39,6 +40,17 @@ export class TxBuilder {
       seedBuffers,
       this.program.programId
     );
+  }
+
+  getRaydiumPoolPda(
+    baseMint: web3.PublicKey,
+    quoteMint: web3.PublicKey
+  ): [web3.PublicKey, number] {
+    const baseMintBn = new BN(baseMint.toBuffer());
+    const quoteMintBn = new BN(quoteMint.toBuffer());
+    const [mint0, mint1] = baseMintBn.lt(quoteMintBn) ? [baseMint, quoteMint] : [quoteMint, baseMint];
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool"), RAYDIUM_AMM_CONFIG.toBuffer(), mint0.toBuffer(), mint1.toBuffer()], RAYDIUM_CLMM_PROGRAM_ID);
   }
 
   getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
@@ -701,8 +713,6 @@ export class TxBuilder {
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
     baseMint: web3.Keypair;
-    ammConfig: web3.PublicKey;
-    clmmProgram: web3.PublicKey;
     provider: any;
   }): Promise<{
     transaction: web3.Transaction;
@@ -714,27 +724,14 @@ export class TxBuilder {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
 
-    const [poolState] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool"),
-        params.ammConfig.toBuffer(),
-        params.baseMint.publicKey.toBuffer(),
-        params.quoteMint.toBuffer(),
-      ],
-      params.clmmProgram
-    );
-
-    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_tick_array_bitmap_extension"),
-        poolState.toBuffer()
-      ],
-      params.clmmProgram
+    const [poolState] = this.getRaydiumPoolPda(
+      params.baseMint.publicKey,
+      params.quoteMint
     );
 
     const [observationState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("observation"), poolState.toBuffer()],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
@@ -743,7 +740,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         params.quoteMint.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [baseVault] = web3.PublicKey.findProgramAddressSync(
@@ -752,7 +749,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         params.baseMint.publicKey.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
@@ -760,7 +757,7 @@ export class TxBuilder {
         Buffer.from("pool_tick_array_bitmap_extension"),
         poolState.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const baseTokenAta = getAssociatedTokenAddressSync(
@@ -780,13 +777,13 @@ export class TxBuilder {
         baseEscrowAta: baseTokenAta,
         baseMint: params.baseMint.publicKey,
         quoteMint: params.quoteMint,
-        raydiumAmmConfig: params.ammConfig,
+        raydiumAmmConfig: RAYDIUM_AMM_CONFIG,
         raydiumPoolState: poolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
         raydiumObservationState: observationState,
         raydiumTickArrayBitmap: tickArrayBitmap,
-        raydiumProgram: params.clmmProgram,
+        raydiumProgram: RAYDIUM_CLMM_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -987,8 +984,6 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
-    ammConfig: web3.PublicKey;
-    clmmProgram: web3.PublicKey;
     tickLowerIndex: number;
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
@@ -1011,14 +1006,9 @@ export class TxBuilder {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
 
-    const [poolState] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool"),
-        params.ammConfig.toBuffer(),
-        params.baseMint.toBuffer(),
-        params.quoteMint.toBuffer(),
-      ],
-      params.clmmProgram
+    const [poolState] = this.getRaydiumPoolPda(
+      params.baseMint,
+      params.quoteMint
     );
 
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
@@ -1027,7 +1017,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         params.quoteMint.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [baseVault] = web3.PublicKey.findProgramAddressSync(
@@ -1036,7 +1026,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         params.baseMint.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const quoteTokenAta = getAssociatedTokenAddressSync(
@@ -1058,7 +1048,7 @@ export class TxBuilder {
         Buffer.from("position"),
         positionNftMint.publicKey.toBuffer(),
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const tickLowerBuffer = Buffer.alloc(4);
@@ -1076,7 +1066,7 @@ export class TxBuilder {
         tickLowerBuffer,
         tickUpperBuffer,
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
@@ -1093,7 +1083,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         tickArrayLowerBuffer,
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [tickArrayUpper] = web3.PublicKey.findProgramAddressSync(
@@ -1102,7 +1092,7 @@ export class TxBuilder {
         poolState.toBuffer(),
         tickArrayUpperBuffer,
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
@@ -1110,7 +1100,7 @@ export class TxBuilder {
         Buffer.from("pool_tick_array_bitmap_extension"),
         poolState.toBuffer()
       ],
-      params.clmmProgram
+      RAYDIUM_CLMM_PROGRAM_ID
     );
 
     const addLiquidityIx = await this.program.methods
@@ -1124,7 +1114,7 @@ export class TxBuilder {
       )
       .accountsStrict({
         payer: params.payer,
-        raydiumProgram: params.clmmProgram,
+        raydiumProgram: RAYDIUM_CLMM_PROGRAM_ID,
         launchState: params.launch,
         baseMint: params.baseMint,
         escrow: escrow,
@@ -1174,8 +1164,6 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
-    ammConfig: web3.PublicKey;
-    clmmProgram: web3.PublicKey;
     provider: any;
     tickLowerIndex: number;
     tickUpperIndex: number;
@@ -1233,8 +1221,6 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
-    ammConfig: web3.PublicKey;
-    clmmProgram: web3.PublicKey;
     payer: web3.PublicKey;
     tickLowerIndex: number;
     tickUpperIndex: number;
