@@ -9,10 +9,6 @@ use crate::{
     instructions::{get_liquidity_range_impl, LiquidityRange}, LaunchState, RAYDIUM_CLMM_PROGRAM_ID,
 };
 
-const MIN_TICK: i32 = -443636;
-const MAX_TICK: i32 = 443636;
-const TICK_ARRAY_SIZE: i32 = 60;
-
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
     pub launch_state: Account<'info, LaunchState>,

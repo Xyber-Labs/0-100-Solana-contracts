@@ -224,12 +224,7 @@ fn add_initial_liquidity<'info>(
     let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
     msg!("is_base_token_0: {}", is_base_token_0);
 
-    let LiquidityRange {
-        tick_array_lower,
-        tick_array_lower_start_index,
-        tick_array_upper,
-        tick_array_upper_start_index,
-    } = get_liquidity_range_impl(
+    let range = get_liquidity_range_impl(
         ctx.accounts.raydium_amm_config.tick_spacing,
         6.16 * 10f64.powi(-7),
         true,
@@ -237,10 +232,10 @@ fn add_initial_liquidity<'info>(
 
     raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
-        tick_array_lower,
-        tick_array_upper,
-        tick_array_lower_start_index,
-        tick_array_upper_start_index,
+        range.tick_array_lower,
+        range.tick_array_upper,
+        range.tick_array_lower_start_index,
+        range.tick_array_upper_start_index,
         0,
         token_0_value,
         token_1_value,

@@ -118,7 +118,7 @@ describe("engine anchor - raydium clmm", () => {
     assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
 
 
-    const quoteAmountLamports = new anchor.BN(1000815917584);
+    const quoteAmountLamports = new anchor.BN(300000000000);
 
     const [escrowAuthority] =
       sdk.getEscrowAuthorityPda(clmmLaunchState);
