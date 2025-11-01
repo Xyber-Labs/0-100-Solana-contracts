@@ -461,8 +461,6 @@ const EngineSDK = {
         launch: args.launch,
         quoteMint: args.quoteMint,
         baseMint,
-        ammConfig: args.ammConfig,
-        clmmProgram: args.clmmProgram,
         provider,
       });
 

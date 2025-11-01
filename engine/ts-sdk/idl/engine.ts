@@ -311,22 +311,6 @@ export type Engine = {
       ],
       "args": [
         {
-          "name": "tickLowerIndex",
-          "type": "i32"
-        },
-        {
-          "name": "tickUpperIndex",
-          "type": "i32"
-        },
-        {
-          "name": "tickArrayLowerStartIndex",
-          "type": "i32"
-        },
-        {
-          "name": "tickArrayUpperStartIndex",
-          "type": "i32"
-        },
-        {
           "name": "baseAmount",
           "type": "u64"
         },

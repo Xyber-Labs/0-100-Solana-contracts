@@ -984,10 +984,6 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
-    tickLowerIndex: number;
-    tickUpperIndex: number;
-    tickArrayLowerStartIndex: number;
-    tickArrayUpperStartIndex: number;
     baseAmount: BN;
     quoteAmount: BN;
     positionNftMint?: web3.Keypair;
@@ -1105,10 +1101,6 @@ export class TxBuilder {
 
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity(
-        params.tickLowerIndex,
-        params.tickUpperIndex,
-        params.tickArrayLowerStartIndex,
-        params.tickArrayUpperStartIndex,
         params.baseAmount,
         params.quoteAmount
       )
@@ -1165,10 +1157,6 @@ export class TxBuilder {
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
     provider: any;
-    tickLowerIndex: number;
-    tickUpperIndex: number;
-    tickArrayLowerStartIndex: number;
-    tickArrayUpperStartIndex: number;
     baseAmount: BN;
     quoteAmount: BN;
   }): Promise<{
@@ -1222,10 +1210,6 @@ export class TxBuilder {
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
     payer: web3.PublicKey;
-    tickLowerIndex: number;
-    tickUpperIndex: number;
-    tickArrayLowerStartIndex: number;
-    tickArrayUpperStartIndex: number;
     baseAmount: BN;
     quoteAmount: BN;
   }): Promise<{

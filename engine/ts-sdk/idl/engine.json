@@ -305,22 +305,6 @@
       ],
       "args": [
         {
-          "name": "tick_lower_index",
-          "type": "i32"
-        },
-        {
-          "name": "tick_upper_index",
-          "type": "i32"
-        },
-        {
-          "name": "tick_array_lower_start_index",
-          "type": "i32"
-        },
-        {
-          "name": "tick_array_upper_start_index",
-          "type": "i32"
-        },
-        {
           "name": "base_amount",
           "type": "u64"
         },

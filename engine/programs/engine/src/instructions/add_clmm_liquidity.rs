@@ -5,7 +5,7 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::{libraries::tick_math, program::AmmV3};
+use raydium_amm_v3::{libraries::tick_math, program::AmmV3, states::TickArrayState};
 
 use crate::{EscrowAccount, LaunchState, SEED_ROOT};
 
@@ -101,25 +101,15 @@ pub struct AddClmmLiquidity<'info> {
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
 ///
 /// # Parameters
-/// * `tick_lower_index` - Lower tick boundary (must be aligned to tick_spacing)
-/// * `tick_upper_index` - Upper tick boundary (must be aligned to tick_spacing)
-/// * `tick_array_lower_start_index` - Start index of tick array covering lower tick
-/// * `tick_array_upper_start_index` - Start index of tick array covering upper tick
+/// * `base_amount` - Amount of base tokens to add
+/// * `quote_amount` - Amount of quote tokens to add
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
     base_amount: u64,
     quote_amount: u64,
 ) -> Result<()> {
     add_initial_liquidity(
         ctx,
-        tick_lower_index,
-        tick_upper_index,
-        tick_array_lower_start_index,
-        tick_array_upper_start_index,
         base_amount,
         quote_amount,
     )
@@ -129,20 +119,12 @@ const RENT_RESERVE: u64 = 200_000_000;
 
 fn add_initial_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
     base_amount: u64,
     quote_amount: u64,
 ) -> Result<()> {
     msg!("=== Input Parameters ===");
     msg!("Base amount: {}", base_amount);
     msg!("Quote amount: {}", quote_amount);
-    msg!("Tick lower index: {}", tick_lower_index);
-    msg!("Tick upper index: {}", tick_upper_index);
-    msg!("Tick array lower start index: {}", tick_array_lower_start_index);
-    msg!("Tick array upper start index: {}", tick_array_upper_start_index);
 
     let available_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
     let transfer_amount = available_balance.saturating_sub(RENT_RESERVE);
@@ -189,7 +171,7 @@ fn add_initial_liquidity<'info>(
     // let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
     // msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
 
-    let mut order = TokenOrder::new(
+    let mut order = OpenPositionOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
@@ -231,31 +213,28 @@ fn add_initial_liquidity<'info>(
     )
     .with_remaining_accounts(ctx.remaining_accounts.to_vec());
 
-    // let tick_spacing = 60i32;
-    // let min_tick = tick_math::MIN_TICK;
-    // let max_tick = tick_math::MAX_TICK;
-    // let tick_lower_index = (min_tick.div_euclid(tick_spacing) + 1) * tick_spacing;
-    // let tick_upper_index = (max_tick.div_euclid(tick_spacing)) * tick_spacing;
-    //
-    // let tick_array_size = 60i32;
-    // let ticks_in_array = tick_spacing * tick_array_size;
-    //
-    // let tick_array_lower_start_index =
-    //     (tick_lower_index.div_euclid(ticks_in_array)) * ticks_in_array;
-    // let tick_array_upper_start_index =
-    //     (tick_upper_index.div_euclid(ticks_in_array)) * ticks_in_array;
-
     let token_0_value = order.amount_0;
     let token_1_value = order.amount_1;
 
     let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
     msg!("is_base_token_0: {}", is_base_token_0);
+
+    const TICK_SPACING: u16 = 1;
+
+    let tick_lower = tick_math::MIN_TICK;
+    let tick_upper = tick_math::MAX_TICK;
+
+    let tick_array_lower_start_index =
+        TickArrayState::get_array_start_index(tick_lower, TICK_SPACING);
+    let tick_array_upper_start_index =
+        TickArrayState::get_array_start_index(tick_upper, TICK_SPACING);
+
     raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
-        -443636,
-        443636,
-        -443640,
-        443580,
+        tick_lower,
+        tick_upper,
+        tick_array_lower_start_index,
+        tick_array_upper_start_index,
         0,
         token_0_value,
         token_1_value,
@@ -274,7 +253,7 @@ pub struct LiquidityAccountsEvent {
     pub expected_base_amount: u64,
 }
 
-struct TokenOrder<'info> {
+struct OpenPositionOrder<'info> {
     token_mint_0: AccountInfo<'info>,
     token_mint_1: AccountInfo<'info>,
     token_vault_0: AccountInfo<'info>,
@@ -286,7 +265,7 @@ struct TokenOrder<'info> {
     base_flag: Option<bool>,
 }
 
-impl<'info> TokenOrder<'info> {
+impl<'info> OpenPositionOrder<'info> {
     fn new(
         quote_mint: &AccountInfo<'info>,
         base_mint: &AccountInfo<'info>,
