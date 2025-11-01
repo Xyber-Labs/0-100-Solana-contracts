@@ -5,9 +5,16 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::{libraries::tick_math, program::AmmV3, states::{AmmConfig, TickArrayState}};
+use raydium_amm_v3::{
+    libraries::tick_math,
+    program::AmmV3,
+    states::{AmmConfig, TickArrayState},
+};
 
-use crate::{EscrowAccount, instructions::get_liquidity_range, LaunchState, SEED_ROOT, AMM_CONFIG_INDEX};
+use crate::{
+    AMM_CONFIG_INDEX,
+    EscrowAccount, instructions::{get_liquidity_range_impl, LiquidityRange}, LaunchState, SEED_ROOT,
+};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -217,19 +224,21 @@ fn add_initial_liquidity<'info>(
     let is_base_token_0 = ctx.accounts.base_mint.key() < ctx.accounts.quote_mint.key();
     msg!("is_base_token_0: {}", is_base_token_0);
 
-    const TICK_SPACING: u16 = 1;
-
-    let (tick_lower, tick_upper) = get_liquidity_range(token_0_value, token_1_value);
-
-    let tick_array_lower_start_index =
-        TickArrayState::get_array_start_index(tick_lower, TICK_SPACING);
-    let tick_array_upper_start_index =
-        TickArrayState::get_array_start_index(tick_upper, TICK_SPACING);
+    let LiquidityRange {
+        tick_array_lower,
+        tick_array_lower_start_index,
+        tick_array_upper,
+        tick_array_upper_start_index,
+    } = get_liquidity_range_impl(
+        ctx.accounts.raydium_amm_config.tick_spacing,
+        token_0_value,
+        token_1_value,
+    );
 
     raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
-        tick_lower,
-        tick_upper,
+        tick_array_lower,
+        tick_array_upper,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
         0,

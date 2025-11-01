@@ -354,39 +354,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "calculateLiquidityRange",
-      "discriminator": [
-        93,
-        36,
-        132,
-        201,
-        111,
-        222,
-        36,
-        13
-      ],
-      "accounts": [
-        {
-          "name": "launchState"
-        }
-      ],
-      "args": [
-        {
-          "name": "baseAmount",
-          "type": "u64"
-        },
-        {
-          "name": "quoteAmount",
-          "type": "u64"
-        }
-      ],
-      "returns": {
-        "defined": {
-          "name": "liquidityRangeResult"
-        }
-      }
-    },
-    {
       "name": "claimCreatorRefund",
       "docs": [
         "Claim creator refund for failed launches"
@@ -1305,6 +1272,96 @@ export type Engine = {
           "type": "u16"
         }
       ]
+    },
+    {
+      "name": "getLiquidityRange",
+      "discriminator": [
+        64,
+        75,
+        195,
+        159,
+        13,
+        177,
+        250,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "launchState"
+        },
+        {
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                165,
+                213,
+                202,
+                158,
+                4,
+                207,
+                93,
+                181,
+                144,
+                183,
+                20,
+                186,
+                47,
+                227,
+                44,
+                177,
+                89,
+                19,
+                63,
+                193,
+                193,
+                146,
+                183,
+                34,
+                87,
+                253,
+                7,
+                211,
+                156,
+                176,
+                64,
+                30
+              ]
+            }
+          }
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "liquidityRange"
+        }
+      }
     },
     {
       "name": "initLaunch",
@@ -3119,16 +3176,12 @@ export type Engine = {
       }
     },
     {
-      "name": "liquidityRangeResult",
+      "name": "liquidityRange",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "tickLower",
-            "type": "i32"
-          },
-          {
-            "name": "tickUpper",
+            "name": "tickArrayLower",
             "type": "i32"
           },
           {
@@ -3136,11 +3189,11 @@ export type Engine = {
             "type": "i32"
           },
           {
-            "name": "tickArrayUpperStartIndex",
+            "name": "tickArrayUpper",
             "type": "i32"
           },
           {
-            "name": "tickCurrent",
+            "name": "tickArrayUpperStartIndex",
             "type": "i32"
           }
         ]

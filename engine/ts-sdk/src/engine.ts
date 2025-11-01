@@ -812,8 +812,7 @@ const EngineSDK = {
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
       createPoolTx: txBuilder.createPoolTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
-      calculateLiquidityRange: txBuilder.calculateLiquidityRange.bind(txBuilder),
-      getAddLiquidityInfo: txBuilder.getAddLiquidityInfo.bind(txBuilder),
+      getLiquidityRange: txBuilder.getLiquidityRange.bind(txBuilder),
 
       fetchLaunch,
       fetchRoster,

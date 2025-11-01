@@ -863,145 +863,23 @@ export class TxBuilder {
     };
   }
 
-  async calculateLiquidityRange(params: {
+  async getLiquidityRange(params: {
     launch: web3.PublicKey;
-    baseAmount: BN;
-    quoteAmount: BN;
-    useSimulation?: boolean;
   }): Promise<{
-    tickLower: number;
-    tickUpper: number;
+    tickArrayLower: number;
+    tickArrayUpper: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
-    tickCurrent: number;
   }> {
-    const useSimulation = params.useSimulation !== false;
-
-    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 2_000_000,
-    });
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
 
     const tx = await this.program.methods
-      .calculateLiquidityRange(
-        params.baseAmount,
-        params.quoteAmount
-      )
+      .getLiquidityRange()
       .accountsStrict({
-        launchState: params.launch
+        launchState: params.launch,
+        raydiumAmmConfig: ammConfig
       })
-      .preInstructions([computeBudgetIx])
       .transaction();
-
-    const provider = this.program.provider as any;
-
-    if (provider.client && provider.client.latestBlockhash) {
-      const wallet = provider.wallet as any;
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = provider.client.latestBlockhash();
-
-      if (wallet.payer) {
-        tx.sign(wallet.payer);
-      } else {
-        tx.sign(wallet);
-      }
-
-      if (useSimulation) {
-        let simulation;
-        try {
-          simulation = await provider.simulate(tx);
-        } catch (error: any) {
-          console.error("Simulation error:", error);
-          throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
-        }
-
-        if (!simulation || !simulation.returnData) {
-          throw new Error("No return data from calculateLiquidityRange simulation");
-        }
-
-        let returnDataStr: string;
-        if (typeof simulation.returnData === 'string') {
-          returnDataStr = simulation.returnData;
-        } else if (Array.isArray(simulation.returnData.data)) {
-          returnDataStr = simulation.returnData.data[0];
-        } else {
-          returnDataStr = simulation.returnData.data || simulation.returnData;
-        }
-
-        const buffer = Buffer.from(returnDataStr, "base64");
-
-        const tickLower = buffer.readInt32LE(0);
-        const tickUpper = buffer.readInt32LE(4);
-        const tickArrayLowerStartIndex = buffer.readInt32LE(8);
-        const tickArrayUpperStartIndex = buffer.readInt32LE(12);
-        const tickCurrent = buffer.readInt32LE(16);
-
-        return {
-          tickLower,
-          tickUpper,
-          tickArrayLowerStartIndex,
-          tickArrayUpperStartIndex,
-          tickCurrent,
-        };
-      } else {
-        const txResult = provider.client.sendTransaction(tx);
-
-        if (txResult.err) {
-          throw new Error(`Transaction failed: ${txResult.err()}`);
-        }
-
-        const logs = txResult.logs();
-        console.log("=== calculateLiquidityRange logs ===");
-        logs.forEach((log: string) => console.log(log));
-
-        if (!txResult.returnData) {
-          throw new Error("No return data from calculateLiquidityRange");
-        }
-
-        const returnData = txResult.returnData();
-
-        // Extract base64 data from logs as fallback
-        let buffer: Buffer;
-
-        // Try to get data from returnData object
-        if (returnData && typeof returnData === 'object') {
-          // Check if it has data property or method
-          let dataBytes;
-          if (typeof returnData.data === 'function') {
-            dataBytes = returnData.data();
-          } else if (returnData.data instanceof Buffer || returnData.data instanceof Uint8Array) {
-            dataBytes = returnData.data;
-          } else if (typeof returnData.data === 'string') {
-            dataBytes = Buffer.from(returnData.data, "base64");
-          } else {
-            // Fallback: parse from logs
-            const returnLog = logs.find((log: string) => log.includes("Program return:"));
-            if (returnLog) {
-              const base64Data = returnLog.split(" ").pop();
-              dataBytes = Buffer.from(base64Data!, "base64");
-            } else {
-              throw new Error("Could not extract return data from transaction");
-            }
-          }
-          buffer = Buffer.from(dataBytes);
-        } else {
-          throw new Error("No return data from calculateLiquidityRange");
-        }
-
-        const tickLower = buffer.readInt32LE(0);
-        const tickUpper = buffer.readInt32LE(4);
-        const tickArrayLowerStartIndex = buffer.readInt32LE(8);
-        const tickArrayUpperStartIndex = buffer.readInt32LE(12);
-        const tickCurrent = buffer.readInt32LE(16);
-
-        return {
-          tickLower,
-          tickUpper,
-          tickArrayLowerStartIndex,
-          tickArrayUpperStartIndex,
-          tickCurrent,
-        };
-      }
-    }
 
     tx.feePayer = this.program.provider.publicKey;
     const { blockhash } = await this.program.provider.connection.getLatestBlockhash();
@@ -1015,24 +893,22 @@ export class TxBuilder {
 
     const returnData = simulation.value.returnData;
     if (!returnData || !returnData.data) {
-      throw new Error("No return data from calculateLiquidityRange");
+      throw new Error("No return data from getLiquidityRange");
     }
 
     const [data, encoding] = returnData.data;
     const buffer = Buffer.from(data, encoding as BufferEncoding);
 
-    const tickLower = buffer.readInt32LE(0);
-    const tickUpper = buffer.readInt32LE(4);
-    const tickArrayLowerStartIndex = buffer.readInt32LE(8);
+    const tickArrayLower = buffer.readInt32LE(0);
+    const tickArrayLowerStartIndex = buffer.readInt32LE(4);
+    const tickArrayUpper = buffer.readInt32LE(8);
     const tickArrayUpperStartIndex = buffer.readInt32LE(12);
-    const tickCurrent = buffer.readInt32LE(16);
 
     return {
-      tickLower,
-      tickUpper,
+      tickArrayLower,
       tickArrayLowerStartIndex,
+      tickArrayUpper,
       tickArrayUpperStartIndex,
-      tickCurrent,
     };
   }
 
@@ -1044,6 +920,12 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
     baseAmount: BN;
     quoteAmount: BN;
+    liquidityRange: {
+      tickArrayLower: number;
+      tickArrayUpper: number;
+      tickArrayLowerStartIndex: number;
+      tickArrayUpperStartIndex: number;
+    };
     positionNftMint?: web3.Keypair;
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -1074,11 +956,13 @@ export class TxBuilder {
     );
 
     const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint.publicKey);
-
-    const [protocolPosition] = this.getRaydiumProtocolPositionPda(poolState, -443636, 443636);
-
-    const [tickArrayLower] = this.getRaydiumTickArrayPda(poolState, -443640);
-    const [tickArrayUpper] = this.getRaydiumTickArrayPda(poolState, 443580);
+    const [protocolPosition] = this.getRaydiumProtocolPositionPda(
+      poolState,
+      params.liquidityRange.tickArrayLower,
+      params.liquidityRange.tickArrayUpper
+    );
+    const [tickArrayLower] = this.getRaydiumTickArrayPda(poolState, params.liquidityRange.tickArrayLowerStartIndex);
+    const [tickArrayUpper] = this.getRaydiumTickArrayPda(poolState, params.liquidityRange.tickArrayUpperStartIndex);
     const [bitmapExtension] = this.getRaydiumBitmapExtensionPda(poolState);
 
     const [ammConfig] = this.getRaydiumAmmConfigPda();
@@ -1145,6 +1029,12 @@ export class TxBuilder {
     provider: any;
     baseAmount: BN;
     quoteAmount: BN;
+    liquidityRange: {
+      tickArrayLower: number;
+      tickArrayUpper: number;
+      tickArrayLowerStartIndex: number;
+      tickArrayUpperStartIndex: number;
+    };
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
@@ -1188,94 +1078,5 @@ export class TxBuilder {
       protocolPosition,
       quoteTokenAta,
     };
-  }
-
-  async getAddLiquidityInfo(params: {
-    launch: web3.PublicKey;
-    quoteMint: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    baseTokenAta: web3.PublicKey;
-    payer: web3.PublicKey;
-    baseAmount: BN;
-    quoteAmount: BN;
-  }): Promise<{
-    quoteTokenAtaAmount: BN;
-    baseEscrowAtaAmount: BN;
-    expectedQuoteAmount: BN;
-    expectedBaseAmount: BN;
-  }> {
-    const positionNftMint = web3.Keypair.generate();
-    const { instruction } = await this.addClmmLiquidityIx({
-      ...params,
-      positionNftMint,
-    });
-
-    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
-    });
-
-    const tx = new web3.Transaction()
-      .add(computeBudgetIx)
-      .add(instruction);
-
-    const provider = this.program.provider as any;
-
-    if (provider.client && provider.client.latestBlockhash) {
-      const wallet = provider.wallet as any;
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = provider.client.latestBlockhash();
-
-      if (wallet.payer) {
-        tx.sign(wallet.payer);
-      } else {
-        tx.sign(wallet);
-      }
-      tx.partialSign(positionNftMint);
-
-      let simulation;
-      try {
-        simulation = provider.client.simulateTransaction(tx);
-      } catch (error: any) {
-        console.error("Simulation error:", error);
-        throw new Error(`Simulation failed: ${error.message || JSON.stringify(error)}`);
-      }
-
-      if (simulation.err) {
-        const errorMsg = simulation.err();
-        console.error("Transaction simulation failed:", errorMsg);
-        throw new Error(`Simulation failed: ${errorMsg}`);
-      }
-
-      const returnData = simulation?.returnData;
-      if (!returnData) {
-        console.error("Full simulation:", simulation);
-        throw new Error("No return data from addClmmLiquidity simulation");
-      }
-
-      let returnDataStr: string;
-      if (typeof simulation.returnData === 'string') {
-        returnDataStr = simulation.returnData;
-      } else if (Array.isArray(simulation.returnData.data)) {
-        returnDataStr = simulation.returnData.data[0];
-      } else {
-        returnDataStr = simulation.returnData.data || simulation.returnData;
-      }
-
-      const buffer = Buffer.from(returnDataStr, "base64");
-
-      const quoteTokenAtaAmount = buffer.readBigUInt64LE(0);
-      const baseEscrowAtaAmount = buffer.readBigUInt64LE(8);
-      const expectedQuoteAmount = buffer.readBigUInt64LE(16);
-      const expectedBaseAmount = buffer.readBigUInt64LE(24);
-
-      return {
-        quoteTokenAtaAmount: new BN(quoteTokenAtaAmount.toString()),
-        baseEscrowAtaAmount: new BN(baseEscrowAtaAmount.toString()),
-        expectedQuoteAmount: new BN(expectedQuoteAmount.toString()),
-        expectedBaseAmount: new BN(expectedBaseAmount.toString()),
-      };
-    }
-
-    throw new Error("Only litesvm provider supported for getAddLiquidityInfo");
   }
 }

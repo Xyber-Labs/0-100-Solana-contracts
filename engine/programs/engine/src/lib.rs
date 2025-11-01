@@ -105,18 +105,10 @@ pub mod engine {
         base_amount: u64,
         quote_amount: u64,
     ) -> Result<()> {
-        instructions::add_clmm_liquidity(
-            ctx,
-            base_amount,
-            quote_amount,
-        )
+        instructions::add_clmm_liquidity(ctx, base_amount, quote_amount)
     }
 
-    pub fn calculate_liquidity_range(
-        ctx: Context<CalculateLiquidityRange>,
-        base_amount: u64,
-        quote_amount: u64,
-    ) -> Result<LiquidityRangeResult> {
-        instructions::calculate_liquidity_range(ctx, base_amount, quote_amount)
+    pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
+        instructions::get_liquidity_range(ctx)
     }
 }

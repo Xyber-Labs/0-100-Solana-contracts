@@ -167,7 +167,12 @@ describe("engine anchor - raydium clmm", () => {
     const tickCurrent = Math.round(Math.log(currentPrice) / Math.log(1.0001));
     console.log(`Current tick: ${tickCurrent}`);
 
-    console.log("\n=== Full-Range Parameters (calculated on-chain) ===");
+    console.log("\n=== Getting Liquidity Range ===");
+    const liquidityRange = await sdk.getLiquidityRange({
+      launch: clmmLaunchState
+    });
+    console.log(`Liquidity range: tickArrayLower=${liquidityRange.tickArrayLower}, tickArrayUpper=${liquidityRange.tickArrayUpper}`);
+    console.log(`Tick array indices: lower=${liquidityRange.tickArrayLowerStartIndex}, upper=${liquidityRange.tickArrayUpperStartIndex}`);
 
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
@@ -178,6 +183,7 @@ describe("engine anchor - raydium clmm", () => {
       provider,
       baseAmount: baseAmount,
       quoteAmount: quoteAmountLamports,
+      liquidityRange: liquidityRange,
     });
 
     console.log("\n=== Sending CreatePool transaction ===");
