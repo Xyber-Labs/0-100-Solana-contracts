@@ -166,8 +166,6 @@ describe("engine litesvm - raydium clmm", () => {
       launch: clmmLaunchState,
       quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
       provider,
     });
 
@@ -220,17 +218,12 @@ describe("engine litesvm - raydium clmm", () => {
     const tickCurrent = Math.round(Math.log(currentPrice) / Math.log(1.0001));
     console.log(`Current tick (calculated): ${tickCurrent}`);
 
-    const tickLower = -443520;
-    const tickUpper = 443520;
-    const tickArrayLowerStartIndex = -446400;
-    const tickArrayUpperStartIndex = 442800;
-
-    console.log("\n=== Full-Range Parameters (exact from mainnet tx 5Q9Nse...) ===");
-    console.log(`  Tick lower: ${tickLower}`);
-    console.log(`  Tick upper: ${tickUpper}`);
-    console.log(`  Range width: ${tickUpper - tickLower} ticks`);
-    console.log(`  Tick array lower start: ${tickArrayLowerStartIndex}`);
-    console.log(`  Tick array upper start: ${tickArrayUpperStartIndex}`);
+    console.log("\n=== Getting Liquidity Range ===");
+    const liquidityRange = await sdk.getLiquidityRange({
+      launch: clmmLaunchState
+    });
+    console.log(`Liquidity range: tickArrayLower=${liquidityRange.tickArrayLower}, tickArrayUpper=${liquidityRange.tickArrayUpper}`);
+    console.log(`Tick array indices: lower=${liquidityRange.tickArrayLowerStartIndex}, upper=${liquidityRange.tickArrayUpperStartIndex}`);
 
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
@@ -238,15 +231,10 @@ describe("engine litesvm - raydium clmm", () => {
       quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
       provider,
-      tickLowerIndex: tickLower,
-      tickUpperIndex: tickUpper,
-      tickArrayLowerStartIndex: tickArrayLowerStartIndex,
-      tickArrayUpperStartIndex: tickArrayUpperStartIndex,
       baseAmount: baseAmount,
       quoteAmount: quoteAmountForLiquidity,
+      liquidityRange: liquidityRange,
     });
 
     console.log("Adding liquidity...");
