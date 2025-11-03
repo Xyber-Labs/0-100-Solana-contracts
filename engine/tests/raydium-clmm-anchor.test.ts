@@ -1,15 +1,9 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createSyncNativeInstruction,
-  TOKEN_PROGRAM_ID
-} from "@solana/spl-token";
+import { assert } from "chai";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
-import { assert } from "chai";
 
 
 function getExplorerUrl(provider, signature) {
@@ -133,50 +127,20 @@ describe("engine anchor - raydium clmm", () => {
 
     const [escrowAuthority] = sdk.getEscrowAuthorityPda(clmmLaunchState);
 
-    console.log("\n=== Preparing WSOL for Liquidity ===");
+    console.log("\n=== Funding Escrow Authority ===");
+    const totalSolNeeded = quoteAmountLamports.toNumber() + (0.3 * anchor.web3.LAMPORTS_PER_SOL);
 
+    const fundTx = new anchor.web3.Transaction().add(
+      anchor.web3.SystemProgram.transfer({
+        fromPubkey: adminKeypair.publicKey,
+        toPubkey: escrowAuthority,
+        lamports: totalSolNeeded,
+      })
+    );
 
-    const wsolAta = anchor.utils.token.associatedAddress({
-      mint: WSOL_MINT,
-      owner: escrowAuthority,
-    });
+    const fundSig = await provider.sendAndConfirm(fundTx, [adminKeypair]);
+    console.log(`✅ Funded escrow authority with ${totalSolNeeded / anchor.web3.LAMPORTS_PER_SOL} SOL:`, fundSig);
 
-    const rentForAccount = 0.3 * anchor.web3.LAMPORTS_PER_SOL;
-
-    const prepareTx = new anchor.web3.Transaction()
-      .add(
-        createAssociatedTokenAccountInstruction(
-          adminKeypair.publicKey,
-          wsolAta,
-          escrowAuthority,
-          WSOL_MINT,
-          TOKEN_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID
-        )
-      )
-      .add(
-        anchor.web3.SystemProgram.transfer({
-          fromPubkey: adminKeypair.publicKey,
-          toPubkey: wsolAta,
-          lamports: quoteAmountLamports.toNumber(),
-        })
-      )
-      .add(
-        createSyncNativeInstruction(wsolAta, TOKEN_PROGRAM_ID)
-      )
-      .add(
-        anchor.web3.SystemProgram.transfer({
-          fromPubkey: adminKeypair.publicKey,
-          toPubkey: escrowAuthority,
-          lamports: rentForAccount,
-        })
-      );
-
-    const prepareSig = await provider.sendAndConfirm(prepareTx, [adminKeypair]);
-    console.log(`✅ Transferred ${quoteAmountLamports.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL to WSOL ATA, synced, and funded escrow authority with ${rentForAccount / anchor.web3.LAMPORTS_PER_SOL} SOL for rent:`, prepareSig);
-
-    const launchData = await program.account.launchState.fetch(clmmLaunchState);
-    console.log("Straight in the state: ", launchData.straight);
     const LP_POOL_ALLOCATION = 440_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
 

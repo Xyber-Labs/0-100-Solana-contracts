@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use raydium_amm_v3::{
-    libraries::tick_math,
-    program::AmmV3,
-    states::{AmmConfig, TickArrayState},
-};
+use raydium_amm_v3::{libraries::tick_math, states::TickArrayState};
 
 pub use add_clmm_liquidity::*;
 pub use claim_creator_refund::*;

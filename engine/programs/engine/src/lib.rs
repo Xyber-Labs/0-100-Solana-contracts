@@ -3,6 +3,7 @@
 use anchor_lang::prelude::*;
 
 use constants::*;
+pub use constants::WSOL_MINT;
 use state::*;
 
 use crate::instructions::*;
@@ -96,7 +97,7 @@ pub mod engine {
         instructions::claim_creator_refund(ctx)
     }
 
-    pub fn create_clmm_pool(mut ctx: Context<CreateClmmPool>) -> Result<()> {
+    pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         instructions::create_clmm_pool(ctx)
     }
 

@@ -16,6 +16,8 @@ pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = anchor_lang::solana_program::pubkey!
 #[cfg(not(feature = "devnet"))]
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = anchor_lang::solana_program::pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
+pub const WSOL_MINT: Pubkey = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112");
+
 // -------------------------------
 // Configuration Constants
 // -------------------------------

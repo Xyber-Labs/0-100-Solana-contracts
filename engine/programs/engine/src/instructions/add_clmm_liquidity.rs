@@ -5,15 +5,11 @@ use anchor_spl::{
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::{
-    libraries::tick_math,
-    program::AmmV3,
-    states::{AmmConfig, TickArrayState},
-};
+use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
-    AMM_CONFIG_INDEX,
-    EscrowAccount, instructions::{get_liquidity_range_impl, LiquidityRange}, LaunchState, SEED_ROOT,
+    AMM_CONFIG_INDEX, EscrowAccount, instructions::get_liquidity_range_impl, LaunchState,
+    SEED_ROOT, WSOL_MINT,
 };
 
 #[derive(Accounts)]
@@ -47,16 +43,12 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    // TODO: Uncomment WSOL constraint when reverting to WSOL
-    #[account(
-        mint::token_program = quote_token_program
-        // address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
-    )]
+    #[account(mint::token_program = quote_token_program, address = WSOL_MINT)]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    // TODO: to be initialized within the previous stages
     #[account(
-        mut,
+        init,
+        payer = payer,
         associated_token::mint = quote_mint,
         associated_token::authority = escrow_authority,
         associated_token::token_program = quote_token_program,
@@ -144,7 +136,28 @@ fn add_initial_liquidity<'info>(
     ];
     let signers = &[&escrow_authority_seeds[..]];
 
-    let mut order = OpenPositionOrder::new(
+    anchor_lang::system_program::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.escrow_authority.to_account_info(),
+                to: ctx.accounts.quote_token_ata.to_account_info(),
+            },
+            signers,
+        ),
+        quote_amount,
+    )?;
+    msg!("Transferred {} lamports to WSOL ATA", quote_amount);
+
+    anchor_spl::token_interface::sync_native(CpiContext::new(
+        ctx.accounts.quote_token_program.to_account_info(),
+        anchor_spl::token_interface::SyncNative {
+            account: ctx.accounts.quote_token_ata.to_account_info(),
+        },
+    ))?;
+    msg!("Synced native for WSOL ATA");
+
+    let order = OpenPositionOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),

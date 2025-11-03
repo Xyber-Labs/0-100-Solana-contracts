@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{self, Mint, MintTo, Token},
@@ -8,7 +8,7 @@ use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::Amm
 
 use crate::{
     AMM_CONFIG_INDEX, errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT,
-    TOTAL_SUPPLY,
+    TOTAL_SUPPLY, WSOL_MINT,
 };
 
 #[derive(Accounts)]
@@ -46,12 +46,7 @@ pub struct CreateClmmPool<'info> {
         bump
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
-
-    // TODO: Uncomment WSOL constraint when reverting to WSOL
-    #[account(
-        mint::token_program = quote_token_program
-        // address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112")
-    )]
+    #[account(mint::token_program = quote_token_program, address = WSOL_MINT)]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
@@ -160,13 +155,7 @@ fn raydium_create_pool_impl(ctx: &mut Context<CreateClmmPool>) -> Result<()> {
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
     msg!("Sqrt price: {}", order.sqrt_price);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
-    ctx.accounts.launch_state.straight = order.straight;
     Ok(())
-}
-
-struct StakingCalculator {
-    raised_lamports: u64,
-    lp_allocation: u64,
 }
 
 struct TokenOrderForPool<'info> {

@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use raydium_amm_v3::{
-    libraries::{liquidity_math, tick_math},
-    states::AmmConfig,
-};
+use raydium_amm_v3::states::AmmConfig;
 
 use crate::{
     AMM_CONFIG_INDEX,
