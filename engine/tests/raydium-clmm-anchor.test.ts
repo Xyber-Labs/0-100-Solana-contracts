@@ -180,7 +180,6 @@ describe("engine anchor - raydium clmm", () => {
     const LP_POOL_ALLOCATION = 440_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
 
-
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
@@ -192,7 +191,6 @@ describe("engine anchor - raydium clmm", () => {
       quoteAmount: quoteAmountLamports,
       liquidityRange: liquidityRange,
     });
-
 
     console.log("✅ Pool created:", createPoolSig);
     console.log("Explorer:", getExplorerUrl(provider, createPoolSig));
