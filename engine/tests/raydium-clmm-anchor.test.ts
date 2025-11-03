@@ -6,10 +6,10 @@ import {
   createSyncNativeInstruction,
   TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
-import { assert } from "chai";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
+import { assert } from "chai";
 
 
 function getExplorerUrl(provider, signature) {
@@ -92,7 +92,7 @@ describe("engine anchor - raydium clmm", () => {
     console.log("=== Creating CLMM Pool and Adding Liquidity (Separate Transactions) ===");
 
     console.log("Raydium CLMM setup:");
-    const { createMint, mintTo, getOrCreateAssociatedTokenAccount } = await import("@solana/spl-token");
+
 
     console.log("\n=== Creating Quote Mint (SPL token) ===");
 
