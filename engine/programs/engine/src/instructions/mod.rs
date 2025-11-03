@@ -37,8 +37,6 @@ mod process_batch;
 mod set_seed;
 mod withdraw;
 
-struct RaydiumPositionCalculator;
-
 const POSITION_LOWER_INDEX: i32 = -5;
 const POSITION_UPPER_INDEX: i32 = 5;
 

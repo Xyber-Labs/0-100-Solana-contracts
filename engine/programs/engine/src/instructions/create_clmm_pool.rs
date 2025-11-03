@@ -7,8 +7,8 @@ use anchor_spl::{
 use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::AmmConfig};
 
 use crate::{
-    AMM_CONFIG_INDEX, errors::ErrorCode, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT,
-    TOTAL_SUPPLY, WSOL_MINT,
+    AMM_CONFIG_INDEX, EscrowAccount, LaunchState, LP_POOL_ALLOCATION, SEED_ROOT, TOTAL_SUPPLY,
+    WSOL_MINT,
 };
 
 #[derive(Accounts)]
