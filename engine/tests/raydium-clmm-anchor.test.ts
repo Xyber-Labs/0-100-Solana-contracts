@@ -1,9 +1,16 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  createSyncNativeInstruction,
+  TOKEN_PROGRAM_ID
+} from "@solana/spl-token";
 import { assert } from "chai";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
+
 
 function getExplorerUrl(provider, signature) {
   const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
@@ -25,7 +32,7 @@ describe("engine anchor - raydium clmm", () => {
   let clmmSaleMint: anchor.web3.Keypair;
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
-  let quoteMintKeypair: anchor.web3.Keypair;
+  const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
   const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
@@ -79,9 +86,6 @@ describe("engine anchor - raydium clmm", () => {
     const numDeposits = Math.ceil(targetRaise / (PER_WALLET_CAP.toNumber() / anchor.web3.LAMPORTS_PER_SOL));
     const batchSize = 10;
     console.log(`Making ${numDeposits} deposits in batches of ${batchSize}...`);
-
-    let totalRaised = 0;
-
   });
 
   it("Creates CLMM pool and adds liquidity in separate transactions", async () => {
@@ -91,63 +95,17 @@ describe("engine anchor - raydium clmm", () => {
     const { createMint, mintTo, getOrCreateAssociatedTokenAccount } = await import("@solana/spl-token");
 
     console.log("\n=== Creating Quote Mint (SPL token) ===");
-    quoteMintKeypair = anchor.web3.Keypair.generate();
 
-    const quoteMint = await createMint(
-      provider.connection,
-      adminKeypair,
-      adminKeypair.publicKey,
-      null,
-      9,
-      quoteMintKeypair
-    );
-
-    console.log("✅ Quote Mint created:", quoteMint.toString());
-
-    console.log("\n=== Ensuring Raydium Token Ordering (Quote must be token_0) ===");
-    const straight = true;
-    do {
-      baseMintKeypair = anchor.web3.Keypair.generate();
-    } while (baseMintKeypair.publicKey.toBuffer().compare(quoteMintKeypair.publicKey.toBuffer()) == (straight ? -1 : 1));
-
-
-    console.log("Quote Mint:", quoteMintKeypair.publicKey.toString());
+    console.log("\n=== Ensuring Raydium Token Ordering (Base must be token_1) ===");
+    baseMintKeypair = anchor.web3.Keypair.generate();
     console.log("Base Mint:", baseMintKeypair.publicKey.toString());
-    //
-    // const isQuoteLessThanBase = quoteMintKeypair.publicKey.toBuffer().compare(baseMintKeypair.publicKey.toBuffer()) > 0;
-    // console.log("Quote < Base (required for Raydium):", isQuoteLessThanBase);
-    // assert.ok(isQuoteLessThanBase, "Quote mint must have smaller address than base mint for Raydium CLMM");
-
 
     const quoteAmountLamports = new anchor.BN(300000000000);
-
-    const [escrowAuthority] =
-      sdk.getEscrowAuthorityPda(clmmLaunchState);
-
-    console.log("\n=== Minting Quote Tokens to Escrow Authority ===");
-    const escrowQuoteAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      adminKeypair,
-      quoteMintKeypair.publicKey,
-      escrowAuthority,
-      true
-    );
-
-    await mintTo(
-      provider.connection,
-      adminKeypair,
-      quoteMintKeypair.publicKey,
-      escrowQuoteAta.address,
-      adminKeypair,
-      quoteAmountLamports.toNumber() + 10000000000
-    );
-
-    console.log("✅ Minted", quoteAmountLamports.toString(), "quote tokens to escrow ATA:", escrowQuoteAta.address.toString());
 
     let createPoolResultTx = await sdk.createClmmPoolTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
-      quoteMint: quoteMintKeypair.publicKey,
+      quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair,
       provider,
     });
@@ -173,6 +131,49 @@ describe("engine anchor - raydium clmm", () => {
     console.log(`Liquidity range: tickArrayLower=${liquidityRange.tickArrayLower}, tickArrayUpper=${liquidityRange.tickArrayUpper}`);
     console.log(`Tick array indices: lower=${liquidityRange.tickArrayLowerStartIndex}, upper=${liquidityRange.tickArrayUpperStartIndex}`);
 
+    const [escrowAuthority] = sdk.getEscrowAuthorityPda(clmmLaunchState);
+
+    console.log("\n=== Preparing WSOL for Liquidity ===");
+
+
+    const wsolAta = anchor.utils.token.associatedAddress({
+      mint: WSOL_MINT,
+      owner: escrowAuthority,
+    });
+
+    const rentForAccount = 0.3 * anchor.web3.LAMPORTS_PER_SOL;
+
+    const prepareTx = new anchor.web3.Transaction()
+      .add(
+        createAssociatedTokenAccountInstruction(
+          adminKeypair.publicKey,
+          wsolAta,
+          escrowAuthority,
+          WSOL_MINT,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      )
+      .add(
+        anchor.web3.SystemProgram.transfer({
+          fromPubkey: adminKeypair.publicKey,
+          toPubkey: wsolAta,
+          lamports: quoteAmountLamports.toNumber(),
+        })
+      )
+      .add(
+        createSyncNativeInstruction(wsolAta, TOKEN_PROGRAM_ID)
+      )
+      .add(
+        anchor.web3.SystemProgram.transfer({
+          fromPubkey: adminKeypair.publicKey,
+          toPubkey: escrowAuthority,
+          lamports: rentForAccount,
+        })
+      );
+
+    const prepareSig = await provider.sendAndConfirm(prepareTx, [adminKeypair]);
+    console.log(`✅ Transferred ${quoteAmountLamports.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL to WSOL ATA, synced, and funded escrow authority with ${rentForAccount / anchor.web3.LAMPORTS_PER_SOL} SOL for rent:`, prepareSig);
 
     const launchData = await program.account.launchState.fetch(clmmLaunchState);
     console.log("Straight in the state: ", launchData.straight);
@@ -183,7 +184,7 @@ describe("engine anchor - raydium clmm", () => {
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
       launch: clmmLaunchState,
-      quoteMint: quoteMintKeypair.publicKey,
+      quoteMint: WSOL_MINT,
       baseMint: baseMintKeypair.publicKey,
       baseTokenAta: createPoolResultTx.baseTokenAta,
       provider,

@@ -54,10 +54,9 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
-    // TODO: Change back to `init` when reverting to WSOL (for SPL tokens, ATA must exist with tokens)
+    // TODO: to be initialized within the previous stages
     #[account(
-        init_if_needed,
-        payer = payer,
+        mut,
         associated_token::mint = quote_mint,
         associated_token::authority = escrow_authority,
         associated_token::token_program = quote_token_program,
@@ -144,37 +143,6 @@ fn add_initial_liquidity<'info>(
         &[ctx.bumps.escrow_authority],
     ];
     let signers = &[&escrow_authority_seeds[..]];
-
-    // TODO: Uncomment SOL transfer for WSOL when reverting
-    // let quote_ata_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
-    // msg!("escwrow_authority_token_ata balance before transfer: {} lamports", quote_ata_balance);
-
-    anchor_lang::system_program::transfer(
-        CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.payer.to_account_info(),
-                to: ctx.accounts.escrow_authority.to_account_info(),
-            },
-            signers,
-        ),
-        5000000000,
-    )?;
-
-    // let quote_ata_balance = ctx.accounts.quote_token_ata.to_account_info().lamports();
-    // msg!("quote_token_ata balance after transfer: {} lamports", quote_ata_balance);
-
-    // NOTE: sync_native commented out for SPL token pairs (not WSOL)
-    // anchor_lang::solana_program::program::invoke(
-    //     &anchor_spl::token::spl_token::instruction::sync_native(
-    //         &ctx.accounts.quote_token_program.key(),
-    //         &ctx.accounts.quote_token_ata.key(),
-    //     )?,
-    //     &[ctx.accounts.quote_token_ata.to_account_info()],
-    // )?;
-
-    // let quote_ata_balance_after_sync = ctx.accounts.quote_token_ata.to_account_info().lamports();
-    // msg!("quote_token_ata balance after sync_native: {} lamports", quote_ata_balance_after_sync);
 
     let mut order = OpenPositionOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
