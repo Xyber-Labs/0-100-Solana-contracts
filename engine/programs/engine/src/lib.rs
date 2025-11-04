@@ -107,4 +107,12 @@ pub mod engine {
     pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
         instructions::mint_for_test(ctx)
     }
+
+    pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
+        instructions::init_team_vesting(ctx)
+    }
+
+    pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
+        instructions::claim_team_tokens(ctx)
+    }
 }

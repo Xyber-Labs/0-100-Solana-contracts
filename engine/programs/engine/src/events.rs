@@ -146,3 +146,20 @@ pub struct RosterShardFinalized {
     pub total_in_shard: u32,
     pub shard_base: u32,
 }
+
+#[event]
+pub struct TeamVestingInitialized {
+    pub launch: Pubkey,
+    pub total_allocation: u64,
+    pub duration_sec: i64,
+}
+
+#[event]
+pub struct TeamClaimed {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub amount: u64,
+    pub claimed_total: u64,
+    pub remaining: u64,
+    pub at: i64,
+}
