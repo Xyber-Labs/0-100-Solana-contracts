@@ -6,6 +6,7 @@ pub struct LaunchInitialized {
     pub creator: Pubkey,
     pub creator_max_deposit: u64,
     pub base_mint: Pubkey,
+    pub pending_key: [u8; 32],
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,

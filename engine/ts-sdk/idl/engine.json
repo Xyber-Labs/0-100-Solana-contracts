@@ -3444,6 +3444,15 @@
             "type": "pubkey"
           },
           {
+            "name": "pending_key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "hard_cap_lamports",
             "type": "u64"
           },
