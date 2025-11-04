@@ -1,3 +1,4 @@
+#![feature(f128)]
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
@@ -105,11 +106,15 @@ pub mod engine {
         ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
         base_amount: u64,
         quote_amount: u64,
+        sqrt_price_lower_x64: u128,
     ) -> Result<()> {
-        instructions::add_clmm_liquidity(ctx, base_amount, quote_amount)
+        instructions::add_clmm_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
     }
 
-    pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
-        instructions::get_liquidity_range(ctx)
+    pub fn get_liquidity_range(
+        ctx: Context<GetLiquidityRange>,
+        sqrt_price_lower_x64: u128,
+    ) -> Result<LiquidityRange> {
+        instructions::get_liquidity_range(ctx, sqrt_price_lower_x64)
     }
 }

@@ -865,6 +865,7 @@ export class TxBuilder {
 
   async getLiquidityRange(params: {
     launch: web3.PublicKey;
+    sqrtPriceLowerX64: BN;
   }): Promise<{
     tickArrayLower: number;
     tickArrayUpper: number;
@@ -874,7 +875,7 @@ export class TxBuilder {
     const [ammConfig] = this.getRaydiumAmmConfigPda();
 
     const tx = await this.program.methods
-      .getLiquidityRange()
+      .getLiquidityRange(params.sqrtPriceLowerX64)
       .accountsStrict({
         launchState: params.launch,
         raydiumAmmConfig: ammConfig
@@ -920,6 +921,7 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
     baseAmount: BN;
     quoteAmount: BN;
+    sqrtPriceLowerX64: BN;
     liquidityRange: {
       tickArrayLower: number;
       tickArrayUpper: number;
@@ -971,7 +973,8 @@ export class TxBuilder {
     const addLiquidityIx = await this.program.methods
       .addClmmLiquidity(
         params.baseAmount,
-        params.quoteAmount
+        params.quoteAmount,
+        params.sqrtPriceLowerX64
       )
       .accountsStrict({
         payer: params.payer,
@@ -1029,6 +1032,7 @@ export class TxBuilder {
     provider: any;
     baseAmount: BN;
     quoteAmount: BN;
+    sqrtPriceLowerX64: BN;
     liquidityRange: {
       tickArrayLower: number;
       tickArrayUpper: number;

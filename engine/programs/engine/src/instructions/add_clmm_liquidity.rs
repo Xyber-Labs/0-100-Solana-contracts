@@ -107,8 +107,9 @@ pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     base_amount: u64,
     quote_amount: u64,
+    sqrt_price_lower_x64: u128,
 ) -> Result<()> {
-    add_initial_liquidity(ctx, base_amount, quote_amount)
+    add_initial_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
 }
 
 const RENT_RESERVE: u64 = 200_000_000;
@@ -117,6 +118,7 @@ fn add_initial_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     base_amount: u64,
     quote_amount: u64,
+    sqrt_price_lower_x64: u128,
 ) -> Result<()> {
     msg!("=== Input Parameters ===");
     msg!("Base amount: {}", base_amount);
@@ -208,6 +210,7 @@ fn add_initial_liquidity<'info>(
         ctx.accounts.raydium_amm_config.tick_spacing,
         6.16 * 10f64.powi(-7),
         order.base_flag.unwrap(),
+        sqrt_price_lower_x64,
     );
     msg!("range: {:?}", range);
 

@@ -119,8 +119,10 @@ describe("engine anchor - raydium clmm", () => {
 
 
     console.log("\n=== Getting Liquidity Range ===");
+    const sqrtPriceLowerX64 = new anchor.BN("4295048016");
     const liquidityRange = await sdk.getLiquidityRange({
-      launch: clmmLaunchState
+      launch: clmmLaunchState,
+      sqrtPriceLowerX64: sqrtPriceLowerX64
     });
     console.log(`Liquidity range: tickArrayLower=${liquidityRange.tickArrayLower}, tickArrayUpper=${liquidityRange.tickArrayUpper}`);
     console.log(`Tick array indices: lower=${liquidityRange.tickArrayLowerStartIndex}, upper=${liquidityRange.tickArrayUpperStartIndex}`);
@@ -153,6 +155,7 @@ describe("engine anchor - raydium clmm", () => {
       provider,
       baseAmount: baseAmount,
       quoteAmount: quoteAmountLamports,
+      sqrtPriceLowerX64: sqrtPriceLowerX64,
       liquidityRange: liquidityRange,
     });
 

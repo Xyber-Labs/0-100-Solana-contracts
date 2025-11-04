@@ -13,12 +13,16 @@ pub struct GetLiquidityRange<'info> {
     pub raydium_amm_config: Account<'info, AmmConfig>,
 }
 
-pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
+pub fn get_liquidity_range(
+    ctx: Context<GetLiquidityRange>,
+    sqrt_price_lower_x64: u128,
+) -> Result<LiquidityRange> {
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     Ok(get_liquidity_range_impl(
         tick_spacing,
         6.16 * 10f64.powi(-7),
         ctx.accounts.launch_state.straight,
+        sqrt_price_lower_x64,
     ))
 }
 
@@ -30,15 +34,27 @@ mod tests {
 
     #[test]
     fn test_range_utilizes_both_tokens() {
+        use raydium_amm_v3::libraries::fixed_point_64;
+
         let base_amount = 440_000_000u64;
         let quote_amount = 300u64;
+
+        let price_ratio = 6.16 * 10f64.powi(-7);
+        let straight = true;
+        let price = if straight {
+            price_ratio
+        } else {
+            1f64 / price_ratio
+        } * 1.15;
+        let price_lower = price * f64::powf(10.0, -5.0);
+        let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
         let LiquidityRange {
             tick_array_lower,
             tick_array_upper,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
-        } = get_liquidity_range_impl(1, 6.16 * 10f64.powi(-7), true);
+        } = get_liquidity_range_impl(1, price_ratio, straight, sqrt_price_lower_x64);
 
         assert_eq!(tick_array_lower, tick_math::MIN_TICK);
         assert_eq!(tick_array_upper, tick_math::MAX_TICK);

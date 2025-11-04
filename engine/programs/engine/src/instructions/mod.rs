@@ -1,3 +1,5 @@
+#![feature(f128)]
+
 use anchor_lang::prelude::*;
 use raydium_amm_v3::{libraries::tick_math, states::TickArrayState};
 
@@ -37,8 +39,8 @@ mod process_batch;
 mod set_seed;
 mod withdraw;
 
-const POSITION_LOWER_INDEX: i32 = -5;
-const POSITION_UPPER_INDEX: i32 = 5;
+const POSITION_LOWER_INDEX: f64 = -5.0;
+const POSITION_UPPER_INDEX: f64 = 5.0;
 
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidityRange {
@@ -48,7 +50,12 @@ pub struct LiquidityRange {
     tick_array_upper_start_index: i32,
 }
 
-fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64, straight: bool) -> LiquidityRange {
+fn get_liquidity_range_impl(
+    tick_spacing: u16,
+    price_ratio: f64,
+    straight: bool,
+    sqrt_price_lower_x64: u128,
+) -> LiquidityRange {
     use raydium_amm_v3::libraries::fixed_point_64;
 
     let price = if straight {
@@ -56,12 +63,14 @@ fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64, straight: bool)
     } else {
         1f64 / price_ratio
     } * 1.15;
-    let price_lower = price * 10f64.powi(POSITION_LOWER_INDEX);
-    let price_upper = price * 10f64.powi(POSITION_UPPER_INDEX);
+    let price_lower = price * f64::powf(10.0, POSITION_LOWER_INDEX);
+    let price_upper = price * 10f64.powf(POSITION_UPPER_INDEX);
 
-    let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
+    // let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
+    msg!("sqrt_price_lower_x64: {}", sqrt_price_lower_x64);
+    msg!("sqrt_price_upper_x64: {}", sqrt_price_upper_x64);
     let tick_lower_raw = tick_math::get_tick_at_sqrt_price(sqrt_price_lower_x64).unwrap();
     let tick_upper_raw = tick_math::get_tick_at_sqrt_price(sqrt_price_upper_x64).unwrap();
 
