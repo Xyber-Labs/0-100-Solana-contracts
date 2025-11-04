@@ -195,7 +195,7 @@ describe("engine litesvm - raydium clmm", () => {
 
     const launchData = await program.account.launchState.fetch(clmmLaunchState);
 
-    const LP_POOL_ALLOCATION = 440_000_000;
+    const LP_POOL_ALLOCATION = 420_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
 
     const quoteAmountLamports = launchData.totalDeposited instanceof anchor.BN

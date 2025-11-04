@@ -119,7 +119,7 @@ describe("engine anchor - raydium clmm", () => {
 
 
     console.log("\n=== Getting Liquidity Range ===");
-    const myCustomValue = new anchor.BN("3"); // 4295048016 - X -79703664017266229248
+    const myCustomValue = new anchor.BN("10"); // 4295048016 - X -79703664017266229248
     const liquidityRange = await sdk.getLiquidityRange({
       launch: clmmLaunchState,
       sqrtPriceLowerX64: myCustomValue
@@ -143,7 +143,7 @@ describe("engine anchor - raydium clmm", () => {
     const fundSig = await provider.sendAndConfirm(fundTx, [adminKeypair]);
     console.log(`✅ Funded escrow authority with ${totalSolNeeded / anchor.web3.LAMPORTS_PER_SOL} SOL:`, fundSig);
 
-    const LP_POOL_ALLOCATION = 440_000_000;
+    const LP_POOL_ALLOCATION = 420_000_000;
     const baseAmount = new anchor.BN(LP_POOL_ALLOCATION).mul(new anchor.BN(1_000_000_000));
 
     let addLiquidityResultTx = await sdk.addClmmLiquidityTx({

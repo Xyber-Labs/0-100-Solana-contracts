@@ -36,7 +36,7 @@ mod tests {
     fn test_range_utilizes_both_tokens() {
         use raydium_amm_v3::libraries::fixed_point_64;
 
-        let base_amount = 440_000_000u64;
+        let base_amount = 420_000_000u64;
         let quote_amount = 300u64;
 
         let price_ratio = 7.18 * 10f64.powi(-7);
@@ -65,9 +65,9 @@ mod tests {
     // #[test]
     // fn test_range_with_different_ratios() {
     //     let test_cases = vec![
-    //         (68920, 440_000_000u64, 300u64),
-    //         (68920, 440_000_000u64, 433u64),
-    //         (68920, 440_000_000u64, 500u64),
+    //         (68920, 420_000_000u64, 300u64),
+    //         (68920, 420_000_000u64, 433u64),
+    //         (68920, 420_000_000u64, 500u64),
     //     ];
     //
     //     for (tick_current, base_amount, quote_amount) in test_cases {

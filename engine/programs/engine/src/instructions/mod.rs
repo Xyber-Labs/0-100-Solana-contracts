@@ -51,7 +51,7 @@ mod withdraw;
 // 8 * 10^-7
 
 const POSITION_LOWER_INDEX: f64 = -5.0; // аффектит в диапазоне [-2.1 до -0]
-const POSITION_UPPER_INDEX: f64 = 5.0; // не аффектит вообще совсем
+const POSITION_UPPER_INDEX: f64 = 4.51; // не аффектит вообще совсем
 
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidityRange {
@@ -74,7 +74,7 @@ fn get_liquidity_range_impl(
     } else {
         1f64 / price_ratio
     } * 1.15;
-    let price_lower = price * f64::powf(10.0, POSITION_LOWER_INDEX);
+    let price_lower = price * f64::powi(10.0, 0 - my_custom_value as i32);
     let price_upper = price * 10f64.powf(POSITION_UPPER_INDEX);
 
     msg!("price_ratio: {}", price_ratio);
