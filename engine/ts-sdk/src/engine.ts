@@ -185,6 +185,34 @@ const EngineSDK = {
       return { launchPda: launchState, escrowPda: escrowAuthority, signature };
     }
 
+    // Convenience: fetch next projectId and initialize launch in one call
+    async function initLaunchAuto(args: {
+      hardCapLamports: BN;
+      minRaiseLamports: BN;
+      perWalletCap: BN;
+      tauLamports: BN;
+      baseTotalAllocation: BN;
+      baseSaleBasisPoints: BN;
+      fundingDurationSeconds: number;
+      unlockTimeSec?: number;
+      rosterShardCap: number;
+      creatorInitialDepositLamports: BN;
+      creatorDailyLamportsLimit: BN;
+      creatorClaimLockPeriodSec: BN;
+      preInstructions?: anchor.web3.TransactionInstruction[];
+      signers?: anchor.web3.Keypair[];
+      creator?: anchor.web3.Keypair;
+    }): Promise<{
+      projectId: BN;
+      launchPda: anchor.web3.PublicKey;
+      escrowPda: anchor.web3.PublicKey;
+      signature: string;
+    }> {
+      const projectId = await getNextProjectId();
+      const res = await initLaunch({ ...args, projectId });
+      return { projectId, ...res };
+    }
+
     async function initRoster(args: {
       launch: anchor.web3.PublicKey;
     }): Promise<{ rosterPda: anchor.web3.PublicKey; signature: string }> {
@@ -823,6 +851,7 @@ const EngineSDK = {
       deposit,
       withdraw,
       claimRefund,
+      initLaunchAuto,
       claimTokens,
       initRosterShard,
       finalizeRosterShard,
