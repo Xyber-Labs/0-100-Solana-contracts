@@ -285,6 +285,7 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: new anchor.BN(0),
     });
 
     const projectId2 = await sdk.getNextProjectId();
@@ -304,6 +305,7 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: new anchor.BN(0),
     });
 
     const projectId3 = await sdk.getNextProjectId();
@@ -323,6 +325,7 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: new anchor.BN(0),
     });
 
     const project1State = await sdk.fetchLaunch(project1Launch);
@@ -585,6 +588,7 @@ describe("engine litesvm", () => {
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
         creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDeposit: creatorDepositAmount,
       }, projectId)
       .accountsStrict({
         creator: admin.publicKey,
@@ -623,6 +627,67 @@ describe("engine litesvm", () => {
     }
 
     console.log("Creator deposit test passed!");
+  });
+
+  it("Creator deposit/withdraw within max limit", async () => {
+    // Ensure admin has enough SOL for transfers
+    const want = BigInt(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const cur = client.getBalance(admin.publicKey);
+    if (cur < want) {
+      client.airdrop(admin.publicKey, want - cur);
+    }
+
+    const MAX = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
+    const testHardCap = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
+    const testMinRaise = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const testPerWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const testTau = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+
+    const { projectId, launchPda } = await sdk.initLaunchAuto({
+      hardCapLamports: testHardCap,
+      minRaiseLamports: testMinRaise,
+      perWalletCap: testPerWalletCap,
+      tauLamports: testTau,
+      baseTotalAllocation: new anchor.BN(0),
+      baseSaleBasisPoints: new anchor.BN(0),
+      fundingDurationSeconds: 20,
+      unlockTimeSec: 0,
+      rosterShardCap: 100,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: MAX,
+      creator: adminKeypair,
+    });
+
+    // Deposit 2 SOL by creator
+    const dep1 = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep1, creatorKeypair: adminKeypair });
+    let grant = await sdk.fetchCreatorGrant(launchPda);
+    let state = await sdk.fetchLaunch(launchPda);
+    assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
+    assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
+
+    // Attempt to exceed max (deposit another 2 SOL -> should fail)
+    try {
+      await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep1, creatorKeypair: adminKeypair });
+      assert.fail("Expected deposit beyond max to fail");
+    } catch (_) { /* expected */ }
+
+    // Deposit remaining 1 SOL to reach max
+    const dep2 = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep2, creatorKeypair: adminKeypair });
+    grant = await sdk.fetchCreatorGrant(launchPda);
+    state = await sdk.fetchLaunch(launchPda);
+    assert.equal(grant.lockedLamports.toNumber(), MAX.toNumber());
+    assert.equal(state.totalDeposited.toNumber(), MAX.toNumber());
+
+    // Withdraw 1 SOL
+    await sdk.creatorWithdraw({ launch: launchPda, amountLamports: dep2, creatorKeypair: adminKeypair });
+    grant = await sdk.fetchCreatorGrant(launchPda);
+    state = await sdk.fetchLaunch(launchPda);
+    assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
+    assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
   });
 
 

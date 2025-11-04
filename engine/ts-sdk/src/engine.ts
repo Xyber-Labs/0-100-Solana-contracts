@@ -139,6 +139,7 @@ const EngineSDK = {
       preInstructions?: anchor.web3.TransactionInstruction[];
       signers?: anchor.web3.Keypair[]; // if payer != provider.wallet
       creator?: anchor.web3.Keypair;
+      creatorMaxDepositLamports: BN;
     }): Promise<{
       launchPda: anchor.web3.PublicKey;
       escrowPda: anchor.web3.PublicKey;
@@ -162,6 +163,7 @@ const EngineSDK = {
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
           creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,
+          creatorMaxDepositLamports: args.creatorMaxDepositLamports,
         }
       );
 
@@ -202,6 +204,7 @@ const EngineSDK = {
       preInstructions?: anchor.web3.TransactionInstruction[];
       signers?: anchor.web3.Keypair[];
       creator?: anchor.web3.Keypair;
+      creatorMaxDepositLamports: BN;
     }): Promise<{
       projectId: BN;
       launchPda: anchor.web3.PublicKey;
@@ -693,6 +696,26 @@ const EngineSDK = {
       return { signature };
     }
 
+    async function creatorDeposit(args: { launch: anchor.web3.PublicKey; amountLamports: BN; creatorKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
+      const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
+      const { instruction } = await txBuilder.creatorDepositIx({ launch: args.launch, creator: creatorPubkey, amount: args.amountLamports });
+      const tx = new anchor.web3.Transaction().add(instruction);
+      const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
+    }
+
+    async function creatorWithdraw(args: { launch: anchor.web3.PublicKey; amountLamports: BN; creatorKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
+      const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
+      const { instruction } = await txBuilder.creatorWithdrawIx({ launch: args.launch, creator: creatorPubkey, amount: args.amountLamports });
+      const tx = new anchor.web3.Transaction().add(instruction);
+      const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
+    }
+
     async function claimCreatorRefundTx(args: {
       launch: anchor.web3.PublicKey;
       creator: anchor.web3.PublicKey;
@@ -887,6 +910,8 @@ const EngineSDK = {
       claimCreatorTokens,
       claimCreatorTokensTx,
       claimCreatorRefund,
+      creatorDeposit,
+      creatorWithdraw,
       claimCreatorRefundTx,
       preparePoolCreation,
       createClmmPool,

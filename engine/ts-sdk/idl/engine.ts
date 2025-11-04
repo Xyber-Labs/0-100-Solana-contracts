@@ -1230,6 +1230,268 @@ export type Engine = {
       "args": []
     },
     {
+      "name": "creatorDeposit",
+      "docs": [
+        "Creator can increase special deposit during funding window"
+      ],
+      "discriminator": [
+        214,
+        153,
+        77,
+        240,
+        195,
+        20,
+        138,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "launchState"
+          ]
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "creatorWithdraw",
+      "docs": [
+        "Creator can decrease special deposit during funding window"
+      ],
+      "discriminator": [
+        92,
+        117,
+        206,
+        254,
+        174,
+        108,
+        37,
+        106
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "launchState"
+          ]
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "docs": [
         "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
@@ -2342,6 +2604,19 @@ export type Engine = {
       ]
     },
     {
+      "name": "creatorDepositChanged",
+      "discriminator": [
+        103,
+        171,
+        3,
+        222,
+        255,
+        235,
+        37,
+        104
+      ]
+    },
+    {
       "name": "creatorGranted",
       "discriminator": [
         139,
@@ -2950,6 +3225,30 @@ export type Engine = {
       }
     },
     {
+      "name": "creatorDepositChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "deltaLamports",
+            "type": "i64"
+          },
+          {
+            "name": "newLockedLamports",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "creatorGrant",
       "type": {
         "kind": "struct",
@@ -3121,6 +3420,10 @@ export type Engine = {
           {
             "name": "creatorClaimLockPeriodSec",
             "type": "i64"
+          },
+          {
+            "name": "creatorMaxDeposit",
+            "type": "u64"
           }
         ]
       }
@@ -3137,6 +3440,10 @@ export type Engine = {
           {
             "name": "creator",
             "type": "pubkey"
+          },
+          {
+            "name": "creatorMaxDeposit",
+            "type": "u64"
           },
           {
             "name": "baseMint",
@@ -3299,6 +3606,10 @@ export type Engine = {
           },
           {
             "name": "creatorInitialDeposit",
+            "type": "u64"
+          },
+          {
+            "name": "creatorMaxDeposit",
             "type": "u64"
           },
           {

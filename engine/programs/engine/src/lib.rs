@@ -93,6 +93,16 @@ pub mod engine {
         instructions::add_clmm_liquidity(ctx)
     }
 
+    /// Creator can increase special deposit during funding window
+    pub fn creator_deposit(ctx: Context<CreatorDeposit>, amount: u64) -> Result<()> {
+        instructions::creator_deposit(ctx, amount)
+    }
+
+    /// Creator can decrease special deposit during funding window
+    pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()> {
+        instructions::creator_withdraw(ctx, amount)
+    }
+
     #[cfg(feature = "test")]
     pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
         instructions::mint_for_test(ctx)

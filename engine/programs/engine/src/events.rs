@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 pub struct LaunchInitialized {
     pub project_id: u64,
     pub creator: Pubkey,
+    pub creator_max_deposit: u64,
     pub base_mint: Pubkey,
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
@@ -115,6 +116,14 @@ pub struct CreatorClaimed {
     pub tokens_minted: u64,
     pub day_index: i64,
     pub remaining_tickets: u32,
+}
+
+#[event]
+pub struct CreatorDepositChanged {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub delta_lamports: i64,
+    pub new_locked_lamports: u64,
 }
 
 #[event]

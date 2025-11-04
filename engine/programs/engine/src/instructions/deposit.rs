@@ -45,6 +45,9 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         EngineErrorCode::AmountNotMultipleTau
     );
 
+    // Creator must use privileged creator_deposit, not user deposit
+    require!(ctx.accounts.user.key() != launch_state.creator, EngineErrorCode::Unauthorized);
+
     // per-wallet cap check
     let current = ctx.accounts.user_contribution.deposited;
     require!(

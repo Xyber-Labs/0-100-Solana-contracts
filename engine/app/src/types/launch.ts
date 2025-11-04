@@ -12,6 +12,7 @@ export interface LaunchConfig {
   creatorInitialDepositLamports: number;
   creatorDailyLamportsLimit: number;
   creatorClaimLockPeriodSec: number;
+  creatorMaxDepositLamports?: number;
   quoteMint?: string;
   ammConfig?: string;
   clmmProgram?: string;
