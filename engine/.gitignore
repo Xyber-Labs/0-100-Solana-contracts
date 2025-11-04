@@ -11,3 +11,4 @@ deploy-keypair.json
 log*.txt
 engine/tests/resources/*
 engine/ts-sdk/*.tgz
+*.tgz

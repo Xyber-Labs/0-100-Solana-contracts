@@ -777,6 +777,33 @@ const EngineSDK = {
       }
     }
 
+    // Fetch projects created by a specific creator (on-chain memcmp filter)
+    async function fetchProjectsByCreator(creator: anchor.web3.PublicKey) {
+      try {
+        const filters = [
+          {
+            memcmp: {
+              // 8 (discriminator) + 8 (project_id) = 16
+              offset: 16,
+              bytes: creator.toBase58(),
+            },
+          },
+        ];
+        const accounts = await program.account.launchState.all(filters as any);
+        return accounts
+          .map((a) => ({
+            projectId: a.account.projectId.toNumber(),
+            launchPda: a.publicKey,
+            account: a.account,
+            baseMint: a.account.baseMint,
+          }))
+          .sort((a, b) => a.projectId - b.projectId);
+      } catch (error) {
+        console.error("Error fetching projects by creator:", error);
+        return [];
+      }
+    }
+
     // Find project by project ID
     async function findProjectById(projectId: number) {
       try {
@@ -887,6 +914,7 @@ const EngineSDK = {
       fetchPoolState,
       getNextProjectId,
       fetchAllProjects,
+      fetchProjectsByCreator,
       findProjectById,
       getProjectByLaunchPda,
     };
