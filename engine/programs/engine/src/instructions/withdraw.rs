@@ -33,6 +33,8 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
 
     let current_time = Clock::get()?.unix_timestamp;
     require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
+    // Creator must use privileged creator_withdraw, not user withdraw
+    require!(ctx.accounts.user.key() != launch_state.creator, EngineErrorCode::Unauthorized);
     let user = &mut ctx.accounts.user_contribution;
     require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
 

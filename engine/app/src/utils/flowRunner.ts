@@ -188,6 +188,7 @@ export async function runFullFlow(
       creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
+      creatorMaxDepositLamports: new BN((config as any).creatorMaxDepositLamports ?? config.creatorInitialDepositLamports),
     });
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);

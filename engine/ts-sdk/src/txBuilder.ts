@@ -56,6 +56,7 @@ export class TxBuilder {
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
+    creatorMaxDepositLamports: BN;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -92,6 +93,7 @@ export class TxBuilder {
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
         creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
+        creatorMaxDeposit: params.creatorMaxDepositLamports,
       };
 
     const instruction = await (this.program.methods as any)
@@ -132,6 +134,7 @@ export class TxBuilder {
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
     provider: any;
+    creatorMaxDepositLamports: BN;
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
@@ -159,6 +162,7 @@ export class TxBuilder {
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
+      creatorMaxDepositLamports: params.creatorMaxDepositLamports,
     });
 
     const initLaunchTx = new web3.Transaction().add(initLaunchIx);
@@ -628,6 +632,38 @@ export class TxBuilder {
     transaction.add(claimIx);
 
     return { transaction };
+  }
+
+  async creatorDepositIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{ instruction: web3.TransactionInstruction }> {
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
+    const instruction = await (this.program.methods as any)
+      .creatorDeposit(params.amount)
+      .accountsStrict({
+        creator: params.creator,
+        launchState: params.launch,
+        escrowAuthority,
+        creatorGrant,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return { instruction };
+  }
+
+  async creatorWithdrawIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{ instruction: web3.TransactionInstruction }> {
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
+    const instruction = await (this.program.methods as any)
+      .creatorWithdraw(params.amount)
+      .accountsStrict({
+        creator: params.creator,
+        launchState: params.launch,
+        escrowAuthority,
+        creatorGrant,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return { instruction };
   }
 
   async fetchCreatorGrant(launch: web3.PublicKey) {

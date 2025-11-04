@@ -36,7 +36,6 @@ pub struct InitLaunch<'info> {
     pub launch_state: Account<'info, LaunchState>,
 
     // base_mint removed from init; it will be created and recorded later during pool/mint setup
-
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -71,9 +70,14 @@ pub struct InitLaunchParams {
     pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
     pub creator_daily_lamports_limit: u64,     // usually 1 * LAMPORTS_PER_SOL
     pub creator_claim_lock_period_sec: i64,
+    pub creator_max_deposit: u64,
 }
 
-pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_id: u64) -> Result<()> {
+pub fn init_launch(
+    ctx: Context<InitLaunch>,
+    params: InitLaunchParams,
+    project_id: u64,
+) -> Result<()> {
     require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
     require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
@@ -95,10 +99,8 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_i
     );
 
     let counter = &mut ctx.accounts.project_counter;
-    let expected_next = counter
-        .last_project_id
-        .checked_add(1)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let expected_next =
+        counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     require!(project_id == expected_next, EngineErrorCode::Unauthorized);
     counter.last_project_id = project_id;
 
@@ -151,6 +153,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_i
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
         require!(state.tau_lamports > 0, EngineErrorCode::InvalidTau);
+        require!(amount <= params.creator_max_deposit, EngineErrorCode::Unauthorized);
         let remainder =
             amount.checked_rem(state.tau_lamports).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(remainder == 0, EngineErrorCode::InvalidCreatorDeposit);
@@ -173,6 +176,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_i
 
     state.total_deposited = amount;
     state.creator_initial_deposit = amount; // Store the initial deposit
+    state.creator_max_deposit = params.creator_max_deposit;
 
     let funding_end = state.funding_period_end;
 
@@ -217,6 +221,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_i
     emit!(LaunchInitialized {
         project_id,
         creator: ctx.accounts.creator.key(),
+        creator_max_deposit: params.creator_max_deposit,
         base_mint: Pubkey::default(),
         hard_cap_lamports: params.hard_cap_lamports,
         min_raise_lamports: params.min_raise_lamports,

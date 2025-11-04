@@ -149,6 +149,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     creatorInitialDepositLamports: 8 * 1e9, // 8 SOL creator deposit
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
+    creatorMaxDepositLamports: 8 * 1e9,
     // Raydium defaults (WSOL; ammConfig/clmmProgram optional)
     quoteMint: 'So11111111111111111111111111111111111111112',
     ammConfig: '',
@@ -322,8 +323,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setIsLoading(true);
       addLog('Initializing launch with custom parameters...');
 
-      const baseMintKeypair = Keypair.generate();
-      const [launchPda] = sdk.getLaunchPda(baseMintKeypair.publicKey);
+      // Derive launch PDA by projectId (no base mint needed at init)
 
       const baseTotalAllocationBN = new BN(launchConfig.saleAllocation).add(new BN(String(launchConfig.lpAllocation)));
       const baseSaleBpsBN = baseTotalAllocationBN.isZero()
@@ -352,13 +352,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
         creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
+        creatorMaxDepositLamports: new BN(launchConfig.creatorMaxDepositLamports || launchConfig.creatorInitialDepositLamports),
       });
-
+      const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       setLaunchState(launchPda);
-      setBaseMint(baseMintKeypair);
+      setBaseMint(null);
       addLog(`SUCCESS: Launch initialized - Signature: ${res.signature}`);
       addLog(`Launch PDA: ${launchPda.toString()}`);
-      addLog(`Sale Mint: ${baseMintKeypair.publicKey.toString()}`);
+      addLog(`Sale Mint will be created during pool setup`);
       await fetchLaunchData();
     } catch (error) {
       addLog(`ERROR: Failed to initialize launch - ${error}`);
@@ -812,32 +813,18 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       // Set the project data
       setLaunchState(project.launchPda);
-      if (project.baseMint) {
-        setBaseMint({ publicKey: project.baseMint } as Keypair);
-      } else {
-        setBaseMint(null);
-      }
+      setBaseMint(project.baseMint ? ({ publicKey: project.baseMint } as Keypair) : null);
 
-      // Derive other PDAs (fallback by launch if baseMint is missing)
+      // Derive PDAs from launch
       addLog('Deriving PDAs...');
       try {
-        if (project.baseMint && sdk.deriveAllPdas) {
-          const pdas = sdk.deriveAllPdas(project.baseMint);
-          setEscrow(pdas.escrow);
-          setRoster(pdas.roster);
-          setSelection(pdas.selection);
-          addLog(`Escrow PDA: ${pdas.escrow.toString()}`);
-          addLog(`Roster PDA: ${pdas.roster.toString()}`);
-          addLog(`Selection PDA: ${pdas.selection.toString()}`);
-        } else {
-          const [escrowPda] = sdk.getEscrowPda(project.launchPda);
-          const [rosterPda] = sdk.getRosterPda(project.launchPda);
-          setEscrow(escrowPda);
-          setRoster(rosterPda);
-          setSelection(null);
-          addLog(`Escrow PDA: ${escrowPda.toString()}`);
-          addLog(`Roster PDA: ${rosterPda.toString()}`);
-        }
+        const [escrowPda] = sdk.getEscrowPda(project.launchPda);
+        const [rosterPda] = sdk.getRosterPda(project.launchPda);
+        setEscrow(escrowPda);
+        setRoster(rosterPda);
+        setSelection(null);
+        addLog(`Escrow PDA: ${escrowPda.toString()}`);
+        addLog(`Roster PDA: ${rosterPda.toString()}`);
       } catch (e) {
         addLog(`ERROR: Failed to derive PDAs - ${e}`);
       }
@@ -1514,6 +1501,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   try {
                     setIsLoading(true);
                     addLog('Initializing roster shard 0...');
+                    // Ensure launch account exists
+                    try { await sdk.fetchLaunch(launchState); } catch (e) { addLog('ERROR: Launch not found on-chain'); throw e; }
                     const { signature } = await sdk.initRosterShard({
                       launch: launchState,
                       shardId: 0,
@@ -1624,10 +1613,54 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
             </div>
 
             <div className="space-y-2">
+              {isCreator && (
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!sdk || !launchState) return;
+                      try {
+                        setIsLoading(true);
+                        const amt = new BN(1 * 1e9);
+                        addLog('Creator deposit 1 SOL...');
+                        await sdk.creatorDeposit({ launch: launchState, amountLamports: amt });
+                        await fetchLaunchData();
+                        addLog('SUCCESS: Creator deposit complete');
+                      } catch (e) {
+                        addLog(`ERROR: Creator deposit failed - ${e}`);
+                      } finally { setIsLoading(false); }
+                    }}
+                    className="terminal-button w-full text-left"
+                    disabled={!launchState || isLoading || isFlowRunning}
+                  >
+                    <span className="terminal-prompt">$</span> Creator Deposit (1 SOL)
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      if (!sdk || !launchState) return;
+                      try {
+                        setIsLoading(true);
+                        const amt = new BN(1 * 1e9);
+                        addLog('Creator withdraw 1 SOL...');
+                        await sdk.creatorWithdraw({ launch: launchState, amountLamports: amt });
+                        await fetchLaunchData();
+                        addLog('SUCCESS: Creator withdraw complete');
+                      } catch (e) {
+                        addLog(`ERROR: Creator withdraw failed - ${e}`);
+                      } finally { setIsLoading(false); }
+                    }}
+                    className="terminal-button w-full text-left"
+                    disabled={!launchState || isLoading || isFlowRunning}
+                  >
+                    <span className="terminal-prompt">$</span> Creator Withdraw (1 SOL)
+                  </button>
+                  <div className="my-2 border-t border-gray-600"></div>
+                </>
+              )}
               <button
                 onClick={deposit}
                 className="terminal-button w-full text-left"
-                disabled={!launchState || !roster || isLoading || isFlowRunning}
+                disabled={!launchState || !roster || isLoading || isFlowRunning || isCreator}
               >
                 <span className="terminal-prompt">$</span> Deposit (2 SOL)
               </button>
@@ -1635,7 +1668,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               <button
                 onClick={withdraw}
                 className="terminal-button w-full text-left"
-                disabled={!launchState || isLoading || isFlowRunning}
+                disabled={!launchState || isLoading || isFlowRunning || isCreator}
               >
                 <span className="terminal-prompt">$</span> Withdraw (2 SOL)
               </button>
