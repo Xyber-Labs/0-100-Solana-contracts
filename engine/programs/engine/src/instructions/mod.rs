@@ -40,7 +40,7 @@ mod set_seed;
 mod withdraw;
 
 const POSITION_LOWER_INDEX: f64 = -5.0;
-const POSITION_UPPER_INDEX: f64 = 5.0;
+const POSITION_UPPER_INDEX: f64 = 2.1;
 
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidityRange {
@@ -66,7 +66,12 @@ fn get_liquidity_range_impl(
     let price_lower = price * f64::powf(10.0, POSITION_LOWER_INDEX);
     let price_upper = price * 10f64.powf(POSITION_UPPER_INDEX);
 
-    // let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
+    msg!("price_ratio: {}", price_ratio);
+    msg!("price: {}", price);
+    msg!("price upper: {}", price_upper);
+
+    let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
+
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
     msg!("sqrt_price_lower_x64: {}", sqrt_price_lower_x64);
