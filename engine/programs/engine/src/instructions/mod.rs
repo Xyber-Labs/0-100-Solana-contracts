@@ -39,8 +39,19 @@ mod process_batch;
 mod set_seed;
 mod withdraw;
 
-const POSITION_LOWER_INDEX: f64 = -5.0;
-const POSITION_UPPER_INDEX: f64 = 2.1;
+// amount_0: 300000000000, amount_1: 440000000000000000">
+// "Order base flag: false"> Program logged: "price_ratio: 0.000000616">
+// "price: 1866883.1168831165">
+// "price upper: 186688311688.31165">
+// "sqrt_price_lower_x64: 2520451161553673125888">
+// "sqrt_price_upper_x64: 79226673521066979257578248090"
+
+// 1,78571428571e-07 100 sol
+// 5.3 10^-7 300 sol
+// 8 * 10^-7
+
+const POSITION_LOWER_INDEX: f64 = -5.0; // аффектит в диапазоне [-2.1 до -0]
+const POSITION_UPPER_INDEX: f64 = 5.0; // не аффектит вообще совсем
 
 #[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct LiquidityRange {
@@ -54,7 +65,7 @@ fn get_liquidity_range_impl(
     tick_spacing: u16,
     price_ratio: f64,
     straight: bool,
-    sqrt_price_lower_x64: u128,
+    my_custom_value: u128,
 ) -> LiquidityRange {
     use raydium_amm_v3::libraries::fixed_point_64;
 
@@ -71,7 +82,6 @@ fn get_liquidity_range_impl(
     msg!("price upper: {}", price_upper);
 
     let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
-
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
     msg!("sqrt_price_lower_x64: {}", sqrt_price_lower_x64);

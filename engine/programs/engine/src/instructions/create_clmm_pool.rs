@@ -134,7 +134,7 @@ fn raydium_create_pool_impl(ctx: &mut Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_program.to_account_info(),
         &ctx.accounts.base_token_program.to_account_info(),
-        6.16 * 10f64.powi(-7),
+        7.18 * 10f64.powi(-7),
     )?;
     msg!("Order straight: {}", order.straight);
     let cpi_accounts = cpi::accounts::CreatePool {
