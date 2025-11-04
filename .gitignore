@@ -4,3 +4,5 @@ lightpaper/*
 CLAUDE.md
 .cursor
 engine/tests/resources/*
+engine/tmp
+target

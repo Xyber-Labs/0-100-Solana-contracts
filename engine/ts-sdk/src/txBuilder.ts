@@ -43,7 +43,7 @@ export class TxBuilder {
 
   async initLaunchIx(params: {
     creator: web3.PublicKey;
-    baseMint: web3.PublicKey; // used only as seed at init time
+    projectId: BN | number;
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -63,7 +63,17 @@ export class TxBuilder {
     projectCounter: web3.PublicKey;
     creatorGrant: web3.PublicKey;
   }> {
-    const [launchState] = this.getPda(["launch", params.baseMint]);
+    const projectIdLe = (() => {
+      if (BN.isBN(params.projectId as any)) {
+        const n = (params.projectId as BN).toArrayLike(Buffer, "le", 8);
+        return n;
+      }
+      const n = BigInt(params.projectId as number);
+      const buf = Buffer.alloc(8);
+      buf.writeBigUInt64LE(n);
+      return buf;
+    })();
+    const [launchState] = this.getPda(["launch", projectIdLe]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
     const [creatorGrant] = this.getPda(["creator", launchState]);
@@ -85,11 +95,10 @@ export class TxBuilder {
       };
 
     const instruction = await (this.program.methods as any)
-      .initLaunch(initParams)
+      .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
       .accountsStrict({
         creator: params.creator,
         launchState: launchState,
-        baseMint: params.baseMint,
         escrowAuthority: escrowAuthority,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
@@ -109,7 +118,7 @@ export class TxBuilder {
 
   async initLaunchTx(params: {
     creator: web3.PublicKey;
-    baseMint: web3.PublicKey | web3.Keypair; // used only as seed at init time
+    projectId: BN | number;
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -130,11 +139,6 @@ export class TxBuilder {
     creatorGrant: web3.PublicKey;
     signers: web3.Keypair[];
   }> {
-    const baseMintPubkey: web3.PublicKey = (params as any).baseMint?.publicKey &&
-      typeof (params as any).baseMint.publicKey?.toBuffer === "function"
-      ? (params.baseMint as any).publicKey
-      : (params.baseMint as web3.PublicKey);
-
     const {
       instruction: initLaunchIx,
       launchState,
@@ -142,7 +146,7 @@ export class TxBuilder {
       creatorGrant,
     } = await this.initLaunchIx({
       creator: params.creator,
-      baseMint: baseMintPubkey,
+      projectId: params.projectId,
       hardCapLamports: params.hardCapLamports,
       minRaiseLamports: params.minRaiseLamports,
       perWalletCap: params.perWalletCap,
@@ -807,6 +811,79 @@ export class TxBuilder {
       baseMint: baseMint,
       baseTokenAta,
       poolState,
+    };
+  }
+
+  async mintForTestTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    baseMint: web3.Keypair | web3.PublicKey; // create and initialize if Keypair provided
+    preIxs?: web3.TransactionInstruction[];
+  }): Promise<{
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    baseMint: web3.PublicKey;
+    baseTokenAta: web3.PublicKey;
+  }> {
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+
+    const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
+    const baseMint = (isKeypair
+      ? (params.baseMint as any).publicKey
+      : (params.baseMint as web3.PublicKey)
+    );
+
+    const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
+    if (isKeypair) {
+      const existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      if (!existing) {
+        const createMintAccountIx = web3.SystemProgram.createAccount({
+          fromPubkey: params.payer,
+          newAccountPubkey: baseMint,
+          space: 82,
+          lamports: await this.program.provider.connection.getMinimumBalanceForRentExemption(82),
+          programId: TOKEN_PROGRAM_ID,
+        });
+        const initializeMintIx = createInitializeMintInstruction(
+          baseMint,
+          6,
+          escrowAuthority,
+          null
+        );
+        maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
+      }
+    }
+
+    const baseTokenAta = getAssociatedTokenAddressSync(
+      baseMint,
+      escrowAuthority,
+      true
+    );
+
+    const ix = await (this.program.methods as any)
+      .mintForTest()
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        escrowAuthority: escrowAuthority,
+        baseMint: baseMint,
+        baseEscrowAta: baseTokenAta,
+        baseTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      } as any)
+      .instruction();
+
+    const transaction = new web3.Transaction();
+    if (params.preIxs?.length) transaction.add(...params.preIxs);
+    if (maybeCreateMintIxs.length) transaction.add(...maybeCreateMintIxs);
+    transaction.add(ix);
+
+    return {
+      transaction,
+      signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
+      baseMint,
+      baseTokenAta,
     };
   }
 

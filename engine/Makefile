@@ -89,6 +89,11 @@ build-sdk:
 build-all: build sync-idl build-sdk
 	@echo "Full build completed (program + IDL sync + SDK)!"
 
+.PHONY: build-all-test
+build-all-test: build-test sync-idl build-sdk
+	@echo "Full build completed (program + IDL sync + SDK)!"
+
+
 .PHONY: deploy
 deploy:
 	@echo "Deploying program..."
@@ -145,6 +150,11 @@ config-remote:
 config-devnet:
 	@echo "Setting Solana config to devnet..."
 	solana config set --url https://api.devnet.solana.com
+
+.PHONY: config-local
+config-local:
+	@echo "Setting Solana config to localnet..."
+	solana config set --url http://127.0.0.1:8899
 
 # Clean commands
 .PHONY: clean
@@ -235,3 +245,7 @@ litesvm:
 
 # Default target
 .DEFAULT_GOAL := help
+
+build-test:
+	anchor build -- --features test
+	make sync-idl

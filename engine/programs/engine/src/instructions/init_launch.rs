@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
-    state::{CreatorGrant, LaunchState, ProjectCounter}
+    state::{CreatorGrant, LaunchState, ProjectCounter},
 };
 use anchor_lang::{
     prelude::*,
@@ -11,6 +11,7 @@ use anchor_lang::{
 use anchor_spl::token::Token;
 
 #[derive(Accounts)]
+#[instruction(params: InitLaunchParams, project_id: u64)]
 pub struct InitLaunch<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
@@ -29,15 +30,12 @@ pub struct InitLaunch<'info> {
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", base_mint.key().as_ref()],
+        seeds = [SEED_ROOT, b"launch", &project_id.to_le_bytes()],
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
 
-    /// Base mint pubkey is used only for seeding the launch_state PDA at init time.
-    /// The mint account itself will be created later in create_clmm_pool.
-    /// CHECK: Only the public key is used as a seed.
-    pub base_mint: UncheckedAccount<'info>,
+    // base_mint removed from init; it will be created and recorded later during pool/mint setup
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -75,7 +73,7 @@ pub struct InitLaunchParams {
     pub creator_claim_lock_period_sec: i64,
 }
 
-pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
+pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_id: u64) -> Result<()> {
     require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
     require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
@@ -97,8 +95,11 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     );
 
     let counter = &mut ctx.accounts.project_counter;
-    let project_id =
-        counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let expected_next = counter
+        .last_project_id
+        .checked_add(1)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(project_id == expected_next, EngineErrorCode::Unauthorized);
     counter.last_project_id = project_id;
 
     let state = &mut ctx.accounts.launch_state;
@@ -138,7 +139,6 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     state.roster_finalized_up_to = -1;
     state.public_total_tickets = 0;
 
-    state.claims_open = false;
     state.tokens_per_ticket = None;
 
     // Initialize creator grant fields
@@ -217,7 +217,7 @@ pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result
     emit!(LaunchInitialized {
         project_id,
         creator: ctx.accounts.creator.key(),
-        base_mint: ctx.accounts.base_mint.key(),
+        base_mint: Pubkey::default(),
         hard_cap_lamports: params.hard_cap_lamports,
         min_raise_lamports: params.min_raise_lamports,
         per_wallet_cap: params.per_wallet_cap,

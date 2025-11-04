@@ -6,6 +6,9 @@
     "module": "commonjs",
     "target": "es6",
     "esModuleInterop": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@xyber-labs/0-100-sdk": ["./ts-sdk/src/engine"]
+    }
   }
 }

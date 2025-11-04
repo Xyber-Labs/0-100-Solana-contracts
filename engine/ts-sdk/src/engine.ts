@@ -46,6 +46,13 @@ const EngineSDK = {
       return txBuilder.getPda(["launch", baseMint]);
     }
 
+    function getLaunchPdaByProjectId(projectId: number | BN): [anchor.web3.PublicKey, number] {
+      const le = BN.isBN(projectId)
+        ? (projectId as BN).toArrayLike(Buffer, "le", 8)
+        : (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(projectId)); return b; })();
+      return txBuilder.getPda(["launch", le]);
+    }
+
     function getEscrowPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
       return txBuilder.getPda(["escrow_authority", launch]);
     }
@@ -112,12 +119,10 @@ const EngineSDK = {
     // =============================
 
     /**
-     * IMPORTANT: For claimTokens to work, the mint authority of baseMint
-     * must be PDA ["mint_auth", launch_state]. This can be computed in advance,
-     * because launch = PDA(["launch", baseMint]).
+     * Initialize a launch by sequential projectId. The base mint will be created later during pool setup.
      */
     async function initLaunch(args: {
-      baseMint: anchor.web3.PublicKey;
+      projectId?: BN | number; // optional for backward compatibility; will be auto-filled
       hardCapLamports: BN;
       minRaiseLamports: BN;
       perWalletCap: BN;
@@ -140,10 +145,11 @@ const EngineSDK = {
       signature: string;
     }> {
       const creatorPayer = args.creator?.publicKey ?? payer;
+      const projectId = args.projectId ?? (await getNextProjectId());
       const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
-          baseMint: args.baseMint,
+          projectId,
           hardCapLamports: args.hardCapLamports,
           minRaiseLamports: args.minRaiseLamports,
           perWalletCap: args.perWalletCap,
@@ -177,6 +183,34 @@ const EngineSDK = {
       }
       const signature = await provider.sendAndConfirm(tx, signers);
       return { launchPda: launchState, escrowPda: escrowAuthority, signature };
+    }
+
+    // Convenience: fetch next projectId and initialize launch in one call
+    async function initLaunchAuto(args: {
+      hardCapLamports: BN;
+      minRaiseLamports: BN;
+      perWalletCap: BN;
+      tauLamports: BN;
+      baseTotalAllocation: BN;
+      baseSaleBasisPoints: BN;
+      fundingDurationSeconds: number;
+      unlockTimeSec?: number;
+      rosterShardCap: number;
+      creatorInitialDepositLamports: BN;
+      creatorDailyLamportsLimit: BN;
+      creatorClaimLockPeriodSec: BN;
+      preInstructions?: anchor.web3.TransactionInstruction[];
+      signers?: anchor.web3.Keypair[];
+      creator?: anchor.web3.Keypair;
+    }): Promise<{
+      projectId: BN;
+      launchPda: anchor.web3.PublicKey;
+      escrowPda: anchor.web3.PublicKey;
+      signature: string;
+    }> {
+      const projectId = await getNextProjectId();
+      const res = await initLaunch({ ...args, projectId });
+      return { projectId, ...res };
     }
 
     async function initRoster(args: {
@@ -478,6 +512,34 @@ const EngineSDK = {
       };
     }
 
+    async function mintForTest(args: {
+      launch: anchor.web3.PublicKey;
+      baseMint?: anchor.web3.Keypair;
+    }): Promise<{
+      signature: string;
+      baseMint: anchor.web3.PublicKey;
+      baseTokenAta: anchor.web3.PublicKey;
+    }> {
+      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
+
+      const result = await txBuilder.mintForTestTx({
+        payer,
+        launch: args.launch,
+        baseMint,
+      });
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      // Note: observationKeypair is NOT a signer, it's just a writable account
+      const signature = await provider.sendAndConfirm(result.transaction, result.signers);
+      return {
+        signature,
+        baseMint: result.baseMint,
+        baseTokenAta: result.baseTokenAta,
+      };
+    }
+
     async function claimTokens(args: {
       launch: anchor.web3.PublicKey;
       baseMint: anchor.web3.PublicKey;
@@ -671,6 +733,16 @@ const EngineSDK = {
       return program.account.poolState.fetch(pda);
     }
 
+    async function getNextProjectId(): Promise<BN> {
+      try {
+        const counter: any = await fetchProjectCounter();
+        const last: BN = counter?.lastProjectId ?? new BN(0);
+        return last.add(new BN(1));
+      } catch (_) {
+        return new BN(1);
+      }
+    }
+
     // Get all launch states (projects) from the blockchain
     async function fetchAllProjects() {
       try {
@@ -701,6 +773,33 @@ const EngineSDK = {
         return projects;
       } catch (error) {
         console.error("Error fetching all projects:", error);
+        return [];
+      }
+    }
+
+    // Fetch projects created by a specific creator (on-chain memcmp filter)
+    async function fetchProjectsByCreator(creator: anchor.web3.PublicKey) {
+      try {
+        const filters = [
+          {
+            memcmp: {
+              // 8 (discriminator) + 8 (project_id) = 16
+              offset: 16,
+              bytes: creator.toBase58(),
+            },
+          },
+        ];
+        const accounts = await program.account.launchState.all(filters as any);
+        return accounts
+          .map((a) => ({
+            projectId: a.account.projectId.toNumber(),
+            launchPda: a.publicKey,
+            account: a.account,
+            baseMint: a.account.baseMint,
+          }))
+          .sort((a, b) => a.projectId - b.projectId);
+      } catch (error) {
+        console.error("Error fetching projects by creator:", error);
         return [];
       }
     }
@@ -738,9 +837,9 @@ const EngineSDK = {
     //        HIGH-LEVEL flows
     // =============================
 
-    /** Returns all PDAs for a given baseMint. Convenient for initialization. */
-    function deriveAllPdas(baseMint: anchor.web3.PublicKey) {
-      const [launch] = getLaunchPda(baseMint);
+    /** Returns all PDAs for a given projectId. Convenient for initialization. */
+    function deriveAllPdasByProjectId(projectId: number | BN) {
+      const [launch] = getLaunchPdaByProjectId(projectId);
       const [escrow] = getEscrowPda(launch);
       const [roster] = getRosterPda(launch);
       const [mintAuth] = getMintAuthPda(launch);
@@ -756,6 +855,7 @@ const EngineSDK = {
 
       // PDAs
       getLaunchPda,
+      getLaunchPdaByProjectId,
       getEscrowPda,
       getEscrowAuthorityPda,
       getRosterPda,
@@ -765,7 +865,7 @@ const EngineSDK = {
       getProjectCounterPda,
       getPoolPda,
       getCreatorGrantPda,
-      deriveAllPdas,
+      deriveAllPdas: deriveAllPdasByProjectId,
 
       // Utils
       getUserAta,
@@ -778,6 +878,7 @@ const EngineSDK = {
       deposit,
       withdraw,
       claimRefund,
+      initLaunchAuto,
       claimTokens,
       initRosterShard,
       finalizeRosterShard,
@@ -789,6 +890,7 @@ const EngineSDK = {
       claimCreatorRefundTx,
       preparePoolCreation,
       createClmmPool,
+      mintForTest,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
@@ -810,7 +912,9 @@ const EngineSDK = {
       fetchCreatorGrant,
       fetchProjectCounter,
       fetchPoolState,
+      getNextProjectId,
       fetchAllProjects,
+      fetchProjectsByCreator,
       findProjectById,
       getProjectByLaunchPda,
     };

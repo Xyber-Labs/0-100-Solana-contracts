@@ -22,8 +22,8 @@ pub mod engine {
     use super::*;
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
-    pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams) -> Result<()> {
-        instructions::init_launch(ctx, params)
+    pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_id: u64) -> Result<()> {
+        instructions::init_launch(ctx, params, project_id)
     }
 
     /// Initialize roster account.
@@ -91,5 +91,10 @@ pub mod engine {
 
     pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
+    }
+
+    #[cfg(feature = "test")]
+    pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
+        instructions::mint_for_test(ctx)
     }
 }

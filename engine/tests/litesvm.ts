@@ -63,11 +63,11 @@ describe("engine litesvm", () => {
   });
 
   it("Initializes the launch state correctly", async () => {
-    baseMint = anchor.web3.Keypair.generate();
+    const nextId = await sdk.getNextProjectId();
 
     const result = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      baseMint: baseMint,
+      projectId: nextId,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -104,7 +104,6 @@ describe("engine litesvm", () => {
     assert.equal(state.selectionProcessed, 0);
     assert.isNull(state.thresholdScore);
     assert.isNull(state.vrfSeed);
-    assert.isFalse(state.claimsOpen);
     assert.isNull(state.tokensPerTicket);
     assert.isNull(state.baseMint);
   });
@@ -116,11 +115,11 @@ describe("engine litesvm", () => {
   });
 
   it("Allows deposits", async () => {
-    const testBaseMint = anchor.web3.Keypair.generate();
+    const nextId = await sdk.getNextProjectId();
 
     const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      baseMint: testBaseMint,
+      projectId: nextId,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -179,11 +178,11 @@ describe("engine litesvm", () => {
   });
 
   it("Allows withdrawals", async () => {
-    const testBaseMint = anchor.web3.Keypair.generate();
+    const nextId = await sdk.getNextProjectId();
 
     const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
       creator: admin.publicKey,
-      baseMint: testBaseMint,
+      projectId: nextId,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -269,14 +268,11 @@ describe("engine litesvm", () => {
   });
 
   it("Project ID increments correctly", async () => {
-    const project1Mint = anchor.web3.Keypair.generate();
-    const project2Mint = anchor.web3.Keypair.generate();
-    const project3Mint = anchor.web3.Keypair.generate();
-
-    const [project1Launch] = sdk.getLaunchPda(project1Mint.publicKey);
+    const projectId1 = await sdk.getNextProjectId();
+    const [project1Launch] = sdk.getLaunchPdaByProjectId(projectId1);
 
     await sdk.initLaunch({
-      baseMint: project1Mint.publicKey,
+      projectId: projectId1,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -289,28 +285,13 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: project1Mint.publicKey,
-          space: 82,
-          lamports: 2039280, // Fixed rent exemption for 82 bytes
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          project1Mint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, project1Mint],
     });
 
-    const [project2Launch] = sdk.getLaunchPda(project2Mint.publicKey);
+    const projectId2 = await sdk.getNextProjectId();
+    const [project2Launch] = sdk.getLaunchPdaByProjectId(projectId2);
 
     await sdk.initLaunch({
-      baseMint: project2Mint.publicKey,
+      projectId: projectId2,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -323,28 +304,13 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: project2Mint.publicKey,
-          space: 82,
-          lamports: 2039280, // Fixed rent exemption for 82 bytes
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          project2Mint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, project2Mint],
     });
 
-    const [project3Launch] = sdk.getLaunchPda(project3Mint.publicKey);
+    const projectId3 = await sdk.getNextProjectId();
+    const [project3Launch] = sdk.getLaunchPdaByProjectId(projectId3);
 
     await sdk.initLaunch({
-      baseMint: project3Mint.publicKey,
+      projectId: projectId3,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
@@ -357,22 +323,6 @@ describe("engine litesvm", () => {
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
-      preInstructions: [
-        anchor.web3.SystemProgram.createAccount({
-          fromPubkey: admin.publicKey,
-          newAccountPubkey: project3Mint.publicKey,
-          space: 82,
-          lamports: 2039280, // Fixed rent exemption for 82 bytes
-          programId: TOKEN_PROGRAM_ID,
-        }),
-        createInitializeMintInstruction(
-          project3Mint.publicKey,
-          6,
-          admin.publicKey,
-          admin.publicKey
-        ),
-      ],
-      signers: [admin.payer, project3Mint],
     });
 
     const project1State = await sdk.fetchLaunch(project1Launch);
@@ -396,11 +346,11 @@ describe("engine litesvm", () => {
   });
 
   it("PDA derivation consistency", async () => {
-    const testMint = anchor.web3.Keypair.generate();
+    const projectId = await sdk.getNextProjectId();
 
-    const sdkPdas = sdk.deriveAllPdas(testMint.publicKey);
+    const sdkPdas = sdk.deriveAllPdas(projectId);
 
-    const [directLaunch] = sdk.getLaunchPda(testMint.publicKey);
+    const [directLaunch] = sdk.getLaunchPdaByProjectId(projectId);
     const [directEscrow] = sdk.getEscrowPda(directLaunch);
     const [directRoster] = sdk.getRosterPda(directLaunch);
     const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 0);
@@ -590,8 +540,9 @@ describe("engine litesvm", () => {
       creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
     }
 
+    const projectId = await sdk.getNextProjectId();
     const testBaseMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
+    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
     const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
     const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
 
@@ -634,12 +585,11 @@ describe("engine litesvm", () => {
         creatorInitialDepositLamports: creatorDepositAmount,
         creatorDailyLamportsLimit: dailyLimit,
         creatorClaimLockPeriodSec: new anchor.BN(2),
-      })
+      }, projectId)
       .accountsStrict({
         creator: admin.publicKey,
         projectCounter: sdk.getProjectCounterPda()[0],
         launchState: testLaunchState,
-        baseMint: testBaseMint.publicKey,
         escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
         creatorGrant: creatorGrant,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -780,8 +730,9 @@ describe("Full flow", () => {
       creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
     }
 
+    const projectId = await sdk.getNextProjectId();
     const testBaseMint = anchor.web3.Keypair.generate();
-    const [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
+    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
     const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
 
     const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
@@ -793,7 +744,7 @@ describe("Full flow", () => {
     console.log("=== Initializing Launch with Creator Deposit ===");
     // Initialize launch with creator deposit
     await sdk.initLaunch({
-      baseMint: testBaseMint.publicKey,
+      projectId,
       hardCapLamports: testHardCap,
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
