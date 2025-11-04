@@ -330,8 +330,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         ? new BN(0)
         : new BN(Math.floor(new BN(launchConfig.saleAllocation).toNumber() * 10000 / baseTotalAllocationBN.toNumber()));
 
+      let lastProjectId = 0;
+      try {
+        const counter: any = await sdk.fetchProjectCounter();
+        lastProjectId = (counter?.lastProjectId?.toNumber && counter.lastProjectId.toNumber()) || 0;
+      } catch (_) {
+        lastProjectId = 0;
+      }
+      const projectId = lastProjectId + 1;
       const res = await sdk.initLaunch({
-        baseMint: baseMintKeypair.publicKey,
+        projectId,
         hardCapLamports: new BN(launchConfig.hardCapLamports),
         minRaiseLamports: new BN(launchConfig.minRaiseLamports),
         perWalletCap: new BN(launchConfig.perWalletCap),

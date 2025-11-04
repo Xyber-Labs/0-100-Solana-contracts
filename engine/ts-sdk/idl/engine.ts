@@ -1551,18 +1551,11 @@ export type Engine = {
                 ]
               },
               {
-                "kind": "account",
-                "path": "baseMint"
+                "kind": "arg",
+                "path": "projectId"
               }
             ]
           }
-        },
-        {
-          "name": "baseMint",
-          "docs": [
-            "Base mint pubkey is used only for seeding the launch_state PDA at init time.",
-            "The mint account itself will be created later in create_clmm_pool."
-          ]
         },
         {
           "name": "escrowAuthority",
@@ -1675,6 +1668,10 @@ export type Engine = {
               "name": "initLaunchParams"
             }
           }
+        },
+        {
+          "name": "projectId",
+          "type": "u64"
         }
       ]
     },

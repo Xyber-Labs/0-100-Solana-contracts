@@ -46,6 +46,13 @@ const EngineSDK = {
       return txBuilder.getPda(["launch", baseMint]);
     }
 
+    function getLaunchPdaByProjectId(projectId: number | BN): [anchor.web3.PublicKey, number] {
+      const le = BN.isBN(projectId)
+        ? (projectId as BN).toArrayLike(Buffer, "le", 8)
+        : (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(projectId)); return b; })();
+      return txBuilder.getPda(["launch", le]);
+    }
+
     function getEscrowPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
       return txBuilder.getPda(["escrow_authority", launch]);
     }
@@ -112,12 +119,10 @@ const EngineSDK = {
     // =============================
 
     /**
-     * IMPORTANT: For claimTokens to work, the mint authority of baseMint
-     * must be PDA ["mint_auth", launch_state]. This can be computed in advance,
-     * because launch = PDA(["launch", baseMint]).
+     * Initialize a launch by sequential projectId. The base mint will be created later during pool setup.
      */
     async function initLaunch(args: {
-      baseMint: anchor.web3.PublicKey;
+      projectId?: BN | number; // optional for backward compatibility; will be auto-filled
       hardCapLamports: BN;
       minRaiseLamports: BN;
       perWalletCap: BN;
@@ -140,10 +145,11 @@ const EngineSDK = {
       signature: string;
     }> {
       const creatorPayer = args.creator?.publicKey ?? payer;
+      const projectId = args.projectId ?? (await getNextProjectId());
       const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
-          baseMint: args.baseMint,
+          projectId,
           hardCapLamports: args.hardCapLamports,
           minRaiseLamports: args.minRaiseLamports,
           perWalletCap: args.perWalletCap,
@@ -699,6 +705,16 @@ const EngineSDK = {
       return program.account.poolState.fetch(pda);
     }
 
+    async function getNextProjectId(): Promise<BN> {
+      try {
+        const counter: any = await fetchProjectCounter();
+        const last: BN = counter?.lastProjectId ?? new BN(0);
+        return last.add(new BN(1));
+      } catch (_) {
+        return new BN(1);
+      }
+    }
+
     // Get all launch states (projects) from the blockchain
     async function fetchAllProjects() {
       try {
@@ -766,9 +782,9 @@ const EngineSDK = {
     //        HIGH-LEVEL flows
     // =============================
 
-    /** Returns all PDAs for a given baseMint. Convenient for initialization. */
-    function deriveAllPdas(baseMint: anchor.web3.PublicKey) {
-      const [launch] = getLaunchPda(baseMint);
+    /** Returns all PDAs for a given projectId. Convenient for initialization. */
+    function deriveAllPdasByProjectId(projectId: number | BN) {
+      const [launch] = getLaunchPdaByProjectId(projectId);
       const [escrow] = getEscrowPda(launch);
       const [roster] = getRosterPda(launch);
       const [mintAuth] = getMintAuthPda(launch);
@@ -784,6 +800,7 @@ const EngineSDK = {
 
       // PDAs
       getLaunchPda,
+      getLaunchPdaByProjectId,
       getEscrowPda,
       getEscrowAuthorityPda,
       getRosterPda,
@@ -793,7 +810,7 @@ const EngineSDK = {
       getProjectCounterPda,
       getPoolPda,
       getCreatorGrantPda,
-      deriveAllPdas,
+      deriveAllPdas: deriveAllPdasByProjectId,
 
       // Utils
       getUserAta,
@@ -839,6 +856,7 @@ const EngineSDK = {
       fetchCreatorGrant,
       fetchProjectCounter,
       fetchPoolState,
+      getNextProjectId,
       fetchAllProjects,
       findProjectById,
       getProjectByLaunchPda,

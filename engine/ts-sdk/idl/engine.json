@@ -1545,18 +1545,11 @@
                 ]
               },
               {
-                "kind": "account",
-                "path": "base_mint"
+                "kind": "arg",
+                "path": "project_id"
               }
             ]
           }
-        },
-        {
-          "name": "base_mint",
-          "docs": [
-            "Base mint pubkey is used only for seeding the launch_state PDA at init time.",
-            "The mint account itself will be created later in create_clmm_pool."
-          ]
         },
         {
           "name": "escrow_authority",
@@ -1669,6 +1662,10 @@
               "name": "InitLaunchParams"
             }
           }
+        },
+        {
+          "name": "project_id",
+          "type": "u64"
         }
       ]
     },

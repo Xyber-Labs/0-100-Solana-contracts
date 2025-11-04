@@ -10,3 +10,4 @@ deploy-keypair.json
 .venv
 log*.txt
 engine/tests/resources/*
+engine/ts-sdk/*.tgz

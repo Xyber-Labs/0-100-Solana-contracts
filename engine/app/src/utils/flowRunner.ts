@@ -124,7 +124,15 @@ export async function runFullFlow(
     addLog(`Available SDK methods: ${Object.keys(sdk).join(', ')}`);
 
     const testBaseMint = Keypair.generate();
-    [testLaunchState] = sdk.getLaunchPda(testBaseMint.publicKey);
+    let lastProjectId = 0;
+    try {
+      const counter: any = await sdk.fetchProjectCounter();
+      lastProjectId = (counter?.lastProjectId?.toNumber && counter.lastProjectId.toNumber()) || 0;
+    } catch (_) {
+      lastProjectId = 0;
+    }
+    const projectId = lastProjectId + 1;
+    [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
     const [escrow] = sdk.getEscrowPda(testLaunchState);
     const [projectCounter] = sdk.getProjectCounterPda();
 
@@ -167,7 +175,7 @@ export async function runFullFlow(
     }
 
     const initRes = await sdk.initLaunch({
-      baseMint: testBaseMint.publicKey,
+      projectId,
       hardCapLamports: new BN(config.hardCapLamports),
       minRaiseLamports: new BN(config.minRaiseLamports),
       perWalletCap: new BN(config.perWalletCap),
