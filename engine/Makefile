@@ -135,12 +135,6 @@ setup: validator-bg build-all deploy test
 setup-quick: build-all deploy test-quick
 	@echo "Quick setup completed!"
 
-# Configuration commands
-.PHONY: config-local
-config-local:
-	@echo "Setting Solana config to localhost..."
-	solana config set --url $(SOLANA_URL)
-
 .PHONY: config-remote
 config-remote:
 	@echo "Setting Solana config to remote server..."

@@ -3450,6 +3450,15 @@ export type Engine = {
             "type": "pubkey"
           },
           {
+            "name": "pendingKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
             "name": "hardCapLamports",
             "type": "u64"
           },

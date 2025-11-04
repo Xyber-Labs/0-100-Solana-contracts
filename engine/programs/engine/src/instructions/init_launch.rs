@@ -4,11 +4,22 @@ use crate::{
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
     state::{CreatorGrant, LaunchState, ProjectCounter},
 };
+use anchor_lang::solana_program::keccak;
 use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock::Clock, Sysvar},
 };
 use anchor_spl::token::Token;
+
+fn make_pending_key(creator: &Pubkey, project_id: u64) -> [u8; 32] {
+    let h = keccak::hashv(&[
+        b"xyber|pending|v1",
+        creator.as_ref(),
+        &project_id.to_le_bytes(),
+        crate::ID.as_ref(),
+    ]);
+    h.to_bytes()
+}
 
 #[derive(Accounts)]
 #[instruction(params: InitLaunchParams, project_id: u64)]
@@ -218,11 +229,14 @@ pub fn init_launch(
         });
     }
 
+    let pending_key = make_pending_key(&ctx.accounts.creator.key(), project_id);
+
     emit!(LaunchInitialized {
         project_id,
         creator: ctx.accounts.creator.key(),
         creator_max_deposit: params.creator_max_deposit,
         base_mint: Pubkey::default(),
+        pending_key: pending_key,
         hard_cap_lamports: params.hard_cap_lamports,
         min_raise_lamports: params.min_raise_lamports,
         per_wallet_cap: params.per_wallet_cap,
@@ -238,4 +252,26 @@ pub fn init_launch(
     });
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_pending_key() {
+        use std::str::FromStr;
+        // Human-readable base58 Pubkey (System Program for example)
+        let creator = Pubkey::from_str("11111111111111111111111111111111").unwrap();
+        let project_id = 1;
+        let pending_key = make_pending_key(&creator, project_id);
+        assert_eq!(pending_key.len(), 32);
+        assert_eq!(
+            pending_key,
+            [
+                201, 110, 224, 164, 248, 161, 196, 49, 95, 41, 70, 183, 131, 211, 72, 136, 12, 37,
+                225, 198, 22, 64, 9, 133, 173, 80, 226, 216, 36, 249, 214, 112
+            ]
+        );
+    }
 }
