@@ -150,44 +150,6 @@ export type Engine = {
           }
         },
         {
-          "name": "poolState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "quoteMint"
         },
         {
@@ -248,6 +210,39 @@ export type Engine = {
           }
         },
         {
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydiumProgram"
+            }
+          }
+        },
+        {
           "name": "raydiumPoolState",
           "writable": true
         },
@@ -269,10 +264,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "raydiumMetadataAccount",
-          "writable": true
-        },
-        {
           "name": "raydiumPersonalPosition",
           "writable": true
         },
@@ -289,9 +280,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "metadataProgram"
-        },
-        {
           "name": "token2022Program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
@@ -299,7 +287,8 @@ export type Engine = {
           "name": "quoteTokenProgram"
         },
         {
-          "name": "baseTokenProgram"
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "associatedTokenProgram",
@@ -314,7 +303,20 @@ export type Engine = {
           "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "baseAmount",
+          "type": "u64"
+        },
+        {
+          "name": "quoteAmount",
+          "type": "u64"
+        },
+        {
+          "name": "sqrtPriceLowerX64",
+          "type": "u128"
+        }
+      ]
     },
     {
       "name": "claimCreatorRefund",
@@ -1394,10 +1396,41 @@ export type Engine = {
           }
         },
         {
-          "name": "quoteMint"
+          "name": "quoteMint",
+          "address": "So11111111111111111111111111111111111111112"
         },
         {
-          "name": "raydiumAmmConfig"
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "raydiumProgram"
+            }
+          }
         },
         {
           "name": "raydiumPoolState",
@@ -1927,6 +1960,101 @@ export type Engine = {
       ]
     },
     {
+      "name": "getLiquidityRange",
+      "discriminator": [
+        64,
+        75,
+        195,
+        159,
+        13,
+        177,
+        250,
+        1
+      ],
+      "accounts": [
+        {
+          "name": "launchState"
+        },
+        {
+          "name": "raydiumAmmConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  109,
+                  109,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  0,
+                  4
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                165,
+                213,
+                202,
+                158,
+                4,
+                207,
+                93,
+                181,
+                144,
+                183,
+                20,
+                186,
+                47,
+                227,
+                44,
+                177,
+                89,
+                19,
+                63,
+                193,
+                193,
+                146,
+                183,
+                34,
+                87,
+                253,
+                7,
+                211,
+                156,
+                176,
+                64,
+                30
+              ]
+            }
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "sqrtPriceLowerX64",
+          "type": "u128"
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "liquidityRange"
+        }
+      }
+    },
+    {
       "name": "initLaunch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -2371,120 +2499,6 @@ export type Engine = {
               }
             ]
           }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "mintForTest",
-      "discriminator": [
-        220,
-        129,
-        50,
-        237,
-        118,
-        129,
-        46,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "baseMint",
-          "writable": true
-        },
-        {
-          "name": "baseEscrowAta",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrowAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "baseTokenProgram"
-              },
-              {
-                "kind": "account",
-                "path": "baseMint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "associatedTokenProgram"
-            }
-          }
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
           "name": "systemProgram",
@@ -4036,6 +4050,30 @@ export type Engine = {
       }
     },
     {
+      "name": "liquidityRange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tickArrayLower",
+            "type": "i32"
+          },
+          {
+            "name": "tickArrayLowerStartIndex",
+            "type": "i32"
+          },
+          {
+            "name": "tickArrayUpper",
+            "type": "i32"
+          },
+          {
+            "name": "tickArrayUpperStartIndex",
+            "type": "i32"
+          }
+        ]
+      }
+    },
+    {
       "name": "poolCreated",
       "type": {
         "kind": "struct",
@@ -4515,6 +4553,11 @@ export type Engine = {
     }
   ],
   "constants": [
+    {
+      "name": "ammConfigIndex",
+      "type": "u16",
+      "value": "4"
+    },
     {
       "name": "seedRoot",
       "type": "bytes",

@@ -1042,6 +1042,9 @@ export class TxBuilder {
     ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
+    baseAmount: BN;
+    quoteAmount: BN;
+    sqrtPriceLowerX64: BN;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
@@ -1163,7 +1166,7 @@ export class TxBuilder {
 
     const [poolState] = this.getPda(["pool", params.launch]);
     const addLiquidityIx = await this.program.methods
-      .addClmmLiquidity()
+      .addClmmLiquidity(params.baseAmount, params.quoteAmount, params.sqrtPriceLowerX64)
       .accountsStrict({
         payer: params.payer,
         raydiumProgram: params.clmmProgram,
@@ -1171,20 +1174,17 @@ export class TxBuilder {
         baseMint: baseMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
-        poolState,
         quoteMint: params.quoteMint,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
         raydiumPositionNftMint: positionNftMint.publicKey,
         raydiumPositionNftAccount: positionNftAccount,
-        raydiumMetadataAccount: metadataAccount,
         raydiumPersonalPosition: personalPosition,
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
         quoteTokenAta: quoteTokenAta,
-        metadataProgram: METADATA_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
@@ -1192,6 +1192,11 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
       } as any)
+      .remainingAccounts([
+        { pubkey: metadataAccount, isSigner: false, isWritable: false },
+        { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: poolState, isSigner: false, isWritable: false },
+      ])
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({

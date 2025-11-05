@@ -1,12 +1,18 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
+    token::Token,
     token_2022::Token2022,
     token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
-use raydium_amm_v3::program::AmmV3;
+use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
-use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT, TEAM_BASIS_POINTS};
+use crate::{
+    constants::AMM_CONFIG_INDEX,
+    utils::clmm::get_liquidity_range_impl,
+    LaunchState,
+    SEED_ROOT,
+};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -36,9 +42,6 @@ pub struct AddClmmLiquidity<'info> {
     )]
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
-    pub pool_state: Account<'info, PoolState>,
-
     #[account(
         mint::token_program = quote_token_program,
         address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
@@ -53,6 +56,9 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::token_program = quote_token_program,
     )]
     pub quote_token_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
+    pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
 
     /// CHECK: Pool state PDA (created by Raydium)
     #[account(mut)]
@@ -70,9 +76,6 @@ pub struct AddClmmLiquidity<'info> {
     /// CHECK: Position NFT account
     #[account(mut)]
     pub raydium_position_nft_account: UncheckedAccount<'info>,
-    /// CHECK: Position metadata account
-    #[account(mut)]
-    pub raydium_metadata_account: UncheckedAccount<'info>,
     /// CHECK: Personal position state
     #[account(mut)]
     pub raydium_personal_position: UncheckedAccount<'info>,
@@ -86,13 +89,11 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub raydium_tick_array_upper: UncheckedAccount<'info>,
 
-    /// CHECK: Metadata program
-    pub metadata_program: UncheckedAccount<'info>,
 
     pub token_2022_program: Program<'info, Token2022>,
 
     pub quote_token_program: Interface<'info, TokenInterface>,
-    pub base_token_program: Interface<'info, TokenInterface>,
+    pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
@@ -102,47 +103,31 @@ pub struct AddClmmLiquidity<'info> {
 ///
 /// Requires 400,000-600,000 compute units due to complex CPI operations with Raydium.
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
-pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-    add_initial_liquidity(&ctx)?;
-    let now = Clock::get()?.unix_timestamp;
-    let launch_state = &mut ctx.accounts.launch_state;
-    launch_state.claims_opened_at = Some(now);
-    ctx.accounts.pool_state.claims_ready = true;
-    emit!(ClaimsOpened {
-        launch: launch_state.key(),
-        opened_at: now,
-    });
-    Ok(())
+pub fn add_clmm_liquidity<'info>(
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    base_amount: u64,
+    quote_amount: u64,
+    sqrt_price_lower_x64: u128,
+) -> Result<()> {
+    add_initial_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
 }
 
-fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
-    let total_allocation = ctx.accounts.launch_state.base_total_allocation;
-    let sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
-    require!(
-        sale_bps <= 10_000u64.saturating_sub(TEAM_BASIS_POINTS),
-        ErrorCode::InvalidShareSum
-    );
-    let sale_allocation = total_allocation
-        .checked_mul(sale_bps)
-        .and_then(|v| v.checked_div(10_000))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let team_allocation = total_allocation
-        .checked_mul(TEAM_BASIS_POINTS)
-        .and_then(|v| v.checked_div(10_000))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let lp_allocation = total_allocation
-        .checked_sub(sale_allocation)
-        .and_then(|v| v.checked_sub(team_allocation))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+const RENT_RESERVE: u64 = 200_000_000;
 
-    let params = StakingCalculator::new(
-        ctx.accounts.launch_state.total_deposited,
-        sale_allocation,
-        lp_allocation,
-    )
-    .get_pool_params()?;
+fn add_initial_liquidity<'info>(
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    base_amount: u64,
+    quote_amount: u64,
+    sqrt_price_lower_x64: u128,
+) -> Result<()> {
+    msg!("=== Input Parameters ===");
+    msg!("Base amount: {}", base_amount);
+    msg!("Quote amount: {}", quote_amount);
 
-    let liquidity = params.quote_volume / 10;
+    let available_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
+    let transfer_amount = available_balance.saturating_sub(RENT_RESERVE);
+    msg!("Available balance on escrow_authority: {}", available_balance);
+    msg!("Transfer amount (after rent reserve): {}", transfer_amount);
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -162,34 +147,34 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
             },
             signers,
         ),
-        params.quote_volume,
+        quote_amount,
     )?;
+    msg!("Transferred {} lamports to WSOL ATA", quote_amount);
 
-    anchor_lang::solana_program::program::invoke(
-        &anchor_spl::token::spl_token::instruction::sync_native(
-            &ctx.accounts.quote_token_program.key(),
-            &ctx.accounts.quote_token_ata.key(),
-        )?,
-        &[ctx.accounts.quote_token_ata.to_account_info()],
-    )?;
+    anchor_spl::token_interface::sync_native(CpiContext::new(
+        ctx.accounts.quote_token_program.to_account_info(),
+        anchor_spl::token_interface::SyncNative {
+            account: ctx.accounts.quote_token_ata.to_account_info(),
+        },
+    ))?;
+    msg!("Synced native for WSOL ATA");
 
-    let order = TokenOrder::new(
+    let order = OpenPositionOrder::new(
         &ctx.accounts.quote_mint.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.raydium_quote_vault.to_account_info(),
         &ctx.accounts.raydium_base_vault.to_account_info(),
         &ctx.accounts.quote_token_ata.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
-        params.quote_volume,
-        params.base_volume,
+        quote_amount,
+        base_amount,
     );
 
-    let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionV2 {
+    let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
         payer: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
-        metadata_account: ctx.accounts.raydium_metadata_account.to_account_info(),
         pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
         protocol_position: ctx.accounts.raydium_protocol_position.to_account_info(),
         tick_array_lower: ctx.accounts.raydium_tick_array_lower.to_account_info(),
@@ -203,7 +188,6 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         system_program: ctx.accounts.system_program.to_account_info(),
         token_program: ctx.accounts.base_token_program.to_account_info(),
         associated_token_program: ctx.accounts.associated_token_program.to_account_info(),
-        metadata_program: ctx.accounts.metadata_program.to_account_info(),
         token_program_2022: ctx.accounts.token_2022_program.to_account_info(),
         vault_0_mint: order.token_mint_0,
         vault_1_mint: order.token_mint_1,
@@ -213,78 +197,36 @@ fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
         ctx.accounts.raydium_program.to_account_info(),
         cpi_accounts,
         signers,
+    )
+    .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+
+    let token_0_value = order.amount_0;
+    let token_1_value = order.amount_1;
+
+    let range = get_liquidity_range_impl(
+        ctx.accounts.raydium_amm_config.tick_spacing,
+        7.16 * 10f64.powi(-7),
+        order.base_flag.unwrap(),
+        sqrt_price_lower_x64,
     );
 
-    raydium_amm_v3::cpi::open_position_v2(
+    raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
-        params.tick_lower_index,
-        params.tick_upper_index,
-        params.tick_array_lower_start_index,
-        params.tick_array_upper_start_index,
-        u128::from(liquidity),
-        order.amount_0,
-        order.amount_1,
-        false,
-        None,
+        range.tick_array_lower,
+        range.tick_array_upper,
+        range.tick_array_lower_start_index,
+        range.tick_array_upper_start_index,
+        0,
+        token_0_value,
+        token_1_value,
+        true,
+        order.base_flag,
     )?;
 
     Ok(())
 }
 
-struct StakingCalculator {
-    raised_lamports: u64,
-    sale_allocation: u64,
-    lp_allocation: u64,
-}
-
-struct RaydiumPoolParams {
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
-    base_volume: u64,
-    quote_volume: u64,
-}
-
-impl StakingCalculator {
-    fn new(raised_lamports: u64, sale_allocation: u64, lp_allocation: u64) -> Self {
-        Self {
-            raised_lamports,
-            sale_allocation,
-            lp_allocation,
-        }
-    }
-
-    fn get_pool_params(&self) -> Result<RaydiumPoolParams> {
-        let tick_lower_index = 0i32;
-        let tick_upper_index = 443580i32;
-
-        let tick_spacing = 60i32;
-        let tick_array_size = 60i32;
-        let ticks_in_array = tick_spacing * tick_array_size;
-
-        let tick_array_lower_start_index = (tick_lower_index / ticks_in_array) * ticks_in_array;
-        let tick_array_upper_start_index = (tick_upper_index / ticks_in_array) * ticks_in_array;
-
-        let base_volume = self.lp_allocation;
-        let quote_volume = u128::from(self.lp_allocation)
-            .checked_mul(u128::from(self.raised_lamports))
-            .and_then(|v| v.checked_div(u128::from(self.sale_allocation)))
-            .and_then(|v| u64::try_from(v).ok())
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-        Ok(RaydiumPoolParams {
-            tick_lower_index,
-            tick_upper_index,
-            tick_array_lower_start_index,
-            tick_array_upper_start_index,
-            base_volume,
-            quote_volume,
-        })
-    }
-}
-
-struct TokenOrder<'info> {
+struct OpenPositionOrder<'info> {
     token_mint_0: AccountInfo<'info>,
     token_mint_1: AccountInfo<'info>,
     token_vault_0: AccountInfo<'info>,
@@ -293,9 +235,10 @@ struct TokenOrder<'info> {
     token_account_1: AccountInfo<'info>,
     amount_0: u64,
     amount_1: u64,
+    base_flag: Option<bool>,
 }
 
-impl<'info> TokenOrder<'info> {
+impl<'info> OpenPositionOrder<'info> {
     fn new(
         quote_mint: &AccountInfo<'info>,
         base_mint: &AccountInfo<'info>,
@@ -316,6 +259,7 @@ impl<'info> TokenOrder<'info> {
                 token_account_1: base_account.clone(),
                 amount_0: quote_amount,
                 amount_1: base_amount,
+                base_flag: Some(false),
             }
         } else {
             Self {
@@ -327,6 +271,7 @@ impl<'info> TokenOrder<'info> {
                 token_account_1: quote_account.clone(),
                 amount_0: base_amount,
                 amount_1: quote_amount,
+                base_flag: Some(true),
             }
         }
     }

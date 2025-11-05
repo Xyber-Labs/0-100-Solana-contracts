@@ -11,6 +11,7 @@ pub use finalize_roster_shard::*;
 pub use init_launch::*;
 pub use init_roster::*;
 pub use init_roster_shard::*;
+pub use get_liquidity_range::*;
 #[cfg(feature = "test")]
 pub use mint_for_test::*;
 pub use prepare_pool_creation::*;
@@ -32,6 +33,7 @@ mod finalize_roster_shard;
 mod init_launch;
 mod init_roster;
 mod init_roster_shard;
+mod get_liquidity_range;
 #[cfg(feature = "test")]
 mod mint_for_test;
 mod prepare_pool_creation;

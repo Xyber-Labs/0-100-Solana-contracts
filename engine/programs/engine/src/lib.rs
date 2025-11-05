@@ -5,6 +5,7 @@ use constants::*;
 use state::*;
 
 use crate::instructions::*;
+use crate::utils::clmm::LiquidityRange;
 
 mod constants;
 pub mod errors;
@@ -22,7 +23,11 @@ pub mod engine {
     use super::*;
 
     /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
-    pub fn init_launch(ctx: Context<InitLaunch>, params: InitLaunchParams, project_id: u64) -> Result<()> {
+    pub fn init_launch(
+        ctx: Context<InitLaunch>,
+        params: InitLaunchParams,
+        project_id: u64,
+    ) -> Result<()> {
         instructions::init_launch(ctx, params, project_id)
     }
 
@@ -89,8 +94,13 @@ pub mod engine {
         instructions::create_clmm_pool(ctx)
     }
 
-    pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
-        instructions::add_clmm_liquidity(ctx)
+    pub fn add_clmm_liquidity<'info>(
+        ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+        base_amount: u64,
+        quote_amount: u64,
+        sqrt_price_lower_x64: u128,
+    ) -> Result<()> {
+        instructions::add_clmm_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
     }
 
     /// Creator can increase special deposit during funding window
@@ -114,5 +124,12 @@ pub mod engine {
 
     pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
         instructions::claim_team_tokens(ctx)
+    }
+
+    pub fn get_liquidity_range(
+        ctx: Context<GetLiquidityRange>,
+        sqrt_price_lower_x64: u128,
+    ) -> Result<LiquidityRange> {
+        instructions::get_liquidity_range(ctx, sqrt_price_lower_x64)
     }
 }
