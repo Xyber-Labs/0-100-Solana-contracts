@@ -53,7 +53,10 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     let current_time = Clock::get()?.unix_timestamp;
     let funding_period_end = launch_state.funding_period_end;
-    let funding_period_expired = current_time >= funding_period_end;
+    let effective_end = funding_period_end
+        .checked_add(launch_state.pool_creation_grace_period_sec)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let funding_period_expired = current_time >= effective_end;
 
     let mut valid_slot = 0u64;
     let mut valid_hash = [0u8; 32];

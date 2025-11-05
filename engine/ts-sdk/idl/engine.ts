@@ -3813,6 +3813,10 @@ export type Engine = {
           {
             "name": "creatorMaxDeposit",
             "type": "u64"
+          },
+          {
+            "name": "poolCreationGracePeriodSec",
+            "type": "i64"
           }
         ]
       }
@@ -4022,6 +4026,10 @@ export type Engine = {
           },
           {
             "name": "fundingPeriodStart",
+            "type": "i64"
+          },
+          {
+            "name": "poolCreationGracePeriodSec",
             "type": "i64"
           }
         ]
