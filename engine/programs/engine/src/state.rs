@@ -53,6 +53,8 @@ pub struct LaunchState {
     pub creator_max_deposit: u64,
     pub roster_shard_cap: u16,
     pub clmm_base_mint: Option<Pubkey>,
+    // --- appended for upgrade safety ---
+    pub funding_period_start: i64,
 }
 
 impl LaunchState {

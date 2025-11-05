@@ -60,6 +60,7 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
+    saleStartTimeSec?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
@@ -97,6 +98,7 @@ export class TxBuilder {
         baseTotalAllocation: params.baseTotalAllocation,
         baseSaleBasisPoints: params.baseSaleBasisPoints,
         fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+        saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
         unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
         rosterShardCap: params.rosterShardCap,
         creatorInitialDepositLamports: params.creatorInitialDepositLamports,
@@ -137,6 +139,7 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
+    saleStartTimeSec?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
     creatorInitialDepositLamports: BN;
@@ -166,6 +169,7 @@ export class TxBuilder {
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
       fundingDurationSeconds: params.fundingDurationSeconds,
+      saleStartTimeSec: params.saleStartTimeSec ?? 0,
       unlockTimeSec: params.unlockTimeSec ?? 0,
       rosterShardCap: params.rosterShardCap,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,

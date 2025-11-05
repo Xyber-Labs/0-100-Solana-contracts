@@ -32,6 +32,7 @@ pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()
     require!(amount > 0, EngineErrorCode::Unauthorized);
     let now = Clock::get()?.unix_timestamp;
     let state = &mut ctx.accounts.launch_state;
+    require!(now >= state.funding_period_start, EngineErrorCode::FundingPeriodNotStarted);
     require!(now < state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
     require!(amount % state.tau_lamports == 0, EngineErrorCode::InvalidCreatorDeposit);
 

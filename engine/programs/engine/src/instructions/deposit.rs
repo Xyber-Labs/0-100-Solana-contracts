@@ -39,6 +39,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     // Check if funding period is still active
     let current_time = Clock::get()?.unix_timestamp;
+    require!(current_time >= launch_state.funding_period_start, EngineErrorCode::FundingPeriodNotStarted);
     require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
     require!(
         amount > 0 && amount % launch_state.tau_lamports == 0,

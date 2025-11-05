@@ -239,8 +239,8 @@ get-program-id:
 logs:
 	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
-litesvm: build-all
-	anchor run litesvm-full && anchor run litesvm-basic && anchor run litesvm-raydium
+litesvm: build-test
+	anchor run litesvm-full && anchor run litesvm-basic
 
 # Default target
 .DEFAULT_GOAL := help
