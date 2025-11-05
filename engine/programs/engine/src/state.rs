@@ -55,6 +55,7 @@ pub struct LaunchState {
     pub clmm_base_mint: Option<Pubkey>,
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
+    pub pool_creation_grace_period_sec: i64,
 }
 
 impl LaunchState {

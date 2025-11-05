@@ -5,7 +5,10 @@ use crate::{
     state::{LaunchState, PoolState},
     utils::pool,
 };
-use anchor_lang::{prelude::*, solana_program::sysvar};
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{self, clock::Clock, Sysvar},
+};
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -48,55 +51,73 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
-    // Get the SlotHashes sysvar
-    let slot_hashes = &ctx.accounts.slot_hashes;
-    let data = slot_hashes.try_borrow_data()?;
+    let current_time = Clock::get()?.unix_timestamp;
+    let funding_period_end = launch_state.funding_period_end;
+    let funding_period_expired = current_time >= funding_period_end;
 
-    // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
-    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
-    require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
-
-    let hashes_to_check = std::cmp::min(512, num_hashes);
-    let mut found_valid_hash = false;
     let mut valid_slot = 0u64;
     let mut valid_hash = [0u8; 32];
 
-    // The SlotHashes sysvar is a LIFO queue. The most recent hash is at index 0.
-    // We iterate forwards, from most recent to oldelaunch_state.
-    for i in 0..hashes_to_check {
-        // Position is calculated as: 8 bytes (for num_hashes) + i * 40 bytes (size of each SlotHash entry)
-        let hash_pos = 8u64
-            .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let slot_pos = hash_pos;
-        let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?; // 8 bytes for slot
+    if funding_period_expired {
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
 
-        let slot = u64::from_le_bytes(
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
+
+        let slot_pos = 8u64;
+        let blockhash_pos = slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+        valid_slot = u64::from_le_bytes(
             data[slot_pos as usize
                 ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
                 .try_into()
                 .unwrap(),
         );
-        let blockhash: [u8; 32] = data[blockhash_pos as usize
+        valid_hash = data[blockhash_pos as usize
             ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
             .try_into()
             .unwrap();
+    } else {
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        let data = slot_hashes.try_borrow_data()?;
 
-        // msg!("Checking slot: {}, blockhash: {:?}", slot, blockhash);
+        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
-        let num_partitions = pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec);
-        // Check if this blockhash is within the project's personal range
-        if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, num_partitions)
-        {
-            found_valid_hash = true;
-            valid_slot = slot;
-            valid_hash = blockhash;
-            break;
+        let hashes_to_check = std::cmp::min(512, num_hashes);
+        let mut found_valid_hash = false;
+
+        for i in 0..hashes_to_check {
+            let hash_pos = 8u64
+                .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            let slot_pos = hash_pos;
+            let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+            let slot = u64::from_le_bytes(
+                data[slot_pos as usize
+                    ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                    .try_into()
+                    .unwrap(),
+            );
+            let blockhash: [u8; 32] = data[blockhash_pos as usize
+                ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                .try_into()
+                .unwrap();
+
+            let num_partitions = pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec);
+            if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, num_partitions)
+            {
+                found_valid_hash = true;
+                valid_slot = slot;
+                valid_hash = blockhash;
+                break;
+            }
         }
-    }
 
-    require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
-    let (valid_slot, valid_hash) = (valid_slot, valid_hash);
+        require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
+    }
 
     // Calculate and store the project's range
     let (range_start, range_end) = pool::calculate_project_range(
