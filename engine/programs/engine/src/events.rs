@@ -28,6 +28,13 @@ pub struct FundingPeriodStarted {
 }
 
 #[event]
+pub struct FundingScheduleSet {
+    pub launch: Pubkey,
+    pub funding_period_start: i64,
+    pub funding_period_end: i64,
+}
+
+#[event]
 pub struct DepositMade {
     pub launch: Pubkey,
     pub user: Pubkey,

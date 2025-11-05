@@ -6,10 +6,14 @@ pub enum ErrorCode {
     MinRaiseNotMet,
     #[msg("Funding period has ended")]
     FundingPeriodEnded,
+    #[msg("Funding period has not started yet")]
+    FundingPeriodNotStarted,
     #[msg("Funding period has not ended yet")]
     FundingPeriodNotEnded,
     #[msg("Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)")]
     InvalidFundingDuration,
+    #[msg("Invalid start time")]
+    InvalidStartTime,
     #[msg("Claims are not open")]
     ClaimsNotOpen,
     #[msg("Unauthorized")]

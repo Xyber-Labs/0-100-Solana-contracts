@@ -130,6 +130,7 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
+      saleStartTimeSec?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       creatorInitialDepositLamports: BN;
@@ -158,6 +159,7 @@ const EngineSDK = {
           baseTotalAllocation: args.baseTotalAllocation,
           baseSaleBasisPoints: args.baseSaleBasisPoints,
           fundingDurationSeconds: args.fundingDurationSeconds,
+          saleStartTimeSec: args.saleStartTimeSec ?? 0,
           unlockTimeSec: args.unlockTimeSec ?? 0,
           rosterShardCap: args.rosterShardCap,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
@@ -196,6 +198,7 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
+      saleStartTimeSec?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       creatorInitialDepositLamports: BN;

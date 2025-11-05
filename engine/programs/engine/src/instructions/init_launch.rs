@@ -1,7 +1,7 @@
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized},
+    events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized, FundingScheduleSet},
     state::{CreatorGrant, LaunchState, ProjectCounter},
 };
 use anchor_lang::solana_program::keccak;
@@ -74,6 +74,7 @@ pub struct InitLaunchParams {
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,
     pub funding_duration_seconds: i64,
+    pub sale_start_time_sec: i64,
     pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
 
@@ -127,11 +128,19 @@ pub fn init_launch(
     state.unlock_time_sec = params.unlock_time_sec;
     state.roster_shard_cap = params.roster_shard_cap;
 
-    // Set funding period end time (current time + duration)
-    let current_time = Clock::get()?.unix_timestamp;
-    state.funding_period_end = current_time
+    // Set funding period start and end time
+    let now = Clock::get()?.unix_timestamp;
+    let start = if params.sale_start_time_sec == 0 {
+        now
+    } else {
+        require!(params.sale_start_time_sec >= now, EngineErrorCode::InvalidStartTime);
+        params.sale_start_time_sec
+    };
+    let end = start
         .checked_add(params.funding_duration_seconds)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    state.funding_period_start = start;
+    state.funding_period_end = end;
     state.total_deposited = 0;
     state.total_tickets = 0;
 
@@ -244,6 +253,12 @@ pub fn init_launch(
         base_total_allocation: params.base_total_allocation,
         base_sale_basis_points: params.base_sale_basis_points,
         unlock_time_sec: state.unlock_time_sec,
+    });
+
+    emit!(FundingScheduleSet {
+        launch: state.key(),
+        funding_period_start: start,
+        funding_period_end: end,
     });
 
     emit!(FundingPeriodStarted {
