@@ -180,8 +180,24 @@ describe("engine anchor - raydium clmm", () => {
       sqrtPriceLowerX64: sqrtLower,
     } as any);
 
-    const addLiqSig = await provider.sendAndConfirm(addLiq.transaction, [adminKeypair, ...addLiq.signers], { skipPreflight: true });
-    console.log("✅ Liquidity added:", addLiqSig);
+    let addLiqSig: string | undefined;
+    try {
+      addLiqSig = await provider.sendAndConfirm(addLiq.transaction, [adminKeypair, ...addLiq.signers], { skipPreflight: true });
+      console.log("✅ Liquidity added:", addLiqSig);
+    } catch (e) {
+      console.log("Add liquidity failed, simulating for logs...");
+      const tx = addLiq.transaction;
+      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash();
+      tx.feePayer = admin.publicKey;
+      tx.recentBlockhash = blockhash;
+      // Sign with all required signers for simulation
+      try { tx.partialSign(adminKeypair); } catch {}
+      try { addLiq.signers.forEach((s: any) => tx.partialSign(s)); } catch {}
+      const sim = await (provider as any).simulate(tx, [adminKeypair, ...addLiq.signers]);
+      console.log("Simulation logs:", sim?.logs ?? sim?.value?.logs);
+      console.log("Simulation err:", sim?.err ?? sim?.value?.err);
+      throw e;
+    }
     console.log("Explorer:", getExplorerUrl(provider, addLiqSig));
 
     const qAcc = await provider.connection.getAccountInfo(addLiq.quoteVault);

@@ -1084,6 +1084,11 @@ export class TxBuilder {
       params.clmmProgram
     );
 
+    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolPda.toBuffer()],
+      params.clmmProgram
+    );
+
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
@@ -1112,7 +1117,8 @@ export class TxBuilder {
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
       escrowAuthority,
-      true
+      true,
+      TOKEN_2022_PROGRAM_ID
     );
 
     const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
@@ -1132,9 +1138,12 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const tickSpacing = 60;
-    const tickLowerIndex = 0;
-    const tickUpperIndex = 443580;
+    const range = await this.getLiquidityRange({
+      launch: params.launch,
+      sqrtPriceLowerX64: params.sqrtPriceLowerX64,
+    });
+    const tickLowerIndex = range.tickArrayLower;
+    const tickUpperIndex = range.tickArrayUpper;
 
     const tickLowerBuffer = Buffer.alloc(4);
     tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
@@ -1152,9 +1161,8 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const TICK_ARRAY_SIZE = 60;
-    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
-    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+    const tickArrayLowerStartIndex = range.tickArrayLowerStartIndex;
+    const tickArrayUpperStartIndex = range.tickArrayUpperStartIndex;
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
     tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
@@ -1191,6 +1199,7 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
         quoteMint: params.quoteMint,
+        raydiumAmmConfig: ammConfigForAdd,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
@@ -1211,7 +1220,7 @@ export class TxBuilder {
       .remainingAccounts([
         { pubkey: metadataAccount, isSigner: false, isWritable: false },
         { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
-        { pubkey: poolState, isSigner: false, isWritable: false },
+        { pubkey: bitmapExtension, isSigner: false, isWritable: true },
       ])
       .instruction();
 
