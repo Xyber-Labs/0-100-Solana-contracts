@@ -119,7 +119,7 @@ describe("engine anchor - raydium clmm", () => {
 
 
     console.log("\n=== Getting Liquidity Range ===");
-    const myCustomValue = new anchor.BN("10"); // 4295048016 - X -79703664017266229248
+    const myCustomValue = new anchor.BN("5"); // 4295048016 - X -79703664017266229248
     const liquidityRange = await sdk.getLiquidityRange({
       launch: clmmLaunchState,
       sqrtPriceLowerX64: myCustomValue

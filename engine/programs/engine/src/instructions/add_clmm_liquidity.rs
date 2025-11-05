@@ -208,7 +208,7 @@ fn add_initial_liquidity<'info>(
 
     let range = get_liquidity_range_impl(
         ctx.accounts.raydium_amm_config.tick_spacing,
-        1.07 * 10f64.powi(-6),
+        7.16 * 10f64.powi(-7),
         order.base_flag.unwrap(),
         sqrt_price_lower_x64,
     );
