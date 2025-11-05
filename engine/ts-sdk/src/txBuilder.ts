@@ -21,6 +21,11 @@ export class TxBuilder {
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
   }
 
+  private getIxMethod(primary: string, fallback: string) {
+    const methods: any = (this.program as any).methods;
+    return methods?.[primary] ?? methods?.[fallback];
+  }
+
   getPda(seeds: (string | Buffer | web3.PublicKey | { publicKey?: web3.PublicKey } | Uint8Array)[]): [web3.PublicKey, number] {
     const toSeedBuffer = (seed: any): Buffer => {
       if (typeof seed === "string") return Buffer.from(seed);
@@ -39,6 +44,10 @@ export class TxBuilder {
   getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
     const le = Buffer.from(Uint8Array.of(shardId & 0xff, (shardId >> 8) & 0xff));
     return this.getPda(["roster_shard", launch, le]);
+  }
+
+  getTeamVestingPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["team", launch]);
   }
 
   async initLaunchIx(params: {
@@ -498,6 +507,94 @@ export class TxBuilder {
     return { transaction, userAta };
   }
 
+  async initTeamVestingIx(params: { payer: web3.PublicKey; launch: web3.PublicKey }): Promise<{
+    instruction: web3.TransactionInstruction;
+    teamVesting: web3.PublicKey;
+  }> {
+    const [teamVesting] = this.getTeamVestingPda(params.launch);
+    const method = this.getIxMethod("initTeamVesting", "init_team_vesting");
+    if (!method) throw new Error("initTeamVesting method not found in program IDL");
+    const instruction = await method()
+      .accountsStrict({
+        payer: params.payer,
+        launchState: params.launch,
+        teamVesting,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .instruction();
+    return { instruction, teamVesting };
+  }
+
+  async initTeamVestingTx(params: { payer: web3.PublicKey; launch: web3.PublicKey }): Promise<{
+    transaction: web3.Transaction;
+    teamVesting: web3.PublicKey;
+  }> {
+    const { instruction, teamVesting } = await this.initTeamVestingIx(params);
+    const transaction = new web3.Transaction().add(instruction);
+    return { transaction, teamVesting };
+  }
+
+  async claimTeamTokensTx(params: {
+    launch: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    creator: web3.PublicKey;
+    creatorAta?: web3.PublicKey;
+    createAtaIfMissing?: boolean;
+    payer: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; creatorAta: web3.PublicKey }> {
+    const [poolState] = this.getPda(["pool", params.launch]);
+    const [teamVesting] = this.getTeamVestingPda(params.launch);
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const creatorAta = params.creatorAta ?? getAssociatedTokenAddressSync(params.baseMint, params.creator, true);
+
+    const transaction = new web3.Transaction();
+
+    if (params.createAtaIfMissing) {
+      try {
+        const ataInfo = await this.program.provider.connection.getAccountInfo(creatorAta);
+        if (!ataInfo) {
+          transaction.add(
+            createAssociatedTokenAccountInstruction(
+              params.payer,
+              creatorAta,
+              params.creator,
+              params.baseMint
+            )
+          );
+        }
+      } catch (error) {
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            params.payer,
+            creatorAta,
+            params.creator,
+            params.baseMint
+          )
+        );
+      }
+    }
+
+    const method = this.getIxMethod("claimTeamTokens", "claim_team_tokens");
+    if (!method) throw new Error("claimTeamTokens method not found in program IDL");
+    const ix = await method()
+      .accounts({
+        creator: params.creator,
+        launchState: params.launch,
+        poolState,
+        teamVesting,
+        baseMint: params.baseMint,
+        escrowAuthority,
+        baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
+        creatorAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      } as any)
+      .instruction();
+
+    transaction.add(ix);
+
+    return { transaction, creatorAta };
+  }
+
   private ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
     const buf = Buffer.from(seed);
     if (buf.length !== 32) throw new Error("seed must be 32 bytes");
@@ -541,6 +638,11 @@ export class TxBuilder {
   async fetchProjectCounter() {
     const [pda] = this.getPda(["project_counter"]);
     return this.program.account.projectCounter.fetch(pda);
+  }
+
+  async fetchTeamVesting(launch: web3.PublicKey) {
+    const [pda] = this.getTeamVestingPda(launch);
+    return this.program.account.teamVesting.fetch(pda);
   }
 
   async claimCreatorTokensTx(params: {
@@ -757,13 +859,13 @@ export class TxBuilder {
       }
     }
 
+    const [mint0, mint1] = (() => {
+      return params.quoteMint.toBuffer().compare(baseMint.toBuffer()) < 0
+        ? [params.quoteMint, baseMint]
+        : [baseMint, params.quoteMint];
+    })();
     const [poolState] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool"),
-        params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        baseMint.toBuffer(),
-      ],
+      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
@@ -945,13 +1047,13 @@ export class TxBuilder {
     const launchState = await this.program.account.launchState.fetch(params.launch);
     const baseMint = launchState.baseMint as web3.PublicKey;
 
+    const [mint0, mint1] = (() => {
+      return params.quoteMint.toBuffer().compare(baseMint.toBuffer()) < 0
+        ? [params.quoteMint, baseMint]
+        : [baseMint, params.quoteMint];
+    })();
     const [raydiumPoolPda] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool"),
-        params.ammConfig.toBuffer(),
-        params.quoteMint.toBuffer(),
-        baseMint.toBuffer(),
-      ],
+      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 

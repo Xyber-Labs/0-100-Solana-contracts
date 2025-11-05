@@ -696,6 +696,60 @@ const EngineSDK = {
       return { signature };
     }
 
+    async function initTeamVesting(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
+      const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+      const { transaction } = await txBuilder.initTeamVestingTx({ payer: payerPubkey, launch: args.launch });
+      const signers = args.payerKeypair ? [args.payerKeypair] : [];
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature };
+    }
+
+    async function initTeamVestingTx(args: { launch: anchor.web3.PublicKey; payerPubkey?: anchor.web3.PublicKey }): Promise<{ transaction: anchor.web3.Transaction }> {
+      const payerPubkey = args.payerPubkey ?? payer;
+      const { transaction } = await txBuilder.initTeamVestingTx({ payer: payerPubkey, launch: args.launch });
+      return { transaction };
+    }
+
+    async function claimTeamTokens(args: {
+      launch: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      creatorKeypair?: anchor.web3.Keypair;
+      creatorAta?: anchor.web3.PublicKey;
+      createAtaIfMissing?: boolean;
+    }): Promise<{ signature: string; creatorAta: anchor.web3.PublicKey }> {
+      const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
+      const { transaction, creatorAta } = await txBuilder.claimTeamTokensTx({
+        launch: args.launch,
+        baseMint: args.baseMint,
+        creator: creatorPubkey,
+        creatorAta: args.creatorAta,
+        createAtaIfMissing: args.createAtaIfMissing,
+        payer,
+      });
+      const signers = args.creatorKeypair ? [args.creatorKeypair] : [];
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(transaction, signers);
+      return { signature, creatorAta };
+    }
+
+    async function claimTeamTokensTx(args: {
+      launch: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      creator: anchor.web3.PublicKey;
+      creatorAta?: anchor.web3.PublicKey;
+      createAtaIfMissing?: boolean;
+    }): Promise<{ transaction: anchor.web3.Transaction; creatorAta: anchor.web3.PublicKey }> {
+      return txBuilder.claimTeamTokensTx({
+        launch: args.launch,
+        baseMint: args.baseMint,
+        creator: args.creator,
+        creatorAta: args.creatorAta,
+        createAtaIfMissing: args.createAtaIfMissing,
+        payer,
+      });
+    }
+
     async function creatorDeposit(args: { launch: anchor.web3.PublicKey; amountLamports: BN; creatorKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
       const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
       const { instruction } = await txBuilder.creatorDepositIx({ launch: args.launch, creator: creatorPubkey, amount: args.amountLamports });
@@ -754,6 +808,10 @@ const EngineSDK = {
     async function fetchPoolState(launch: anchor.web3.PublicKey) {
       const [pda] = getPoolPda(launch);
       return program.account.poolState.fetch(pda);
+    }
+
+    async function fetchTeamVesting(launch: anchor.web3.PublicKey) {
+      return txBuilder.fetchTeamVesting(launch);
     }
 
     async function getNextProjectId(): Promise<BN> {
@@ -888,6 +946,7 @@ const EngineSDK = {
       getProjectCounterPda,
       getPoolPda,
       getCreatorGrantPda,
+      getTeamVestingPda: txBuilder.getTeamVestingPda.bind(txBuilder),
       deriveAllPdas: deriveAllPdasByProjectId,
 
       // Utils
@@ -913,6 +972,10 @@ const EngineSDK = {
       creatorDeposit,
       creatorWithdraw,
       claimCreatorRefundTx,
+      initTeamVesting,
+      initTeamVestingTx,
+      claimTeamTokens,
+      claimTeamTokensTx,
       preparePoolCreation,
       createClmmPool,
       mintForTest,
@@ -935,6 +998,7 @@ const EngineSDK = {
       fetchRoster,
       fetchUserContribution,
       fetchCreatorGrant,
+      fetchTeamVesting,
       fetchProjectCounter,
       fetchPoolState,
       getNextProjectId,

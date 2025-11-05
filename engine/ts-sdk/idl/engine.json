@@ -814,6 +814,222 @@
       "args": []
     },
     {
+      "name": "claim_team_tokens",
+      "discriminator": [
+        137,
+        104,
+        44,
+        247,
+        225,
+        216,
+        99,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state"
+        },
+        {
+          "name": "pool_state",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "team_vesting",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  97,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "escrow_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_escrow_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrow_authority"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "creator_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim_tokens",
       "docs": [
         "Claim tokens (post open_claims): mint tokens_per_ticket * y_i to user ATA."
@@ -2091,6 +2307,73 @@
       ]
     },
     {
+      "name": "init_team_vesting",
+      "discriminator": [
+        223,
+        100,
+        145,
+        80,
+        168,
+        121,
+        82,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "team_vesting",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  101,
+                  97,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "mint_for_test",
       "discriminator": [
         220,
@@ -2544,6 +2827,19 @@
       ]
     },
     {
+      "name": "TeamVesting",
+      "discriminator": [
+        111,
+        31,
+        119,
+        194,
+        134,
+        31,
+        241,
+        1
+      ]
+    },
+    {
       "name": "UserContribution",
       "discriminator": [
         89,
@@ -2751,6 +3047,32 @@
         136,
         103,
         185
+      ]
+    },
+    {
+      "name": "TeamClaimed",
+      "discriminator": [
+        142,
+        240,
+        28,
+        70,
+        7,
+        206,
+        152,
+        180
+      ]
+    },
+    {
+      "name": "TeamVestingInitialized",
+      "discriminator": [
+        77,
+        238,
+        181,
+        180,
+        87,
+        241,
+        148,
+        31
       ]
     },
     {
@@ -3065,6 +3387,26 @@
       "code": 6056,
       "name": "PoolNotCreated",
       "msg": "Pool not created yet"
+    },
+    {
+      "code": 6057,
+      "name": "TeamVestingMissing",
+      "msg": "Team vesting account is missing"
+    },
+    {
+      "code": 6058,
+      "name": "TeamVestingNotStarted",
+      "msg": "Team vesting is not started yet"
+    },
+    {
+      "code": 6059,
+      "name": "TeamClaimsNotOpen",
+      "msg": "Team claims are not open yet"
+    },
+    {
+      "code": 6060,
+      "name": "TeamClaimTooFrequent",
+      "msg": "Claim is too frequent"
     }
   ],
   "types": [
@@ -3948,6 +4290,98 @@
       }
     },
     {
+      "name": "TeamClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_total",
+            "type": "u64"
+          },
+          {
+            "name": "remaining",
+            "type": "u64"
+          },
+          {
+            "name": "at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TeamVesting",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "claimed",
+            "type": "u64"
+          },
+          {
+            "name": "start_ts",
+            "type": "i64"
+          },
+          {
+            "name": "duration_sec",
+            "type": "i64"
+          },
+          {
+            "name": "min_interval_sec",
+            "type": "i64"
+          },
+          {
+            "name": "last_claim_ts",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TeamVestingInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "duration_sec",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokensClaimed",
       "type": {
         "kind": "struct",
@@ -4056,6 +4490,21 @@
       "name": "SEED_ROOT",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
+    },
+    {
+      "name": "TEAM_BASIS_POINTS",
+      "type": "u64",
+      "value": "1000"
+    },
+    {
+      "name": "TEAM_CLAIM_MIN_INTERVAL_SEC",
+      "type": "i64",
+      "value": "1"
+    },
+    {
+      "name": "TEAM_VESTING_DURATION_SEC",
+      "type": "i64",
+      "value": "31536000"
     }
   ]
 }

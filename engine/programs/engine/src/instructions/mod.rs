@@ -15,6 +15,8 @@ pub use mint_for_test::*;
 pub use prepare_pool_creation::*;
 pub use set_seed::*;
 pub use withdraw::*;
+pub use init_team_vesting::*;
+pub use claim_team_tokens::*;
 
 mod add_clmm_liquidity;
 mod claim_creator_refund;
@@ -33,3 +35,5 @@ mod mint_for_test;
 mod prepare_pool_creation;
 mod set_seed;
 mod withdraw;
+mod init_team_vesting;
+mod claim_team_tokens;

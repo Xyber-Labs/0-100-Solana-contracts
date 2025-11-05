@@ -120,4 +120,13 @@ pub enum ErrorCode {
 
     #[msg("Pool not created yet")]
     PoolNotCreated,
+
+    #[msg("Team vesting account is missing")]
+    TeamVestingMissing,
+    #[msg("Team vesting is not started yet")]
+    TeamVestingNotStarted,
+    #[msg("Team claims are not open yet")]
+    TeamClaimsNotOpen,
+    #[msg("Claim is too frequent")]
+    TeamClaimTooFrequent,
 }

@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::program::AmmV3;
 
-use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, events::ClaimsOpened, state::PoolState, LaunchState, SEED_ROOT, TEAM_BASIS_POINTS};
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -118,12 +118,22 @@ pub fn add_clmm_liquidity(ctx: Context<AddClmmLiquidity>) -> Result<()> {
 fn add_initial_liquidity(ctx: &Context<AddClmmLiquidity>) -> Result<()> {
     let total_allocation = ctx.accounts.launch_state.base_total_allocation;
     let sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+    require!(
+        sale_bps <= 10_000u64.saturating_sub(TEAM_BASIS_POINTS),
+        ErrorCode::InvalidShareSum
+    );
     let sale_allocation = total_allocation
         .checked_mul(sale_bps)
         .and_then(|v| v.checked_div(10_000))
         .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let lp_allocation =
-        total_allocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
+    let team_allocation = total_allocation
+        .checked_mul(TEAM_BASIS_POINTS)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let lp_allocation = total_allocation
+        .checked_sub(sale_allocation)
+        .and_then(|v| v.checked_sub(team_allocation))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
     let params = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,

@@ -6,7 +6,7 @@ use anchor_spl::{
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
-use crate::{errors::ErrorCode, utils::U256, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, utils::U256, LaunchState, SEED_ROOT, TEAM_BASIS_POINTS};
 
 // Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
@@ -136,6 +136,12 @@ fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
 fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let total_acclocation = ctx.accounts.launch_state.base_total_allocation;
     let base_sale_bps = ctx.accounts.launch_state.base_sale_basis_points;
+
+    require!(
+        base_sale_bps <= 10_000u64.saturating_sub(TEAM_BASIS_POINTS),
+        ErrorCode::InvalidShareSum
+    );
+
     let sale_allocation = ctx
         .accounts
         .launch_state
@@ -144,8 +150,18 @@ fn invoke_raydium_prepare_pool_creation(ctx: &Context<CreateClmmPool>) -> Result
         .and_then(|v| v.checked_div(10_000))
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    let lp_allocation =
-        total_acclocation.checked_sub(sale_allocation).ok_or(ErrorCode::ArithmeticOverflow)?;
+    let team_allocation = ctx
+        .accounts
+        .launch_state
+        .base_total_allocation
+        .checked_mul(TEAM_BASIS_POINTS)
+        .and_then(|v| v.checked_div(10_000))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let lp_allocation = total_acclocation
+        .checked_sub(sale_allocation)
+        .and_then(|v| v.checked_sub(team_allocation))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
     let calculator = StakingCalculator::new(
         ctx.accounts.launch_state.total_deposited,

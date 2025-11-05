@@ -157,3 +157,16 @@ pub struct CreatorGrant {
 
     pub refunded: bool,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct TeamVesting {
+    pub launch: Pubkey,
+    pub creator: Pubkey,
+    pub total_allocation: u64,
+    pub claimed: u64,
+    pub start_ts: i64,
+    pub duration_sec: i64,
+    pub min_interval_sec: i64,
+    pub last_claim_ts: i64,
+}
