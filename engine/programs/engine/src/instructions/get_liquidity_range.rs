@@ -20,7 +20,7 @@ pub fn get_liquidity_range(
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     Ok(get_liquidity_range_impl(
         tick_spacing,
-        7.18 * 10f64.powi(-7),
+        1.07 * 10f64.powi(-6),
         ctx.accounts.launch_state.straight,
         sqrt_price_lower_x64,
     ))
@@ -39,7 +39,7 @@ mod tests {
         let base_amount = 420_000_000u64;
         let quote_amount = 300u64;
 
-        let price_ratio = 7.18 * 10f64.powi(-7);
+        let price_ratio = 1.07 * 10f64.powi(-6);
         let straight = true;
         let price = if straight {
             price_ratio
