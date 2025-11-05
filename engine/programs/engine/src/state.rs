@@ -55,6 +55,7 @@ pub struct LaunchState {
     pub clmm_base_mint: Option<Pubkey>,
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
+    pub pool_creation_grace_period_sec: i64,
 }
 
 impl LaunchState {
@@ -130,8 +131,6 @@ pub struct PoolState {
     pub project_id: u64,
     pub created_slot: u64,
     pub created_blockhash: [u8; 32],
-    pub range_start: [u8; 32],
-    pub range_end: [u8; 32],
     pub created: bool,
     pub claims_ready: bool,
 }

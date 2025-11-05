@@ -102,8 +102,6 @@ pub struct PoolCreated {
     pub project_id: u64,
     pub blockhash: [u8; 32],
     pub slot: u64,
-    pub range_start: [u8; 32],
-    pub range_end: [u8; 32],
 }
 
 #[event]

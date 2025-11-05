@@ -83,6 +83,7 @@ pub struct InitLaunchParams {
     pub creator_daily_lamports_limit: u64,     // usually 1 * LAMPORTS_PER_SOL
     pub creator_claim_lock_period_sec: i64,
     pub creator_max_deposit: u64,
+    pub pool_creation_grace_period_sec: i64,
 }
 
 pub fn init_launch(
@@ -168,6 +169,7 @@ pub fn init_launch(
     state.creator_grant_present = false;
     state.claims_opened_at = None;
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
+    state.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
 
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;

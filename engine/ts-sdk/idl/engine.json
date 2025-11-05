@@ -3807,6 +3807,10 @@
           {
             "name": "creator_max_deposit",
             "type": "u64"
+          },
+          {
+            "name": "pool_creation_grace_period_sec",
+            "type": "i64"
           }
         ]
       }
@@ -4017,6 +4021,10 @@
           {
             "name": "funding_period_start",
             "type": "i64"
+          },
+          {
+            "name": "pool_creation_grace_period_sec",
+            "type": "i64"
           }
         ]
       }
@@ -4050,24 +4058,6 @@
           {
             "name": "slot",
             "type": "u64"
-          },
-          {
-            "name": "range_start",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_end",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }
@@ -4095,24 +4085,6 @@
           },
           {
             "name": "created_blockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_start",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_end",
             "type": {
               "array": [
                 "u8",
