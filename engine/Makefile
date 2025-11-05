@@ -248,3 +248,6 @@ litesvm: build-test
 build-test:
 	anchor build -- --features test
 	make sync-idl
+
+test-raydium-clmm-anchor:
+	./scripts/test-raydium-local.sh

@@ -756,6 +756,10 @@ const EngineSDK = {
       });
     }
 
+    async function getLiquidityRange(args: { launch: anchor.web3.PublicKey; sqrtPriceLowerX64: BN }) {
+      return txBuilder.getLiquidityRange({ launch: args.launch, sqrtPriceLowerX64: args.sqrtPriceLowerX64 });
+    }
+
     async function creatorDeposit(args: { launch: anchor.web3.PublicKey; amountLamports: BN; creatorKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
       const creatorPubkey = args.creatorKeypair?.publicKey ?? payer;
       const { instruction } = await txBuilder.creatorDepositIx({ launch: args.launch, creator: creatorPubkey, amount: args.amountLamports });
@@ -985,6 +989,7 @@ const EngineSDK = {
       preparePoolCreation,
       createClmmPool,
       mintForTest,
+      getLiquidityRange,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),

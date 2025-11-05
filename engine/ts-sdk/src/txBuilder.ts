@@ -15,10 +15,21 @@ const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb
 export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
+  private ammConfigIndex: number;
 
   constructor(program: Program<EngineIDL>, admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
+    const constants: any[] = ((this.program as any).idl?.constants ?? []) as any[];
+    const idxConst = constants.find((c: any) => c.name === "AMM_CONFIG_INDEX");
+    this.ammConfigIndex = Number(idxConst?.value ?? 4);
+  }
+
+  private getRaydiumAmmConfigPda(): [web3.PublicKey, number] {
+    const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+    const indexBuffer = Buffer.alloc(2);
+    indexBuffer.writeUInt16BE(Number.isFinite(this.ammConfigIndex) ? this.ammConfigIndex : 4, 0);
+    return web3.PublicKey.findProgramAddressSync([Buffer.from("amm_config"), indexBuffer], RAYDIUM_CLMM_PROGRAM_ID);
   }
 
   private getIxMethod(primary: string, fallback: string) {
@@ -92,22 +103,22 @@ export class TxBuilder {
     // No ATA creation at init stage
 
     const initParams: any = {
-        hardCapLamports: params.hardCapLamports,
-        minRaiseLamports: params.minRaiseLamports,
-        perWalletCap: params.perWalletCap,
-        tauLamports: params.tauLamports,
-        baseTotalAllocation: params.baseTotalAllocation,
-        baseSaleBasisPoints: params.baseSaleBasisPoints,
-        fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-        saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
-        unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
-        rosterShardCap: params.rosterShardCap,
-        creatorInitialDepositLamports: params.creatorInitialDepositLamports,
-        creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
-        creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-        creatorMaxDeposit: params.creatorMaxDepositLamports,
-        poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
-      };
+      hardCapLamports: params.hardCapLamports,
+      minRaiseLamports: params.minRaiseLamports,
+      perWalletCap: params.perWalletCap,
+      tauLamports: params.tauLamports,
+      baseTotalAllocation: params.baseTotalAllocation,
+      baseSaleBasisPoints: params.baseSaleBasisPoints,
+      fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+      saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
+      unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
+      rosterShardCap: params.rosterShardCap,
+      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
+      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
+      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
+      creatorMaxDeposit: params.creatorMaxDepositLamports,
+      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
+    };
 
     const instruction = await (this.program.methods as any)
       .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
@@ -872,8 +883,10 @@ export class TxBuilder {
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
+    const ammConfigForPool = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const [poolState] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      [Buffer.from("pool"), ammConfigForPool.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
@@ -915,17 +928,18 @@ export class TxBuilder {
     );
 
 
+    const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
-      .accounts({
+      .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
         escrowAuthority: escrowAuthority,
-        mintAuth: mintAuth,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
         quoteMint: params.quoteMint,
-        raydiumAmmConfig: params.ammConfig,
+        raydiumAmmConfig,
         raydiumPoolState: poolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
@@ -937,7 +951,7 @@ export class TxBuilder {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
-      } as any)
+      })
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
@@ -1039,7 +1053,7 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey; // ignored; use baseMint from launch
     baseTokenAta: web3.PublicKey;
-    ammConfig: web3.PublicKey;
+    ammConfig?: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
     baseAmount: BN;
@@ -1063,8 +1077,10 @@ export class TxBuilder {
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
+    const ammConfigForAdd = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const [raydiumPoolPda] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      [Buffer.from("pool"), ammConfigForAdd.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
@@ -1215,5 +1231,63 @@ export class TxBuilder {
       positionNftMint: positionNftMint.publicKey,
       quoteTokenAta,
     };
+  }
+
+  async getLiquidityRange(params: {
+    launch: web3.PublicKey;
+    sqrtPriceLowerX64: BN;
+  }): Promise<{
+    tickArrayLower: number;
+    tickArrayUpper: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
+  }> {
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
+
+    try {
+      const res = await (this.program.methods as any)
+        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .accountsStrict({
+          launchState: params.launch,
+          raydiumAmmConfig: ammConfig,
+        })
+        .view();
+      return res as any;
+    } catch (_) {
+      const tx = await (this.program.methods as any)
+        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .accountsStrict({
+          launchState: params.launch,
+          raydiumAmmConfig: ammConfig,
+        })
+        .transaction();
+
+      tx.feePayer = (this.program.provider as any).publicKey;
+      const { blockhash } = await this.program.provider.connection.getLatestBlockhash();
+      tx.recentBlockhash = blockhash;
+
+      const simulation = await this.program.provider.connection.simulateTransaction(tx);
+      if (simulation.value.err) {
+        throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+      const returnData = simulation.value.returnData;
+      if (!returnData || !returnData.data) {
+        throw new Error("No return data from getLiquidityRange");
+      }
+      const [data, encoding] = returnData.data as [string, BufferEncoding];
+      const buffer = Buffer.from(data, encoding);
+
+      const tickArrayLower = buffer.readInt32LE(0);
+      const tickArrayLowerStartIndex = buffer.readInt32LE(4);
+      const tickArrayUpper = buffer.readInt32LE(8);
+      const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+
+      return {
+        tickArrayLower,
+        tickArrayLowerStartIndex,
+        tickArrayUpper,
+        tickArrayUpperStartIndex,
+      };
+    }
   }
 }
