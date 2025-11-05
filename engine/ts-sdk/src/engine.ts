@@ -141,6 +141,7 @@ const EngineSDK = {
       signers?: anchor.web3.Keypair[]; // if payer != provider.wallet
       creator?: anchor.web3.Keypair;
       creatorMaxDepositLamports: BN;
+      poolCreationGracePeriodSec?: number;
     }): Promise<{
       launchPda: anchor.web3.PublicKey;
       escrowPda: anchor.web3.PublicKey;
@@ -166,6 +167,7 @@ const EngineSDK = {
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
           creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,
           creatorMaxDepositLamports: args.creatorMaxDepositLamports,
+          poolCreationGracePeriodSec: args.poolCreationGracePeriodSec,
         }
       );
 
@@ -208,6 +210,7 @@ const EngineSDK = {
       signers?: anchor.web3.Keypair[];
       creator?: anchor.web3.Keypair;
       creatorMaxDepositLamports: BN;
+      poolCreationGracePeriodSec?: number;
     }): Promise<{
       projectId: BN;
       launchPda: anchor.web3.PublicKey;
@@ -469,7 +472,7 @@ const EngineSDK = {
       computeUnitPriceMicroLamports?: number;
     }): Promise<{ signature: string }> {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
-      const { transaction } = await txBuilder.createPoolTx({
+      const { transaction } = await txBuilder.preparePoolCreationTx({
         payer: payerPubkey,
         launch: args.launch,
         computeUnits: args.computeUnits,
@@ -994,7 +997,7 @@ const EngineSDK = {
       withdrawTx,
       withdrawIx,
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
-      createPoolTx: txBuilder.createPoolTx.bind(txBuilder),
+      preparePoolCreationTx: txBuilder.preparePoolCreationTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
       fetchLaunch,

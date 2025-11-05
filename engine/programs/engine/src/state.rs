@@ -131,8 +131,6 @@ pub struct PoolState {
     pub project_id: u64,
     pub created_slot: u64,
     pub created_blockhash: [u8; 32],
-    pub range_start: [u8; 32],
-    pub range_end: [u8; 32],
     pub created: bool,
     pub claims_ready: bool,
 }

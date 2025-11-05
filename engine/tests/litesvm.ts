@@ -382,7 +382,7 @@ describe("engine litesvm", () => {
 
     // Attempt to create pool at the very beginning - should fail (simulate to avoid side effects)
     try {
-      const { transaction } = await sdk.createPoolTx({
+      const { transaction } = await sdk.preparePoolCreationTx({
         payer: admin.publicKey,
         launch: existingLaunchPda,
       });
@@ -418,7 +418,7 @@ describe("engine litesvm", () => {
 
       // Attempt to create pool after deposits but before finalization/claims/blockhash - should fail (simulate)
       try {
-        const { transaction } = await sdk.createPoolTx({
+        const { transaction } = await sdk.preparePoolCreationTx({
           payer: admin.publicKey,
           launch: existingLaunchPda,
         });
@@ -474,7 +474,7 @@ describe("engine litesvm", () => {
     });
 
     try {
-      const { transaction } = await sdk.createPoolTx({
+      const { transaction } = await sdk.preparePoolCreationTx({
         payer: admin.publicKey,
         launch: existingLaunchPda,
       });
@@ -531,6 +531,83 @@ describe("engine litesvm", () => {
       "Pool should reference correct launch"
     );
 
+  });
+
+  it("Grace period: invalid hashes fail within grace; succeed after", async () => {
+    const GRACE = 20;
+    const HARD_CAP = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
+    const MIN_RAISE = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
+    const PER_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
+    const TAU = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const TOTAL = new anchor.BN(1000000);
+    const SALE_BPS = new anchor.BN(10000);
+
+    const projectId = await sdk.getNextProjectId();
+    const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
+
+    await sdk.initLaunch({
+      projectId: projectId,
+      hardCapLamports: HARD_CAP,
+      minRaiseLamports: MIN_RAISE,
+      perWalletCap: PER_CAP,
+      tauLamports: TAU,
+      baseTotalAllocation: TOTAL,
+      baseSaleBasisPoints: SALE_BPS,
+      fundingDurationSeconds: 10,
+      unlockTimeSec: 60,
+      rosterShardCap: 100,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: new anchor.BN(0),
+      poolCreationGracePeriodSec: GRACE,
+    });
+
+    await sdk.initRoster({ launch: launchPda });
+    await sdk.initRosterShard({ launch: launchPda, shardId: 0 });
+
+    const depositor = await createAndFundAccount(client, 20);
+    const [rosterShard] = sdk.getRosterShardPda(launchPda, 0);
+    await sdk.deposit({ launch: launchPda, amountLamports: MIN_RAISE, userKeypair: depositor, rosterShard });
+
+    await advanceTime(client, { seconds: BigInt(12) });
+    await sdk.setSeed({ launch: launchPda });
+    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 0 });
+
+    const state = await sdk.fetchLaunch(launchPda);
+    const project = state.projectId.toNumber();
+    const unlock = Number((state as any).unlockTimeSec);
+    const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
+    const rangeStart = width * BigInt(project - 1);
+    const rangeEnd = rangeStart + width;
+
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+    const invalidNumHashes = 512;
+    const currentClock = client.getClock();
+    const data = Buffer.alloc(8 + invalidNumHashes * 40);
+    data.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
+    for (let i = 0; i < invalidNumHashes; i++) {
+      const offset = 8 + i * 40;
+      data.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      bigIntTo32BytesBE(rangeEnd).copy(data, offset + 8);
+    }
+    client.setAccount(SLOT_HASHES_SYSVAR, { lamports: 1_000_000, data, owner: anchor.web3.SystemProgram.programId, executable: false });
+
+    let threw = false;
+    try {
+      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda });
+      await provider.simulate(transaction);
+    } catch (_) {
+      threw = true;
+    }
+    assert.isTrue(threw, "Expected failure within grace when no in-range blockhash present");
+
+    await advanceTime(client, { seconds: BigInt(GRACE + 5) });
+    const { signature } = await sdk.preparePoolCreation({ launch: launchPda, computeUnits: 1_500_000 });
+    assert.isString(signature);
+    const poolState = await sdk.fetchPoolState(launchPda);
+    assert.isTrue(poolState.created);
   });
 
   it("Initializes launch with creator deposit", async () => {

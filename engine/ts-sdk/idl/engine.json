@@ -4058,24 +4058,6 @@
           {
             "name": "slot",
             "type": "u64"
-          },
-          {
-            "name": "range_start",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_end",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }
@@ -4103,24 +4085,6 @@
           },
           {
             "name": "created_blockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_start",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "range_end",
             "type": {
               "array": [
                 "u8",

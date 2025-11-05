@@ -38,7 +38,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let pool_state = &mut ctx.accounts.pool_state;
 
-    // Preconditions: ready to finalize + enable claims
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
     require!(
         launch_state.total_deposited >= launch_state.min_raise_lamports,
@@ -52,97 +51,110 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
-    let funding_period_end = launch_state.funding_period_end;
-    let effective_end = funding_period_end
-        .checked_add(launch_state.pool_creation_grace_period_sec)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let funding_period_expired = current_time >= effective_end;
-
-    let mut valid_slot = 0u64;
-    let mut valid_hash = [0u8; 32];
-
-    if funding_period_expired {
-        let slot_hashes = &ctx.accounts.slot_hashes;
-        let data = slot_hashes.try_borrow_data()?;
-
-        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
-        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
-
-        let slot_pos = 8u64;
-        let blockhash_pos = slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-        valid_slot = u64::from_le_bytes(
-            data[slot_pos as usize
-                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-                .try_into()
-                .unwrap(),
-        );
-        valid_hash = data[blockhash_pos as usize
-            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-            .try_into()
-            .unwrap();
-    } else {
-        let slot_hashes = &ctx.accounts.slot_hashes;
-        let data = slot_hashes.try_borrow_data()?;
-
-        let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
-        require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
-
-        let hashes_to_check = std::cmp::min(512, num_hashes);
-        let mut found_valid_hash = false;
-
-        for i in 0..hashes_to_check {
-            let hash_pos = 8u64
-                .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
-                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-            let slot_pos = hash_pos;
-            let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-            let slot = u64::from_le_bytes(
-                data[slot_pos as usize
-                    ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-                    .try_into()
-                    .unwrap(),
-            );
-            let blockhash: [u8; 32] = data[blockhash_pos as usize
-                ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-                .try_into()
-                .unwrap();
-
-            let num_partitions = pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec);
-            if pool::is_blockhash_in_project_range(&blockhash, launch_state.project_id, num_partitions)
-            {
-                found_valid_hash = true;
-                valid_slot = slot;
-                valid_hash = blockhash;
-                break;
-            }
-        }
-
-        require!(found_valid_hash, EngineErrorCode::NoValidBlockhash);
-    }
-
-    // Calculate and store the project's range
-    let (range_start, range_end) = pool::calculate_project_range(
+    let (valid_slot, valid_hash) = select_blockhash(
+        &ctx.accounts.slot_hashes.to_account_info(),
+        current_time,
+        launch_state.funding_period_end,
+        launch_state.pool_creation_grace_period_sec,
         launch_state.project_id,
-        pool::derive_num_partitions_from_unlock(launch_state.unlock_time_sec),
-    );
-    let mut range_start_bytes = [0u8; 32];
-    range_start.to_big_endian(&mut range_start_bytes);
-    let mut range_end_bytes = [0u8; 32];
-    range_end.to_big_endian(&mut range_end_bytes);
+        launch_state.unlock_time_sec,
+    )?;
 
-    // Initialize pool state
     pool_state.launch = launch_state.key();
     pool_state.pool_id = launch_state.project_id; // Use project_id as pool_id for 1-to-1 mapping
     pool_state.project_id = launch_state.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
-    pool_state.range_start = range_start_bytes;
-    pool_state.range_end = range_end_bytes;
     pool_state.created = true;
 
-    // ---- Selection finalization and opening claims
+    finalize_selection(launch_state)?;
+
+    // for claims and withdrawal testing, without pool creation
+    #[cfg(feature = "test")]
+    {
+        ctx.accounts.pool_state.claims_ready = true;
+    }
+
+    emit!(SelectionFinalized {
+        launch: launch_state.key(),
+        k_capacity: launch_state.k_capacity,
+    });
+
+    emit!(PoolCreated {
+        launch: launch_state.key(),
+        pool_id: launch_state.project_id,
+        project_id: launch_state.project_id,
+        blockhash: valid_hash,
+        slot: valid_slot,
+    });
+
+    Ok(())
+}
+
+fn select_blockhash(
+    slot_hashes: &AccountInfo,
+    current_time: i64,
+    funding_period_end: i64,
+    pool_creation_grace_period_sec: i64,
+    project_id: u64,
+    unlock_time_sec: i64,
+) -> Result<(u64, [u8; 32])> {
+    let effective_end = funding_period_end
+        .checked_add(pool_creation_grace_period_sec)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let random_pool_creation_expired = current_time >= effective_end;
+
+    let data = slot_hashes.try_borrow_data()?;
+    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+    require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
+
+    if random_pool_creation_expired {
+        let slot_pos = 8u64;
+        let blockhash_pos = slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+        let valid_slot = u64::from_le_bytes(
+            data[slot_pos as usize
+                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                .try_into()
+                .unwrap(),
+        );
+        let valid_hash: [u8; 32] = data[blockhash_pos as usize
+            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+            .try_into()
+            .unwrap();
+        return Ok((valid_slot, valid_hash));
+    }
+
+    let hashes_to_check = std::cmp::min(512, num_hashes);
+    let num_partitions = pool::derive_num_partitions_from_unlock(unlock_time_sec);
+
+    for i in 0..hashes_to_check {
+        let hash_pos = 8u64
+            .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let slot_pos = hash_pos;
+        let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+        let slot = u64::from_le_bytes(
+            data[slot_pos as usize
+                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+                .try_into()
+                .unwrap(),
+        );
+        let blockhash: [u8; 32] = data[blockhash_pos as usize
+            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+            .try_into()
+            .unwrap();
+
+        if pool::is_blockhash_in_project_range(&blockhash, project_id, num_partitions) {
+            return Ok((slot, blockhash));
+        }
+    }
+
+    err!(EngineErrorCode::NoValidBlockhash)
+}
+
+fn finalize_selection(launch_state: &mut LaunchState) -> Result<()> {
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
@@ -167,7 +179,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         .and_then(|v| v.checked_div(10_000))
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    // tokens_per_ticket
     let grand_total_tickets = (launch_state.public_total_tickets as u64)
         .checked_add(launch_state.creator_reserved_tickets as u64)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -182,27 +193,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     launch_state.tokens_per_ticket = Some(tokens_per_ticket);
     launch_state.selection_finalized = true;
-
-    // for claims and withdrawal testing, without pool creation
-    #[cfg(feature = "test")]
-    {
-        ctx.accounts.pool_state.claims_ready = true;
-    }
-
-    emit!(SelectionFinalized {
-        launch: launch_state.key(),
-        k_capacity: launch_state.k_capacity,
-    });
-
-    emit!(PoolCreated {
-        launch: launch_state.key(),
-        pool_id: launch_state.project_id,
-        project_id: launch_state.project_id,
-        blockhash: valid_hash,
-        slot: valid_slot,
-        range_start: range_start_bytes,
-        range_end: range_end_bytes,
-    });
 
     Ok(())
 }

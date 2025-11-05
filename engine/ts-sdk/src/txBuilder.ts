@@ -67,6 +67,7 @@ export class TxBuilder {
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
     creatorMaxDepositLamports: BN;
+    poolCreationGracePeriodSec?: number;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -105,6 +106,7 @@ export class TxBuilder {
         creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
         creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
         creatorMaxDeposit: params.creatorMaxDepositLamports,
+        poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
       };
 
     const instruction = await (this.program.methods as any)
@@ -147,6 +149,7 @@ export class TxBuilder {
     creatorClaimLockPeriodSec: BN;
     provider: any;
     creatorMaxDepositLamports: BN;
+    poolCreationGracePeriodSec?: number;
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
@@ -176,6 +179,7 @@ export class TxBuilder {
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       creatorMaxDepositLamports: params.creatorMaxDepositLamports,
+      poolCreationGracePeriodSec: params.poolCreationGracePeriodSec,
     });
 
     const initLaunchTx = new web3.Transaction().add(initLaunchIx);
@@ -779,7 +783,7 @@ export class TxBuilder {
 
 
 
-  async createPoolTx(params: {
+  async preparePoolCreationTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     computeUnits?: number;

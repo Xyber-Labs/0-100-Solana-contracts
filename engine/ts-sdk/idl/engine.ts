@@ -4064,24 +4064,6 @@ export type Engine = {
           {
             "name": "slot",
             "type": "u64"
-          },
-          {
-            "name": "rangeStart",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "rangeEnd",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }
@@ -4109,24 +4091,6 @@ export type Engine = {
           },
           {
             "name": "createdBlockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "rangeStart",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "rangeEnd",
             "type": {
               "array": [
                 "u8",
