@@ -102,7 +102,12 @@ deploy:
 .PHONY: deploy-local
 deploy-local: config-local
 	@echo "Deploying program to local validator..."
-	anchor deploy --program-name engine --provider.cluster $(SOLANA_URL) --program-keypair ./deploy-keypair.json
+	anchor deploy --program-name engine --provider.cluster localnet --program-keypair ./deploy-keypair.json
+
+.PHONY: deploy-devnet
+deploy-devnet:
+	@echo "Deploying program to local validator..."
+	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
 
 .PHONY: build-deploy
 build-deploy: build deploy
@@ -234,7 +239,7 @@ get-program-id:
 logs:
 	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
-litesvm:
+litesvm: build-all
 	anchor run litesvm-full && anchor run litesvm-basic && anchor run litesvm-raydium
 
 # Default target

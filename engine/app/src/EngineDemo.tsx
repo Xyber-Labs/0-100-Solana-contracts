@@ -63,7 +63,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const { publicKey, signTransaction, signAllTransactions } = useWallet();
   const { connection } = useConnection();
 
-  const [sdk, setSdk] = useState<any>(null);
+  
+  const [sdk, setSdk] = useState<ReturnType<typeof EngineSDK.create> | null>(null);
   const [program, setProgram] = useState<any>(null);
   const [launchState, setLaunchState] = useState<PublicKey | null>(null);
   const [baseMint, setBaseMint] = useState<Keypair | null>(null);

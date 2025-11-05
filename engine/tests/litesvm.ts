@@ -395,7 +395,7 @@ describe("engine litesvm", () => {
 
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
     let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
-    if (!launchAccount.selectionFinalized || !launchAccount.claimsOpen) {
+    if (!launchAccount.selectionFinalized || !(launchAccount as any).claimsReady) {
       // 1) Init roster and shard 0
       await sdk.initRoster({ launch: existingLaunchPda });
       await sdk.initRosterShard({ launch: existingLaunchPda, shardId: 0 });
@@ -822,6 +822,7 @@ describe("Full flow", () => {
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
       creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: testHardCap,
       creator: adminKeypair,
       preInstructions: [
         anchor.web3.SystemProgram.createAccount({
@@ -1120,6 +1121,93 @@ describe("Full flow", () => {
       assert.equal(finalCreatorGrant.claimedTickets, 0);
     }
     assert.isFalse(finalCreatorGrant.refunded);
+
+    console.log("=== Testing Team Vesting Claiming ===");
+    // Initialize team vesting account
+    await sdk.initTeamVesting({ launch: testLaunchState });
+
+    // Ensure creator ATA exists (was created earlier for creator claim), but create defensively if missing
+    const teamCreatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+    try {
+      const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
+      if (!ataInfo) {
+        const createAtaIx = sdk.buildCreateAtaIx({
+          payer: admin.publicKey,
+          owner: admin.publicKey,
+          mint: testBaseMint.publicKey,
+        }).ix;
+        await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
+      }
+    } catch (_) {
+      const createAtaIx = sdk.buildCreateAtaIx({
+        payer: admin.publicKey,
+        owner: admin.publicKey,
+        mint: testBaseMint.publicKey,
+      }).ix;
+      await provider.sendAndConfirm(new anchor.web3.Transaction().add(createAtaIx), []);
+    }
+
+    // Advance chain time to accrue some vested amount (≥ 1 token unit)
+    await advanceTime(client, { seconds: BigInt(400) });
+
+    const beforeVesting = await sdk.fetchTeamVesting(testLaunchState);
+    const beforeTokenAccInfo = client.getAccount(teamCreatorAta);
+    const beforeToken = unpackAccount(teamCreatorAta, { ...(beforeTokenAccInfo as any), data: Buffer.from(beforeTokenAccInfo.data) } as any);
+
+    const { transaction: claimTeamTx } = await sdk.claimTeamTokensTx({
+      launch: testLaunchState,
+      baseMint: testBaseMint.publicKey,
+      creator: admin.publicKey,
+      creatorAta: teamCreatorAta,
+      createAtaIfMissing: false,
+    });
+    claimTeamTx.instructions.unshift(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 3_000_000 }));
+    claimTeamTx.feePayer = admin.publicKey;
+    claimTeamTx.recentBlockhash = client.latestBlockhash();
+    await provider.wallet.signTransaction(claimTeamTx as any);
+    await provider.simulate(claimTeamTx);
+    const firstSig = await provider.sendAndConfirm(claimTeamTx, []);
+    console.log("Team vesting: first claim signature:", firstSig);
+
+    const afterVesting = await sdk.fetchTeamVesting(testLaunchState);
+    const afterTokenAccInfo = client.getAccount(teamCreatorAta);
+    const afterToken = unpackAccount(teamCreatorAta, { ...(afterTokenAccInfo as any), data: Buffer.from(afterTokenAccInfo.data) } as any);
+
+    assert.isAbove(Number(afterVesting.claimed), Number(beforeVesting.claimed));
+    assert.isAbove(Number(afterToken.amount), Number(beforeToken.amount));
+
+    // Immediate re-claim should fail due to min interval (1 sec)
+    {
+      const { transaction } = await sdk.claimTeamTokensTx({
+        launch: testLaunchState,
+        baseMint: testBaseMint.publicKey,
+        creator: admin.publicKey,
+        creatorAta: teamCreatorAta,
+        createAtaIfMissing: false,
+      });
+      let tooFrequentFailed = false;
+      try {
+        transaction.feePayer = admin.publicKey;
+        transaction.recentBlockhash = client.latestBlockhash();
+        await provider.wallet.signTransaction(transaction as any);
+        await provider.simulate(transaction);
+      } catch (_) {
+        tooFrequentFailed = true;
+      }
+      assert.isTrue(tooFrequentFailed, "Expected TeamClaimTooFrequent on immediate re-claim (simulation)");
+    }
+
+    // Wait enough time to accrue at least 1 unit again (avoid floor to 0)
+    await advanceTime(client, { seconds: BigInt(400) });
+    await sdk.claimTeamTokens({
+      launch: testLaunchState,
+      baseMint: testBaseMint.publicKey,
+      creatorAta: teamCreatorAta,
+      createAtaIfMissing: false,
+    });
+
+    const finalVesting = await sdk.fetchTeamVesting(testLaunchState);
+    assert.isAbove(Number(finalVesting.claimed), Number(afterVesting.claimed));
 
     console.log(
       "✅ Complete flow with creator deposit test passed! All functions tested successfully."
