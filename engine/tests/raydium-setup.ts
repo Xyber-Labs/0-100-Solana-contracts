@@ -39,12 +39,20 @@ export async function setupRaydiumCLMM(client: LiteSVM) {
   client.addProgram(METADATA_PROGRAM_ID, metaplexBinary);
   console.log('✅ Metaplex Token Metadata program loaded');
 
-  const ammConfigPubkey = anchor.web3.Keypair.generate().publicKey;
+  // Derive AmmConfig PDA exactly as on-chain seeds expect:
+  // seeds = ["amm_config", AMM_CONFIG_INDEX.to_be_bytes()], seeds::program = raydium_program
+  const AMM_CONFIG_INDEX = 4; // must match on-chain constant
+  const indexBe = Buffer.alloc(2);
+  indexBe.writeUInt16BE(AMM_CONFIG_INDEX, 0);
+  const [ammConfigPubkey, ammConfigBump] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from('amm_config'), indexBe],
+    RAYDIUM_CLMM_ID
+  );
 
   const discriminator = Buffer.from('daf42168cbcb2b6f', 'hex');
-  const bump = Buffer.from([255]);
+  const bump = Buffer.from([ammConfigBump]);
   const index = Buffer.alloc(2);
-  index.writeUInt16LE(0, 0);
+  index.writeUInt16LE(AMM_CONFIG_INDEX, 0); // struct field is little-endian u16
 
   const owner = new anchor.web3.PublicKey('11111111111111111111111111111111');
   const protocolFeeRate = Buffer.alloc(4);

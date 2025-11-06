@@ -1338,14 +1338,45 @@ export class TxBuilder {
         .transaction();
 
       tx.feePayer = (this.program.provider as any).publicKey;
-      const { blockhash } = await this.program.provider.connection.getLatestBlockhash();
-      tx.recentBlockhash = blockhash;
+      const providerAny: any = this.program.provider as any;
+      const conn: any = providerAny.connection;
+      let blockhash: string | undefined;
+      if (conn && typeof conn.getLatestBlockhash === "function") {
+        const res = await conn.getLatestBlockhash();
+        blockhash = res?.blockhash ?? res;
+      } else if (conn && typeof conn.getRecentBlockhash === "function") {
+        const res = await conn.getRecentBlockhash();
+        blockhash = res?.blockhash ?? res;
+      } else if (conn && typeof conn.latestBlockhash === "function") {
+        blockhash = await conn.latestBlockhash();
+      } else if (typeof providerAny.latestBlockhash === "function") {
+        blockhash = await providerAny.latestBlockhash();
+      }
+      if (blockhash) tx.recentBlockhash = blockhash as string;
 
-      const simulation = await this.program.provider.connection.simulateTransaction(tx);
+      // Ensure the tx is signed before simulation (LiteSVM requires signatures)
+      try {
+        if (providerAny?.wallet?.signTransaction) {
+          await providerAny.wallet.signTransaction(tx);
+        } else if (providerAny?.wallet?.payer) {
+          tx.partialSign(providerAny.wallet.payer);
+        }
+      } catch (_) {
+        // best-effort; simulation may still work on other providers
+      }
+
+      let simulation: any;
+      if (conn && typeof conn.simulateTransaction === "function") {
+        simulation = await conn.simulateTransaction(tx);
+      } else if (typeof providerAny.simulate === "function") {
+        simulation = await providerAny.simulate(tx);
+      } else {
+        throw new Error("Simulation not supported by provider");
+      }
       if (simulation.value.err) {
         throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
       }
-      const returnData = simulation.value.returnData;
+      const returnData = simulation.value?.returnData ?? simulation.returnData;
       if (!returnData || !returnData.data) {
         throw new Error("No return data from getLiquidityRange");
       }
