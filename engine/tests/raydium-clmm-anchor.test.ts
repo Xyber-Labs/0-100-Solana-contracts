@@ -51,24 +51,37 @@ describe("engine anchor - raydium clmm", () => {
     admin2Keypair = anchor.web3.Keypair.generate();
     const creationFee = new anchor.BN(1_000_000);
     admin3Keypair = anchor.web3.Keypair.generate();
-    await sdk.initEngineConfig({
-      treasury: admin2Keypair.publicKey,
-      creationFee,
-      admins: [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as any,
-      threshold: 2,
-      adminKeypairs: [adminKeypair, admin2Keypair],
-    });
+    // Skip init if EngineConfig already exists; if exists, read treasury from it
+    const [cfgPda] = (sdk as any).getConfigPda();
+    const cfgInfo = await provider.connection.getAccountInfo(cfgPda);
+    if (!cfgInfo) {
+      await sdk.initEngineConfig({
+        treasury: admin2Keypair.publicKey,
+        creationFee,
+        admins: [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as any,
+        threshold: 2,
+        adminKeypairs: [adminKeypair, admin2Keypair],
+      });
+    } else {
+      console.log("EngineConfig already exists; skipping init");
+    }
 
     xyberMintKeypair = anchor.web3.Keypair.generate();
     xyberMint = xyberMintKeypair.publicKey;
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
     const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
-    const treasuryAta = getAssociatedTokenAddressSync(xyberMint, admin2Keypair.publicKey, true);
+    // Determine treasury from EngineConfig (may differ if config pre-exists)
+    let treasuryOwner = admin2Keypair.publicKey;
+    try {
+      const cfg: any = (await (program.account as any).engineConfig.fetch(cfgPda)) as any;
+      treasuryOwner = (cfg?.treasury as anchor.web3.PublicKey) ?? treasuryOwner;
+    } catch {}
+    const treasuryAta = getAssociatedTokenAddressSync(xyberMint, treasuryOwner, true);
     const tx = new anchor.web3.Transaction()
       .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: xyberMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
       .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
       .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, admin2Keypair.publicKey, xyberMint))
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasuryOwner, xyberMint))
       .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFee.toString())));
     await provider.sendAndConfirm(tx, [adminKeypair, xyberMintKeypair]);
   });
@@ -125,7 +138,7 @@ describe("engine anchor - raydium clmm", () => {
         .accounts({
           user: user1.publicKey,
           launchState: clmmLaunchState,
-          userContribution: sdk.getUserContributionPda(clmmLaunchState, user1.publicKey)[0],
+          userContribution: sdk.getUserContributionPda(clmmLaunchState, user1)[0],
           rosterShard: sdk.getRosterShardPda(clmmLaunchState, 0)[0],
           escrowAuthority: sdk.getEscrowAuthorityPda(clmmLaunchState)[0],
           launch: clmmLaunchState,
@@ -140,7 +153,7 @@ describe("engine anchor - raydium clmm", () => {
         .accounts({
           user: user2.publicKey,
           launchState: clmmLaunchState,
-          userContribution: sdk.getUserContributionPda(clmmLaunchState, user2.publicKey)[0],
+          userContribution: sdk.getUserContributionPda(clmmLaunchState, user2)[0],
           rosterShard: sdk.getRosterShardPda(clmmLaunchState, 0)[0],
           escrowAuthority: sdk.getEscrowAuthorityPda(clmmLaunchState)[0],
           launch: clmmLaunchState,

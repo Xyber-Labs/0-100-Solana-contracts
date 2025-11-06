@@ -16,6 +16,8 @@ help:
 	@echo "  validator-stop - Stop local validator"
 	@echo "  setup         - Full setup (build + deploy + test)"
 	@echo "  test-litesvm  - Run tests using litesvm simulator"
+	@echo "  deploy-config - Run EngineConfig migration (migrations/deploy.ts)"
+	@echo "                 Pass CLI args via ARGS=\"--treasury ... --fee ... --admins ... --threshold ... --admin-key ...\""
 	@echo ""
 	@echo "Remote development:"
 	@echo "  config-remote - Set config to remote server (10.186.0.84)"
@@ -86,6 +88,11 @@ deploy-devnet:
 
 .PHONY: build-deploy
 build-deploy: build deploy
+
+.PHONY: deploy-config
+deploy-config:
+	@echo "Running EngineConfig migration..."
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/deploy.ts $(ARGS)
 
 .PHONY: build-deploy-local
 build-deploy-local: build deploy-local sync-idl build-sdk

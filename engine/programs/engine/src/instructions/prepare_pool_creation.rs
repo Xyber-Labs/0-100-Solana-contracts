@@ -174,9 +174,10 @@ fn finalize_selection(launch_state: &mut LaunchState) -> Result<()> {
 
     let total_allocation = launch_state.base_total_allocation;
     let sale_bps = launch_state.base_sale_basis_points;
-    let sale_allocation = total_allocation
-        .checked_mul(sale_bps)
-        .and_then(|v| v.checked_div(10_000))
+    // Compute sale allocation in u128 to avoid intermediate overflow, then use for per-ticket calc
+    let sale_allocation_u128 = (total_allocation as u128)
+        .checked_mul(sale_bps as u128)
+        .and_then(|v| v.checked_div(10_000u128))
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     let grand_total_tickets = (launch_state.public_total_tickets as u64)
@@ -185,9 +186,9 @@ fn finalize_selection(launch_state: &mut LaunchState) -> Result<()> {
     let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
-    let tokens_per_ticket = (sale_allocation as u128)
-        .checked_mul(1_000_000)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?
+    // Store tokens_per_ticket directly in atomic units (mint decimals),
+    // computed as floor(sale_allocation / divisor)
+    let tokens_per_ticket = sale_allocation_u128
         .checked_div(divisor as u128)
         .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
 

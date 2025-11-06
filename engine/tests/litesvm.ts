@@ -1283,7 +1283,7 @@ describe("Full flow", () => {
       const perVal: any = latestState.tokensPerTicket ?? state.tokensPerTicket;
       const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
       const ticketsClaimed = creatorGrantAfterClaim.claimedTickets;
-      const expectedAmountRaw = Math.floor((per * ticketsClaimed) / 1_000_000);
+      const expectedAmountRaw = per * ticketsClaimed;
       assert.equal(Number(tokenAccount.amount), expectedAmountRaw);
 
       console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedAmountRaw} raw units`);
