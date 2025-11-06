@@ -2093,6 +2093,76 @@ export type Engine = {
       }
     },
     {
+      "name": "initEngineConfig",
+      "discriminator": [
+        184,
+        166,
+        151,
+        83,
+        176,
+        40,
+        10,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engineConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "initEngineConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "initLaunch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -2294,6 +2364,49 @@ export type Engine = {
               }
             ]
           }
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorXyberAta",
+          "writable": true
+        },
+        {
+          "name": "treasuryXyberAta",
+          "writable": true
         },
         {
           "name": "systemProgram",
@@ -2770,6 +2883,72 @@ export type Engine = {
       "args": []
     },
     {
+      "name": "updateEngineConfig",
+      "discriminator": [
+        62,
+        159,
+        32,
+        233,
+        137,
+        163,
+        225,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engineConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "updateEngineConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Withdraw during funding window (reduces ticket_count and returns lamports)."
@@ -2931,6 +3110,19 @@ export type Engine = {
         50,
         10,
         157
+      ]
+    },
+    {
+      "name": "engineConfig",
+      "discriminator": [
+        10,
+        197,
+        172,
+        236,
+        51,
+        169,
+        22,
+        207
       ]
     },
     {
@@ -3602,6 +3794,26 @@ export type Engine = {
       "code": 6062,
       "name": "teamClaimTooFrequent",
       "msg": "Claim is too frequent"
+    },
+    {
+      "code": 6063,
+      "name": "notEnoughAdminSigners",
+      "msg": "Not enough admin signatures"
+    },
+    {
+      "code": 6064,
+      "name": "invalidAdminThreshold",
+      "msg": "Invalid admin threshold"
+    },
+    {
+      "code": 6065,
+      "name": "invalidAdminSet",
+      "msg": "Invalid admin set"
+    },
+    {
+      "code": 6066,
+      "name": "insufficientFeeBalance",
+      "msg": "Insufficient fee balance"
     }
   ],
   "types": [
@@ -3884,6 +4096,35 @@ export type Engine = {
       }
     },
     {
+      "name": "engineConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "creationFee",
+            "type": "u64"
+          },
+          {
+            "name": "admins",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "fundingPeriodStarted",
       "type": {
         "kind": "struct",
@@ -3915,6 +4156,35 @@ export type Engine = {
           {
             "name": "fundingPeriodEnd",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initEngineConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "creationFee",
+            "type": "u64"
+          },
+          {
+            "name": "admins",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
           }
         ]
       }
@@ -4623,6 +4893,43 @@ export type Engine = {
               "Number of winning tickets."
             ],
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateEngineConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "newTreasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "newCreationFee",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "newAdmins",
+            "type": {
+              "option": {
+                "array": [
+                  "pubkey",
+                  3
+                ]
+              }
+            }
+          },
+          {
+            "name": "newThreshold",
+            "type": {
+              "option": "u8"
+            }
           }
         ]
       }

@@ -38,6 +38,10 @@ export class TxBuilder {
     return methods?.[primary] ?? methods?.[fallback];
   }
 
+  getConfigPda(): [web3.PublicKey, number] {
+    return this.getPda(["config"]);
+  }
+
   async getSqrtPriceLowerX64ForPool(params: {
     launch: web3.PublicKey;
     priceBumpMultiplier?: number; // e.g. 1.15
@@ -124,6 +128,7 @@ export class TxBuilder {
     creatorClaimLockPeriodSec: BN;
     creatorMaxDepositLamports: BN;
     poolCreationGracePeriodSec?: number;
+    xyberMint: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -165,6 +170,18 @@ export class TxBuilder {
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
     };
 
+    const [engineConfig] = this.getPda(["config"]);
+    let treasury: web3.PublicKey | undefined;
+    try {
+      const cfg: any = (await (this.program.account as any).engineConfig.fetch(engineConfig)) as any;
+      treasury = (cfg?.treasury as web3.PublicKey) ?? undefined;
+    } catch {}
+    if (!treasury) {
+      throw new Error("EngineConfig not initialized");
+    }
+    const creatorXyberAta = getAssociatedTokenAddressSync(params.xyberMint, params.creator, true);
+    const treasuryXyberAta = getAssociatedTokenAddressSync(params.xyberMint, treasury, true);
+
     const instruction = await (this.program.methods as any)
       .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
       .accountsStrict({
@@ -173,6 +190,9 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         projectCounter: projectCounter,
         creatorGrant: creatorGrant,
+        engineConfig,
+        creatorXyberAta,
+        treasuryXyberAta,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
@@ -206,6 +226,7 @@ export class TxBuilder {
     provider: any;
     creatorMaxDepositLamports: BN;
     poolCreationGracePeriodSec?: number;
+    xyberMint: web3.PublicKey;
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
@@ -236,6 +257,7 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       creatorMaxDepositLamports: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: params.poolCreationGracePeriodSec,
+      xyberMint: params.xyberMint,
     });
 
     const initLaunchTx = new web3.Transaction().add(initLaunchIx);
@@ -247,6 +269,63 @@ export class TxBuilder {
       creatorGrant,
       signers: [],
     };
+  }
+
+  async initEngineConfigIx(params: {
+    payer: web3.PublicKey;
+    treasury: web3.PublicKey;
+    creationFee: BN;
+    admins: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
+    threshold: number;
+    signerAdmins: web3.PublicKey[];
+  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey }> {
+    const [engineConfig] = this.getConfigPda();
+    const method = this.getIxMethod("initEngineConfig", "init_engine_config");
+    if (!method) throw new Error("initEngineConfig method not found in program IDL");
+    const ix = await method({
+      treasury: params.treasury,
+      creationFee: params.creationFee,
+      admins: params.admins,
+      threshold: params.threshold,
+    })
+      .accountsStrict({
+        payer: params.payer,
+        engineConfig,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .remainingAccounts(
+        params.admins.map((pubkey) => ({ pubkey, isSigner: params.signerAdmins.some((s) => s.equals(pubkey)), isWritable: false }))
+      )
+      .instruction();
+    return { instruction: ix, engineConfig };
+  }
+
+  async updateEngineConfigIx(params: {
+    payer: web3.PublicKey;
+    newTreasury?: web3.PublicKey;
+    newCreationFee?: BN;
+    newAdmins?: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
+    newThreshold?: number;
+    signerAdmins: web3.PublicKey[];
+  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey }> {
+    const [engineConfig] = this.getConfigPda();
+    const method = this.getIxMethod("updateEngineConfig", "update_engine_config");
+    if (!method) throw new Error("updateEngineConfig method not found in program IDL");
+    const ix = await method({
+      newTreasury: params.newTreasury ?? null,
+      newCreationFee: params.newCreationFee ?? null,
+      newAdmins: params.newAdmins ?? null,
+      newThreshold: typeof params.newThreshold === "number" ? params.newThreshold : null,
+    })
+      .accountsStrict({
+        payer: params.payer,
+        engineConfig,
+      })
+      .remainingAccounts(
+        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
+      )
+      .instruction();
+    return { instruction: ix, engineConfig };
   }
 
   async initRosterIx(params: {
@@ -905,7 +984,12 @@ export class TxBuilder {
     );
     const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
     if (isKeypair) {
-      const existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      let existing: any = null;
+      try {
+        existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      } catch (_) {
+        existing = null; // LiteSVM throws if account missing
+      }
       if (!existing) {
         const createMintAccountIx = web3.SystemProgram.createAccount({
           fromPubkey: params.payer,
@@ -1039,7 +1123,12 @@ export class TxBuilder {
 
     const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
     if (isKeypair) {
-      const existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      let existing: any = null;
+      try {
+        existing = await this.program.provider.connection.getAccountInfo(baseMint);
+      } catch (_) {
+        existing = null; // LiteSVM throws if account missing
+      }
       if (!existing) {
         const createMintAccountIx = web3.SystemProgram.createAccount({
           fromPubkey: params.payer,

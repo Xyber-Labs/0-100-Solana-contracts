@@ -1,4 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
+import { createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
@@ -28,6 +29,9 @@ describe("engine anchor - raydium clmm", () => {
 
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
+  let xyberMintKeypair: anchor.web3.Keypair;
+  let xyberMint: anchor.web3.PublicKey;
+  let admin2Keypair: anchor.web3.Keypair;
   const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
   const HARD_CAP_LAMPORTS = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
@@ -40,6 +44,32 @@ describe("engine anchor - raydium clmm", () => {
   const LP_ALLOCATION = new anchor.BN(418_600_000);   // 41.86%
   const BASE_TOTAL = SALE_ALLOCATION.add(LP_ALLOCATION); // 90% of total
   const SALE_BPS = new anchor.BN(Math.floor((SALE_ALLOCATION.toNumber() * 10000) / BASE_TOTAL.toNumber()));
+
+  before(async () => {
+    // Init EngineConfig and XYBER mint for fee
+    admin2Keypair = anchor.web3.Keypair.generate();
+    const creationFee = new anchor.BN(1_000_000);
+    await sdk.initEngineConfig({
+      treasury: admin2Keypair.publicKey,
+      creationFee,
+      admins: [admin.publicKey, admin2Keypair.publicKey, adminKeypair.publicKey] as any,
+      threshold: 2,
+      adminKeypairs: [adminKeypair, admin2Keypair],
+    });
+
+    xyberMintKeypair = anchor.web3.Keypair.generate();
+    xyberMint = xyberMintKeypair.publicKey;
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
+    const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
+    const treasuryAta = getAssociatedTokenAddressSync(xyberMint, admin2Keypair.publicKey, true);
+    const tx = new anchor.web3.Transaction()
+      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: xyberMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+      .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint))
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, admin2Keypair.publicKey, xyberMint))
+      .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFee.toString())));
+    await provider.sendAndConfirm(tx, [adminKeypair, xyberMintKeypair]);
+  });
 
   it("Initializes launch (no deposits here)", async () => {
     const nextId = await sdk.getNextProjectId();
@@ -59,6 +89,7 @@ describe("engine anchor - raydium clmm", () => {
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
       provider,
+      xyberMint,
     } as any);
 
     const sig = await provider.sendAndConfirm(initLaunchTx, [adminKeypair, ...signers]);

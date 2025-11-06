@@ -171,3 +171,12 @@ pub struct TeamVesting {
     pub min_interval_sec: i64,
     pub last_claim_ts: i64,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct EngineConfig {
+    pub treasury: Pubkey,
+    pub creation_fee: u64,
+    pub admins: [Pubkey; 3],
+    pub threshold: u8,
+}

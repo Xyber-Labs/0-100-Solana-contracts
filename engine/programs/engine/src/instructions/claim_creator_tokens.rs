@@ -73,7 +73,8 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         (periods_passed as u32).saturating_add(1).saturating_mul(creator_grant.daily_ticket_cap);
 
     // The total unlocked amount cannot exceed the total reserved tickets.
-    let total_unlocked = unlocked_ceiling.min(creator_grant.reserved_tickets);
+    // Reserved tickets are finalized and stored on launch_state during pool creation.
+    let total_unlocked = unlocked_ceiling.min(launch_state.creator_reserved_tickets);
 
     // The amount to claim now is the difference between what's unlocked and what's already been claimed.
     let to_claim = total_unlocked
@@ -125,7 +126,9 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
             .ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
         day_index: periods_passed, // Using periods_passed for logging
-        remaining_tickets: creator_grant.reserved_tickets - creator_grant.claimed_tickets,
+        remaining_tickets: launch_state
+            .creator_reserved_tickets
+            .saturating_sub(creator_grant.claimed_tickets),
     });
 
     Ok(())
