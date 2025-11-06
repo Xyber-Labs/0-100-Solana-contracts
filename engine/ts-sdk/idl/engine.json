@@ -4103,6 +4103,10 @@
             "type": "u64"
           },
           {
+            "name": "xyber_mint",
+            "type": "pubkey"
+          },
+          {
             "name": "admins",
             "type": {
               "array": [
@@ -4166,6 +4170,10 @@
           {
             "name": "creation_fee",
             "type": "u64"
+          },
+          {
+            "name": "xyber_mint",
+            "type": "pubkey"
           },
           {
             "name": "admins",
@@ -4906,6 +4914,12 @@
             "name": "new_creation_fee",
             "type": {
               "option": "u64"
+            }
+          },
+          {
+            "name": "new_xyber_mint",
+            "type": {
+              "option": "pubkey"
             }
           },
           {

@@ -177,6 +177,7 @@ pub struct TeamVesting {
 pub struct EngineConfig {
     pub treasury: Pubkey,
     pub creation_fee: u64,
+    pub xyber_mint: Pubkey,
     pub admins: [Pubkey; 3],
     pub threshold: u8,
 }

@@ -71,9 +71,12 @@ const EngineSDK = {
 
     function getUserContributionPda(
       launch: anchor.web3.PublicKey,
-      user: anchor.web3.PublicKey
+      user: anchor.web3.PublicKey | { publicKey?: anchor.web3.PublicKey }
     ): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["user", launch, user]);
+      const userSeed = (user as any)?.publicKey && typeof (user as any).publicKey?.toBuffer === "function"
+        ? (user as any).publicKey
+        : (user as anchor.web3.PublicKey);
+      return txBuilder.getPda(["user", launch, userSeed]);
     }
 
     function getMintAuthPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -723,6 +726,7 @@ const EngineSDK = {
     async function initEngineConfig(args: {
       treasury: anchor.web3.PublicKey;
       creationFee: BN;
+      xyberMint: anchor.web3.PublicKey;
       admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
       threshold: number;
       adminKeypairs?: anchor.web3.Keypair[];
@@ -731,6 +735,7 @@ const EngineSDK = {
         payer,
         treasury: args.treasury,
         creationFee: args.creationFee,
+        xyberMint: args.xyberMint,
         admins: args.admins,
         threshold: args.threshold,
         signerAdmins: (args.adminKeypairs ?? []).map((k) => k.publicKey),
@@ -745,6 +750,7 @@ const EngineSDK = {
     async function updateEngineConfig(args: {
       newTreasury?: anchor.web3.PublicKey;
       newCreationFee?: BN;
+      newXyberMint?: anchor.web3.PublicKey;
       newAdmins?: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
       newThreshold?: number;
       signerAdmins: anchor.web3.Keypair[];
@@ -753,6 +759,7 @@ const EngineSDK = {
         payer,
         newTreasury: args.newTreasury,
         newCreationFee: args.newCreationFee,
+        newXyberMint: args.newXyberMint,
         newAdmins: args.newAdmins,
         newThreshold: args.newThreshold,
         signerAdmins: args.signerAdmins.map((k) => k.publicKey),

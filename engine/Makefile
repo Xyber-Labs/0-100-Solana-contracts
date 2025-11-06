@@ -213,8 +213,10 @@ litesvm:
 # Default target
 .DEFAULT_GOAL := help
 
-run-validator-raydium:
+setup-validator-raydium:
 	NET=mainnet-beta ./scripts/setup-local-validator.sh
+
+run-validator-raydium:
 	NET=mainnet-beta ./scripts/start-validator.sh
 
 build-test:
@@ -223,3 +225,11 @@ build-test:
 
 test-raydium-clmm-anchor:
 	./scripts/test-raydium-local.sh
+
+.PHONY: deploy-config-auto
+deploy-config-auto:
+	@echo "Running EngineConfig migration with payload..."
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/deploy.ts --payload tmp/predeploy.json
+
+predeploy-setup:
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/pre-deploy-setup.ts --out tmp/predeploy.json --airdrop 2 --supply 1000000000 --decimals 9

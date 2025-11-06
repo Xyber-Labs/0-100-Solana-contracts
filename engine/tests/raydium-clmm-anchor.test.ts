@@ -1,4 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
+import * as fs from "fs";
 import { createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
@@ -27,6 +28,29 @@ describe("engine anchor - raydium clmm", () => {
   const adminKeypair = (provider.wallet as any).payer as anchor.web3.Keypair;
   const sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
+  function tryLoadPredeploy(): null | {
+    xyberMint?: string;
+    admins?: string[];
+    adminKeyPaths?: string[];
+    treasury?: string;
+    feeU64?: string | number;
+    threshold?: number;
+  } {
+    const path = process.env.PREDEPLOY_PAYLOAD || "tmp/predeploy.json";
+    try {
+      const raw = fs.readFileSync(path, "utf8");
+      return JSON.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+  function loadKeypair(path: string): anchor.web3.Keypair {
+    const raw = fs.readFileSync(path, "utf8");
+    const arr = JSON.parse(raw);
+    const secret = Uint8Array.from(arr);
+    return anchor.web3.Keypair.fromSecretKey(secret);
+  }
+
   let clmmLaunchState: anchor.web3.PublicKey;
   let baseMintKeypair: anchor.web3.Keypair;
   let xyberMintKeypair: anchor.web3.Keypair;
@@ -47,43 +71,93 @@ describe("engine anchor - raydium clmm", () => {
   const SALE_BPS = new anchor.BN(Math.floor((SALE_ALLOCATION.toNumber() * 10000) / BASE_TOTAL.toNumber()));
 
   before(async () => {
-    // Init EngineConfig and XYBER mint for fee
-    admin2Keypair = anchor.web3.Keypair.generate();
-    const creationFee = new anchor.BN(1_000_000);
-    admin3Keypair = anchor.web3.Keypair.generate();
-    // Skip init if EngineConfig already exists; if exists, read treasury from it
+    // Prefer predeploy payload if available
+    const payload = tryLoadPredeploy();
+    let creationFee = new anchor.BN(1_000_000);
+    if (payload?.feeU64 !== undefined && payload?.feeU64 !== null) {
+      creationFee = new anchor.BN(String(payload.feeU64));
+    }
+    if (payload?.xyberMint) {
+      xyberMint = new anchor.web3.PublicKey(payload.xyberMint);
+    }
+    // Admin keypairs only needed if we need to (re)initialize config
+    if (payload?.adminKeyPaths?.length) {
+      const [a1, a2, a3] = payload.adminKeyPaths;
+      try { admin2Keypair = loadKeypair(a2); } catch { admin2Keypair = anchor.web3.Keypair.generate(); }
+      try { admin3Keypair = loadKeypair(a3); } catch { admin3Keypair = anchor.web3.Keypair.generate(); }
+    } else {
+      admin2Keypair = anchor.web3.Keypair.generate();
+      admin3Keypair = anchor.web3.Keypair.generate();
+    }
+    // If no predeploy mint provided, create ephemeral mint for this test
+    if (!xyberMint) {
+      xyberMintKeypair = anchor.web3.Keypair.generate();
+      xyberMint = xyberMintKeypair.publicKey;
+    }
+
+    // Resolve or initialize EngineConfig (prefer getAccountInfo guard to avoid re-init on existing PDA)
     const [cfgPda] = (sdk as any).getConfigPda();
     const cfgInfo = await provider.connection.getAccountInfo(cfgPda);
     if (!cfgInfo) {
-      await sdk.initEngineConfig({
-        treasury: admin2Keypair.publicKey,
+      const adminsArr = payload?.admins?.length === 3
+        ? payload.admins.map((s) => new anchor.web3.PublicKey(String(s))) as any
+        : [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as any;
+      const treasuryPk = payload?.treasury ? new anchor.web3.PublicKey(payload.treasury) : admin2Keypair.publicKey;
+      // Use provided admin keypairs if present for multisig signing
+      let adminSigners: anchor.web3.Keypair[] = [adminKeypair, admin2Keypair];
+      if (payload?.adminKeyPaths?.length) {
+        const paths = payload.adminKeyPaths;
+        const kps: anchor.web3.Keypair[] = [];
+        try { kps.push(loadKeypair(paths[0])); } catch {}
+        try { kps.push(loadKeypair(paths[1])); } catch {}
+        adminSigners = kps.length ? kps : adminSigners;
+      }
+      await (sdk as any).initEngineConfig({
+        treasury: treasuryPk,
         creationFee,
-        admins: [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as any,
-        threshold: 2,
-        adminKeypairs: [adminKeypair, admin2Keypair],
+        xyberMint,
+        admins: adminsArr,
+        threshold: Number(payload?.threshold ?? 2),
+        adminKeypairs: adminSigners,
       });
     } else {
       console.log("EngineConfig already exists; skipping init");
+      try {
+        const existing: any = await (program.account as any).engineConfig.fetch(cfgPda);
+        const onchainMint = (existing?.xyberMint as anchor.web3.PublicKey);
+        if (onchainMint) xyberMint = onchainMint;
+        if (existing?.creationFee) creationFee = new anchor.BN(String(existing.creationFee));
+      } catch {}
     }
 
-    xyberMintKeypair = anchor.web3.Keypair.generate();
-    xyberMint = xyberMintKeypair.publicKey;
-    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
-    // Determine treasury from EngineConfig (may differ if config pre-exists)
+    // Determine treasury from EngineConfig and ensure it's a System account
     let treasuryOwner = admin2Keypair.publicKey;
     try {
-      const cfg: any = (await (program.account as any).engineConfig.fetch(cfgPda)) as any;
-      treasuryOwner = (cfg?.treasury as anchor.web3.PublicKey) ?? treasuryOwner;
+      const freshCfg: any = await (program.account as any).engineConfig.fetch(cfgPda);
+      treasuryOwner = (freshCfg?.treasury as anchor.web3.PublicKey) ?? treasuryOwner;
     } catch {}
-    const treasuryAta = getAssociatedTokenAddressSync(xyberMint, treasuryOwner, true);
-    const tx = new anchor.web3.Transaction()
-      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: xyberMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasuryOwner, xyberMint))
-      .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFee.toString())));
-    await provider.sendAndConfirm(tx, [adminKeypair, xyberMintKeypair]);
+    try {
+      const info = await provider.connection.getAccountInfo(treasuryOwner);
+      if (!info) {
+        const sig = await provider.connection.requestAirdrop(treasuryOwner, 1_000_000_000);
+        await provider.connection.confirmTransaction(sig, "confirmed");
+      }
+    } catch {}
+
+    // Ensure creator (provider wallet) has XYBER to pay creation fee
+    try {
+      const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
+      const info = await provider.connection.getAccountInfo(creatorAta);
+      const ixs: anchor.web3.TransactionInstruction[] = [];
+      if (!info) {
+        ixs.push(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint));
+      }
+      // Mint only if we are mint authority (predeploy setup uses provider as mint authority)
+      ixs.push(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFee.toString())));
+      if (ixs.length) {
+        await provider.sendAndConfirm(new anchor.web3.Transaction().add(...ixs), []);
+      }
+    } catch (_) {}
   });
 
   it("Initializes launch (no deposits here)", async () => {

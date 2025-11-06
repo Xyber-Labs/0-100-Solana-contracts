@@ -4109,6 +4109,10 @@ export type Engine = {
             "type": "u64"
           },
           {
+            "name": "xyberMint",
+            "type": "pubkey"
+          },
+          {
             "name": "admins",
             "type": {
               "array": [
@@ -4172,6 +4176,10 @@ export type Engine = {
           {
             "name": "creationFee",
             "type": "u64"
+          },
+          {
+            "name": "xyberMint",
+            "type": "pubkey"
           },
           {
             "name": "admins",
@@ -4912,6 +4920,12 @@ export type Engine = {
             "name": "newCreationFee",
             "type": {
               "option": "u64"
+            }
+          },
+          {
+            "name": "newXyberMint",
+            "type": {
+              "option": "pubkey"
             }
           },
           {

@@ -182,7 +182,8 @@ describe("engine litesvm", () => {
       .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
       .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasury, mint: mint.publicKey }).ix);
+      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasury, mint: mint.publicKey }).ix)
+      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000))); // pre-mint some XYBER for potential fee
     await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
 
     adminBKeypair = anchor.web3.Keypair.generate();
@@ -191,12 +192,81 @@ describe("engine litesvm", () => {
       payer: admin.publicKey,
       treasury,
       creationFee: new anchor.BN(0),
+      xyberMint: mint.publicKey,
       admins,
       threshold: 2,
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
     xyberMint = mint.publicKey;
+  });
+
+  it("Rejects initLaunch with wrong XYBER mint", async () => {
+    const nextId = await sdk.getNextProjectId();
+    // 1) Ensure EngineConfig has non-zero fee (so InvalidMint is checked)
+    const fee = new anchor.BN(1234);
+    {
+      const { instruction } = await (sdk as any).updateEngineConfigIx({
+        payer: admin.publicKey,
+        newCreationFee: fee,
+        signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+      });
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
+      // verify fee applied
+      const [cfgPdaVerify] = (sdk as any).getConfigPda();
+      const cfgVerify: any = await (program.account as any).engineConfig.fetch(cfgPdaVerify);
+      assert.equal(Number(cfgVerify.creationFee), Number(fee));
+    }
+    // 2) Prepare a wrong mint and ATAs for creator/treasury with enough balance on creator ATA
+    const wrongMintKp = anchor.web3.Keypair.generate();
+    const wrongMint = wrongMintKp.publicKey;
+    const [cfgPda] = (sdk as any).getConfigPda();
+    const cfg: any = await (program.account as any).engineConfig.fetch(cfgPda);
+    const treasury: anchor.web3.PublicKey = cfg.treasury as anchor.web3.PublicKey;
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
+    const creatorAta = getAssociatedTokenAddressSync(wrongMint, admin.publicKey);
+    const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasury);
+    {
+      const tx = new anchor.web3.Transaction()
+        .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+        .add(createInitializeMintInstruction(wrongMint, 9, admin.publicKey, null))
+        .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, wrongMint))
+        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasury, wrongMint))
+        .add(createMintToInstruction(wrongMint, creatorAta, admin.publicKey, BigInt(fee.toString())));
+      await safeSendAndConfirm(provider, client, tx, [admin.payer, wrongMintKp]);
+    }
+    // 3) Build initLaunchTx with wrong mint and simulate signed
+    const { initLaunchTx } = await sdk.initLaunchTx({
+      creator: admin.publicKey,
+      projectId: nextId,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
+      fundingDurationSeconds: 10,
+      rosterShardCap: ROSTER_SHARD_CAP,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      provider,
+      xyberMint: wrongMint,
+    });
+    let failed = false;
+    try {
+      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
+      failed = true; // should not reach
+    } catch (e) {
+      const msg = String((e as any)?.message ?? e);
+      assert.isTrue(
+        msg.includes("InvalidMint") || msg.includes("0x4b0") || msg.includes("custom program error") || msg.includes("3012"),
+        `Expected program failure due to wrong XYBER mint; got: ${msg}`
+      );
+    }
+    if (failed) {
+      assert.fail("initLaunch unexpectedly succeeded with wrong xyberMint");
+    }
   });
 
   it("Allows deposits", async () => {
@@ -875,7 +945,21 @@ describe("engine litesvm", () => {
 
     // Deposit 2 SOL by creator
     const dep1 = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep1, creatorKeypair: adminKeypair });
+    {
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
+      const tx = await program.methods
+        .creatorDeposit(dep1)
+        .accountsStrict({
+          creator: adminKeypair.publicKey,
+          launchState: launchPda,
+          escrowAuthority,
+          creatorGrant,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .transaction();
+      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
+    }
     let grant = await sdk.fetchCreatorGrant(launchPda);
     let state = await sdk.fetchLaunch(launchPda);
     assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
@@ -883,20 +967,60 @@ describe("engine litesvm", () => {
 
     // Attempt to exceed max (deposit another 2 SOL -> should fail)
     try {
-      await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep1, creatorKeypair: adminKeypair });
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
+      const tx = await program.methods
+        .creatorDeposit(dep1)
+        .accountsStrict({
+          creator: adminKeypair.publicKey,
+          launchState: launchPda,
+          escrowAuthority,
+          creatorGrant,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .transaction();
+      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
       assert.fail("Expected deposit beyond max to fail");
     } catch (_) { /* expected */ }
 
     // Deposit remaining 1 SOL to reach max
     const dep2 = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    await sdk.creatorDeposit({ launch: launchPda, amountLamports: dep2, creatorKeypair: adminKeypair });
+    {
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
+      const tx = await program.methods
+        .creatorDeposit(dep2)
+        .accountsStrict({
+          creator: adminKeypair.publicKey,
+          launchState: launchPda,
+          escrowAuthority,
+          creatorGrant,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .transaction();
+      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
+    }
     grant = await sdk.fetchCreatorGrant(launchPda);
     state = await sdk.fetchLaunch(launchPda);
     assert.equal(grant.lockedLamports.toNumber(), MAX.toNumber());
     assert.equal(state.totalDeposited.toNumber(), MAX.toNumber());
 
     // Withdraw 1 SOL
-    await sdk.creatorWithdraw({ launch: launchPda, amountLamports: dep2, creatorKeypair: adminKeypair });
+    {
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
+      const tx = await program.methods
+        .creatorWithdraw(dep2)
+        .accountsStrict({
+          creator: adminKeypair.publicKey,
+          launchState: launchPda,
+          escrowAuthority,
+          creatorGrant,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .transaction();
+      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
+    }
     grant = await sdk.fetchCreatorGrant(launchPda);
     state = await sdk.fetchLaunch(launchPda);
     assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
@@ -924,6 +1048,7 @@ describe("engine litesvm", () => {
       payer: admin.publicKey,
       treasury: treasury1,
       creationFee: creationFee1,
+      xyberMint,
       admins,
       threshold: 2,
       signerAdmins: [admin1.publicKey, admin2.publicKey],
@@ -1048,19 +1173,25 @@ describe("Full flow", () => {
     // Initialize EngineConfig (multisig admins) for creation fee flow
     admin2Keypair = anchor.web3.Keypair.generate();
     admin3Keypair = anchor.web3.Keypair.generate();
+    // Ensure treasury (admin2) is a valid System-owned account for ATA ownership
+    client.airdrop(admin2Keypair.publicKey, BigInt(2 * anchor.web3.LAMPORTS_PER_SOL));
+
+    // Create XYBER mint keypair first, so we can store it in EngineConfig
+    xyberMintKeypair = anchor.web3.Keypair.generate();
+    xyberMint = xyberMintKeypair.publicKey;
+
     const creationFee = new anchor.BN(1_000_000);
     const adminsArray = [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
     await sdk.initEngineConfig({
       treasury: admin2Keypair.publicKey,
       creationFee,
+      xyberMint,
       admins: adminsArray,
       threshold: 2,
       adminKeypairs: [adminKeypair, admin2Keypair],
     });
 
-    // Create XYBER mint and fund creator ATA with fee amount
-    xyberMintKeypair = anchor.web3.Keypair.generate();
-    xyberMint = xyberMintKeypair.publicKey;
+    // Create XYBER mint account, ATAs, and fund creator ATA with fee amount
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
     const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
     const treasuryAta = getAssociatedTokenAddressSync(xyberMint, admin2Keypair.publicKey, true);

@@ -119,6 +119,7 @@ pub fn init_launch(
     if fee > 0 {
         require!(ctx.accounts.creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
         require!(ctx.accounts.creator_xyber_ata.mint == ctx.accounts.treasury_xyber_ata.mint, EngineErrorCode::InvalidMint);
+        require!(ctx.accounts.creator_xyber_ata.mint == ctx.accounts.engine_config.xyber_mint, EngineErrorCode::InvalidMint);
         require!(ctx.accounts.creator_xyber_ata.owner == ctx.accounts.creator.key(), EngineErrorCode::InvalidOwner);
         require!(ctx.accounts.treasury_xyber_ata.owner == ctx.accounts.engine_config.treasury, EngineErrorCode::InvalidOwner);
 

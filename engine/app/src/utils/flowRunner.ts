@@ -10,6 +10,7 @@ import {
   createAssociatedTokenAccountInstruction,
   createInitializeMintInstruction,
   createMintToInstruction,
+  createTransferInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -146,32 +147,48 @@ export async function runFullFlow(
     const treasuryPubkey: PublicKey = engineConfig.treasury as PublicKey;
     const creationFeeU64: number = Number(engineConfig.creationFee ?? 0);
 
-    // Create XYBER mint and ATAs (creator + treasury). Mint fee to creator if fee > 0.
-    const xyberMintKp = Keypair.generate();
-    const xyberMint = xyberMintKp.publicKey;
-    const rentForMint = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
-    const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryPubkey, true);
-
-    {
-      const txMint = new Transaction()
-        .add(
-          (await import("@solana/web3.js")).SystemProgram.createAccount({
-            fromPubkey: admin.publicKey,
-            newAccountPubkey: xyberMint,
-            space: 82,
-            lamports: rentForMint,
-            programId: TOKEN_PROGRAM_ID,
-          })
-        )
-        .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorXyberAta, admin.publicKey, xyberMint))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryXyberAta, treasuryPubkey, xyberMint));
-      if (creationFeeU64 > 0) {
-        txMint.add(createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64)));
+    // Reuse configured XYBER mint; do NOT fallback to ad-hoc mint to avoid mismatch with on-chain cfg
+    const engineXyberMintStr = String(engineConfig.xyberMint ?? "");
+    const engineXyberMintDefault = /^0+$/i.test(engineXyberMintStr.replace(/[^0-9a-f]/gi, ""));
+    let xyberMint: PublicKey;
+    if (engineXyberMintDefault || !engineConfig.xyberMint) {
+      throw new Error("EngineConfig.xyberMint is not set. Run pre-deploy setup and deploy-config to initialize XYBER mint.");
+    }
+    xyberMint = engineConfig.xyberMint as PublicKey;
+    addLog(`   -> Using XYBER mint from config: ${xyberMint.toBase58()}`);
+    // Ensure ATAs exist for creator and treasury; mint fee to creator if needed
+    const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey);
+    const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryPubkey);
+    const ataTx = new Transaction()
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorXyberAta, admin.publicKey, xyberMint))
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryXyberAta, treasuryPubkey, xyberMint));
+    try {
+      await provider.sendAndConfirm!(ataTx, []);
+    } catch (_) {
+      // ignore if already exists
+    }
+    if (creationFeeU64 > 0) {
+      try {
+        const mintFeeTx = new Transaction().add(
+          createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64))
+        );
+        await provider.sendAndConfirm!(mintFeeTx, []);
+      } catch (_) {
+        // If not mint authority, try transferring fee from treasury ATA to creator ATA
+        try {
+          const transferTx = new Transaction().add(
+            createTransferInstruction(
+              treasuryXyberAta,
+              creatorXyberAta,
+              treasuryPubkey,
+              BigInt(creationFeeU64)
+            )
+          );
+          await provider.sendAndConfirm!(transferTx, []);
+        } catch {
+          // As a last resort, continue; initLaunch will fail later with insufficient XYBER
+        }
       }
-      await provider.sendAndConfirm!(txMint, [xyberMintKp]);
-      addLog(`   -> XYBER mint prepared. Mint: ${xyberMint.toBase58()}`);
     }
 
     // 2. Initialize Launch

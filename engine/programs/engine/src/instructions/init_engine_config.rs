@@ -24,6 +24,7 @@ pub struct InitEngineConfig<'info> {
 pub struct InitEngineConfigParams {
     pub treasury: Pubkey,
     pub creation_fee: u64,
+    pub xyber_mint: Pubkey,
     pub admins: [Pubkey; 3],
     pub threshold: u8,
 }
@@ -55,6 +56,7 @@ pub fn init_engine_config(ctx: Context<InitEngineConfig>, params: InitEngineConf
     let cfg = &mut ctx.accounts.engine_config;
     cfg.treasury = params.treasury;
     cfg.creation_fee = params.creation_fee;
+    cfg.xyber_mint = params.xyber_mint;
     cfg.admins = params.admins;
     cfg.threshold = params.threshold;
 

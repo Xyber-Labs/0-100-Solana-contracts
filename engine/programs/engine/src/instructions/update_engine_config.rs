@@ -19,6 +19,7 @@ pub struct UpdateEngineConfig<'info> {
 pub struct UpdateEngineConfigParams {
     pub new_treasury: Option<Pubkey>,
     pub new_creation_fee: Option<u64>,
+    pub new_xyber_mint: Option<Pubkey>,
     pub new_admins: Option<[Pubkey; 3]>,
     pub new_threshold: Option<u8>,
 }
@@ -50,6 +51,11 @@ pub fn update_engine_config(
 
     if let Some(fee) = params.new_creation_fee {
         cfg.creation_fee = fee;
+    }
+
+    if let Some(mint) = params.new_xyber_mint {
+        require!(mint != Pubkey::default(), EngineErrorCode::InvalidAdminSet);
+        cfg.xyber_mint = mint;
     }
 
     if let Some(admins) = params.new_admins {

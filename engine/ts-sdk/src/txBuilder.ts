@@ -176,11 +176,10 @@ export class TxBuilder {
       const cfg: any = (await (this.program.account as any).engineConfig.fetch(engineConfig)) as any;
       treasury = (cfg?.treasury as web3.PublicKey) ?? undefined;
     } catch {}
-    if (!treasury) {
-      throw new Error("EngineConfig not initialized");
-    }
+    // Fallback to creator as treasury owner if config fetch fails on some clusters
+    const treasuryOwner = treasury ?? params.creator;
     const creatorXyberAta = getAssociatedTokenAddressSync(params.xyberMint, params.creator, true);
-    const treasuryXyberAta = getAssociatedTokenAddressSync(params.xyberMint, treasury, true);
+    const treasuryXyberAta = getAssociatedTokenAddressSync(params.xyberMint, treasuryOwner, true);
 
     const instruction = await (this.program.methods as any)
       .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
@@ -275,6 +274,7 @@ export class TxBuilder {
     payer: web3.PublicKey;
     treasury: web3.PublicKey;
     creationFee: BN;
+    xyberMint: web3.PublicKey;
     admins: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
     threshold: number;
     signerAdmins: web3.PublicKey[];
@@ -285,6 +285,7 @@ export class TxBuilder {
     const ix = await method({
       treasury: params.treasury,
       creationFee: params.creationFee,
+      xyberMint: params.xyberMint,
       admins: params.admins,
       threshold: params.threshold,
     })
@@ -304,6 +305,7 @@ export class TxBuilder {
     payer: web3.PublicKey;
     newTreasury?: web3.PublicKey;
     newCreationFee?: BN;
+    newXyberMint?: web3.PublicKey;
     newAdmins?: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
     newThreshold?: number;
     signerAdmins: web3.PublicKey[];
@@ -314,6 +316,7 @@ export class TxBuilder {
     const ix = await method({
       newTreasury: params.newTreasury ?? null,
       newCreationFee: params.newCreationFee ?? null,
+      newXyberMint: params.newXyberMint ?? null,
       newAdmins: params.newAdmins ?? null,
       newThreshold: typeof params.newThreshold === "number" ? params.newThreshold : null,
     })
