@@ -11,19 +11,75 @@ import {
 import { getConstant } from "./utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
+  private ammConfigIndex: number;
 
   constructor(program: Program<EngineIDL>, admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
+    const constants: any[] = ((this.program as any).idl?.constants ?? []) as any[];
+    const idxConst = constants.find((c: any) => c.name === "AMM_CONFIG_INDEX");
+    this.ammConfigIndex = Number(idxConst?.value ?? 4);
+  }
+
+  private getRaydiumAmmConfigPda(): [web3.PublicKey, number] {
+    const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+    const indexBuffer = Buffer.alloc(2);
+    indexBuffer.writeUInt16BE(Number.isFinite(this.ammConfigIndex) ? this.ammConfigIndex : 4, 0);
+    return web3.PublicKey.findProgramAddressSync([Buffer.from("amm_config"), indexBuffer], RAYDIUM_CLMM_PROGRAM_ID);
   }
 
   private getIxMethod(primary: string, fallback: string) {
     const methods: any = (this.program as any).methods;
     return methods?.[primary] ?? methods?.[fallback];
+  }
+
+  async getSqrtPriceLowerX64ForPool(params: {
+    launch: web3.PublicKey;
+    priceBumpMultiplier?: number; // e.g. 1.15
+    lowerRangePow10?: number; // e.g. -5
+  }): Promise<BN> {
+    const launchState: any = await this.program.account.launchState.fetch(params.launch);
+    const baseMint: web3.PublicKey = launchState.baseMint as web3.PublicKey;
+    const straight = baseMint.toBuffer().compare(WSOL_MINT.toBuffer()) < 0;
+
+    const priceRatio = 7.16e-7; // same constant as on-chain calc
+    const basePrice = straight ? priceRatio : 1 / priceRatio;
+    const priceBump = params.priceBumpMultiplier ?? 1.15;
+    const lowerPow = params.lowerRangePow10 ?? -5;
+    const targetPriceLower = basePrice * priceBump * Math.pow(10, lowerPow);
+    const Q64 = Math.pow(2, 64);
+    const sqrtLower = Math.sqrt(targetPriceLower) * Q64;
+    // Convert potentially-large float to integer string safely (without exceeding JS safe integer)
+    const expStr = sqrtLower.toExponential(20); // mantissa with 20 digits
+    const [mantissaStr, eStr] = expStr.split("e");
+    const exp = parseInt(eStr, 10);
+    const [intPart, fracPartRaw] = mantissaStr.split(".");
+    const fracPart = (fracPartRaw ?? "").replace(/[^0-9]/g, "");
+    const digits = (intPart + fracPart).replace(/^0+/, "") || "0";
+    const k = exp - (fracPart.length);
+    let integerStr: string;
+    if (k >= 0) {
+      integerStr = digits + "0".repeat(k);
+    } else {
+      const cut = digits.length + k;
+      integerStr = cut > 0 ? digits.slice(0, cut) : "0";
+    }
+    // Floor to integer by construction
+    return new BN(integerStr === "" ? "0" : integerStr);
+  }
+
+  async estimateQuoteForBase(params: { launch: web3.PublicKey; baseAmount: BN; safetyBumpBps?: number }): Promise<BN> {
+    const baseTokens = BigInt(params.baseAmount.toString()); // base tokens (no decimals)
+    const bumpBps = BigInt((params.safetyBumpBps ?? 10200).toString()); // default +2%
+    // Economic price: 7.16e-7 SOL per base token → 716 lamports per base token
+    let quoteLamports = baseTokens * 716n;
+    quoteLamports = (quoteLamports * bumpBps) / 10000n;
+    return new BN(quoteLamports.toString());
   }
 
   getPda(seeds: (string | Buffer | web3.PublicKey | { publicKey?: web3.PublicKey } | Uint8Array)[]): [web3.PublicKey, number] {
@@ -92,22 +148,22 @@ export class TxBuilder {
     // No ATA creation at init stage
 
     const initParams: any = {
-        hardCapLamports: params.hardCapLamports,
-        minRaiseLamports: params.minRaiseLamports,
-        perWalletCap: params.perWalletCap,
-        tauLamports: params.tauLamports,
-        baseTotalAllocation: params.baseTotalAllocation,
-        baseSaleBasisPoints: params.baseSaleBasisPoints,
-        fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-        saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
-        unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
-        rosterShardCap: params.rosterShardCap,
-        creatorInitialDepositLamports: params.creatorInitialDepositLamports,
-        creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
-        creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-        creatorMaxDeposit: params.creatorMaxDepositLamports,
-        poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
-      };
+      hardCapLamports: params.hardCapLamports,
+      minRaiseLamports: params.minRaiseLamports,
+      perWalletCap: params.perWalletCap,
+      tauLamports: params.tauLamports,
+      baseTotalAllocation: params.baseTotalAllocation,
+      baseSaleBasisPoints: params.baseSaleBasisPoints,
+      fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+      saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
+      unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
+      rosterShardCap: params.rosterShardCap,
+      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
+      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
+      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
+      creatorMaxDeposit: params.creatorMaxDepositLamports,
+      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
+    };
 
     const instruction = await (this.program.methods as any)
       .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
@@ -838,6 +894,7 @@ export class TxBuilder {
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
     poolState: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
@@ -859,7 +916,7 @@ export class TxBuilder {
         });
         const initializeMintIx = createInitializeMintInstruction(
           baseMint,
-          6,
+          9,
           escrowAuthority,
           null
         );
@@ -872,8 +929,10 @@ export class TxBuilder {
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
+    const ammConfigForPool = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const [poolState] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      [Buffer.from("pool"), ammConfigForPool.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
@@ -901,10 +960,7 @@ export class TxBuilder {
     );
 
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_tick_array_bitmap_extension"),
-        poolState.toBuffer(),
-      ],
+      [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
       params.clmmProgram
     );
 
@@ -915,17 +971,18 @@ export class TxBuilder {
     );
 
 
+    const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
-      .accounts({
+      .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
         escrowAuthority: escrowAuthority,
-        mintAuth: mintAuth,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
         quoteMint: params.quoteMint,
-        raydiumAmmConfig: params.ammConfig,
+        raydiumAmmConfig,
         raydiumPoolState: poolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
@@ -937,11 +994,11 @@ export class TxBuilder {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
-      } as any)
+      })
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
+      units: 1_400_000,
     });
 
     const transaction = new web3.Transaction();
@@ -957,6 +1014,7 @@ export class TxBuilder {
       baseMint: baseMint,
       baseTokenAta,
       poolState,
+      tickArrayBitmap,
     };
   }
 
@@ -992,7 +1050,7 @@ export class TxBuilder {
         });
         const initializeMintIx = createInitializeMintInstruction(
           baseMint,
-          6,
+          9,
           escrowAuthority,
           null
         );
@@ -1039,16 +1097,29 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey; // ignored; use baseMint from launch
     baseTokenAta: web3.PublicKey;
-    ammConfig: web3.PublicKey;
+    ammConfig?: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
+    baseAmount: BN;
+    quoteAmount: BN;
+    sqrtPriceLowerX64: BN;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
+    poolState: web3.PublicKey;
     positionNftMint: web3.PublicKey;
+    positionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
     quoteTokenAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    tickArrayLower: web3.PublicKey;
+    tickArrayUpper: web3.PublicKey;
+    bitmapExtension: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
@@ -1060,8 +1131,19 @@ export class TxBuilder {
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
+    const ammConfigForAdd = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+
     const [raydiumPoolPda] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool"), params.ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      [Buffer.from("pool"), ammConfigForAdd.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      params.clmmProgram
+    );
+
+    const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolPda.toBuffer()],
+      params.clmmProgram
+    );
+    const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("tick_array_bitmap"), raydiumPoolPda.toBuffer()],
       params.clmmProgram
     );
 
@@ -1093,7 +1175,8 @@ export class TxBuilder {
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint.publicKey,
       escrowAuthority,
-      true
+      true,
+      TOKEN_2022_PROGRAM_ID
     );
 
     const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
@@ -1113,9 +1196,12 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const tickSpacing = 60;
-    const tickLowerIndex = 0;
-    const tickUpperIndex = 443580;
+    const range = await this.getLiquidityRange({
+      launch: params.launch,
+      sqrtPriceLowerX64: params.sqrtPriceLowerX64,
+    });
+    const tickLowerIndex = range.tickArrayLower;
+    const tickUpperIndex = range.tickArrayUpper;
 
     const tickLowerBuffer = Buffer.alloc(4);
     tickLowerBuffer.writeInt32BE(tickLowerIndex, 0);
@@ -1133,9 +1219,8 @@ export class TxBuilder {
       params.clmmProgram
     );
 
-    const TICK_ARRAY_SIZE = 60;
-    const tickArrayLowerStartIndex = Math.floor(tickLowerIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
-    const tickArrayUpperStartIndex = Math.floor(tickUpperIndex / (tickSpacing * TICK_ARRAY_SIZE)) * (tickSpacing * TICK_ARRAY_SIZE);
+    const tickArrayLowerStartIndex = range.tickArrayLowerStartIndex;
+    const tickArrayUpperStartIndex = range.tickArrayUpperStartIndex;
 
     const tickArrayLowerBuffer = Buffer.alloc(4);
     tickArrayLowerBuffer.writeInt32BE(tickArrayLowerStartIndex, 0);
@@ -1163,7 +1248,7 @@ export class TxBuilder {
 
     const [poolState] = this.getPda(["pool", params.launch]);
     const addLiquidityIx = await this.program.methods
-      .addClmmLiquidity()
+      .addClmmLiquidity(params.baseAmount, params.quoteAmount, params.sqrtPriceLowerX64)
       .accountsStrict({
         payer: params.payer,
         raydiumProgram: params.clmmProgram,
@@ -1171,20 +1256,19 @@ export class TxBuilder {
         baseMint: baseMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
-        poolState,
         quoteMint: params.quoteMint,
+        poolState: poolState,
+        raydiumAmmConfig: ammConfigForAdd,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
         raydiumPositionNftMint: positionNftMint.publicKey,
         raydiumPositionNftAccount: positionNftAccount,
-        raydiumMetadataAccount: metadataAccount,
         raydiumPersonalPosition: personalPosition,
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
         quoteTokenAta: quoteTokenAta,
-        metadataProgram: METADATA_PROGRAM_ID,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
@@ -1192,23 +1276,129 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
       } as any)
+      .remainingAccounts([
+        { pubkey: bitmapExtension, isSigner: false, isWritable: true },
+      ])
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
+      units: 1_400_000,
     });
 
     const transaction = new web3.Transaction()
       .add(computeBudgetIx)
       .add(addLiquidityIx);
 
+    try {
+      transaction.partialSign(positionNftMint);
+    } catch {}
+
     return {
       transaction,
       signers: [positionNftMint],
       quoteVault,
       baseVault,
+      poolState: raydiumPoolPda,
       positionNftMint: positionNftMint.publicKey,
+      positionNftAccount,
+      personalPosition,
+      protocolPosition,
       quoteTokenAta,
+      ammConfig: ammConfigForAdd,
+      tickArrayLower,
+      tickArrayUpper,
+      bitmapExtension,
+      tickArrayBitmap,
+      escrowAuthority,
     };
+  }
+
+  async getLiquidityRange(params: {
+    launch: web3.PublicKey;
+    sqrtPriceLowerX64: BN;
+  }): Promise<{
+    tickArrayLower: number;
+    tickArrayUpper: number;
+    tickArrayLowerStartIndex: number;
+    tickArrayUpperStartIndex: number;
+  }> {
+    const [ammConfig] = this.getRaydiumAmmConfigPda();
+
+    try {
+      const res = await (this.program.methods as any)
+        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .accountsStrict({
+          launchState: params.launch,
+          raydiumAmmConfig: ammConfig,
+        })
+        .view();
+      return res as any;
+    } catch (_) {
+      const tx = await (this.program.methods as any)
+        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .accountsStrict({
+          launchState: params.launch,
+          raydiumAmmConfig: ammConfig,
+        })
+        .transaction();
+
+      const providerAny: any = this.program.provider as any;
+      const walletPayerPubkey = providerAny?.wallet?.payer?.publicKey;
+      if (!walletPayerPubkey) throw new Error("LiteSVM: missing wallet.payer for feePayer");
+      tx.feePayer = walletPayerPubkey;
+      const conn: any = providerAny.connection;
+      let blockhash: string | undefined;
+      if (conn && typeof conn.getLatestBlockhash === "function") {
+        const res = await conn.getLatestBlockhash();
+        blockhash = res?.blockhash ?? res;
+      } else if (conn && typeof conn.getRecentBlockhash === "function") {
+        const res = await conn.getRecentBlockhash();
+        blockhash = res?.blockhash ?? res;
+      } else if (conn && typeof conn.latestBlockhash === "function") {
+        blockhash = await conn.latestBlockhash();
+      } else if (typeof providerAny.latestBlockhash === "function") {
+        blockhash = await providerAny.latestBlockhash();
+      }
+      if (blockhash) tx.recentBlockhash = blockhash as string;
+
+      // Ensure the tx is signed before simulation (LiteSVM requires signatures)
+      try {
+        tx.partialSign(providerAny.wallet.payer);
+      } catch (_) {}
+
+      let simulation: any;
+      if (conn && typeof conn.simulateTransaction === "function") {
+        try {
+          simulation = await conn.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true } as any);
+        } catch (_) {
+          simulation = await conn.simulateTransaction(tx);
+        }
+      } else if (typeof providerAny.simulate === "function") {
+        simulation = await providerAny.simulate(tx);
+      } else {
+        throw new Error("Simulation not supported by provider");
+      }
+      if (simulation.value.err) {
+        throw new Error(`Simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      }
+      const returnData = simulation.value?.returnData ?? simulation.returnData;
+      if (!returnData || !returnData.data) {
+        throw new Error("No return data from getLiquidityRange");
+      }
+      const [data, encoding] = returnData.data as [string, BufferEncoding];
+      const buffer = Buffer.from(data, encoding);
+
+      const tickArrayLower = buffer.readInt32LE(0);
+      const tickArrayLowerStartIndex = buffer.readInt32LE(4);
+      const tickArrayUpper = buffer.readInt32LE(8);
+      const tickArrayUpperStartIndex = buffer.readInt32LE(12);
+
+      return {
+        tickArrayLower,
+        tickArrayLowerStartIndex,
+        tickArrayUpper,
+        tickArrayUpperStartIndex,
+      };
+    }
   }
 }

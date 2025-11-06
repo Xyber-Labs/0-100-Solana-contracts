@@ -5,7 +5,6 @@
 help:
 	@echo "Available commands:"
 	@echo "  test          - Run all tests (comprehensive coverage)"
-	@echo "  test-quick    - Run tests without rebuilding"
 	@echo "  test-basic    - Run only basic tests (6 tests)"
 	@echo "  build         - Build the program"
 	@echo "  build-all     - Build program + sync IDL + build SDK"
@@ -16,8 +15,6 @@ help:
 	@echo "  validator     - Start local validator"
 	@echo "  validator-stop - Stop local validator"
 	@echo "  setup         - Full setup (build + deploy + test)"
-	@echo "  test-local    - Run the full flow test on the local validator"
-	@echo "  test-local-quick - Run the full flow test on an already running validator"
 	@echo "  test-litesvm  - Run tests using litesvm simulator"
 	@echo ""
 	@echo "Remote development:"
@@ -31,7 +28,6 @@ help:
 # Environment variables
 ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
 ANCHOR_WALLET := ~/.config/solana/id.json
-SOLANA_URL := http://127.0.0.1:8899
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
 # Test commands
@@ -40,26 +36,6 @@ test: validator-bg build-all deploy
 	@echo "Running tests..."
 	cargo fmt
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
-
-.PHONY: test-quick
-test-quick:
-	@echo "Running tests (quick mode)..."
-	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts
-
-.PHONY: test-verbose
-test-verbose: validator-bg build-all deploy
-	@echo "Running tests with verbose output..."
-	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --reporter spec
-
-.PHONY: test-local
-test-local: validator-bg build-all-test deploy
-	@echo "Running full flow script on local validator..."
-	yarn run script:local-flow
-
-.PHONY: test-local-quick
-test-local-quick: build-all deploy
-	@echo "Running full flow script on existing local validator..."
-	yarn run script:local-flow
 
 .PHONY: test-litesvm
 test-litesvm: build-all
@@ -92,7 +68,6 @@ build-all: build sync-idl build-sdk
 .PHONY: build-all-test
 build-all-test: build-test sync-idl build-sdk
 	@echo "Full build completed (program + IDL sync + SDK)!"
-
 
 .PHONY: deploy
 deploy:
@@ -135,10 +110,6 @@ validator-bg:
 .PHONY: setup
 setup: validator-bg build-all deploy test
 	@echo "Full setup completed!"
-
-.PHONY: setup-quick
-setup-quick: build-all deploy test-quick
-	@echo "Quick setup completed!"
 
 .PHONY: config-remote
 config-remote:
@@ -186,16 +157,6 @@ test-basic: validator-bg build-all deploy
 	@echo "Running basic tests only..."
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts --grep "Initializes the launch state|Closes funding after period ends|Sets the VRF seed|Allows deposits|Allows withdrawals"
 
-
-# Debug commands
-.PHONY: debug
-debug:
-	@echo "Debug information:"
-	@echo "ANCHOR_PROVIDER_URL: $(ANCHOR_PROVIDER_URL)"
-	@echo "ANCHOR_WALLET: $(ANCHOR_WALLET)"
-	@echo "SOLANA_URL: $(SOLANA_URL)"
-	solana config get
-
 # Remote development commands
 .PHONY: airdrop-remote
 airdrop-remote: config-remote
@@ -239,12 +200,19 @@ get-program-id:
 logs:
 	solana logs DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
 
-litesvm: build-test
+litesvm: 
 	anchor run litesvm-full && anchor run litesvm-basic
 
 # Default target
 .DEFAULT_GOAL := help
 
+run-validator-raydium:
+	NET=mainnet-beta ./scripts/setup-local-validator.sh
+	NET=mainnet-beta ./scripts/start-validator.sh
+
 build-test:
 	anchor build -- --features test
 	make sync-idl
+
+test-raydium-clmm-anchor:
+	./scripts/test-raydium-local.sh
