@@ -32,6 +32,7 @@ describe("engine anchor - raydium clmm", () => {
   let xyberMintKeypair: anchor.web3.Keypair;
   let xyberMint: anchor.web3.PublicKey;
   let admin2Keypair: anchor.web3.Keypair;
+  let admin3Keypair: anchor.web3.Keypair;
   const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
   const HARD_CAP_LAMPORTS = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
@@ -49,10 +50,11 @@ describe("engine anchor - raydium clmm", () => {
     // Init EngineConfig and XYBER mint for fee
     admin2Keypair = anchor.web3.Keypair.generate();
     const creationFee = new anchor.BN(1_000_000);
+    admin3Keypair = anchor.web3.Keypair.generate();
     await sdk.initEngineConfig({
       treasury: admin2Keypair.publicKey,
       creationFee,
-      admins: [admin.publicKey, admin2Keypair.publicKey, adminKeypair.publicKey] as any,
+      admins: [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as any,
       threshold: 2,
       adminKeypairs: [adminKeypair, admin2Keypair],
     });
