@@ -1257,6 +1257,7 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         baseEscrowAta: params.baseTokenAta,
         quoteMint: params.quoteMint,
+        poolState: poolState,
         raydiumAmmConfig: ammConfigForAdd,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
@@ -1287,6 +1288,10 @@ export class TxBuilder {
     const transaction = new web3.Transaction()
       .add(computeBudgetIx)
       .add(addLiquidityIx);
+
+    try {
+      transaction.partialSign(positionNftMint);
+    } catch {}
 
     return {
       transaction,

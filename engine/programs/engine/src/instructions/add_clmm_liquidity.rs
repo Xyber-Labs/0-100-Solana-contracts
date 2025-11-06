@@ -10,6 +10,7 @@ use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 use crate::{
     constants::AMM_CONFIG_INDEX,
     utils::clmm::get_liquidity_range_impl,
+    state::PoolState,
     LaunchState,
     SEED_ROOT,
 };
@@ -60,6 +61,9 @@ pub struct AddClmmLiquidity<'info> {
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
 
+    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
+    pub pool_state: Account<'info, PoolState>,
+
     /// CHECK: Pool state PDA (created by Raydium)
     #[account(mut)]
     pub raydium_pool_state: UncheckedAccount<'info>,
@@ -109,13 +113,15 @@ pub fn add_clmm_liquidity<'info>(
     quote_amount: u64,
     sqrt_price_lower_x64: u128,
 ) -> Result<()> {
-    add_initial_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
+    add_initial_liquidity(&ctx, base_amount, quote_amount, sqrt_price_lower_x64)?;
+    ctx.accounts.pool_state.claims_ready = true;
+    Ok(())
 }
 
 const RENT_RESERVE: u64 = 200_000_000;
 
 fn add_initial_liquidity<'info>(
-    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     base_amount: u64,
     quote_amount: u64,
     sqrt_price_lower_x64: u128,

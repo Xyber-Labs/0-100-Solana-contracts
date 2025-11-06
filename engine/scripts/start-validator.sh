@@ -43,15 +43,23 @@ VALIDATOR_PID=$!
 echo "⏳ Waiting for validator to start..."
 sleep 5
 
-echo "📦 Uploading Raydium CLMM IDL to local validator..."
+echo "📦 Uploading Raydium CLMM IDL to local validator (if present)..."
 if [ -f "./tests/resources/raydium_clmm_idl.json" ]; then
-    anchor idl init $CLMM_ID -f ./tests/resources/raydium_clmm_idl.json --provider.cluster localnet
-    echo "✅ Raydium CLMM IDL uploaded successfully"
+  # Try to init; ignore failure to keep validator running
+  anchor idl init $CLMM_ID -f ./tmp/raydium_clmm_idl.json --provider.cluster localnet || true
+  echo "✅ Raydium CLMM IDL upload attempted"
 else
-    echo "⚠️  Warning: raydium_clmm_idl.json not found. Run 'anchor idl fetch $CLMM_ID -o tests/resources/raydium_clmm_idl.json --provider.cluster mainnet' first."
+  echo "ℹ️  Raydium CLMM IDL file not found; skipping"
 fi
 
-anchor idl init --provider.cluster localnet --filepath target/idl/engine.json DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7
+# Optionally upload Engine IDL only if the program is deployed to localnet
+if solana program show DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 >/dev/null 2>&1; then
+  echo "📦 Uploading Engine IDL to local validator..."
+  anchor idl init --provider.cluster localnet --filepath target/idl/engine.json DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 || true
+  echo "✅ Engine IDL upload attempted"
+else
+  echo "ℹ️  Engine program not found on localnet yet; skipping Engine IDL upload"
+fi
 
 echo "✅ Validator started with PID $VALIDATOR_PID"
 echo "Press Ctrl+C to stop the validator"
