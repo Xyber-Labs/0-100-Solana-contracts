@@ -19,6 +19,8 @@ pub use set_seed::*;
 pub use withdraw::*;
 pub use init_team_vesting::*;
 pub use claim_team_tokens::*;
+pub use init_engine_config::*;
+pub use update_engine_config::*;
 
 mod add_clmm_liquidity;
 mod claim_creator_refund;
@@ -41,3 +43,5 @@ mod set_seed;
 mod withdraw;
 mod init_team_vesting;
 mod claim_team_tokens;
+mod init_engine_config;
+mod update_engine_config;

@@ -2087,6 +2087,76 @@
       }
     },
     {
+      "name": "init_engine_config",
+      "discriminator": [
+        184,
+        166,
+        151,
+        83,
+        176,
+        40,
+        10,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitEngineConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "init_launch",
       "docs": [
         "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
@@ -2288,6 +2358,49 @@
               }
             ]
           }
+        },
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_xyber_ata",
+          "writable": true
+        },
+        {
+          "name": "treasury_xyber_ata",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -2764,6 +2877,72 @@
       "args": []
     },
     {
+      "name": "update_engine_config",
+      "discriminator": [
+        62,
+        159,
+        32,
+        233,
+        137,
+        163,
+        225,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "UpdateEngineConfigParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Withdraw during funding window (reduces ticket_count and returns lamports)."
@@ -2925,6 +3104,19 @@
         50,
         10,
         157
+      ]
+    },
+    {
+      "name": "EngineConfig",
+      "discriminator": [
+        10,
+        197,
+        172,
+        236,
+        51,
+        169,
+        22,
+        207
       ]
     },
     {
@@ -3596,6 +3788,26 @@
       "code": 6062,
       "name": "TeamClaimTooFrequent",
       "msg": "Claim is too frequent"
+    },
+    {
+      "code": 6063,
+      "name": "NotEnoughAdminSigners",
+      "msg": "Not enough admin signatures"
+    },
+    {
+      "code": 6064,
+      "name": "InvalidAdminThreshold",
+      "msg": "Invalid admin threshold"
+    },
+    {
+      "code": 6065,
+      "name": "InvalidAdminSet",
+      "msg": "Invalid admin set"
+    },
+    {
+      "code": 6066,
+      "name": "InsufficientFeeBalance",
+      "msg": "Insufficient fee balance"
     }
   ],
   "types": [
@@ -3878,6 +4090,39 @@
       }
     },
     {
+      "name": "EngineConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "creation_fee",
+            "type": "u64"
+          },
+          {
+            "name": "xyber_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "admins",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "FundingPeriodStarted",
       "type": {
         "kind": "struct",
@@ -3909,6 +4154,39 @@
           {
             "name": "funding_period_end",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitEngineConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "creation_fee",
+            "type": "u64"
+          },
+          {
+            "name": "xyber_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "admins",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
           }
         ]
       }
@@ -4617,6 +4895,49 @@
               "Number of winning tickets."
             ],
             "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateEngineConfigParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_treasury",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_creation_fee",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "new_xyber_mint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_admins",
+            "type": {
+              "option": {
+                "array": [
+                  "pubkey",
+                  3
+                ]
+              }
+            }
+          },
+          {
+            "name": "new_threshold",
+            "type": {
+              "option": "u8"
+            }
           }
         ]
       }

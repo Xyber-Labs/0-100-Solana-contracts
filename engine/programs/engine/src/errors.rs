@@ -133,4 +133,13 @@ pub enum ErrorCode {
     TeamClaimsNotOpen,
     #[msg("Claim is too frequent")]
     TeamClaimTooFrequent,
+
+    #[msg("Not enough admin signatures")]
+    NotEnoughAdminSigners,
+    #[msg("Invalid admin threshold")]
+    InvalidAdminThreshold,
+    #[msg("Invalid admin set")]
+    InvalidAdminSet,
+    #[msg("Insufficient fee balance")]
+    InsufficientFeeBalance,
 }

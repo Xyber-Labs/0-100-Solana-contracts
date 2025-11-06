@@ -141,7 +141,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
-    saleAllocation: '459460000000000', // 45.946% of 1B supply with 6 decimals
+    saleAllocation: '459460000000000000', // 45.946% of 1B supply with 9 decimals
     lpAllocation: 500000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 15, // Default custom seconds

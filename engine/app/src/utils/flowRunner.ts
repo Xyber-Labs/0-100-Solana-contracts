@@ -6,6 +6,14 @@ import {
   Transaction,
   ComputeBudgetProgram,
 } from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountInstruction,
+  createInitializeMintInstruction,
+  createMintToInstruction,
+  createTransferInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 
 // import type EngineSDK from "../../../ts-sdk/src/engine";
 import type EngineSDK from "@xyber-labs/0-100-sdk";
@@ -37,22 +45,31 @@ export async function runFullFlow(
 
   // --- Simulation Parameters ---
   const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
-  const SALE_PERCENTAGE = 0.45946; // 45.946%
-  const TOKEN_DECIMALS = 6;
+  const SALE_PERCENTAGE = 0.4814; // 48.14% (align with tests)
+  const LP_PERCENTAGE = 0.4186;    // 41.86% (base total 90%)
+  const TOKEN_DECIMALS = 9;
 
-  // // Calculate sale_allocation based on simulation parameters
-  // const saleAllocation = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE) * (10 ** TOKEN_DECIMALS);
-  // config.saleAllocation = saleAllocation;
+  // Ensure sale/lp allocations are set in human units (not atomic); override if missing/unreasonable
+  const computedSaleHuman = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE);
+  const computedLpHuman = Math.floor(TOTAL_SUPPLY * LP_PERCENTAGE);
+  const parsedSaleHuman = Number.parseInt(String(config.saleAllocation || "0"), 10);
+  if (!Number.isFinite(parsedSaleHuman) || parsedSaleHuman <= 0 || parsedSaleHuman < 1_000_000) {
+    config.saleAllocation = String(computedSaleHuman);
+  }
+  if (!Number.isFinite(config.lpAllocation) || config.lpAllocation <= 0 || config.lpAllocation < 1_000_000) {
+    (config as any).lpAllocation = computedLpHuman;
+  }
 
   // Override creator deposit for this specific test
   const LAMPORTS_PER_SOL = 1_000_000_000;
   config.creatorInitialDepositLamports = 8 * LAMPORTS_PER_SOL;
-  config.creatorDailyLamportsLimit = 2 * LAMPORTS_PER_SOL; // Set to 2 SOL to make daily_ticket_cap = 2
+  // daily limit will be recalculated below to allow full creator claim if needed
 
   addLog(`\n--- Using Simulation Parameters ---`);
   addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
   addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
-  addLog(`   -> Calculated Sale Allocation (atomic units): ${config.saleAllocation.toLocaleString()}`);
+  addLog(`   -> Sale Allocation (human units): ${Number(config.saleAllocation).toLocaleString()}`);
+  addLog(`   -> LP Allocation (human units): ${Number((config as any).lpAllocation).toLocaleString()}`);
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
@@ -115,8 +132,67 @@ export async function runFullFlow(
 
     const MINT_RENT = 2039280; // Fixed rent exemption for 82 bytes
 
-    // 1. Initialize Launch
-    addLog(`[1/10] Initializing Launch...`);
+    // 1. Prepare EngineConfig + XYBER fee accounts
+    addLog(`[1/10] Preparing EngineConfig and XYBER fee accounts...`);
+    const [engineConfigPda] = sdk.getConfigPda();
+    let engineConfig: any | null = null;
+    try {
+      engineConfig = await (program.account as any).engineConfig.fetch(engineConfigPda);
+    } catch (_) {
+      engineConfig = null;
+    }
+    if (!engineConfig) {
+      throw new Error("EngineConfig not initialized. Run migration to set treasury, fee and admins.");
+    }
+    const treasuryPubkey: PublicKey = engineConfig.treasury as PublicKey;
+    const creationFeeU64: number = Number(engineConfig.creationFee ?? 0);
+
+    // Reuse configured XYBER mint; do NOT fallback to ad-hoc mint to avoid mismatch with on-chain cfg
+    const engineXyberMintStr = String(engineConfig.xyberMint ?? "");
+    const engineXyberMintDefault = /^0+$/i.test(engineXyberMintStr.replace(/[^0-9a-f]/gi, ""));
+    let xyberMint: PublicKey;
+    if (engineXyberMintDefault || !engineConfig.xyberMint) {
+      throw new Error("EngineConfig.xyberMint is not set. Run pre-deploy setup and deploy-config to initialize XYBER mint.");
+    }
+    xyberMint = engineConfig.xyberMint as PublicKey;
+    addLog(`   -> Using XYBER mint from config: ${xyberMint.toBase58()}`);
+    // Ensure ATAs exist for creator and treasury; mint fee to creator if needed
+    const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey);
+    const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryPubkey);
+    const ataTx = new Transaction()
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorXyberAta, admin.publicKey, xyberMint))
+      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryXyberAta, treasuryPubkey, xyberMint));
+    try {
+      await provider.sendAndConfirm!(ataTx, []);
+    } catch (_) {
+      // ignore if already exists
+    }
+    if (creationFeeU64 > 0) {
+      try {
+        const mintFeeTx = new Transaction().add(
+          createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64))
+        );
+        await provider.sendAndConfirm!(mintFeeTx, []);
+      } catch (_) {
+        // If not mint authority, try transferring fee from treasury ATA to creator ATA
+        try {
+          const transferTx = new Transaction().add(
+            createTransferInstruction(
+              treasuryXyberAta,
+              creatorXyberAta,
+              treasuryPubkey,
+              BigInt(creationFeeU64)
+            )
+          );
+          await provider.sendAndConfirm!(transferTx, []);
+        } catch {
+          // As a last resort, continue; initLaunch will fail later with insufficient XYBER
+        }
+      }
+    }
+
+    // 2. Initialize Launch
+    addLog(`[2/10] Initializing Launch...`);
 
     const balanceBeforeLaunch = await provider.connection.getBalance(admin.publicKey);
 
@@ -162,13 +238,22 @@ export async function runFullFlow(
     const fundingDurationSeconds = Math.max(15, Math.min(cfgSec || estClamped, estClamped));
 
     // Add main instruction
-    // Mirror LiteSVM: derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
-    const saleAllocBN = new BN(config.saleAllocation);
-    const lpAllocBN = new BN(String(config.lpAllocation));
+    // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
+    // Convert to atomic units (9 decimals). If values look already atomic, pass-through.
+    const DECIMALS_SCALE = new BN(1_000_000_000); // 10^9
+    const toAtomic = (val: string | number): BN => {
+      const raw = new BN(String(val));
+      // Heuristic: if already very large (>= 1e13), assume atomic and do not rescale
+      // 1e13 tokens * 1e9 = 1e22 (would overflow u64), so practical UI inputs (<= 1e12) should be rescaled
+      const THRESHOLD = new BN("10000000000000"); // 1e13
+      return raw.gte(THRESHOLD) ? raw : raw.mul(DECIMALS_SCALE);
+    };
+    const saleAllocBN = toAtomic(config.saleAllocation);
+    const lpAllocBN = toAtomic(config.lpAllocation);
     const baseTotalAllocationBN = saleAllocBN.add(lpAllocBN);
     const baseSaleBpsBN = baseTotalAllocationBN.isZero()
       ? new BN(0)
-      : new BN(Math.floor(saleAllocBN.toNumber() * 10000 / baseTotalAllocationBN.toNumber()));
+      : saleAllocBN.mul(new BN(10000)).div(baseTotalAllocationBN);
 
     if (lpAllocBN.isZero()) {
       throw new Error("Invalid config: lpAllocation is zero; LP must be > 0");
@@ -189,6 +274,7 @@ export async function runFullFlow(
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       creatorMaxDepositLamports: new BN((config as any).creatorMaxDepositLamports ?? config.creatorInitialDepositLamports),
+      xyberMint,
     });
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
@@ -198,10 +284,27 @@ export async function runFullFlow(
     addLog(`   -> Launch initialized. Signature: ${initRes.signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
-    // 2. Pre-initialize all necessary roster shards
-    const numShards = Math.ceil(simConfig.numUsers / config.rosterShardCap);
+    // Compute expected k_capacity and public target tickets to ensure full sale coverage
+    const kCapacityExpected = Math.floor(config.hardCapLamports / config.tauLamports);
+    const reservedExpected = Math.floor(
+      (config.creatorInitialDepositLamports > 0
+        ? (config.creatorInitialDepositLamports / config.hardCapLamports) * kCapacityExpected
+        : 0)
+    );
+    const kPubExpected = Math.max(0, kCapacityExpected - reservedExpected);
+    // Ensure creator can claim all reserved in one go for the simulation
+    config.creatorDailyLamportsLimit = Math.max(
+      config.creatorDailyLamportsLimit ?? 0,
+      reservedExpected * config.tauLamports
+    );
+
+    // 3. Pre-initialize all necessary roster shards
+    // We'll generate enough users to reach at least k_pub tickets
+    const MAX_TICKETS_PER_USER = Math.max(1, simConfig.maxTicketsPerUser);
+    const usersNeeded = Math.ceil(kPubExpected / MAX_TICKETS_PER_USER);
+    const numShards = Math.ceil(usersNeeded / config.rosterShardCap);
     addLog(
-      `\n[2/10] Calculated ${numShards} shards needed for ${simConfig.numUsers} users with a capacity of ${config.rosterShardCap}. Initializing...`
+      `\n[3/10] Calculated ${numShards} shards needed for ~${usersNeeded} users to cover k_pub=${kPubExpected} with cap=${config.rosterShardCap}. Initializing...`
     );
     const balanceBeforeShards = await provider.connection.getBalance(admin.publicKey);
     for (let i = 0; i < numShards; i++) {
@@ -221,27 +324,30 @@ export async function runFullFlow(
     const balanceAfterShards = await provider.connection.getBalance(admin.publicKey);
     const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
-    // 3. Simulate deposits for 1000 users with various amounts
-    const TARGET_USERS = simConfig.numUsers;
-    const MAX_TICKETS_PER_USER = simConfig.maxTicketsPerUser; // Use value from simConfig
+    // 3. Simulate deposits to reach at least k_pub tickets
+    const TARGET_USERS = usersNeeded;
+    const MAX_TICKETS = MAX_TICKETS_PER_USER;
     const usersWithDeposits = new Map<
       string,
       { keypair: Keypair; tickets: number; shardId: number }
     >();
 
-    addLog(`\n[3/10] Simulating deposits for up to ${TARGET_USERS} users...`);
-    addLog(
-      `   -> Each user will deposit for a random amount of tickets (1-${MAX_TICKETS_PER_USER}).`
-    );
+    addLog(`\n[3/10] Simulating deposits to cover k_pub tickets...`);
 
-    // Step 1: Generate all potential user keypairs and their desired deposits
-    let users = Array.from({ length: TARGET_USERS }, (_, i) => {
+    // Step 1: Generate deterministic users to hit k_pubExpected tickets
+    let remainingTickets = kPubExpected;
+    const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
+    let idx = 0;
+    while (remainingTickets > 0) {
+      const tickets = Math.min(remainingTickets, MAX_TICKETS);
       const keypair = Keypair.generate();
-      const tickets = Math.floor(Math.random() * MAX_TICKETS_PER_USER) + 1;
-      const depositAmount = new BN(config.tauLamports * tickets);
-      const shardId = Math.floor(i / config.rosterShardCap);
-      return { keypair, tickets, depositAmount, shardId };
-    });
+      const depositAmount = new BN(config.tauLamports).mul(new BN(tickets));
+      const shardId = Math.floor(idx / config.rosterShardCap);
+      provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
+      remainingTickets -= tickets;
+      idx++;
+    }
+    let users = provisionalUsers;
 
     // Step 2: Check admin balance and filter users we can afford to fund
     let currentAdminBalance: number;

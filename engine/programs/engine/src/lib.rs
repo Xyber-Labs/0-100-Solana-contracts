@@ -132,4 +132,18 @@ pub mod engine {
     ) -> Result<LiquidityRange> {
         instructions::get_liquidity_range(ctx, sqrt_price_lower_x64)
     }
+
+    pub fn init_engine_config(
+        ctx: Context<InitEngineConfig>,
+        params: InitEngineConfigParams,
+    ) -> Result<()> {
+        instructions::init_engine_config(ctx, params)
+    }
+
+    pub fn update_engine_config(
+        ctx: Context<UpdateEngineConfig>,
+        params: UpdateEngineConfigParams,
+    ) -> Result<()> {
+        instructions::update_engine_config(ctx, params)
+    }
 }

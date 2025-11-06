@@ -2,14 +2,14 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized, FundingScheduleSet},
-    state::{CreatorGrant, LaunchState, ProjectCounter},
+    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter},
 };
 use anchor_lang::solana_program::keccak;
 use anchor_lang::{
     prelude::*,
     solana_program::sysvar::{clock::Clock, Sysvar},
 };
-use anchor_spl::token::Token;
+use anchor_spl::token::{self, Token, TokenAccount};
 
 fn make_pending_key(creator: &Pubkey, project_id: u64) -> [u8; 32] {
     let h = keccak::hashv(&[
@@ -61,6 +61,17 @@ pub struct InitLaunch<'info> {
     )]
     pub creator_grant: Account<'info, CreatorGrant>,
 
+    #[account(
+        seeds = [SEED_ROOT, b"config"],
+        bump
+    )]
+    pub engine_config: Account<'info, EngineConfig>,
+
+    #[account(mut)]
+    pub creator_xyber_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub treasury_xyber_ata: Account<'info, TokenAccount>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
@@ -104,6 +115,22 @@ pub fn init_launch(
         EngineErrorCode::MinRaiseTooHigh
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
+    let fee = ctx.accounts.engine_config.creation_fee;
+    if fee > 0 {
+        require!(ctx.accounts.creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
+        require!(ctx.accounts.creator_xyber_ata.mint == ctx.accounts.treasury_xyber_ata.mint, EngineErrorCode::InvalidMint);
+        require!(ctx.accounts.creator_xyber_ata.mint == ctx.accounts.engine_config.xyber_mint, EngineErrorCode::InvalidMint);
+        require!(ctx.accounts.creator_xyber_ata.owner == ctx.accounts.creator.key(), EngineErrorCode::InvalidOwner);
+        require!(ctx.accounts.treasury_xyber_ata.owner == ctx.accounts.engine_config.treasury, EngineErrorCode::InvalidOwner);
+
+        let cpi_accounts = anchor_spl::token::Transfer {
+            from: ctx.accounts.creator_xyber_ata.to_account_info(),
+            to: ctx.accounts.treasury_xyber_ata.to_account_info(),
+            authority: ctx.accounts.creator.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        token::transfer(cpi_ctx, fee)?;
+    }
 
     // Max duration: 7 days
     require!(

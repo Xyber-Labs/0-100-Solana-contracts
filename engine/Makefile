@@ -16,6 +16,8 @@ help:
 	@echo "  validator-stop - Stop local validator"
 	@echo "  setup         - Full setup (build + deploy + test)"
 	@echo "  test-litesvm  - Run tests using litesvm simulator"
+	@echo "  deploy-config - Run EngineConfig migration (migrations/deploy.ts)"
+	@echo "                 Pass CLI args via ARGS=\"--treasury ... --fee ... --admins ... --threshold ... --admin-key ...\""
 	@echo ""
 	@echo "Remote development:"
 	@echo "  config-remote - Set config to remote server (10.186.0.84)"
@@ -86,6 +88,11 @@ deploy-devnet:
 
 .PHONY: build-deploy
 build-deploy: build deploy
+
+.PHONY: deploy-config
+deploy-config:
+	@echo "Running EngineConfig migration..."
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/deploy.ts $(ARGS)
 
 .PHONY: build-deploy-local
 build-deploy-local: build deploy-local sync-idl build-sdk
@@ -206,8 +213,10 @@ litesvm:
 # Default target
 .DEFAULT_GOAL := help
 
-run-validator-raydium:
+setup-validator-raydium:
 	NET=mainnet-beta ./scripts/setup-local-validator.sh
+
+run-validator-raydium:
 	NET=mainnet-beta ./scripts/start-validator.sh
 
 build-test:
@@ -216,3 +225,11 @@ build-test:
 
 test-raydium-clmm-anchor:
 	./scripts/test-raydium-local.sh
+
+.PHONY: deploy-config-auto
+deploy-config-auto:
+	@echo "Running EngineConfig migration with payload..."
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/deploy.ts --payload tmp/predeploy.json
+
+predeploy-setup:
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/pre-deploy-setup.ts --out tmp/predeploy.json --airdrop 2 --supply 1000000000 --decimals 9
