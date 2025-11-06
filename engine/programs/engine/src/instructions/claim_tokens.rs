@@ -47,7 +47,7 @@ pub struct ClaimTokens<'info> {
 
 pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
+    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::TeamClaimsNotOpen);
     require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
     require!(
         ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(),

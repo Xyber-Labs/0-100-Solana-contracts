@@ -1342,8 +1342,10 @@ export class TxBuilder {
         })
         .transaction();
 
-      tx.feePayer = (this.program.provider as any).publicKey;
       const providerAny: any = this.program.provider as any;
+      const walletPayerPubkey = providerAny?.wallet?.payer?.publicKey;
+      if (!walletPayerPubkey) throw new Error("LiteSVM: missing wallet.payer for feePayer");
+      tx.feePayer = walletPayerPubkey;
       const conn: any = providerAny.connection;
       let blockhash: string | undefined;
       if (conn && typeof conn.getLatestBlockhash === "function") {
@@ -1361,18 +1363,16 @@ export class TxBuilder {
 
       // Ensure the tx is signed before simulation (LiteSVM requires signatures)
       try {
-        if (providerAny?.wallet?.signTransaction) {
-          await providerAny.wallet.signTransaction(tx);
-        } else if (providerAny?.wallet?.payer) {
-          tx.partialSign(providerAny.wallet.payer);
-        }
-      } catch (_) {
-        // best-effort; simulation may still work on other providers
-      }
+        tx.partialSign(providerAny.wallet.payer);
+      } catch (_) {}
 
       let simulation: any;
       if (conn && typeof conn.simulateTransaction === "function") {
-        simulation = await conn.simulateTransaction(tx);
+        try {
+          simulation = await conn.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true } as any);
+        } catch (_) {
+          simulation = await conn.simulateTransaction(tx);
+        }
       } else if (typeof providerAny.simulate === "function") {
         simulation = await providerAny.simulate(tx);
       } else {
