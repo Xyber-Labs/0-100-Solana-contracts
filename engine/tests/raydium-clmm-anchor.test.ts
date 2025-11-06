@@ -148,23 +148,50 @@ describe("engine anchor - raydium clmm", () => {
       provider,
     } as any);
 
-    const createPoolSig = await provider.sendAndConfirm(createPool.transaction, [adminKeypair, ...createPool.signers], { skipPreflight: true });
-    console.log("✅ Pool created:", createPoolSig);
-    console.log("Explorer:", getExplorerUrl(provider, createPoolSig));
+    console.log("tickArrayBitmap:", createPool.tickArrayBitmap.toString());
+    let createPoolSig: string | undefined;
+    try {
+      createPoolSig = await provider.sendAndConfirm(createPool.transaction, [adminKeypair, ...createPool.signers]);
+      console.log("✅ Pool created:", createPoolSig);
+      console.log("Explorer:", getExplorerUrl(provider, createPoolSig));
+    } catch (e) {
+      console.log("Create pool failed, simulating for logs...");
+      try { console.log("Preflight logs:", (e as any)?.logs); } catch {}
+      const tx = createPool.transaction;
+      try {
+        const { blockhash } = await provider.connection.getLatestBlockhash();
+        tx.feePayer = admin.publicKey;
+        tx.recentBlockhash = blockhash;
+        try { tx.partialSign(adminKeypair); } catch {}
+        try { createPool.signers.forEach((s: any) => tx.partialSign(s)); } catch {}
+        const sim = await (provider as any).simulate(tx, [adminKeypair, ...createPool.signers]);
+        console.log("Simulation logs:", sim?.logs ?? sim?.value?.logs);
+        console.log("Simulation err:", sim?.err ?? sim?.value?.err);
+      } catch (e2) {
+        try {
+          const sim2 = await provider.connection.simulateTransaction(tx as any, { sigVerify: false, replaceRecentBlockhash: true } as any);
+          console.log("Simulation logs:", sim2?.value?.logs);
+          console.log("Simulation err:", sim2?.value?.err);
+        } catch (e3) {
+          console.log("Create pool simulation failed:", String((e3 as any)?.message || e3));
+        }
+      }
+      throw e;
+    }
 
     const sqrtLower = new anchor.BN(5);
     const range = await sdk.getLiquidityRange({ launch: clmmLaunchState, sqrtPriceLowerX64: sqrtLower });
     console.log(`Liquidity range: lower=${range.tickArrayLower}, upper=${range.tickArrayUpper}`);
 
     const [escrowAuthority] = sdk.getEscrowAuthorityPda(clmmLaunchState);
-    const quoteAmountLamports = new anchor.BN(300_000_000_000);
+    const quoteAmountLamports = new anchor.BN(350_000_000_000);
     const totalLamports = quoteAmountLamports.toNumber() + 300_000_000; // +0.3 SOL buffer
     const fundTx = new anchor.web3.Transaction().add(
       anchor.web3.SystemProgram.transfer({ fromPubkey: adminKeypair.publicKey, toPubkey: escrowAuthority, lamports: totalLamports })
     );
     await provider.sendAndConfirm(fundTx, [adminKeypair]);
 
-    const baseAmount = LP_ALLOCATION.mul(new anchor.BN(1_000_000_000));
+    const baseAmount = LP_ALLOCATION; // amounts expected in mint base units on-chain
 
     const addLiq = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,
@@ -180,22 +207,50 @@ describe("engine anchor - raydium clmm", () => {
       sqrtPriceLowerX64: sqrtLower,
     } as any);
 
+    console.log("\n=== Debug addresses for add-liquidity ===");
+    console.log("launch:", clmmLaunchState.toString());
+    console.log("poolState:", addLiq.poolState.toString());
+    console.log("baseMint:", baseMintKeypair.publicKey.toString());
+    console.log("quoteMint:", WSOL_MINT.toString());
+    console.log("quoteVault:", addLiq.quoteVault.toString());
+    console.log("baseVault:", addLiq.baseVault.toString());
+    console.log("positionNftMint:", addLiq.positionNftMint.toString());
+    console.log("positionNftAccount:", (addLiq as any).positionNftAccount?.toString?.() ?? "");
+    console.log("personalPosition:", (addLiq as any).personalPosition?.toString?.() ?? "");
+    console.log("protocolPosition:", (addLiq as any).protocolPosition?.toString?.() ?? "");
+    console.log("ammConfig:", (addLiq as any).ammConfig?.toString?.() ?? "");
+    console.log("tickArrayLower:", (addLiq as any).tickArrayLower?.toString?.() ?? "");
+    console.log("tickArrayUpper:", (addLiq as any).tickArrayUpper?.toString?.() ?? "");
+    console.log("bitmapExtension:", (addLiq as any).bitmapExtension?.toString?.() ?? "");
+    console.log("escrowAuthority:", (addLiq as any).escrowAuthority?.toString?.() ?? "");
+    console.log("quoteTokenAta:", addLiq.quoteTokenAta.toString());
+
     let addLiqSig: string | undefined;
     try {
-      addLiqSig = await provider.sendAndConfirm(addLiq.transaction, [adminKeypair, ...addLiq.signers], { skipPreflight: true });
+      addLiqSig = await provider.sendAndConfirm(addLiq.transaction, [adminKeypair, ...addLiq.signers]);
       console.log("✅ Liquidity added:", addLiqSig);
     } catch (e) {
       console.log("Add liquidity failed, simulating for logs...");
+      try { console.log("Preflight logs:", (e as any)?.logs); } catch { }
       const tx = addLiq.transaction;
-      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash();
-      tx.feePayer = admin.publicKey;
-      tx.recentBlockhash = blockhash;
-      // Sign with all required signers for simulation
-      try { tx.partialSign(adminKeypair); } catch {}
-      try { addLiq.signers.forEach((s: any) => tx.partialSign(s)); } catch {}
-      const sim = await (provider as any).simulate(tx, [adminKeypair, ...addLiq.signers]);
-      console.log("Simulation logs:", sim?.logs ?? sim?.value?.logs);
-      console.log("Simulation err:", sim?.err ?? sim?.value?.err);
+      try {
+        const { blockhash } = await provider.connection.getLatestBlockhash();
+        tx.feePayer = admin.publicKey;
+        tx.recentBlockhash = blockhash;
+        try { tx.partialSign(adminKeypair); } catch { }
+        try { addLiq.signers.forEach((s: any) => tx.partialSign(s)); } catch { }
+        try {
+          const sim = await (provider as any).simulate(tx, [adminKeypair, ...addLiq.signers]);
+          console.log("Simulation logs:", sim?.logs ?? sim?.value?.logs);
+          console.log("Simulation err:", sim?.err ?? sim?.value?.err);
+        } catch (e1) {
+          const sim2 = await provider.connection.simulateTransaction(tx as any, { sigVerify: false, replaceRecentBlockhash: true } as any);
+          console.log("Simulation logs:", sim2?.value?.logs);
+          console.log("Simulation err:", sim2?.value?.err);
+        }
+      } catch (e2) {
+        console.log("Simulation setup failed:", String((e2 as any)?.message || e2));
+      }
       throw e;
     }
     console.log("Explorer:", getExplorerUrl(provider, addLiqSig));

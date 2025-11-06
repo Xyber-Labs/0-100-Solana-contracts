@@ -849,6 +849,7 @@ export class TxBuilder {
     baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
     poolState: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [mintAuth] = this.getPda(["mint_auth", params.launch]);
@@ -870,7 +871,7 @@ export class TxBuilder {
         });
         const initializeMintIx = createInitializeMintInstruction(
           baseMint,
-          6,
+          9,
           escrowAuthority,
           null
         );
@@ -914,10 +915,7 @@ export class TxBuilder {
     );
 
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool_tick_array_bitmap_extension"),
-        poolState.toBuffer(),
-      ],
+      [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
       params.clmmProgram
     );
 
@@ -955,7 +953,7 @@ export class TxBuilder {
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
+      units: 1_400_000,
     });
 
     const transaction = new web3.Transaction();
@@ -971,6 +969,7 @@ export class TxBuilder {
       baseMint: baseMint,
       baseTokenAta,
       poolState,
+      tickArrayBitmap,
     };
   }
 
@@ -1006,7 +1005,7 @@ export class TxBuilder {
         });
         const initializeMintIx = createInitializeMintInstruction(
           baseMint,
-          6,
+          9,
           escrowAuthority,
           null
         );
@@ -1064,8 +1063,18 @@ export class TxBuilder {
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
+    poolState: web3.PublicKey;
     positionNftMint: web3.PublicKey;
+    positionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
     quoteTokenAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    tickArrayLower: web3.PublicKey;
+    tickArrayUpper: web3.PublicKey;
+    bitmapExtension: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
   }> {
     const [escrow] = this.getPda(["escrow", params.launch]);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
@@ -1086,6 +1095,10 @@ export class TxBuilder {
 
     const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolPda.toBuffer()],
+      params.clmmProgram
+    );
+    const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("tick_array_bitmap"), raydiumPoolPda.toBuffer()],
       params.clmmProgram
     );
 
@@ -1218,14 +1231,12 @@ export class TxBuilder {
         rent: web3.SYSVAR_RENT_PUBKEY,
       } as any)
       .remainingAccounts([
-        { pubkey: metadataAccount, isSigner: false, isWritable: false },
-        { pubkey: METADATA_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: bitmapExtension, isSigner: false, isWritable: true },
       ])
       .instruction();
 
     const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 400_000,
+      units: 1_400_000,
     });
 
     const transaction = new web3.Transaction()
@@ -1237,8 +1248,18 @@ export class TxBuilder {
       signers: [positionNftMint],
       quoteVault,
       baseVault,
+      poolState: raydiumPoolPda,
       positionNftMint: positionNftMint.publicKey,
+      positionNftAccount,
+      personalPosition,
+      protocolPosition,
       quoteTokenAta,
+      ammConfig: ammConfigForAdd,
+      tickArrayLower,
+      tickArrayUpper,
+      bitmapExtension,
+      tickArrayBitmap,
+      escrowAuthority,
     };
   }
 
