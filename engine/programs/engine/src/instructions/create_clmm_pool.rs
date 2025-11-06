@@ -111,7 +111,11 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let to_mint = ctx.accounts.launch_state.base_total_allocation;
+    // Mint base in atomic units: base_total_allocation * 10^decimals
+    let decimals_factor = 10u128.pow(ctx.accounts.base_mint.decimals as u32);
+    let to_mint_u128 = (ctx.accounts.launch_state.base_total_allocation as u128)
+        .saturating_mul(decimals_factor);
+    let to_mint = to_mint_u128 as u64;
 
     // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]
     let seeds: &[&[u8]] = &[

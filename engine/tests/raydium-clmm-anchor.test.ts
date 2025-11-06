@@ -35,9 +35,10 @@ describe("engine anchor - raydium clmm", () => {
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const ROSTER_SHARD_CAP = 100;
-  const SALE_ALLOCATION = new anchor.BN(540_540_000);
-  const LP_ALLOCATION = new anchor.BN(459_460_000);
-  const BASE_TOTAL = SALE_ALLOCATION.add(LP_ALLOCATION);
+  // New allocations: Sale 48.14%, Liquidity 41.86%, Team/Funding 10% (not part of base_total)
+  const SALE_ALLOCATION = new anchor.BN(481_400_000); // 48.14%
+  const LP_ALLOCATION = new anchor.BN(418_600_000);   // 41.86%
+  const BASE_TOTAL = SALE_ALLOCATION.add(LP_ALLOCATION); // 90% of total
   const SALE_BPS = new anchor.BN(Math.floor((SALE_ALLOCATION.toNumber() * 10000) / BASE_TOTAL.toNumber()));
 
   it("Initializes launch (no deposits here)", async () => {
@@ -179,19 +180,22 @@ describe("engine anchor - raydium clmm", () => {
       throw e;
     }
 
-    const sqrtLower = new anchor.BN(5);
+    const sqrtLower = await sdk.getSqrtPriceLowerX64ForPool({ launch: clmmLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
     const range = await sdk.getLiquidityRange({ launch: clmmLaunchState, sqrtPriceLowerX64: sqrtLower });
     console.log(`Liquidity range: lower=${range.tickArrayLower}, upper=${range.tickArrayUpper}`);
 
     const [escrowAuthority] = sdk.getEscrowAuthorityPda(clmmLaunchState);
-    const quoteAmountLamports = new anchor.BN(350_000_000_000);
+    // Use atomic units for base amount (decimals = 9)
+    const baseAmount = LP_ALLOCATION.mul(new anchor.BN(1_000_000_000));
+    // Fixed quote like AU to avoid >53-bit .toNumber overflow and match expected scale
+    const quoteAmountLamports = new anchor.BN(300_000_000_000);
     const totalLamports = quoteAmountLamports.toNumber() + 300_000_000; // +0.3 SOL buffer
     const fundTx = new anchor.web3.Transaction().add(
       anchor.web3.SystemProgram.transfer({ fromPubkey: adminKeypair.publicKey, toPubkey: escrowAuthority, lamports: totalLamports })
     );
     await provider.sendAndConfirm(fundTx, [adminKeypair]);
 
-    const baseAmount = LP_ALLOCATION; // amounts expected in mint base units on-chain
+    // base amount stays as whole tokens (contract expects same units for minting and liquidity)
 
     const addLiq = await sdk.addClmmLiquidityTx({
       payer: admin.publicKey,

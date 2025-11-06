@@ -11,6 +11,7 @@ import {
 import { getConstant } from "./utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -35,6 +36,50 @@ export class TxBuilder {
   private getIxMethod(primary: string, fallback: string) {
     const methods: any = (this.program as any).methods;
     return methods?.[primary] ?? methods?.[fallback];
+  }
+
+  async getSqrtPriceLowerX64ForPool(params: {
+    launch: web3.PublicKey;
+    priceBumpMultiplier?: number; // e.g. 1.15
+    lowerRangePow10?: number; // e.g. -5
+  }): Promise<BN> {
+    const launchState: any = await this.program.account.launchState.fetch(params.launch);
+    const baseMint: web3.PublicKey = launchState.baseMint as web3.PublicKey;
+    const straight = baseMint.toBuffer().compare(WSOL_MINT.toBuffer()) < 0;
+
+    const priceRatio = 7.16e-7; // same constant as on-chain calc
+    const basePrice = straight ? priceRatio : 1 / priceRatio;
+    const priceBump = params.priceBumpMultiplier ?? 1.15;
+    const lowerPow = params.lowerRangePow10 ?? -5;
+    const targetPriceLower = basePrice * priceBump * Math.pow(10, lowerPow);
+    const Q64 = Math.pow(2, 64);
+    const sqrtLower = Math.sqrt(targetPriceLower) * Q64;
+    // Convert potentially-large float to integer string safely (without exceeding JS safe integer)
+    const expStr = sqrtLower.toExponential(20); // mantissa with 20 digits
+    const [mantissaStr, eStr] = expStr.split("e");
+    const exp = parseInt(eStr, 10);
+    const [intPart, fracPartRaw] = mantissaStr.split(".");
+    const fracPart = (fracPartRaw ?? "").replace(/[^0-9]/g, "");
+    const digits = (intPart + fracPart).replace(/^0+/, "") || "0";
+    const k = exp - (fracPart.length);
+    let integerStr: string;
+    if (k >= 0) {
+      integerStr = digits + "0".repeat(k);
+    } else {
+      const cut = digits.length + k;
+      integerStr = cut > 0 ? digits.slice(0, cut) : "0";
+    }
+    // Floor to integer by construction
+    return new BN(integerStr === "" ? "0" : integerStr);
+  }
+
+  async estimateQuoteForBase(params: { launch: web3.PublicKey; baseAmount: BN; safetyBumpBps?: number }): Promise<BN> {
+    const baseTokens = BigInt(params.baseAmount.toString()); // base tokens (no decimals)
+    const bumpBps = BigInt((params.safetyBumpBps ?? 10200).toString()); // default +2%
+    // Economic price: 7.16e-7 SOL per base token → 716 lamports per base token
+    let quoteLamports = baseTokens * 716n;
+    quoteLamports = (quoteLamports * bumpBps) / 10000n;
+    return new BN(quoteLamports.toString());
   }
 
   getPda(seeds: (string | Buffer | web3.PublicKey | { publicKey?: web3.PublicKey } | Uint8Array)[]): [web3.PublicKey, number] {
