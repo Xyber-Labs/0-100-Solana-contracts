@@ -127,6 +127,7 @@ export class TxBuilder {
     saleStartTimeSec?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
+    rosterShardsTotal: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
@@ -172,6 +173,7 @@ export class TxBuilder {
       saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
       unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
       rosterShardCap: params.rosterShardCap,
+      rosterShardsTotal: params.rosterShardsTotal,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
@@ -234,6 +236,7 @@ export class TxBuilder {
     saleStartTimeSec?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
+    rosterShardsTotal: number;
     creatorInitialDepositLamports: BN;
     creatorDailyLamportsLimit: BN;
     creatorClaimLockPeriodSec: BN;
@@ -271,6 +274,7 @@ export class TxBuilder {
       saleStartTimeSec: params.saleStartTimeSec ?? 0,
       unlockTimeSec: params.unlockTimeSec ?? 0,
       rosterShardCap: params.rosterShardCap,
+      rosterShardsTotal: params.rosterShardsTotal,
       creatorInitialDepositLamports: params.creatorInitialDepositLamports,
       creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
@@ -958,6 +962,7 @@ export class TxBuilder {
     poolState: web3.PublicKey;
   }> {
     const [poolState] = this.getPda(["pool", params.launch]);
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const ix = await this.program.methods
@@ -965,6 +970,7 @@ export class TxBuilder {
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        creatorGrant,
         poolState,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: web3.SystemProgram.programId,

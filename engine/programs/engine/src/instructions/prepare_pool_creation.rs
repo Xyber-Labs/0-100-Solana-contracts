@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{PoolCreated, SelectionFinalized},
-    state::{LaunchState, PoolState},
+    state::{CreatorGrant, LaunchState, PoolState},
     utils::pool,
 };
 use anchor_lang::{
@@ -17,6 +17,13 @@ pub struct CreatePool<'info> {
 
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
+        bump,
+    )]
+    pub creator_grant: Account<'info, CreatorGrant>,
 
     #[account(
         init,
@@ -67,7 +74,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     pool_state.created_blockhash = valid_hash;
     pool_state.created = true;
 
-    finalize_selection(launch_state)?;
+    finalize_selection(launch_state, &mut ctx.accounts.creator_grant)?;
 
     // for claims and withdrawal testing, without pool creation
     #[cfg(feature = "test")]
@@ -154,11 +161,11 @@ fn select_blockhash(
     err!(EngineErrorCode::NoValidBlockhash)
 }
 
-fn finalize_selection(launch_state: &mut LaunchState) -> Result<()> {
+fn finalize_selection(launch_state: &mut LaunchState, creator_grant: &mut CreatorGrant) -> Result<()> {
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
-        let creator_share_ppm = (launch_state.creator_initial_deposit as u128)
+        let creator_share_ppm = (creator_grant.locked_lamports as u128)
             .checked_mul(1_000_000)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
             .checked_div(launch_state.hard_cap_lamports as u128)
@@ -169,7 +176,9 @@ fn finalize_selection(launch_state: &mut LaunchState) -> Result<()> {
             .checked_div(1_000_000)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(creator_reserved_u128 <= u32::MAX as u128, EngineErrorCode::U64ConversionOverflow);
-        launch_state.creator_reserved_tickets = creator_reserved_u128 as u32;
+        let creator_reserved_u32 = creator_reserved_u128 as u32;
+        launch_state.creator_reserved_tickets = creator_reserved_u32;
+        creator_grant.reserved_tickets = creator_reserved_u32;
     }
 
     let total_allocation = launch_state.base_total_allocation;

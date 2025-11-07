@@ -2902,6 +2902,47 @@ export type Engine = {
           "writable": true
         },
         {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "poolState",
           "writable": true,
           "pda": {
@@ -3864,71 +3905,76 @@ export type Engine = {
     },
     {
       "code": 6053,
+      "name": "shardIdOutOfRange",
+      "msg": "Roster shard id is out of allowed range"
+    },
+    {
+      "code": 6054,
       "name": "noTokensToClaim",
       "msg": "User has no tokens to claim"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "noDistributionRules",
       "msg": "No distribution rules found for market cap"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "recipientNotFound",
       "msg": "Recipient not found in distribution"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "invalidShareSum",
       "msg": "Sum of shares in tier must equal 10000 basis points"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "invalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "poolNotCreated",
       "msg": "Pool not created yet"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "teamVestingMissing",
       "msg": "Team vesting account is missing"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "teamVestingNotStarted",
       "msg": "Team vesting is not started yet"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "teamClaimsNotOpen",
       "msg": "Team claims are not open yet"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "teamClaimTooFrequent",
       "msg": "Claim is too frequent"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
     }
@@ -4357,6 +4403,10 @@ export type Engine = {
           },
           {
             "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterShardsTotal",
             "type": "u16"
           },
           {

@@ -36,14 +36,11 @@ pub struct InitRosterShard<'info> {
 pub fn init_roster_shard(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
+    require!(shard_id < launch_state.roster_shards, crate::errors::ErrorCode::ShardIdOutOfRange);
     shard.launch = launch_state.key();
     shard.shard_id = shard_id;
     shard.total_in_shard = 0;
     shard.shard_base = 0;
-
-    // Ensure launch_state.roster_shards reflects at least max(shard_id) + 1
-    let required = shard_id.saturating_add(1);
-    launch_state.roster_shards = launch_state.roster_shards.max(required);
 
     emit!(RosterShardInitialized {
         launch: launch_state.key(),

@@ -262,6 +262,8 @@ export async function runFullFlow(
     const metaName = `Lumi Project #${projectId}`;
     const metaSymbol = "LUMI";
     const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
+    const kCap = Math.floor(config.hardCapLamports / config.tauLamports);
+    const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
     const { initLaunchTx } = await (sdk as any).initLaunchTx({
       creator: admin.publicKey,
       projectId,
@@ -274,6 +276,7 @@ export async function runFullFlow(
       fundingDurationSeconds,
       unlockTimeSec: config.unlockTimeSec,
       rosterShardCap: config.rosterShardCap,
+      rosterShardsTotal,
       creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
@@ -447,9 +450,18 @@ export async function runFullFlow(
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
-    for (let i = 0; i < numShards; i++) {
+    // Ensure ALL shards up to launch_state.roster_shards are finalized
+    const launchAfterDeposits: any = await sdk.fetchLaunch(testLaunchState);
+    const totalShards: number = Number(launchAfterDeposits.rosterShards ?? 0);
+    for (let i = 0; i < totalShards; i++) {
+      // initialize shard if it wasn't created earlier (empty shard is OK)
+      try {
+        await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
+      } catch (_) {
+        // ignore if exists
+      }
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
-      addLog(`   -> Shard ${i} finalized.`);
+      addLog(`   -> Shard ${i}/${totalShards - 1} finalized.`);
     }
 
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
@@ -459,8 +471,63 @@ export async function runFullFlow(
     addLog(`\n[7/10] Prepare Pool Creation...`);
     await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
 
-    const mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
-    addLog(`      - Minted base mint: ${mintedBaseMint.toBase58()}`);
+    let mintedBaseMint: PublicKey | null = null;
+    try {
+      mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
+      addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      if (msg.includes("mintForTest is unavailable")) {
+        const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
+        // Auto-select CLMM program if not provided: devnet -> DRay..., else CAMMC...
+        let clmmProgramStr = String(config.clmmProgram || "");
+        if (!clmmProgramStr) {
+          const ep = (provider as any)?.connection?.rpcEndpoint || "";
+          clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+          addLog?.(`      - Using default CLMM Program: ${clmmProgramStr}`);
+          (config as any).clmmProgram = clmmProgramStr;
+        }
+        const quoteMintPk = new PublicKey(quoteMintStr);
+        const clmmProgramPk = new PublicKey(clmmProgramStr);
+        addLog("      - Falling back to Raydium pool creation (mints sale tokens to escrow)...");
+        const createPool = await (sdk as any).createClmmPoolTx({
+          payer: (provider as any).wallet.publicKey,
+          launch: testLaunchState,
+          quoteMint: quoteMintPk,
+          baseMint: testBaseMint,
+          clmmProgram: clmmProgramPk,
+          provider,
+        });
+        const sig = await (provider as any).sendAndConfirm(createPool.transaction, createPool.signers);
+        addLog(`      - CLMM pool created. Signature: ${sig}`);
+        mintedBaseMint = testBaseMint.publicKey;
+
+        // Add minimal initial liquidity to open claims (sets pool_state.claims_ready = true)
+        try {
+          const sqrtLower = await (sdk as any).getSqrtPriceLowerX64ForPool({ launch: testLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
+          const baseAmount = new BN(1_000_000_000); // 1 base token (decimals=9)
+          const quoteAmount = new BN(100_000_000);  // 0.1 SOL (lamports)
+          const addLiq = await (sdk as any).addClmmLiquidityTx({
+            payer: (provider as any).wallet.publicKey,
+            launch: testLaunchState,
+            quoteMint: quoteMintPk,
+            baseMint: testBaseMint.publicKey,
+            baseTokenAta: createPool.baseTokenAta,
+            clmmProgram: clmmProgramPk,
+            provider,
+            baseAmount,
+            quoteAmount,
+            sqrtPriceLowerX64: sqrtLower,
+          });
+          const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
+          addLog(`      - Initial liquidity added. Signature: ${sigL}`);
+        } catch (liqErr: any) {
+          addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
+        }
+      } else {
+        throw e;
+      }
+    }
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
