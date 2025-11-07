@@ -339,6 +339,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         lastProjectId = 0;
       }
       const projectId = lastProjectId + 1;
+      const kCap = Math.floor(launchConfig.hardCapLamports / launchConfig.tauLamports);
+      const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, launchConfig.rosterShardCap)));
       const res = await sdk.initLaunch({
         projectId,
         hardCapLamports: new BN(launchConfig.hardCapLamports),
@@ -350,6 +352,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         fundingDurationSeconds: getFundingDurationInSeconds(),
         unlockTimeSec: launchConfig.unlockTimeSec,
         rosterShardCap: launchConfig.rosterShardCap,
+        rosterShardsTotal,
         creatorInitialDepositLamports: new BN(launchConfig.creatorInitialDepositLamports),
         creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
         creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),

@@ -262,6 +262,8 @@ export async function runFullFlow(
     const metaName = `Lumi Project #${projectId}`;
     const metaSymbol = "LUMI";
     const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
+    const kCap = Math.floor(config.hardCapLamports / config.tauLamports);
+    const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
     const { initLaunchTx } = await (sdk as any).initLaunchTx({
       creator: admin.publicKey,
       projectId,
@@ -274,6 +276,7 @@ export async function runFullFlow(
       fundingDurationSeconds,
       unlockTimeSec: config.unlockTimeSec,
       rosterShardCap: config.rosterShardCap,
+      rosterShardsTotal,
       creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),

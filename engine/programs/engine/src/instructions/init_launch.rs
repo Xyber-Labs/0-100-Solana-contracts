@@ -97,6 +97,7 @@ pub struct InitLaunchParams {
     pub sale_start_time_sec: i64,
     pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
+    pub roster_shards_total: u16,
 
     // Creator grant parameters
     pub creator_initial_deposit_lamports: u64, // usually 8 * LAMPORTS_PER_SOL
@@ -131,6 +132,7 @@ pub fn init_launch(
         EngineErrorCode::MinRaiseTooHigh
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
+    require!(params.roster_shards_total > 0, EngineErrorCode::InvalidK);
     let fee = ctx.accounts.engine_config.creation_fee;
     if fee > 0 {
         require!(ctx.accounts.creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
@@ -201,7 +203,7 @@ pub fn init_launch(
     state.vrf_seed = None;
 
     // Sharded roster fields
-    state.roster_shards = 0; // UI must set before creating shards
+    state.roster_shards = params.roster_shards_total;
     state.roster_finalized_up_to = -1;
     state.public_total_tickets = 0;
 

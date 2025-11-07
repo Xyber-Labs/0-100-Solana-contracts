@@ -173,6 +173,7 @@ describe("engine anchor - raydium clmm", () => {
       baseSaleBasisPoints: SALE_BPS,
       fundingDurationSeconds: 5,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: 1,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),

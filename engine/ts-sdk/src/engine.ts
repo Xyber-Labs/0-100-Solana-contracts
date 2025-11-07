@@ -136,6 +136,7 @@ const EngineSDK = {
       saleStartTimeSec?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
+      rosterShardsTotal: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
       creatorClaimLockPeriodSec: BN;
@@ -177,6 +178,7 @@ const EngineSDK = {
           saleStartTimeSec: args.saleStartTimeSec ?? 0,
           unlockTimeSec: args.unlockTimeSec ?? 0,
           rosterShardCap: args.rosterShardCap,
+          rosterShardsTotal: args.rosterShardsTotal,
           creatorInitialDepositLamports: args.creatorInitialDepositLamports,
           creatorDailyLamportsLimit: args.creatorDailyLamportsLimit,
           creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,
@@ -223,6 +225,7 @@ const EngineSDK = {
       saleStartTimeSec?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
+      rosterShardsTotal: number;
       creatorInitialDepositLamports: BN;
       creatorDailyLamportsLimit: BN;
       creatorClaimLockPeriodSec: BN;

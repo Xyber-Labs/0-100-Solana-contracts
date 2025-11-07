@@ -128,6 +128,7 @@ describe("engine litesvm", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -247,6 +248,7 @@ describe("engine litesvm", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -283,6 +285,7 @@ describe("engine litesvm", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -347,6 +350,7 @@ describe("engine litesvm", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -441,6 +445,7 @@ describe("engine litesvm", () => {
         fundingDurationSeconds: 10,
         saleStartTimeSec: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
+        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
         creatorDailyLamportsLimit: new anchor.BN(0),
         creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -467,6 +472,7 @@ describe("engine litesvm", () => {
         fundingDurationSeconds: 10,
         saleStartTimeSec: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
+        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
         creatorDailyLamportsLimit: new anchor.BN(0),
         creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -493,6 +499,7 @@ describe("engine litesvm", () => {
         fundingDurationSeconds: 10,
         saleStartTimeSec: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
+        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
         creatorDailyLamportsLimit: new anchor.BN(0),
         creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -733,6 +740,7 @@ describe("engine litesvm", () => {
         fundingDurationSeconds: 10,
         saleStartTimeSec: 0,
         rosterShardCap: 100,
+      rosterShardsTotal: 1,
         creatorInitialDepositLamports: new anchor.BN(0),
         creatorDailyLamportsLimit: new anchor.BN(0),
         creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -878,6 +886,7 @@ describe("engine litesvm", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 10,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
       creatorClaimLockPeriodSec: new anchor.BN(2),
@@ -926,7 +935,10 @@ describe("engine litesvm", () => {
     const testPerWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
     const testTau = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const { projectId, launchPda } = await sdk.initLaunchAuto({
+    const projectId = await sdk.getNextProjectId();
+    const { initLaunchTx, launchState: launchPda } = await sdk.initLaunchTx({
+      creator: admin.publicKey,
+      projectId,
       hardCapLamports: testHardCap,
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
@@ -936,13 +948,18 @@ describe("engine litesvm", () => {
       fundingDurationSeconds: 20,
       unlockTimeSec: 0,
       rosterShardCap: 100,
+      rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / 100)),
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
+      provider,
       creatorMaxDepositLamports: MAX,
-      creator: adminKeypair,
       xyberMint,
-    });
+      name: "Lumi",
+      symbol: "LUMI",
+      uri: "https://metadata.xyberlabs.dev/lumi/default.json",
+    } as any);
+    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
 
     // Deposit 2 SOL by creator
     const dep1 = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
@@ -1250,6 +1267,7 @@ describe("Full flow", () => {
       baseSaleBasisPoints: BASE_SALE_BPS_F,
       fundingDurationSeconds: 11,
       rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: creatorDepositAmount,
       creatorDailyLamportsLimit: dailyLimit,
       creatorClaimLockPeriodSec: new anchor.BN(2),

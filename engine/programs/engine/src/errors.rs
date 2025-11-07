@@ -111,6 +111,8 @@ pub enum ErrorCode {
     ShardNotFinalized,
     #[msg("Claims cannot be opened before all shards finalized")]
     ShardsNotFullyFinalized,
+    #[msg("Roster shard id is out of allowed range")]
+    ShardIdOutOfRange,
     #[msg("User has no tokens to claim")]
     NoTokensToClaim,
     #[msg("No distribution rules found for market cap")]
