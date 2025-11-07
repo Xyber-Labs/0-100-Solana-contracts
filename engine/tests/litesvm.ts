@@ -13,12 +13,32 @@ import {
   unpackAccount
 } from "@solana/spl-token";
 import { assert } from "chai";
+import fs from "fs";
+import path from "path";
+import { execSync } from "child_process";
 
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 
 import { advanceTime, createAndFundAccount, injectSlotHashesForRange } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
+
+function ensureRaydiumResources(): void {
+  const dirA = path.resolve(__dirname, "resources");
+  const dirB = path.resolve(__dirname, "recources");
+  if (!fs.existsSync(dirA) && !fs.existsSync(dirB)) {
+    const script = path.resolve(__dirname, "dump-raydium.sh");
+    execSync(`bash "${script}"`, { stdio: "inherit", cwd: path.resolve(__dirname, "..") });
+    const nested = path.resolve(__dirname, "tests", "resources");
+    if (fs.existsSync(nested) && !fs.existsSync(dirA)) {
+      fs.mkdirSync(path.dirname(dirA), { recursive: true });
+      try { fs.renameSync(nested, dirA); } catch {}
+      try { fs.rmdirSync(path.resolve(__dirname, "tests")); } catch {}
+    }
+  }
+}
+
+ensureRaydiumResources();
 
 let client: LiteSVM;
 let provider: LiteSVMProvider;
