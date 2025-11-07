@@ -259,7 +259,11 @@ export async function runFullFlow(
       throw new Error("Invalid config: lpAllocation is zero; LP must be > 0");
     }
 
-    const initRes = await sdk.initLaunch({
+    const metaName = `Lumi Project #${projectId}`;
+    const metaSymbol = "LUMI";
+    const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
+    const { initLaunchTx } = await (sdk as any).initLaunchTx({
+      creator: admin.publicKey,
       projectId,
       hardCapLamports: new BN(config.hardCapLamports),
       minRaiseLamports: new BN(config.minRaiseLamports),
@@ -275,13 +279,19 @@ export async function runFullFlow(
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       creatorMaxDepositLamports: new BN((config as any).creatorMaxDepositLamports ?? config.creatorInitialDepositLamports),
       xyberMint,
+      name: metaName,
+      symbol: metaSymbol,
+      uri: metaUri,
+      isMutable: true,
+      sellerFeeBasisPoints: 0,
     });
+    const signature = await provider.sendAndConfirm!(initLaunchTx, []);
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
     const grossLaunchCost = balanceBeforeLaunch - balanceAfterLaunch;
     const launchTxFees = grossLaunchCost - config.creatorInitialDepositLamports - MINT_RENT;
 
-    addLog(`   -> Launch initialized. Signature: ${initRes.signature}`);
+    addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
     // Compute expected k_capacity and public target tickets to ensure full sale coverage

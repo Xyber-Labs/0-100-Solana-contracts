@@ -109,10 +109,14 @@ export async function preparePoolCreationWithRetry(params: {
   addLog?: AddLog;
 }): Promise<void> {
   const { sdk, launchPda, retries = 5, computeUnits = 2_000_000, addLog } = params;
+  const provider: any = (sdk as any).program?.provider;
+  const payer = provider?.wallet?.publicKey;
+  if (!provider || !payer) throw new Error("Missing provider or wallet for preparePoolCreation");
   let prepared = false;
   for (let i = 0; i < retries; i++) {
     try {
-      await sdk.preparePoolCreation({ launch: launchPda, computeUnits });
+      const { transaction } = await (sdk as any).preparePoolCreationTx({ payer, launch: launchPda, computeUnits });
+      await provider.sendAndConfirm(transaction, []);
       prepared = true;
       addLog?.("preparePoolCreation succeeded (valid recent blockhash found).");
       break;
