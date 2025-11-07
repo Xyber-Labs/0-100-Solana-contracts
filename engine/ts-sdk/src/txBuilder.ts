@@ -962,6 +962,7 @@ export class TxBuilder {
     poolState: web3.PublicKey;
   }> {
     const [poolState] = this.getPda(["pool", params.launch]);
+    const [creatorGrant] = this.getPda(["creator", params.launch]);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const ix = await this.program.methods
@@ -969,6 +970,7 @@ export class TxBuilder {
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        creatorGrant,
         poolState,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: web3.SystemProgram.programId,

@@ -141,9 +141,20 @@ export async function mintForTestSafe(params: {
 }): Promise<PublicKey> {
   const { sdk, launchPda, baseMintKeypair, addLog } = params;
   const isRealKeypair = !!(baseMintKeypair && (baseMintKeypair as any).secretKey && typeof (baseMintKeypair as any).secretKey.length === "number");
-  const res = await sdk.mintForTest({ launch: launchPda, baseMint: isRealKeypair ? (baseMintKeypair as Keypair) : undefined });
-  addLog?.(`Minted base tokens to escrow. Signature: ${res.signature}`);
-  return res.baseMint;
+  try {
+    const res = await sdk.mintForTest({ launch: launchPda, baseMint: isRealKeypair ? (baseMintKeypair as Keypair) : undefined });
+    addLog?.(`Minted base tokens to escrow. Signature: ${res.signature}`);
+    return res.baseMint;
+  } catch (e: any) {
+    const msg = String(e?.message || e || "");
+    // Anchor fallback when instruction is not compiled (feature "test" not enabled)
+    if (msg.includes("InstructionFallbackNotFound") || msg.includes("0x65")) {
+      const friendly = "mintForTest is unavailable on this deployment (program built without test feature). Use LiteSVM tests or deploy a test build, or create CLMM pool and add liquidity instead.";
+      addLog?.(friendly);
+      throw new Error(friendly);
+    }
+    throw e;
+  }
 }
 
 
