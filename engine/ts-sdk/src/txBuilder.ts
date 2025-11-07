@@ -1,5 +1,5 @@
 import { BN, Program, web3 } from "@coral-xyz/anchor";
-import { Engine as EngineIDL } from "../idl/engine";
+import type { Engine as EngineIDL } from "../idl/engine";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -18,7 +18,7 @@ export class TxBuilder {
   private seedRoot: Buffer;
   private ammConfigIndex: number;
 
-  constructor(program: Program<EngineIDL>, admin?: web3.Keypair) {
+  constructor(program: Program<EngineIDL>, _admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
     const constants: any[] = ((this.program as any).idl?.constants ?? []) as any[];
@@ -772,11 +772,7 @@ export class TxBuilder {
     return { transaction, creatorAta };
   }
 
-  private ensure32Bytes(seed: Uint8Array | number[] | Buffer): Buffer {
-    const buf = Buffer.from(seed);
-    if (buf.length !== 32) throw new Error("seed must be 32 bytes");
-    return buf;
-  }
+  
 
   async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
@@ -1012,7 +1008,7 @@ export class TxBuilder {
     tickArrayBitmap: web3.PublicKey;
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [mintAuth] = this.getPda(["mint_auth", params.launch]);
+    
     const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
     const baseMint = (isKeypair
       ? (params.baseMint as any).publicKey
@@ -1253,7 +1249,7 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     tickArrayBitmap: web3.PublicKey;
   }> {
-    const [escrow] = this.getPda(["escrow", params.launch]);
+    
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const launchState = await this.program.account.launchState.fetch(params.launch);
     const baseMint = launchState.baseMint as web3.PublicKey;
@@ -1311,14 +1307,7 @@ export class TxBuilder {
       TOKEN_2022_PROGRAM_ID
     );
 
-    const [metadataAccount] = web3.PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("metadata"),
-        METADATA_PROGRAM_ID.toBuffer(),
-        positionNftMint.publicKey.toBuffer(),
-      ],
-      METADATA_PROGRAM_ID
-    );
+    
 
     const [personalPosition] = web3.PublicKey.findProgramAddressSync(
       [

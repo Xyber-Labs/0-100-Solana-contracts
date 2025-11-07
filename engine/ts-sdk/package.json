@@ -4,7 +4,8 @@
   "main": "dist/src/engine.js",
   "types": "dist/src/engine.d.ts",
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "prepack": "tsc -b"
   },
   "files": [
     "dist",

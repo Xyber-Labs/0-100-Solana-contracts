@@ -8,11 +8,9 @@ import {
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
-  createInitializeMintInstruction,
   createMintToInstruction,
   createTransferInstruction,
   getAssociatedTokenAddressSync,
-  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
 // import type EngineSDK from "../../../ts-sdk/src/engine";
@@ -209,14 +207,9 @@ export async function runFullFlow(
     }
     const projectId = lastProjectId + 1;
     [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
-    const [escrow] = sdk.getEscrowPda(testLaunchState);
-    const [projectCounter] = sdk.getProjectCounterPda();
 
     // Check if getCreatorGrantPda exists before calling it
-    let creatorGrant: PublicKey;
-    if (typeof sdk.getCreatorGrantPda === 'function') {
-      [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
-    } else {
+    if (typeof sdk.getCreatorGrantPda !== 'function') {
       throw new Error(`getCreatorGrantPda method not found on SDK. Available methods: ${Object.keys(sdk).join(', ')}`);
     }
 
