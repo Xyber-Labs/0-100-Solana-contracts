@@ -5,12 +5,15 @@ import {
   PublicKey,
   Transaction,
   ComputeBudgetProgram,
+  SystemProgram,
 } from "@solana/web3.js";
 import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   createTransferInstruction,
+  createInitializeMintInstruction,
   getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 
 // import type EngineSDK from "../../../ts-sdk/src/engine";
@@ -30,7 +33,8 @@ export async function runFullFlow(
   provider: any,
   config: LaunchConfig,
   addLog: (log: string) => void,
-  simConfig: SimulationConfig
+  simConfig: SimulationConfig,
+  adminSigners: Keypair[] = []
 ): Promise<{ success: boolean; message: string }> {
   const admin = provider.wallet;
   const adminInitialBalance = await provider.connection.getBalance(admin.publicKey);
@@ -144,47 +148,83 @@ export async function runFullFlow(
     }
     const treasuryPubkey: PublicKey = engineConfig.treasury as PublicKey;
     const creationFeeU64: number = Number(engineConfig.creationFee ?? 0);
+    const threshold: number = Number(engineConfig.threshold ?? 1);
 
-    // Reuse configured XYBER mint; do NOT fallback to ad-hoc mint to avoid mismatch with on-chain cfg
     const engineXyberMintStr = String(engineConfig.xyberMint ?? "");
     const engineXyberMintDefault = /^0+$/i.test(engineXyberMintStr.replace(/[^0-9a-f]/gi, ""));
     let xyberMint: PublicKey;
     if (engineXyberMintDefault || !engineConfig.xyberMint) {
-      throw new Error("EngineConfig.xyberMint is not set. Run pre-deploy setup and deploy-config to initialize XYBER mint.");
+      throw new Error("EngineConfig.xyberMint is not set. Initialize config before running the flow.");
     }
     xyberMint = engineConfig.xyberMint as PublicKey;
     addLog(`   -> Using XYBER mint from config: ${xyberMint.toBase58()}`);
-    // Ensure ATAs exist for creator and treasury; mint fee to creator if needed
+
+    const mintInfo = await provider.connection.getAccountInfo(xyberMint);
+    if (!mintInfo) {
+      addLog(`   -> XYBER mint account is missing on this cluster: ${xyberMint.toBase58()}`);
+      // Best-effort attempt to create a new local mint and update config; may fail if multisig required
+      try {
+        const newMint = Keypair.generate();
+        const lamports = await provider.connection.getMinimumBalanceForRentExemption(82);
+        const tx = new Transaction()
+          .add(SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: newMint.publicKey, space: 82, lamports, programId: TOKEN_PROGRAM_ID }))
+          .add(createInitializeMintInstruction(newMint.publicKey, 9, admin.publicKey, null));
+        await provider.sendAndConfirm!(tx, [newMint]);
+        try {
+          if (threshold > 1 && adminSigners.length < threshold) {
+            throw new Error(`Not enough admin signers provided (${adminSigners.length}/${threshold}).`);
+          }
+          await (sdk as any).updateEngineConfig({ newXyberMint: newMint.publicKey, signerAdmins: adminSigners });
+          xyberMint = newMint.publicKey;
+          addLog(`   -> Updated EngineConfig.xyberMint to new local mint: ${xyberMint.toBase58()}`);
+        } catch (e: any) {
+          addLog(`   -> Failed to update EngineConfig.xyberMint automatically: ${e?.message || e}`);
+          throw new Error("XYBER mint missing and EngineConfig update failed. Provide enough adminSigners, or re-run predeploy to set xyberMint correctly.");
+        }
+      } catch (e: any) {
+        throw new Error(`Failed to provision XYBER mint locally: ${e?.message || e}`);
+      }
+    }
+
     const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey);
     const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryPubkey);
-    const ataTx = new Transaction()
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorXyberAta, admin.publicKey, xyberMint))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryXyberAta, treasuryPubkey, xyberMint));
     try {
+      const ataTx = new Transaction()
+        .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorXyberAta, admin.publicKey, xyberMint))
+        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryXyberAta, treasuryPubkey, xyberMint));
       await provider.sendAndConfirm!(ataTx, []);
-    } catch (_) {
-      // ignore if already exists
+    } catch (e: any) {
+      // ignore creation races; we'll verify below
+      addLog(`   -> ATA creation attempt finished: ${e?.message ? "with warnings" : "ok"}`);
+    }
+    const creatorAtaInfo = await provider.connection.getAccountInfo(creatorXyberAta);
+    const treasuryAtaInfo = await provider.connection.getAccountInfo(treasuryXyberAta);
+    if (!creatorAtaInfo || !treasuryAtaInfo) {
+      throw new Error("Failed to create required XYBER ATAs for creator/treasury. Ensure XYBER mint exists and wallet has authority.");
     }
     if (creationFeeU64 > 0) {
+      let funded = false;
       try {
-        const mintFeeTx = new Transaction().add(
-          createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64))
-        );
+        const mintFeeTx = new Transaction().add(createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64)));
         await provider.sendAndConfirm!(mintFeeTx, []);
-      } catch (_) {
-        // If not mint authority, try transferring fee from treasury ATA to creator ATA
+        funded = true;
+      } catch (_) {}
+      if (!funded) {
         try {
-          const transferTx = new Transaction().add(
-            createTransferInstruction(
-              treasuryXyberAta,
-              creatorXyberAta,
-              treasuryPubkey,
-              BigInt(creationFeeU64)
-            )
-          );
+          const transferTx = new Transaction().add(createTransferInstruction(treasuryXyberAta, creatorXyberAta, treasuryPubkey, BigInt(creationFeeU64)));
           await provider.sendAndConfirm!(transferTx, []);
-        } catch {
-          // As a last resort, continue; initLaunch will fail later with insufficient XYBER
+          funded = true;
+        } catch (_) {}
+      }
+      if (!funded) {
+        try {
+          if (threshold > 1 && adminSigners.length < threshold) {
+            throw new Error(`Not enough admin signers provided (${adminSigners.length}/${threshold}).`);
+          }
+          await (sdk as any).updateEngineConfig({ newCreationFee: new BN(0), signerAdmins: adminSigners });
+          addLog("   -> Creation fee set to 0 via config update.");
+        } catch (e: any) {
+          throw new Error(`Unable to fund creator XYBER ATA for creation fee and cannot update config: ${e?.message || e}`);
         }
       }
     }

@@ -2989,6 +2989,120 @@ export type Engine = {
       "args": []
     },
     {
+      "name": "mintForTest",
+      "discriminator": [
+        220,
+        129,
+        50,
+        237,
+        118,
+        129,
+        46,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseMint",
+          "writable": true
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "baseTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associatedTokenProgram"
+            }
+          }
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "preparePoolCreation",
       "docs": [
         "Create AMM pool"
