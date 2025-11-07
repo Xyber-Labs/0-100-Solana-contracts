@@ -3,12 +3,12 @@ use anchor_lang::prelude::*;
 pub mod errors;
 #[cfg(test)]
 mod income_calculator;
+pub mod instructions;
 pub mod state;
 
-use errors::ErrorCode;
-use state::*;
+use crate::instructions::*;
 
-declare_id!("5RBTApVVa2JYk2w5WhjxXPseWb4uCDMnBbtGCSVf4b2p");
+declare_id!("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
 
 #[constant]
 pub const SEED_ROOT: &[u8] = b"income-dispatcher";
@@ -22,42 +22,19 @@ pub mod income_dispatcher {
         platform_wallet: Pubkey,
         income_source: Pubkey,
     ) -> Result<()> {
-        let config = &mut ctx.accounts.config;
-        config.admin = ctx.accounts.admin.key();
-        config.platform_wallet = platform_wallet;
-        config.income_source = income_source;
-        Ok(())
+        instructions::initialize(ctx, platform_wallet, income_source)
     }
 
     pub fn update_platform_wallet(
         ctx: Context<UpdatePlatformWallet>,
         new_platform_wallet: Pubkey,
     ) -> Result<()> {
-        let config = &mut ctx.accounts.config;
-        config.platform_wallet = new_platform_wallet;
-        Ok(())
+        instructions::update_platform_wallet(ctx, new_platform_wallet)
     }
-}
 
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(
-        init,
-        payer = admin,
-        space = 8 + Config::INIT_SPACE,
-        seeds = [SEED_ROOT, b"config"],
-        bump
-    )]
-    pub config: Account<'info, Config>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdatePlatformWallet<'info> {
-    #[account(constraint = admin.key() == config.admin @ ErrorCode::Unauthorized)]
-    pub admin: Signer<'info>,
-    #[account(mut, seeds = [SEED_ROOT, b"config"], bump)]
-    pub config: Account<'info, Config>,
+    pub fn claim_clmm_fees_by_admin<'info>(
+        ctx: Context<'_, '_, '_, 'info, ClaimClmmFeesByAdmin<'info>>,
+    ) -> Result<()> {
+        instructions::claim_clmm_fees_by_admin(ctx)
+    }
 }

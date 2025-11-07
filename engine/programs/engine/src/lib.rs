@@ -2,8 +2,8 @@
 
 use anchor_lang::prelude::*;
 
-use constants::*;
 pub use constants::WSOL_MINT;
+use constants::*;
 use state::*;
 
 use crate::instructions::*;
@@ -111,5 +111,11 @@ pub mod engine {
 
     pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
         instructions::get_liquidity_range(ctx)
+    }
+
+    pub fn claim_clmm_fees<'info>(
+        ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'info>>,
+    ) -> Result<()> {
+        instructions::claim_clmm_fees(ctx)
     }
 }

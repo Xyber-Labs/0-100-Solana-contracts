@@ -30,8 +30,8 @@ mod tests {
 
     #[test]
     fn test_range_utilizes_both_tokens() {
-        let base_amount = 440_000_000u64;
-        let quote_amount = 300u64;
+        let _base_amount = 440_000_000u64;
+        let _quote_amount = 300u64;
 
         let LiquidityRange {
             tick_array_lower,

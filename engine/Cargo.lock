@@ -769,6 +769,9 @@ name = "income-dispatcher"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "anchor-spl",
+ "engine",
+ "raydium-amm-v3",
 ]
 
 [[package]]

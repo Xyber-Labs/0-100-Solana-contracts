@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use raydium_amm_v3::{libraries::tick_math, states::TickArrayState};
 
 pub use add_clmm_liquidity::*;
+pub use claim_clmm_fees::*;
 pub use claim_creator_refund::*;
 pub use claim_creator_tokens::*;
 pub use claim_refund::*;
@@ -20,6 +21,7 @@ pub use set_seed::*;
 pub use withdraw::*;
 
 mod add_clmm_liquidity;
+mod claim_clmm_fees;
 mod claim_creator_refund;
 mod claim_creator_tokens;
 mod claim_refund;

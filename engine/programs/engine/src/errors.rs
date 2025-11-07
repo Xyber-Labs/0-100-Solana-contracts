@@ -83,6 +83,9 @@ pub enum ErrorCode {
     #[msg("Invalid owner for ATA")]
     InvalidOwner,
 
+    #[msg("Invalid authority")]
+    InvalidAuthority,
+
     #[msg("Hard cap must be > 0")]
     InvalidHardCap,
     #[msg("Min raise must be > 0")]
