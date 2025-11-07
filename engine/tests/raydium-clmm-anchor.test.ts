@@ -308,7 +308,7 @@ describe("engine anchor - raydium clmm", () => {
     // Use atomic units for base amount (decimals = 9)
     const baseAmount = LP_ALLOCATION.mul(new anchor.BN(1_000_000_000));
     // Fixed quote like AU to avoid >53-bit .toNumber overflow and match expected scale
-    const quoteAmountLamports = new anchor.BN(300_000_000_000);
+    const quoteAmountLamports = new anchor.BN(310_000_000_000);
     const totalLamports = quoteAmountLamports.toNumber() + 300_000_000; // +0.3 SOL buffer
     const fundTx = new anchor.web3.Transaction().add(
       anchor.web3.SystemProgram.transfer({ fromPubkey: adminKeypair.publicKey, toPubkey: escrowAuthority, lamports: totalLamports })
