@@ -106,6 +106,10 @@ export class TxBuilder {
     return this.getPda(["roster_shard", launch, le]);
   }
 
+  getTokenMetadataConfigPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["token_metadata", launch]);
+  }
+
   getTeamVestingPda(launch: web3.PublicKey): [web3.PublicKey, number] {
     return this.getPda(["team", launch]);
   }
@@ -129,6 +133,11 @@ export class TxBuilder {
     creatorMaxDepositLamports: BN;
     poolCreationGracePeriodSec?: number;
     xyberMint: web3.PublicKey;
+    name: string;
+    symbol: string;
+    uri: string;
+    isMutable?: boolean;
+    sellerFeeBasisPoints?: number;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -168,6 +177,11 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       creatorMaxDeposit: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
+      name: params.name,
+      symbol: params.symbol,
+      uri: params.uri,
+      isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
+      sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
     };
 
     const [engineConfig] = this.getPda(["config"]);
@@ -192,6 +206,7 @@ export class TxBuilder {
         engineConfig,
         creatorXyberAta,
         treasuryXyberAta,
+        tokenMetadataConfig: this.getTokenMetadataConfigPda(launchState)[0],
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       } as any)
@@ -226,6 +241,11 @@ export class TxBuilder {
     creatorMaxDepositLamports: BN;
     poolCreationGracePeriodSec?: number;
     xyberMint: web3.PublicKey;
+    name: string;
+    symbol: string;
+    uri: string;
+    isMutable?: boolean;
+    sellerFeeBasisPoints?: number;
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
@@ -257,6 +277,11 @@ export class TxBuilder {
       creatorMaxDepositLamports: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: params.poolCreationGracePeriodSec,
       xyberMint: params.xyberMint,
+      name: params.name,
+      symbol: params.symbol,
+      uri: params.uri,
+      isMutable: params.isMutable,
+      sellerFeeBasisPoints: params.sellerFeeBasisPoints,
     });
 
     const initLaunchTx = new web3.Transaction().add(initLaunchIx);
@@ -358,6 +383,8 @@ export class TxBuilder {
     const transaction = new web3.Transaction().add(instruction);
     return { transaction, rosterPda };
   }
+
+  // metadata is set during initLaunch; no extra instruction needed
 
   async initRosterShardIx(params: {
     launch: web3.PublicKey;
@@ -1081,6 +1108,13 @@ export class TxBuilder {
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: web3.SystemProgram.programId,
         rent: web3.SYSVAR_RENT_PUBKEY,
+        metadataAccount: web3.PublicKey.findProgramAddressSync([
+          Buffer.from("metadata"),
+          METADATA_PROGRAM_ID.toBuffer(),
+          baseMint.toBuffer(),
+        ], METADATA_PROGRAM_ID)[0],
+        tokenMetadataConfig: this.getTokenMetadataConfigPda(params.launch)[0],
+        tokenMetadataProgram: METADATA_PROGRAM_ID,
       })
       .instruction();
 

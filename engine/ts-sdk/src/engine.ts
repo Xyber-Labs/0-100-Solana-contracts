@@ -146,6 +146,11 @@ const EngineSDK = {
       creatorMaxDepositLamports: BN;
       poolCreationGracePeriodSec?: number;
       xyberMint: anchor.web3.PublicKey;
+      name: string;
+      symbol: string;
+      uri: string;
+      isMutable?: boolean;
+      sellerFeeBasisPoints?: number;
     }): Promise<{
       launchPda: anchor.web3.PublicKey;
       escrowPda: anchor.web3.PublicKey;
@@ -153,6 +158,11 @@ const EngineSDK = {
     }> {
       const creatorPayer = args.creator?.publicKey ?? payer;
       const projectId = args.projectId ?? (await getNextProjectId());
+      const metaName = args.name;
+      const metaSymbol = args.symbol;
+      const metaUri = args.uri;
+      const metaMutable = typeof args.isMutable === "boolean" ? args.isMutable : false;
+      const metaSellerFeeBps = typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0;
       const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
@@ -173,6 +183,11 @@ const EngineSDK = {
           creatorMaxDepositLamports: args.creatorMaxDepositLamports,
           poolCreationGracePeriodSec: args.poolCreationGracePeriodSec,
           xyberMint: args.xyberMint,
+          name: metaName,
+          symbol: metaSymbol,
+          uri: metaUri,
+          isMutable: metaMutable,
+          sellerFeeBasisPoints: metaSellerFeeBps,
         }
       );
 
@@ -217,6 +232,11 @@ const EngineSDK = {
       creatorMaxDepositLamports: BN;
       poolCreationGracePeriodSec?: number;
       xyberMint: anchor.web3.PublicKey;
+      name: string;
+      symbol: string;
+      uri: string;
+      isMutable?: boolean;
+      sellerFeeBasisPoints?: number;
     }): Promise<{
       projectId: BN;
       launchPda: anchor.web3.PublicKey;
@@ -224,7 +244,15 @@ const EngineSDK = {
       signature: string;
     }> {
       const projectId = await getNextProjectId();
-      const res = await initLaunch({ ...args, projectId });
+      const res = await initLaunch({
+        ...args,
+        projectId,
+        name: args.name,
+        symbol: args.symbol,
+        uri: args.uri,
+        isMutable: args.isMutable,
+        sellerFeeBasisPoints: args.sellerFeeBasisPoints,
+      });
       return { projectId, ...res };
     }
 

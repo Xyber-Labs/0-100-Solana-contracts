@@ -681,12 +681,12 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    const { signature } = await sdk.preparePoolCreation({
+    const { transaction } = await sdk.preparePoolCreationTx({
+      payer: admin.publicKey,
       launch: existingLaunchPda,
-      useTestMode: false,
       computeUnits: 2_000_000
     });
-
+    const signature = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
     console.log("Pool created successfully!");
     console.log("Signature:", signature);
 
@@ -807,6 +807,7 @@ describe("engine litesvm", () => {
     assert.isTrue(threw, "Expected failure within grace when no in-range blockhash present");
 
     await advanceTime(client, { seconds: BigInt(GRACE + 5) });
+    injectSlotHashesForRange(client, rangeStart, rangeEnd);
     const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda, computeUnits: 1_500_000 });
     const sig = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
     assert.isString(sig);
@@ -1343,7 +1344,10 @@ describe("Full flow", () => {
       const rangeEnd = rangeStart + width;
       injectSlotHashesForRange(client, rangeStart, rangeEnd);
     }
-    await sdk.preparePoolCreation({ launch: testLaunchState });
+    {
+      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunchState, computeUnits: 2_000_000 });
+      await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
+    }
 
     // Create Raydium CLMM pool and add liquidity to open claims and initialize escrow ATA
     const { raydiumProgramId, ammConfig: raydiumAmmConfig } = await setupRaydiumCLMM(client);

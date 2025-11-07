@@ -354,6 +354,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         creatorDailyLamportsLimit: new BN(launchConfig.creatorDailyLamportsLimit),
         creatorClaimLockPeriodSec: new BN(launchConfig.creatorClaimLockPeriodSec),
         creatorMaxDepositLamports: new BN(launchConfig.creatorMaxDepositLamports || launchConfig.creatorInitialDepositLamports),
+        name: `Lumi Project #${projectId}`,
+        symbol: "LUMI",
+        uri: "https://metadata.xyberlabs.dev/lumi/default.json",
       });
       const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       setLaunchState(launchPda);

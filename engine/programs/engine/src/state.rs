@@ -181,3 +181,17 @@ pub struct EngineConfig {
     pub admins: [Pubkey; 3],
     pub threshold: u8,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenMetadataConfig {
+    pub launch: Pubkey,
+    #[max_len(64)]
+    pub name: String,
+    #[max_len(16)]
+    pub symbol: String,
+    #[max_len(256)]
+    pub uri: String,
+    pub is_mutable: bool,
+    pub seller_fee_basis_points: u16,
+}

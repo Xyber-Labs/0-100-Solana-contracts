@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::pubkey::Pubkey;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{self, Mint, MintTo, Token},
-    token_interface::{Mint as InterfaceMint, TokenInterface},
 };
 use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::AmmConfig};
 
@@ -10,8 +10,11 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
+    state::TokenMetadataConfig,
     SEED_ROOT,
 };
+use anchor_spl::metadata::{self, CreateMetadataAccountsV3, Metadata};
+use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
 
 // Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
@@ -42,11 +45,8 @@ pub struct CreateClmmPool<'info> {
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
 
-    #[account(
-        mint::token_program = quote_token_program,
-        address = WSOL_MINT
-    )]
-    pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
+    #[account(address = WSOL_MINT)]
+    pub quote_mint: Box<Account<'info, Mint>>,
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
     /// CHECK: Pool state PDA
@@ -66,11 +66,18 @@ pub struct CreateClmmPool<'info> {
     pub raydium_tick_array_bitmap: UncheckedAccount<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
-    pub quote_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Program<'info, Token>,
     pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+
+    /// CHECK: Metaplex metadata account PDA for base_mint
+    #[account(mut)]
+    pub metadata_account: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
+    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
+    pub token_metadata_program: Program<'info, Metadata>,
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
@@ -88,6 +95,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
 
     create_base_escrow_ata(&ctx)?;
     mint_sale_tokens_to_escrow(&ctx)?;
+    create_token_metadata_if_missing(&ctx)?;
     raydium_create_pool_impl(&ctx)?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
@@ -170,6 +178,59 @@ fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
+    Ok(())
+}
+
+fn derive_metadata_pda(metaplex_program_id: &Pubkey, mint: &Pubkey) -> Pubkey {
+    let seeds = &[b"metadata".as_ref(), metaplex_program_id.as_ref(), mint.as_ref()];
+    Pubkey::find_program_address(seeds, metaplex_program_id).0
+}
+
+fn create_token_metadata_if_missing(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    let expected = derive_metadata_pda(&ctx.accounts.token_metadata_program.key(), &ctx.accounts.base_mint.key());
+    require_keys_eq!(ctx.accounts.metadata_account.key(), expected, ErrorCode::InvalidOwner);
+
+    if ctx.accounts.metadata_account.lamports() == 0 {
+        let data = DataV2 {
+            name: ctx.accounts.token_metadata_config.name.clone(),
+            symbol: ctx.accounts.token_metadata_config.symbol.clone(),
+            uri: ctx.accounts.token_metadata_config.uri.clone(),
+            seller_fee_basis_points: ctx.accounts.token_metadata_config.seller_fee_basis_points,
+            creators: None,
+            collection: None,
+            uses: None,
+        };
+
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"escrow_authority",
+            &ctx.accounts.launch_state.key().to_bytes(),
+            &[LaunchState::mint_auth_bump_for(&ctx.accounts.launch_state.key())],
+        ];
+        let signer_seeds = &[seeds];
+
+        let cpi_accounts = CreateMetadataAccountsV3 {
+            metadata: ctx.accounts.metadata_account.to_account_info(),
+            mint: ctx.accounts.base_mint.to_account_info(),
+            mint_authority: ctx.accounts.escrow_authority.to_account_info(),
+            payer: ctx.accounts.payer.to_account_info(),
+            update_authority: ctx.accounts.escrow_authority.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+            rent: ctx.accounts.rent.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_metadata_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        metadata::create_metadata_accounts_v3(
+            cpi_ctx,
+            data,
+            ctx.accounts.token_metadata_config.is_mutable,
+            true,
+            None,
+        )?;
+    }
     Ok(())
 }
 

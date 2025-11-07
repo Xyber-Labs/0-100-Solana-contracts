@@ -259,7 +259,11 @@ export async function runFullFlow(
       throw new Error("Invalid config: lpAllocation is zero; LP must be > 0");
     }
 
-    const initRes = await sdk.initLaunch({
+    const metaName = `Lumi Project #${projectId}`;
+    const metaSymbol = "LUMI";
+    const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
+    const { initLaunchTx } = await (sdk as any).initLaunchTx({
+      creator: admin.publicKey,
       projectId,
       hardCapLamports: new BN(config.hardCapLamports),
       minRaiseLamports: new BN(config.minRaiseLamports),
@@ -275,13 +279,19 @@ export async function runFullFlow(
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       creatorMaxDepositLamports: new BN((config as any).creatorMaxDepositLamports ?? config.creatorInitialDepositLamports),
       xyberMint,
+      name: metaName,
+      symbol: metaSymbol,
+      uri: metaUri,
+      isMutable: true,
+      sellerFeeBasisPoints: 0,
     });
+    const signature = await provider.sendAndConfirm!(initLaunchTx, []);
 
     const balanceAfterLaunch = await provider.connection.getBalance(admin.publicKey);
     const grossLaunchCost = balanceBeforeLaunch - balanceAfterLaunch;
     const launchTxFees = grossLaunchCost - config.creatorInitialDepositLamports - MINT_RENT;
 
-    addLog(`   -> Launch initialized. Signature: ${initRes.signature}`);
+    addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
 
     // Compute expected k_capacity and public target tickets to ensure full sale coverage
@@ -456,6 +466,79 @@ export async function runFullFlow(
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
 
     const allUsersData = Array.from(usersWithDeposits.values());
+
+    function toBytesFromBase64(b64: string): Uint8Array {
+      try {
+        // @ts-ignore
+        if (typeof Buffer !== "undefined" && Buffer.from) return new Uint8Array(Buffer.from(b64, "base64"));
+      } catch {}
+      const bin = typeof atob === "function" ? atob(b64) : "";
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function parseTokensClaimedFromLogs(logs: string[]): { amount?: number; yApproved?: number } | null {
+      if (!logs || !logs.length) return null;
+      const discriminator = [25, 128, 244, 55, 241, 136, 200, 91];
+      for (const line of logs) {
+        const idx = line.indexOf("Program data: ");
+        if (idx === -1) continue;
+        const b64 = line.slice(idx + "Program data: ".length).trim();
+        if (!b64) continue;
+        const bytes = toBytesFromBase64(b64);
+        if (bytes.length < 8) continue;
+        let match = true;
+        for (let i = 0; i < 8; i++) if (bytes[i] !== discriminator[i]) { match = false; break; }
+        if (!match) continue;
+        if (bytes.length < 8 + 32 + 32 + 8 + 4) continue;
+        const amountView = new DataView(bytes.buffer, bytes.byteOffset + 8 + 32 + 32, 8);
+        const yView = new DataView(bytes.buffer, bytes.byteOffset + 8 + 32 + 32 + 8, 4);
+        const amountLo = amountView.getUint32(0, true);
+        const amountHi = amountView.getUint32(4, true);
+        const amount = Number((BigInt(amountHi) << 32n) + BigInt(amountLo));
+        const yApproved = yView.getUint32(0, true);
+        return { amount, yApproved };
+      }
+      return null;
+    }
+
+    const demoUser = allUsersData[0];
+    if (demoUser) {
+      addLog(`   -> Demo: simulating token claim for ${demoUser.keypair.publicKey.toBase58()} (shard ${demoUser.shardId})`);
+      try {
+        const { transaction, userAta } = await (sdk as any).claimTokensTx({
+          launch: testLaunchState,
+          baseMint: testBaseMint.publicKey,
+          userPubkey: demoUser.keypair.publicKey,
+          shardId: demoUser.shardId,
+          createAtaIfMissing: true,
+        });
+        const latest = await provider.connection.getLatestBlockhash();
+        transaction.feePayer = provider.wallet.publicKey;
+        transaction.recentBlockhash = latest.blockhash ?? latest;
+        try { transaction.partialSign(demoUser.keypair); } catch {}
+        let sim: any;
+        try {
+          sim = await provider.connection.simulateTransaction(transaction, { sigVerify: false, replaceRecentBlockhash: true } as any);
+        } catch (_) {
+          sim = await provider.connection.simulateTransaction(transaction as any);
+        }
+        const logs = sim?.value?.logs ?? sim?.logs ?? [];
+        const parsed = parseTokensClaimedFromLogs(logs);
+        addLog(`      user ATA: ${userAta.toBase58()}`);
+        if (sim?.value?.err) {
+          addLog(`      simulation error: ${JSON.stringify(sim.value.err)}`);
+        } else if (parsed && typeof parsed.amount === "number") {
+          const amountUi = parsed.amount / Math.pow(10, 9);
+          addLog(`      would receive: ${amountUi.toFixed(6)} tokens (y_approved=${parsed.yApproved ?? "?"})`);
+        } else {
+          addLog("      simulation ok (no parsable event in logs)");
+        }
+      } catch (e: any) {
+        addLog(`      simulation failed: ${e?.message || e}`);
+      }
+    }
 
     addLog(`   -> Claiming for ${allUsersData.length} users in batches of 50...`);
     const CLAIM_BATCH_SIZE = 50;

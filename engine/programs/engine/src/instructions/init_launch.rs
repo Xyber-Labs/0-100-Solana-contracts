@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized, FundingScheduleSet},
-    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter},
+    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
 };
 use anchor_lang::solana_program::keccak;
 use anchor_lang::{
@@ -62,6 +62,15 @@ pub struct InitLaunch<'info> {
     pub creator_grant: Account<'info, CreatorGrant>,
 
     #[account(
+        init,
+        payer = creator,
+        space = 8 + TokenMetadataConfig::INIT_SPACE,
+        seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()],
+        bump
+    )]
+    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
+
+    #[account(
         seeds = [SEED_ROOT, b"config"],
         bump
     )]
@@ -95,6 +104,13 @@ pub struct InitLaunchParams {
     pub creator_claim_lock_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
+
+    // Base token metadata config
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub is_mutable: bool,
+    pub seller_fee_basis_points: u16,
 }
 
 pub fn init_launch(
@@ -294,6 +310,15 @@ pub fn init_launch(
         launch: launch_key,
         funding_period_end: funding_end,
     });
+
+    // Initialize TokenMetadataConfig
+    let meta = &mut ctx.accounts.token_metadata_config;
+    meta.launch = state.key();
+    meta.name = params.name;
+    meta.symbol = params.symbol;
+    meta.uri = params.uri;
+    meta.is_mutable = params.is_mutable;
+    meta.seller_fee_basis_points = params.seller_fee_basis_points;
 
     Ok(())
 }
