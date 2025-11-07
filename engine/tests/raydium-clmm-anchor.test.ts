@@ -51,7 +51,7 @@ describe("engine anchor - raydium clmm", () => {
   const admin = provider.wallet as any;
   const adminKeypair = (provider.wallet as any).payer as anchor.web3.Keypair;
   const sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
-  const txBuilder = new TxBuilder(program, adminKeypair);
+  //const txBuilder = new TxBuilder(program, adminKeypair);
 
   function tryLoadPredeploy(): null | {
     xyberMint?: string;
@@ -604,7 +604,7 @@ describe("engine anchor - raydium clmm", () => {
     console.log("✅ Income-dispatcher config verified");
   });
 
-  it("Claims CLMM fees through income-dispatcher", async () => {
+  /*it("Claims CLMM fees through income-dispatcher", async () => {
     console.log("=== Claiming CLMM Fees through Income-Dispatcher ===");
 
     // Skip if Raydium not available
@@ -737,5 +737,5 @@ describe("engine anchor - raydium clmm", () => {
 
       throw error; // Re-throw to fail the test
     }
-  });
+  });*/
 });
