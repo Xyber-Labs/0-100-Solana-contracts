@@ -24,6 +24,7 @@ anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 anchor-spl = "0.31.1"
 raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = ["no-entrypoint", "cpi"] }
 uint = { version = "0.9.3", default-features = false }
+mpl-token-metadata = { version = "5.1.1" }
 
 [dev-dependencies]
 
