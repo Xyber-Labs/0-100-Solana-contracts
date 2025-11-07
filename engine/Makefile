@@ -29,6 +29,7 @@ help:
 
 # Environment variables
 ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
+# ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
@@ -230,6 +231,11 @@ test-raydium-clmm-anchor:
 deploy-config-auto:
 	@echo "Running EngineConfig migration with payload..."
 	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/deploy.ts --payload tmp/predeploy.json
+
+.	PHONY: update-config-auto
+update-config-auto:
+	@echo "Updating EngineConfig with payload..."
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/update-config.ts --payload tmp/predeploy.json
 
 predeploy-setup:
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/pre-deploy-setup.ts --out tmp/predeploy.json --airdrop 2 --supply 1000000000 --decimals 9

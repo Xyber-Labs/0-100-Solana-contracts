@@ -146,7 +146,7 @@ const EngineSDK = {
       creator?: anchor.web3.Keypair;
       creatorMaxDepositLamports: BN;
       poolCreationGracePeriodSec?: number;
-      xyberMint: anchor.web3.PublicKey;
+      xyberMint?: anchor.web3.PublicKey;
       name: string;
       symbol: string;
       uri: string;
@@ -164,6 +164,16 @@ const EngineSDK = {
       const metaUri = args.uri;
       const metaMutable = typeof args.isMutable === "boolean" ? args.isMutable : false;
       const metaSellerFeeBps = typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0;
+      const xyberMintPk = args.xyberMint ?? (await (async () => {
+        try {
+          const [engineConfig] = (txBuilder as any).getConfigPda ? (txBuilder as any).getConfigPda() : txBuilder.getPda(["config"]);
+          const cfg: any = await (program.account as any).engineConfig.fetch(engineConfig);
+          if (!cfg?.xyberMint) throw new Error("missing xyberMint in EngineConfig");
+          return cfg.xyberMint as anchor.web3.PublicKey;
+        } catch (e) {
+          throw new Error("xyberMint not provided and EngineConfig.xyberMint not set");
+        }
+      })());
       const { instruction, launchState, escrowAuthority } = await txBuilder.initLaunchIx(
         {
           creator: creatorPayer,
@@ -184,7 +194,7 @@ const EngineSDK = {
           creatorClaimLockPeriodSec: args.creatorClaimLockPeriodSec,
           creatorMaxDepositLamports: args.creatorMaxDepositLamports,
           poolCreationGracePeriodSec: args.poolCreationGracePeriodSec,
-          xyberMint: args.xyberMint,
+          xyberMint: xyberMintPk,
           name: metaName,
           symbol: metaSymbol,
           uri: metaUri,
@@ -234,7 +244,7 @@ const EngineSDK = {
       creator?: anchor.web3.Keypair;
       creatorMaxDepositLamports: BN;
       poolCreationGracePeriodSec?: number;
-      xyberMint: anchor.web3.PublicKey;
+      xyberMint?: anchor.web3.PublicKey;
       name: string;
       symbol: string;
       uri: string;

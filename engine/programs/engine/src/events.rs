@@ -14,6 +14,9 @@ pub struct LaunchInitialized {
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,
     pub unlock_time_sec: i64,
+    pub launch: Pubkey,
+    pub funding_period_start: i64,
+    pub funding_period_end: i64,
 }
 
 #[event]
