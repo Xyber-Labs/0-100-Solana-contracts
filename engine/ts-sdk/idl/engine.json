@@ -4503,6 +4503,18 @@
           {
             "name": "unlock_time_sec",
             "type": "i64"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "funding_period_start",
+            "type": "i64"
+          },
+          {
+            "name": "funding_period_end",
+            "type": "i64"
           }
         ]
       }

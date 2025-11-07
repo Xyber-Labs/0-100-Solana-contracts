@@ -1,7 +1,7 @@
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::{CreatorGranted, FundingPeriodStarted, LaunchInitialized, FundingScheduleSet},
+    events::{CreatorGranted, LaunchInitialized},
     state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
 };
 use anchor_lang::solana_program::keccak;
@@ -247,7 +247,7 @@ pub fn init_launch(
     state.creator_initial_deposit = amount; // Store the initial deposit
     state.creator_max_deposit = params.creator_max_deposit;
 
-    let funding_end = state.funding_period_end;
+    // consolidated into LaunchInitialized event
 
     // Creator grant reserved_tickets will be calculated in open_claims
     let reserved_tickets = 0;
@@ -302,17 +302,9 @@ pub fn init_launch(
         base_total_allocation: params.base_total_allocation,
         base_sale_basis_points: params.base_sale_basis_points,
         unlock_time_sec: state.unlock_time_sec,
-    });
-
-    emit!(FundingScheduleSet {
-        launch: state.key(),
+        launch: launch_key,
         funding_period_start: start,
         funding_period_end: end,
-    });
-
-    emit!(FundingPeriodStarted {
-        launch: launch_key,
-        funding_period_end: funding_end,
     });
 
     // Initialize TokenMetadataConfig

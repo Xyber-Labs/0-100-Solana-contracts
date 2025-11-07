@@ -4509,6 +4509,18 @@ export type Engine = {
           {
             "name": "unlockTimeSec",
             "type": "i64"
+          },
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "fundingPeriodStart",
+            "type": "i64"
+          },
+          {
+            "name": "fundingPeriodEnd",
+            "type": "i64"
           }
         ]
       }
