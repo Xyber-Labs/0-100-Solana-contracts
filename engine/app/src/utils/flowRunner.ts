@@ -450,9 +450,18 @@ export async function runFullFlow(
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
-    for (let i = 0; i < numShards; i++) {
+    // Ensure ALL shards up to launch_state.roster_shards are finalized
+    const launchAfterDeposits: any = await sdk.fetchLaunch(testLaunchState);
+    const totalShards: number = Number(launchAfterDeposits.rosterShards ?? 0);
+    for (let i = 0; i < totalShards; i++) {
+      // initialize shard if it wasn't created earlier (empty shard is OK)
+      try {
+        await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
+      } catch (_) {
+        // ignore if exists
+      }
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
-      addLog(`   -> Shard ${i} finalized.`);
+      addLog(`   -> Shard ${i}/${totalShards - 1} finalized.`);
     }
 
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
