@@ -1,0 +1,27 @@
+[package]
+name = "income-dispatcher"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "income_dispatcher"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "engine/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+devnet = ["raydium-amm-v3/devnet"]
+
+[dependencies]
+anchor-lang = "0.31.1"
+anchor-spl = "0.31.1"
+engine = { path = "../engine", features = ["cpi", "no-entrypoint"] }
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = ["no-entrypoint", "cpi"] }

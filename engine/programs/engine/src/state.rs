@@ -74,6 +74,13 @@ impl LaunchState {
 
 #[account]
 #[derive(InitSpace)]
+pub struct EscrowAccount {
+    pub launch: Pubkey,
+    pub balance: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
 pub struct UserContribution {
     pub launch: Pubkey,
     pub wallet: Pubkey,

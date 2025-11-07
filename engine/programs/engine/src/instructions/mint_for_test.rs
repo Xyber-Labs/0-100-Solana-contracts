@@ -5,7 +5,7 @@ use anchor_spl::{
     token::{self, Mint, MintTo, Token},
 };
 
-use crate::{errors::ErrorCode, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, state::LaunchState, SEED_ROOT};
 
 // Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 

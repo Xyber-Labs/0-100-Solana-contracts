@@ -21,6 +21,12 @@ pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
 pub const WSOL_MINT: Pubkey =
     anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112");
 
+#[constant]
+pub const INCOME_DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
+
+pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
+    anchor_lang::solana_program::pubkey!("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
+
 // -------------------------------
 // Configuration Constants
 // -------------------------------

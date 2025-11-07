@@ -7,9 +7,11 @@ skip-lint = false
 
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
 
 [programs.devnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
 
 
 # [programs.remote]

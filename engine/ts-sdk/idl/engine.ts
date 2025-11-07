@@ -357,6 +357,232 @@ export type Engine = {
       ]
     },
     {
+      "name": "claimClmmFees",
+      "discriminator": [
+        224,
+        247,
+        150,
+        26,
+        146,
+        28,
+        145,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "incomeDispatcherAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                184,
+                44,
+                214,
+                141,
+                86,
+                169,
+                207,
+                182,
+                104,
+                150,
+                184,
+                72,
+                242,
+                107,
+                1,
+                15,
+                35,
+                36,
+                192,
+                23,
+                88,
+                180,
+                64,
+                236,
+                196,
+                151,
+                147,
+                195,
+                14,
+                132,
+                184,
+                243
+              ]
+            }
+          }
+        },
+        {
+          "name": "raydiumProgram",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "baseMint"
+        },
+        {
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "positionNftMint",
+          "writable": true
+        },
+        {
+          "name": "positionNftAccount",
+          "writable": true
+        },
+        {
+          "name": "personalPosition",
+          "writable": true
+        },
+        {
+          "name": "poolState",
+          "writable": true
+        },
+        {
+          "name": "protocolPosition",
+          "writable": true
+        },
+        {
+          "name": "tokenVault0",
+          "writable": true
+        },
+        {
+          "name": "tokenVault1",
+          "writable": true
+        },
+        {
+          "name": "tickArrayLower",
+          "writable": true
+        },
+        {
+          "name": "tickArrayUpper",
+          "writable": true
+        },
+        {
+          "name": "recipientTokenAccount0",
+          "writable": true
+        },
+        {
+          "name": "recipientTokenAccount1",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenProgram2022",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "memoProgram",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "vault0Mint"
+        },
+        {
+          "name": "vault1Mint"
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "quoteTokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claimCreatorRefund",
       "docs": [
         "Claim creator refund for failed launches"
@@ -2763,120 +2989,6 @@ export type Engine = {
       "args": []
     },
     {
-      "name": "mintForTest",
-      "discriminator": [
-        220,
-        129,
-        50,
-        237,
-        118,
-        129,
-        46,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "baseMint",
-          "writable": true
-        },
-        {
-          "name": "baseEscrowAta",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrowAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "baseTokenProgram"
-              },
-              {
-                "kind": "account",
-                "path": "baseMint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "associatedTokenProgram"
-            }
-          }
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "preparePoolCreation",
       "docs": [
         "Create AMM pool"
@@ -2900,47 +3012,6 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
-        },
-        {
-          "name": "creatorGrant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
         },
         {
           "name": "poolState",
@@ -3850,63 +3921,63 @@ export type Engine = {
     },
     {
       "code": 6042,
+      "name": "invalidAuthority",
+      "msg": "Invalid authority"
+    },
+    {
+      "code": 6043,
       "name": "invalidHardCap",
       "msg": "Hard cap must be > 0"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "invalidMinRaise",
       "msg": "Min raise must be > 0"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "hardCapNotDivisibleByTau",
       "msg": "Hard cap must be divisible by tau"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "perWalletCapTooSmall",
       "msg": "Per-wallet cap must be >= tau"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "minRaiseTooHigh",
       "msg": "Min raise must be <= hard cap"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "invalidClaimLockPeriod",
       "msg": "Creator claim lock period must be > 0"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "notSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "rosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "invalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "shardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "shardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
-    },
-    {
-      "code": 6053,
-      "name": "shardIdOutOfRange",
-      "msg": "Roster shard id is out of allowed range"
     },
     {
       "code": 6054,
@@ -3915,65 +3986,78 @@ export type Engine = {
     },
     {
       "code": 6055,
+      "code": 6055,
       "name": "noDistributionRules",
       "msg": "No distribution rules found for market cap"
     },
     {
+      "code": 6056,
       "code": 6056,
       "name": "recipientNotFound",
       "msg": "Recipient not found in distribution"
     },
     {
       "code": 6057,
+      "code": 6057,
       "name": "invalidShareSum",
       "msg": "Sum of shares in tier must equal 10000 basis points"
     },
     {
+      "code": 6058,
       "code": 6058,
       "name": "invalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
     },
     {
       "code": 6059,
+      "code": 6059,
       "name": "poolNotCreated",
       "msg": "Pool not created yet"
     },
     {
+      "code": 6060,
       "code": 6060,
       "name": "teamVestingMissing",
       "msg": "Team vesting account is missing"
     },
     {
       "code": 6061,
+      "code": 6061,
       "name": "teamVestingNotStarted",
       "msg": "Team vesting is not started yet"
     },
     {
+      "code": 6062,
       "code": 6062,
       "name": "teamClaimsNotOpen",
       "msg": "Team claims are not open yet"
     },
     {
       "code": 6063,
+      "code": 6063,
       "name": "teamClaimTooFrequent",
       "msg": "Claim is too frequent"
     },
     {
+      "code": 6064,
       "code": 6064,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
       "code": 6065,
+      "code": 6065,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
       "code": 6066,
+      "code": 6066,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
+      "code": 6067,
       "code": 6067,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
@@ -5261,6 +5345,11 @@ export type Engine = {
       "name": "ammConfigIndex",
       "type": "u16",
       "value": "4"
+    },
+    {
+      "name": "incomeDispatcherSeedRoot",
+      "type": "bytes",
+      "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
     },
     {
       "name": "seedRoot",

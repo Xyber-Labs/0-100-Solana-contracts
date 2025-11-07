@@ -1,11 +1,13 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-use constants::*;
-use state::*;
 
 use crate::instructions::*;
 use crate::utils::clmm::LiquidityRange;
+
+pub use constants::WSOL_MINT;
+use constants::*;
+use state::*;
 
 mod constants;
 pub mod errors;
@@ -145,5 +147,11 @@ pub mod engine {
         params: UpdateEngineConfigParams,
     ) -> Result<()> {
         instructions::update_engine_config(ctx, params)
+    }
+
+    pub fn claim_clmm_fees<'info>(
+        ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'info>>,
+    ) -> Result<()> {
+        instructions::claim_clmm_fees(ctx)
     }
 }

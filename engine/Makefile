@@ -221,7 +221,7 @@ run-validator-raydium:
 	NET=mainnet-beta ./scripts/start-validator.sh
 
 build-test:
-	anchor build -- --features test
+	anchor build 
 	make sync-idl
 
 test-raydium-clmm-anchor:
