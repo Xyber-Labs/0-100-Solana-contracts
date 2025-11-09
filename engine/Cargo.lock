@@ -78,7 +78,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "715a261c57c7679581e06f07a74fa2af874ac30f86bd8ea07cca4a7e5388a064"
 dependencies = [
  "anchor-syn",
- "bs58",
+ "bs58 0.5.1",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -127,7 +127,7 @@ dependencies = [
  "anchor-lang-idl",
  "anchor-syn",
  "anyhow",
- "bs58",
+ "bs58 0.5.1",
  "heck",
  "proc-macro2",
  "quote",
@@ -243,7 +243,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dc7a6d90cc643df0ed2744862cdf180587d1e5d28936538c18fc8908489ed67"
 dependencies = [
  "anyhow",
- "bs58",
+ "bs58 0.5.1",
  "cargo_toml",
  "heck",
  "proc-macro2",
@@ -531,6 +531,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "bs58"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "771fe0050b883fcc3ea2359b1a96bcfbc090b7116eae7c3c512c7a083fdf23d3"
 
 [[package]]
 name = "bs58"
@@ -878,6 +884,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "mpl-token-metadata",
+ "orao-solana-vrf",
  "raydium-amm-v3",
  "uint 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1309,6 +1316,16 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+
+[[package]]
+name = "orao-solana-vrf"
+version = "0.6.1"
+source = "git+https://github.com/orao-network/solana-vrf#43c4b298a903f2fc72ca74d79181ef1d88862318"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "bs58 0.4.0",
+]
 
 [[package]]
 name = "parking_lot"
@@ -1897,7 +1914,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1807bc4e9e1d25271514167d5a1e698ce5a330bce547a368242dd63b355b5faa"
 dependencies = [
  "borsh 1.5.7",
- "bs58",
+ "bs58 0.5.1",
  "bytemuck",
  "bytemuck_derive",
  "js-sys",
@@ -1998,7 +2015,7 @@ dependencies = [
  "blake3",
  "borsh 0.10.4",
  "borsh 1.5.7",
- "bs58",
+ "bs58 0.5.1",
  "bv",
  "bytemuck",
  "bytemuck_derive",
@@ -2119,7 +2136,7 @@ checksum = "bea3215775fcedf200d47590c7e2ce9a3a46bc2b7d3f77d0eae9c6edf0a39aec"
 dependencies = [
  "borsh 0.10.4",
  "borsh 1.5.7",
- "bs58",
+ "bs58 0.5.1",
  "bytemuck",
  "bytemuck_derive",
  "curve25519-dalek 4.1.3",
@@ -2164,7 +2181,7 @@ dependencies = [
  "bincode",
  "bitflags",
  "borsh 1.5.7",
- "bs58",
+ "bs58 0.5.1",
  "bytemuck",
  "bytemuck_derive",
  "byteorder",
@@ -2224,7 +2241,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bd2265b93dce9d3dcf9f395abf1a85b5e06e4da4aa60ca147620003ac3abc67"
 dependencies = [
- "bs58",
+ "bs58 0.5.1",
  "proc-macro2",
  "quote",
  "syn 2.0.109",
@@ -2294,7 +2311,7 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad9784d110f195a3a4fe423479d18f05b01a1c380a1430644a3b3038fdbe2f0"
 dependencies = [
- "bs58",
+ "bs58 0.5.1",
  "ed25519-dalek",
  "generic-array",
  "rand 0.8.5",
