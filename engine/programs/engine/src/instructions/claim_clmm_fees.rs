@@ -8,7 +8,6 @@ use raydium_amm_v3::program::AmmV3;
 
 use crate::{
     constants::{INCOME_DISPATCHER_PROGRAM_ID, INCOME_DISPATCHER_SEED_ROOT, SEED_ROOT},
-    errors::ErrorCode as EngineErrorCode,
     state::LaunchState,
 };
 
@@ -20,7 +19,7 @@ pub struct ClaimClmmFees<'info> {
         bump,
         seeds::program = INCOME_DISPATCHER_PROGRAM_ID
     )]
-    pub income_dispatcher_authority: UncheckedAccount<'info>,
+    pub income_dispatcher_authority: Signer<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
 
@@ -99,17 +98,6 @@ pub struct ClaimClmmFees<'info> {
 }
 
 pub fn claim_clmm_fees<'info>(ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'info>>) -> Result<()> {
-    // Validate income_dispatcher_authority PDA
-    let expected_authority = Pubkey::find_program_address(
-        &[INCOME_DISPATCHER_SEED_ROOT, b"authority"],
-        &INCOME_DISPATCHER_PROGRAM_ID,
-    )
-    .0;
-    require!(
-        ctx.accounts.income_dispatcher_authority.key() == expected_authority,
-        EngineErrorCode::InvalidAuthority
-    );
-
     let launch_state = &ctx.accounts.launch_state;
     let launch_key = launch_state.key();
 
