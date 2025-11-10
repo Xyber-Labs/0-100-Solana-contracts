@@ -456,11 +456,12 @@ export async function runFullFlow(
     addLog(`      - Concurrency: ${depositConcurrency}`);
     addLog(`      - Shards involved: ${uniqueShardsInUse}/${rosterShardsTotal} (cap per shard ${config.rosterShardCap})`);
     addLog(`      - Tickets: total=${totalTicketsSim}, avgPerUser=${avgTicketsSim.toFixed(2)}`);
-    // record for later claims
-    for (const user of users) {
-      usersWithDeposits.set(user.keypair.publicKey.toBase58(), { keypair: user.keypair, tickets: user.tickets, shardId: user.shardId });
+    const depositResults = await depositUsersParallel({ sdk, launchPda: testLaunchState, users, concurrency: depositConcurrency, addLog });
+    for (const result of depositResults) {
+      const k = result.pubkey.toBase58();
+      const user = users.find(u => u.keypair.publicKey.toBase58() === k)!;
+      usersWithDeposits.set(k, { keypair: user.keypair, tickets: user.tickets, shardId: result.shardId });
     }
-    await depositUsersParallel({ sdk, launchPda: testLaunchState, users, concurrency: depositConcurrency, addLog });
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End

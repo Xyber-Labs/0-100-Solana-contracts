@@ -10,6 +10,7 @@ import {
 // ---- IDL ----
 import type { Engine as EngineIDL } from "../idl/engine";
 import { TxBuilder } from "./txBuilder";
+import { createShardsApi, pickShardId, selectRosterShard } from "./shards";
 
 // Import IDL as a dynamic import to avoid require
 let idl: any;
@@ -116,6 +117,20 @@ const EngineSDK = {
       );
       return { ata, ix };
     }
+
+    const {
+      initMissingRosterShards,
+      initRosterAndAllShards,
+      depositAutoShard,
+    } = createShardsApi({
+      program,
+      provider,
+      txBuilder,
+      payer,
+      getRosterPda,
+      getRosterShardPda,
+      fetchLaunch: (launch: anchor.web3.PublicKey) => txBuilder.fetchLaunch(launch),
+    });
 
     // =============================
     //          TX methods
@@ -1065,6 +1080,12 @@ const EngineSDK = {
       // Utils
       getUserAta,
       buildCreateAtaIx,
+
+      pickShardId,
+      selectRosterShard,
+      initRosterAndAllShards,
+      initMissingRosterShards,
+      depositAutoShard,
 
       initLaunch,
       initRoster,

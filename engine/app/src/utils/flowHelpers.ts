@@ -101,20 +101,23 @@ export async function depositUsersParallel(params: {
   users: SimUser[];
   concurrency?: number;
   addLog?: AddLog;
-}): Promise<void> {
+}): Promise<Array<{ pubkey: PublicKey; shardId: number }>> {
   const { sdk, launchPda, users, concurrency = 200, addLog } = params;
   const total = users.length;
   const step = Math.max(1, Math.floor(total / 20));
   let completed = 0;
   addLog?.(`Depositing for ${total} users in parallel...`);
-  await runWithConcurrency(users, Math.min(concurrency, total), async (user) => {
-    await sdk.deposit({ launch: launchPda, amountLamports: user.depositAmount, userKeypair: user.keypair, shardId: user.shardId });
+  const results: Array<{ pubkey: PublicKey; shardId: number }> = new Array(users.length);
+  await runWithConcurrency(users, Math.min(concurrency, total), async (user, index) => {
+    const res = await (sdk as any).depositAutoShard({ launch: launchPda, amountLamports: user.depositAmount, userKeypair: user.keypair, preferredShardId: user.shardId });
+    results[index] = { pubkey: user.keypair.publicKey, shardId: res.shardId };
     const c = ++completed;
     if (c % step === 0 || c === total) {
       const percent = Math.round((c / total) * 100);
       addLog?.(`Deposits progress: ${c}/${total} (${percent}%)`);
     }
   });
+  return results;
 }
 
 export async function preparePoolCreationWithRetry(params: {
