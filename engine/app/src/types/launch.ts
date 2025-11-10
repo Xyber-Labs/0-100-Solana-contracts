@@ -16,6 +16,7 @@ export interface LaunchConfig {
   quoteMint?: string;
   ammConfig?: string;
   clmmProgram?: string;
+  rosterShardsTotal?: number;
 }
 
 
