@@ -268,7 +268,7 @@ export async function runFullFlow(
     const estSec = estFundingBatches * 2 + estDepositBatches * 3 + 5; // ~2s per funding batch, ~3s per deposit batch + overhead
     const estClamped = Math.max(15, Math.min(estSec, 90));
     const cfgSec = typeof config.fundingDurationSeconds === 'number' ? config.fundingDurationSeconds : 0;
-    const fundingDurationSeconds = Math.max(15, Math.min(cfgSec || estClamped, estClamped));
+    const fundingDurationSeconds = cfgSec > 0 ? Math.max(15, cfgSec) : estClamped;
 
     // Add main instruction
     // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
@@ -296,7 +296,9 @@ export async function runFullFlow(
     const metaSymbol = "LUMI";
     const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
     const kCap = Math.floor(config.hardCapLamports / config.tauLamports);
-    const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
+    const rosterShardsTotal = (config as any).rosterShardsTotal && (config as any).rosterShardsTotal > 0
+      ? Math.min(65535, (config as any).rosterShardsTotal)
+      : Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
     const { initLaunchTx } = await (sdk as any).initLaunchTx({
       creator: admin.publicKey,
       projectId,
@@ -348,10 +350,16 @@ export async function runFullFlow(
     // We'll generate enough users to reach at least k_pub tickets
     const MAX_TICKETS_PER_USER = Math.max(1, simConfig.maxTicketsPerUser);
     const usersNeeded = Math.ceil(kPubExpected / MAX_TICKETS_PER_USER);
-    const numShards = Math.ceil(usersNeeded / config.rosterShardCap);
+    const requestedUsers = simConfig.numUsers && simConfig.numUsers > 0 ? simConfig.numUsers : usersNeeded;
+    const maxUsersCapacity = rosterShardsTotal * config.rosterShardCap;
+    const TARGET_USERS = Math.min(requestedUsers, maxUsersCapacity);
+    const numShards = Math.min(Math.ceil(TARGET_USERS / config.rosterShardCap), rosterShardsTotal);
     addLog(
-      `\n[3/10] Calculated ${numShards} shards needed for ~${usersNeeded} users to cover k_pub=${kPubExpected} with cap=${config.rosterShardCap}. Initializing...`
+      `\n[3/10] Calculated ${numShards}/${rosterShardsTotal} shards for ${TARGET_USERS} target users (k_pub=${kPubExpected}, cap=${config.rosterShardCap}). Initializing...`
     );
+    if (requestedUsers > TARGET_USERS) {
+      addLog(`   -> Requested ${requestedUsers} users exceeds shard capacity (${maxUsersCapacity}). Capped to ${TARGET_USERS}.`);
+    }
     const balanceBeforeShards = await provider.connection.getBalance(admin.publicKey);
     for (let i = 0; i < numShards; i++) {
       try {
@@ -371,27 +379,21 @@ export async function runFullFlow(
     const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
     // 3. Simulate deposits to reach at least k_pub tickets
-    const TARGET_USERS = usersNeeded;
     const MAX_TICKETS = MAX_TICKETS_PER_USER;
     const usersWithDeposits = new Map<
       string,
       { keypair: Keypair; tickets: number; shardId: number }
     >();
 
-    addLog(`\n[3/10] Simulating deposits to cover k_pub tickets...`);
+    addLog(`\n[3/10] Simulating deposits for ${TARGET_USERS} users...`);
 
-    // Step 1: Generate deterministic users to hit k_pubExpected tickets
-    let remainingTickets = kPubExpected;
     const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
-    let idx = 0;
-    while (remainingTickets > 0) {
-      const tickets = Math.min(remainingTickets, MAX_TICKETS);
+    for (let i = 0; i < TARGET_USERS; i++) {
+      const tickets = Math.max(1, Math.floor(Math.random() * MAX_TICKETS) + 1);
       const keypair = Keypair.generate();
       const depositAmount = new BN(config.tauLamports).mul(new BN(tickets));
-      const shardId = Math.floor(idx / config.rosterShardCap);
+      const shardId = Math.floor(i / config.rosterShardCap);
       provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
-      remainingTickets -= tickets;
-      idx++;
     }
     let users = provisionalUsers;
 
@@ -439,17 +441,26 @@ export async function runFullFlow(
 
     // concurrency runner moved to helpers
 
+    const fundingConcurrency = Math.min(200, numUsersToSimulate);
     addLog(`   -> Funding ${numUsersToSimulate} users with transfers from admin (parallel)...`);
-    await fundUsersParallel({ provider, admin: admin.publicKey, users, addLog });
+    addLog(`      - Concurrency: ${fundingConcurrency}`);
+    await fundUsersParallel({ provider, admin: admin.publicKey, users, concurrency: fundingConcurrency, addLog });
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, using pre-calculated shard IDs
+    const depositConcurrency = Math.min(200, numUsersToSimulate);
+    const uniqueShardsInUse = new Set(users.map(u => u.shardId)).size;
+    const totalTicketsSim = users.reduce((acc, u) => acc + u.tickets, 0);
+    const avgTicketsSim = totalTicketsSim / Math.max(1, numUsersToSimulate);
     addLog(`   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`);
+    addLog(`      - Concurrency: ${depositConcurrency}`);
+    addLog(`      - Shards involved: ${uniqueShardsInUse}/${rosterShardsTotal} (cap per shard ${config.rosterShardCap})`);
+    addLog(`      - Tickets: total=${totalTicketsSim}, avgPerUser=${avgTicketsSim.toFixed(2)}`);
     // record for later claims
     for (const user of users) {
       usersWithDeposits.set(user.keypair.publicKey.toBase58(), { keypair: user.keypair, tickets: user.tickets, shardId: user.shardId });
     }
-    await depositUsersParallel({ sdk, launchPda: testLaunchState, users, addLog });
+    await depositUsersParallel({ sdk, launchPda: testLaunchState, users, concurrency: depositConcurrency, addLog });
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End

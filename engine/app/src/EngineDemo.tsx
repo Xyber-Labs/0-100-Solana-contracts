@@ -340,7 +340,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       }
       const projectId = lastProjectId + 1;
       const kCap = Math.floor(launchConfig.hardCapLamports / launchConfig.tauLamports);
-      const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, launchConfig.rosterShardCap)));
+      const rosterShardsTotal = launchConfig.rosterShardsTotal && launchConfig.rosterShardsTotal > 0
+        ? Math.min(65535, launchConfig.rosterShardsTotal)
+        : Math.min(65535, Math.ceil(kCap / Math.max(1, launchConfig.rosterShardCap)));
       const res = await sdk.initLaunch({
         projectId,
         hardCapLamports: new BN(launchConfig.hardCapLamports),
@@ -1140,6 +1142,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   value={launchConfig.rosterShardCap}
                   onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.target.value) }))}
                   className="terminal-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">Roster Shards Total (override)</label>
+                <input
+                  type="number"
+                  value={launchConfig.rosterShardsTotal || 0}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value) || 0;
+                    setLaunchConfig(prev => ({ ...prev, rosterShardsTotal: v > 0 ? v : undefined }));
+                  }}
+                  className="terminal-input w-full"
+                  placeholder="0 = auto"
                 />
               </div>
               <div className="col-span-full mt-4">

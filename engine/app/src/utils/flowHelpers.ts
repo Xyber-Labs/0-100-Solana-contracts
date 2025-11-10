@@ -76,14 +76,22 @@ export async function fundUsersParallel(params: {
   addLog?: AddLog;
 }): Promise<void> {
   const { provider, admin, users, feeBufferLamports = 5_000_000, concurrency = 200, addLog } = params;
-  addLog?.(`Funding ${users.length} users in parallel...`);
-  await runWithConcurrency(users, Math.min(concurrency, users.length), async (user) => {
+  const total = users.length;
+  const step = Math.max(1, Math.floor(total / 20));
+  let completed = 0;
+  addLog?.(`Funding ${total} users in parallel...`);
+  await runWithConcurrency(users, Math.min(concurrency, total), async (user) => {
     const fundingAmount = user.depositAmount.toNumber() + feeBufferLamports;
     const transferIx = SystemProgram.transfer({ fromPubkey: admin, toPubkey: user.keypair.publicKey, lamports: fundingAmount });
     const tx = new Transaction().add(transferIx);
     tx.feePayer = admin;
     tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
     await provider.sendAndConfirm(tx, []);
+    const c = ++completed;
+    if (c % step === 0 || c === total) {
+      const percent = Math.round((c / total) * 100);
+      addLog?.(`Funding progress: ${c}/${total} (${percent}%)`);
+    }
   });
 }
 
@@ -95,9 +103,17 @@ export async function depositUsersParallel(params: {
   addLog?: AddLog;
 }): Promise<void> {
   const { sdk, launchPda, users, concurrency = 200, addLog } = params;
-  addLog?.(`Depositing for ${users.length} users in parallel...`);
-  await runWithConcurrency(users, Math.min(concurrency, users.length), async (user) => {
+  const total = users.length;
+  const step = Math.max(1, Math.floor(total / 20));
+  let completed = 0;
+  addLog?.(`Depositing for ${total} users in parallel...`);
+  await runWithConcurrency(users, Math.min(concurrency, total), async (user) => {
     await sdk.deposit({ launch: launchPda, amountLamports: user.depositAmount, userKeypair: user.keypair, shardId: user.shardId });
+    const c = ++completed;
+    if (c % step === 0 || c === total) {
+      const percent = Math.round((c / total) * 100);
+      addLog?.(`Deposits progress: ${c}/${total} (${percent}%)`);
+    }
   });
 }
 
