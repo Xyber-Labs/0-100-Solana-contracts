@@ -14,9 +14,9 @@ pub struct ClaimRefund<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    // Sharded roster shard for index computation
-    #[account(constraint = roster_shard.launch == launch_state.key())]
-    pub roster_shard: Account<'info, RosterShard>,
+    /// CHECK: optional — only required if finalized_snapshot == false
+    #[account(mut)]
+    pub roster_shard: Option<AccountInfo<'info>>,
     /// CHECK:
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -75,22 +75,35 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     let k_pub =
         launch_state.k_capacity.checked_sub(reserved).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let n = launch_state.public_total_tickets;
-    let shard = &ctx.accounts.roster_shard;
-    // Ensure shard is finalized and consistent
-    require!(
-        launch_state.roster_finalized_up_to >= shard.shard_id as i32,
-        EngineErrorCode::ShardNotFinalized
-    );
-    require!(
-        shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
-        EngineErrorCode::ShardNotFinalized
-    );
-    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
-    let u = user.idx_in_shard as usize;
-    let base = shard
-        .shard_base
-        .checked_add(*shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let (base, tcount) = if user.finalized_snapshot {
+        (user.final_t_base, user.final_ticket_count)
+    } else {
+        let shard_ai = ctx
+            .accounts
+            .roster_shard
+            .as_ref()
+            .ok_or(EngineErrorCode::ShardNotFinalized)?;
+        require_keys_eq!(*shard_ai.owner, crate::ID, EngineErrorCode::Unauthorized);
+        let data = shard_ai.data.borrow().to_vec();
+        let mut cursor: &[u8] = &data;
+        let shard = RosterShard::try_deserialize(&mut cursor)?;
+        require!(
+            launch_state.roster_finalized_up_to >= shard.shard_id as i32,
+            EngineErrorCode::ShardNotFinalized
+        );
+        require!(
+            shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
+            EngineErrorCode::ShardNotFinalized
+        );
+        require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
+        let u = user.idx_in_shard as usize;
+        let b = shard
+            .shard_base
+            .checked_add(*shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let c = *shard.counts.get(u).ok_or(EngineErrorCode::MappingError)?;
+        (b, c)
+    };
     // Early exit when no public winners exist or n==0 to avoid permute loop
     if k_pub == 0 || n == 0 {
         let approved_lamports = 0u64;
@@ -130,7 +143,7 @@ pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
     }
 
     let mut y = 0u32;
-    for j in 0..user.ticket_count {
+    for j in 0..tcount {
         let t = base.checked_add(j).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         if permute_u32(&seed, n, t) < k_pub {
             y = y.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;

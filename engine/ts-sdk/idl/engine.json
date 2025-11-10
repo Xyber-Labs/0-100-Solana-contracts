@@ -1020,7 +1020,9 @@
           }
         },
         {
-          "name": "roster_shard"
+          "name": "roster_shard",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "escrow_authority",
@@ -1362,7 +1364,9 @@
           }
         },
         {
-          "name": "roster_shard"
+          "name": "roster_shard",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "pool_state",
@@ -1553,6 +1557,93 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "close_roster_shard",
+      "docs": [
+        "Close roster shard account after sealing"
+      ],
+      "discriminator": [
+        87,
+        131,
+        169,
+        146,
+        4,
+        168,
+        88,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "roster_shard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              },
+              {
+                "kind": "arg",
+                "path": "shard_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "create_clmm_pool",
@@ -2983,120 +3074,6 @@
       "args": []
     },
     {
-      "name": "mint_for_test",
-      "discriminator": [
-        220,
-        129,
-        50,
-        237,
-        118,
-        129,
-        46,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "escrow_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "base_mint",
-          "writable": true
-        },
-        {
-          "name": "base_escrow_ata",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow_authority"
-              },
-              {
-                "kind": "account",
-                "path": "base_token_program"
-              },
-              {
-                "kind": "account",
-                "path": "base_mint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "associated_token_program"
-            }
-          }
-        },
-        {
-          "name": "base_token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "prepare_pool_creation",
       "docs": [
         "Create AMM pool"
@@ -3210,6 +3187,101 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "seal_roster_shard",
+      "docs": [
+        "Seal roster shard by snapshotting user ticket ranges into UserContribution"
+      ],
+      "discriminator": [
+        18,
+        100,
+        12,
+        188,
+        84,
+        188,
+        103,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "roster_shard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              },
+              {
+                "kind": "arg",
+                "path": "shard_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u16"
+        },
+        {
+          "name": "from",
+          "type": "u32"
+        },
+        {
+          "name": "max",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "set_seed",
@@ -5439,6 +5511,18 @@
           },
           {
             "name": "idx_in_shard",
+            "type": "u32"
+          },
+          {
+            "name": "finalized_snapshot",
+            "type": "bool"
+          },
+          {
+            "name": "final_t_base",
+            "type": "u32"
+          },
+          {
+            "name": "final_ticket_count",
             "type": "u32"
           }
         ]

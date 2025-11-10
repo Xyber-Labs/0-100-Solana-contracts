@@ -92,6 +92,11 @@ pub struct UserContribution {
     // Sharded roster placement (assigned on first deposit)
     pub shard_id: u16,
     pub idx_in_shard: u32,
+
+    // --- appended for upgrade safety: finalized snapshot for claims ---
+    pub finalized_snapshot: bool,   // default: false
+    pub final_t_base: u32,          // shard_base + prefix[u]
+    pub final_ticket_count: u32,    // counts[u] at seal time
 }
 
 #[account]

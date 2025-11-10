@@ -53,6 +53,16 @@ pub mod engine {
         instructions::finalize_roster_shard(ctx, shard_id)
     }
 
+    /// Seal roster shard by snapshotting user ticket ranges into UserContribution
+    pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32, max: u16) -> Result<()> {
+        instructions::seal_roster_shard(ctx, shard_id, from, max)
+    }
+
+    /// Close roster shard account after sealing
+    pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Result<()> {
+        instructions::close_roster_shard(ctx, shard_id)
+    }
+
     // -------------------------------
     // User (UI)
     // -------------------------------

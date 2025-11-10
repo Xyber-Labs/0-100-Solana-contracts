@@ -1026,7 +1026,9 @@ export type Engine = {
           }
         },
         {
-          "name": "rosterShard"
+          "name": "rosterShard",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "escrowAuthority",
@@ -1368,7 +1370,9 @@ export type Engine = {
           }
         },
         {
-          "name": "rosterShard"
+          "name": "rosterShard",
+          "writable": true,
+          "optional": true
         },
         {
           "name": "poolState",
@@ -1559,6 +1563,93 @@ export type Engine = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "closeRosterShard",
+      "docs": [
+        "Close roster shard account after sealing"
+      ],
+      "discriminator": [
+        87,
+        131,
+        169,
+        146,
+        4,
+        168,
+        88,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "rosterShard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              },
+              {
+                "kind": "arg",
+                "path": "shardId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "shardId",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "createClmmPool",
@@ -2989,120 +3080,6 @@ export type Engine = {
       "args": []
     },
     {
-      "name": "mintForTest",
-      "discriminator": [
-        220,
-        129,
-        50,
-        237,
-        118,
-        129,
-        46,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "escrowAuthority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "baseMint",
-          "writable": true
-        },
-        {
-          "name": "baseEscrowAta",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrowAuthority"
-              },
-              {
-                "kind": "account",
-                "path": "baseTokenProgram"
-              },
-              {
-                "kind": "account",
-                "path": "baseMint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "associatedTokenProgram"
-            }
-          }
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "associatedTokenProgram",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "preparePoolCreation",
       "docs": [
         "Create AMM pool"
@@ -3216,6 +3193,101 @@ export type Engine = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "sealRosterShard",
+      "docs": [
+        "Seal roster shard by snapshotting user ticket ranges into UserContribution"
+      ],
+      "discriminator": [
+        18,
+        100,
+        12,
+        188,
+        84,
+        188,
+        103,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "rosterShard",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  115,
+                  116,
+                  101,
+                  114,
+                  95,
+                  115,
+                  104,
+                  97,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              },
+              {
+                "kind": "arg",
+                "path": "shardId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "shardId",
+          "type": "u16"
+        },
+        {
+          "name": "from",
+          "type": "u32"
+        },
+        {
+          "name": "max",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "setSeed",
@@ -5445,6 +5517,18 @@ export type Engine = {
           },
           {
             "name": "idxInShard",
+            "type": "u32"
+          },
+          {
+            "name": "finalizedSnapshot",
+            "type": "bool"
+          },
+          {
+            "name": "finalTBase",
+            "type": "u32"
+          },
+          {
+            "name": "finalTicketCount",
             "type": "u32"
           }
         ]
