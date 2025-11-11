@@ -174,7 +174,7 @@ export class TxBuilder {
       teamAllocationBasisPoints: new BN(
         typeof params.teamAllocationBasisPoints === "number"
           ? params.teamAllocationBasisPoints
-          : 10000
+          : 1000
       ),
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
       saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),

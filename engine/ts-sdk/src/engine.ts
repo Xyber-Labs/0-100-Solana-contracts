@@ -850,10 +850,18 @@ const EngineSDK = {
 
     async function initTeamVesting(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ signature: string }> {
       const payerPubkey = args.payerKeypair?.publicKey ?? payer;
-      const { transaction } = await txBuilder.initTeamVestingTx({ payer: payerPubkey, launch: args.launch });
-      const signers = args.payerKeypair ? [args.payerKeypair] : [];
-      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(transaction, signers);
+      const [teamVesting] = txBuilder.getTeamVestingPda(args.launch);
+      const method = (program.methods as any).initTeamVesting?.() ?? (program.methods as any).init_team_vesting?.();
+      if (!method) throw new Error("initTeamVesting method not found in program IDL");
+      const rpc = method
+        .accountsStrict({
+          payer: payerPubkey,
+          launchState: args.launch,
+          teamVesting,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        });
+      if (args.payerKeypair) rpc.signers([args.payerKeypair]);
+      const signature = await rpc.rpc();
       return { signature };
     }
 
