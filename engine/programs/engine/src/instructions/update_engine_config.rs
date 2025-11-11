@@ -30,12 +30,8 @@ pub fn update_engine_config(
 ) -> Result<()> {
     let cfg = &mut ctx.accounts.engine_config;
 
-    let signer_set: std::collections::BTreeSet<Pubkey> = ctx
-        .remaining_accounts
-        .iter()
-        .filter(|ai| ai.is_signer)
-        .map(|ai| ai.key())
-        .collect();
+    let signer_set: std::collections::BTreeSet<Pubkey> =
+        ctx.remaining_accounts.iter().filter(|ai| ai.is_signer).map(|ai| ai.key()).collect();
 
     let mut signed = 0u8;
     for k in cfg.admins.iter() {
@@ -43,7 +39,7 @@ pub fn update_engine_config(
             signed = signed.saturating_add(1);
         }
     }
-    require!((signed as u8) >= cfg.threshold, EngineErrorCode::NotEnoughAdminSigners);
+    require!(signed >= cfg.threshold, EngineErrorCode::NotEnoughAdminSigners);
 
     if let Some(t) = params.new_treasury {
         cfg.treasury = t;
@@ -75,5 +71,3 @@ pub fn update_engine_config(
 
     Ok(())
 }
-
-

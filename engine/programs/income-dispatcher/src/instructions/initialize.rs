@@ -6,11 +6,13 @@ pub fn initialize(
     ctx: Context<Initialize>,
     platform_wallet: Pubkey,
     income_source: Pubkey,
+    project_initializer: Pubkey,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.admin = ctx.accounts.admin.key();
     config.platform_wallet = platform_wallet;
     config.income_source = income_source;
+    config.project_initializer = project_initializer;
     Ok(())
 }
 

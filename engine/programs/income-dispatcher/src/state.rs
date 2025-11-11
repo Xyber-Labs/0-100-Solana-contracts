@@ -8,6 +8,7 @@ pub struct Config {
     pub admin: Pubkey,
     pub platform_wallet: Pubkey,
     pub income_source: Pubkey,
+    pub project_initializer: Pubkey,
 }
 
 #[account]
@@ -16,15 +17,13 @@ pub struct ProjectPool {
     pub project_id: [u8; 32],
     pub creator: Pubkey,
     pub base_mint: Pubkey,
+    pub base_decimals: u8,
     pub quote_mint: Pubkey,
-    pub income_calculator: Option<IncomeCalculator>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
-pub struct IncomeCalculator {
-    pub price_in_quote: u128,
-    // #[max_len(100)]
-    // pub rules: Vec<DistributionRule>,
+    pub quote_decimals: u8,
+    pub total_base_claimed: u64,
+    pub total_quote_claimed: u64,
+    pub total_claimed_in_base: u64,
+    pub total_claimed_in_quote: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]

@@ -21,8 +21,9 @@ pub mod income_dispatcher {
         ctx: Context<Initialize>,
         platform_wallet: Pubkey,
         income_source: Pubkey,
+        project_initializer: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, platform_wallet, income_source)
+        instructions::initialize(ctx, platform_wallet, income_source, project_initializer)
     }
 
     pub fn update_platform_wallet(
@@ -36,5 +37,20 @@ pub mod income_dispatcher {
         ctx: Context<'_, '_, '_, 'info, ClaimClmmFeesByAdmin<'info>>,
     ) -> Result<()> {
         instructions::claim_clmm_fees_by_admin(ctx)
+    }
+
+    pub fn claim(ctx: Context<Claim>) -> Result<()> {
+        instructions::claim(ctx)
+    }
+
+    pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) -> Result<()> {
+        instructions::harvest_pool(ctx)
+    }
+
+    pub fn init_project(
+        ctx: Context<InitProject>,
+        project_id: [u8; 32],
+    ) -> Result<()> {
+        instructions::init_project(ctx, project_id)
     }
 }
