@@ -2848,6 +2848,391 @@
       ]
     },
     {
+      "name": "init_launch_from_preset",
+      "discriminator": [
+        134,
+        182,
+        130,
+        54,
+        214,
+        93,
+        249,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "project_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "project_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrow_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_grant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_metadata_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_xyber_ata",
+          "writable": true
+        },
+        {
+          "name": "treasury_xyber_ata",
+          "writable": true
+        },
+        {
+          "name": "launch_preset"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "preset_id",
+          "type": "u8"
+        },
+        {
+          "name": "project_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "init_launch_preset",
+      "discriminator": [
+        219,
+        152,
+        56,
+        254,
+        153,
+        12,
+        96,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_preset",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u8"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitLaunchParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "init_roster",
       "docs": [
         "Initialize roster account."
@@ -3500,6 +3885,79 @@
       ]
     },
     {
+      "name": "update_launch_preset",
+      "discriminator": [
+        137,
+        161,
+        39,
+        168,
+        45,
+        186,
+        69,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_preset",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u8"
+        },
+        {
+          "name": "patch",
+          "type": {
+            "defined": {
+              "name": "UpdateLaunchParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Withdraw during funding window (reduces ticket_count and returns lamports)."
@@ -3674,6 +4132,19 @@
         169,
         22,
         207
+      ]
+    },
+    {
+      "name": "LaunchPreset",
+      "discriminator": [
+        29,
+        197,
+        177,
+        13,
+        230,
+        184,
+        203,
+        69
       ]
     },
     {
@@ -4945,6 +5416,110 @@
       }
     },
     {
+      "name": "LaunchPreset",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u8"
+          },
+          {
+            "name": "hard_cap_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_raise_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "per_wallet_cap",
+            "type": "u64"
+          },
+          {
+            "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "base_total_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "base_sale_basis_points",
+            "type": "u64"
+          },
+          {
+            "name": "team_allocation_basis_points",
+            "type": "u64"
+          },
+          {
+            "name": "funding_duration_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "sale_start_time_sec",
+            "type": "i64"
+          },
+          {
+            "name": "unlock_time_sec",
+            "type": "i64"
+          },
+          {
+            "name": "roster_shard_cap",
+            "type": "u16"
+          },
+          {
+            "name": "roster_shards_total",
+            "type": "u16"
+          },
+          {
+            "name": "creator_initial_deposit_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "creator_daily_lamports_limit",
+            "type": "u64"
+          },
+          {
+            "name": "creator_claim_lock_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "creator_max_deposit",
+            "type": "u64"
+          },
+          {
+            "name": "pool_creation_grace_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "team_vesting_duration_sec",
+            "type": "i64"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "is_mutable",
+            "type": "bool"
+          },
+          {
+            "name": "seller_fee_basis_points",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "LaunchState",
       "type": {
         "kind": "struct",
@@ -5601,6 +6176,152 @@
             "name": "new_threshold",
             "type": {
               "option": "u8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UpdateLaunchParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hard_cap_lamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "min_raise_lamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "per_wallet_cap",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "tau_lamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "base_total_allocation",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "base_sale_basis_points",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "team_allocation_basis_points",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "funding_duration_seconds",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "sale_start_time_sec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "unlock_time_sec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "roster_shard_cap",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "roster_shards_total",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "creator_initial_deposit_lamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creator_daily_lamports_limit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creator_claim_lock_period_sec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "creator_max_deposit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "pool_creation_grace_period_sec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "team_vesting_duration_sec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "name",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "uri",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "is_mutable",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "seller_fee_basis_points",
+            "type": {
+              "option": "u16"
             }
           }
         ]

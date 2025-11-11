@@ -2854,6 +2854,391 @@ export type Engine = {
       ]
     },
     {
+      "name": "initLaunchFromPreset",
+      "discriminator": [
+        134,
+        182,
+        130,
+        54,
+        214,
+        93,
+        249,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "projectCounter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "projectId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "escrowAuthority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorGrant",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenMetadataConfig",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorXyberAta",
+          "writable": true
+        },
+        {
+          "name": "treasuryXyberAta",
+          "writable": true
+        },
+        {
+          "name": "launchPreset"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "presetId",
+          "type": "u8"
+        },
+        {
+          "name": "projectId",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initLaunchPreset",
+      "discriminator": [
+        219,
+        152,
+        56,
+        254,
+        153,
+        12,
+        96,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchPreset",
+          "writable": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u8"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "initLaunchParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "initRoster",
       "docs": [
         "Initialize roster account."
@@ -3506,6 +3891,79 @@ export type Engine = {
       ]
     },
     {
+      "name": "updateLaunchPreset",
+      "discriminator": [
+        137,
+        161,
+        39,
+        168,
+        45,
+        186,
+        69,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launchPreset",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u8"
+        },
+        {
+          "name": "patch",
+          "type": {
+            "defined": {
+              "name": "updateLaunchParams"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "docs": [
         "Withdraw during funding window (reduces ticket_count and returns lamports)."
@@ -3680,6 +4138,19 @@ export type Engine = {
         169,
         22,
         207
+      ]
+    },
+    {
+      "name": "launchPreset",
+      "discriminator": [
+        29,
+        197,
+        177,
+        13,
+        230,
+        184,
+        203,
+        69
       ]
     },
     {
@@ -4951,6 +5422,110 @@ export type Engine = {
       }
     },
     {
+      "name": "launchPreset",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u8"
+          },
+          {
+            "name": "hardCapLamports",
+            "type": "u64"
+          },
+          {
+            "name": "minRaiseLamports",
+            "type": "u64"
+          },
+          {
+            "name": "perWalletCap",
+            "type": "u64"
+          },
+          {
+            "name": "tauLamports",
+            "type": "u64"
+          },
+          {
+            "name": "baseTotalAllocation",
+            "type": "u64"
+          },
+          {
+            "name": "baseSaleBasisPoints",
+            "type": "u64"
+          },
+          {
+            "name": "teamAllocationBasisPoints",
+            "type": "u64"
+          },
+          {
+            "name": "fundingDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "saleStartTimeSec",
+            "type": "i64"
+          },
+          {
+            "name": "unlockTimeSec",
+            "type": "i64"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterShardsTotal",
+            "type": "u16"
+          },
+          {
+            "name": "creatorInitialDepositLamports",
+            "type": "u64"
+          },
+          {
+            "name": "creatorDailyLamportsLimit",
+            "type": "u64"
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "creatorMaxDeposit",
+            "type": "u64"
+          },
+          {
+            "name": "poolCreationGracePeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "teamVestingDurationSec",
+            "type": "i64"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "isMutable",
+            "type": "bool"
+          },
+          {
+            "name": "sellerFeeBasisPoints",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "launchState",
       "type": {
         "kind": "struct",
@@ -5607,6 +6182,152 @@ export type Engine = {
             "name": "newThreshold",
             "type": {
               "option": "u8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "updateLaunchParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hardCapLamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "minRaiseLamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "perWalletCap",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "tauLamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "baseTotalAllocation",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "baseSaleBasisPoints",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "teamAllocationBasisPoints",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "fundingDurationSeconds",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "saleStartTimeSec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "unlockTimeSec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "rosterShardCap",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "rosterShardsTotal",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "creatorInitialDepositLamports",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creatorDailyLamportsLimit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "creatorMaxDeposit",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "poolCreationGracePeriodSec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "teamVestingDurationSec",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "name",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "symbol",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "uri",
+            "type": {
+              "option": "string"
+            }
+          },
+          {
+            "name": "isMutable",
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "name": "sellerFeeBasisPoints",
+            "type": {
+              "option": "u16"
             }
           }
         ]
