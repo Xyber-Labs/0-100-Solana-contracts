@@ -156,7 +156,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     ammConfig: '',
     clmmProgram: '',
     teamVestingDurationSec: 1,
-    teamAllocationBasisPoints: 10000,
+    teamAllocationBasisPoints: 1000,
   };
 
   // --- New state for simulation config ---
