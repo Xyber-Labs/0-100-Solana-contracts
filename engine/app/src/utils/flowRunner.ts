@@ -324,8 +324,7 @@ export async function runFullFlow(
       isMutable: true,
       sellerFeeBasisPoints: 0,
       teamAllocationBasisPoints: (config as any).teamAllocationBasisPoints ?? 1000,
-      // teamVestingDurationSec: (config as any).teamVestingDurationSec ?? 1, // tests can set to 1s to claim immediately
-      teamVestingDurationSec: 1, // tests can set to 1s to claim immediately
+      teamVestingDurationSec: (config as any).teamVestingDurationSec ?? 1, // tests can set to 1s to claim immediately
     });
     const signature = await provider.sendAndConfirm!(initLaunchTx, []);
 

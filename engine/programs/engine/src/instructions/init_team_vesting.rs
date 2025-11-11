@@ -55,6 +55,8 @@ pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
     team.start_ts = state.claims_opened_at.unwrap_or(now);
     let duration = if state.team_vesting_duration_sec > 0 {
         state.team_vesting_duration_sec
+    } else if state.team_allocation_basis_points == 0 {
+        1
     } else {
         TEAM_VESTING_DURATION_SEC
     };

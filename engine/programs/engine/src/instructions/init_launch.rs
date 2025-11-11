@@ -175,7 +175,11 @@ pub fn init_launch(
     state.tau_lamports = params.tau_lamports;
     state.base_total_allocation = params.base_total_allocation;
     state.base_sale_basis_points = params.base_sale_basis_points;
-    state.team_allocation_basis_points = params.team_allocation_basis_points;
+    state.team_allocation_basis_points = if params.team_allocation_basis_points > 0 {
+        params.team_allocation_basis_points
+    } else {
+        crate::constants::TEAM_BASIS_POINTS
+    };
     state.unlock_time_sec = params.unlock_time_sec;
     state.roster_shard_cap = params.roster_shard_cap;
 
@@ -220,7 +224,11 @@ pub fn init_launch(
     state.claims_opened_at = None;
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
     state.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
-    state.team_vesting_duration_sec = params.team_vesting_duration_sec;
+    state.team_vesting_duration_sec = if params.team_vesting_duration_sec > 0 {
+        params.team_vesting_duration_sec
+    } else {
+        crate::constants::TEAM_VESTING_DURATION_SEC
+    };
 
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;

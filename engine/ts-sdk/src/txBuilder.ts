@@ -171,9 +171,11 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
-      team_allocation_basis_points: typeof params.teamAllocationBasisPoints === "number"
-        ? params.teamAllocationBasisPoints
-        : 1000,
+      teamAllocationBasisPoints: new BN(
+        typeof params.teamAllocationBasisPoints === "number"
+          ? params.teamAllocationBasisPoints
+          : 10000
+      ),
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
       saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
       unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
@@ -184,7 +186,7 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       creatorMaxDeposit: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
-      team_vesting_duration_sec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
+      teamVestingDurationSec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
       name: params.name,
       symbol: params.symbol,
       uri: params.uri,
