@@ -17,7 +17,7 @@ import {
 } from "@solana/spl-token";
 
 // import type EngineSDK from "../../../ts-sdk/src/engine";
-import type EngineSDK from "@xyber-labs/0-100-sdk";
+import type { EngineClient } from "@xyber-labs/0-100-sdk";
 import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
 
 
@@ -28,7 +28,7 @@ interface SimulationConfig {
 }
 
 export async function runFullFlow(
-  sdk: ReturnType<typeof EngineSDK.create>,
+  sdk: EngineClient,
   program: Program,
   provider: any,
   config: LaunchConfig,
@@ -208,13 +208,13 @@ export async function runFullFlow(
         const mintFeeTx = new Transaction().add(createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64)));
         await provider.sendAndConfirm!(mintFeeTx, []);
         funded = true;
-      } catch (_) {}
+      } catch (_) { }
       if (!funded) {
         try {
           const transferTx = new Transaction().add(createTransferInstruction(treasuryXyberAta, creatorXyberAta, treasuryPubkey, BigInt(creationFeeU64)));
           await provider.sendAndConfirm!(transferTx, []);
           funded = true;
-        } catch (_) {}
+        } catch (_) { }
       }
       if (!funded) {
         try {
@@ -268,7 +268,7 @@ export async function runFullFlow(
     const estSec = estFundingBatches * 2 + estDepositBatches * 3 + 5; // ~2s per funding batch, ~3s per deposit batch + overhead
     const estClamped = Math.max(15, Math.min(estSec, 90));
     const cfgSec = typeof config.fundingDurationSeconds === 'number' ? config.fundingDurationSeconds : 0;
-    const fundingDurationSeconds = Math.max(15, Math.min(cfgSec || estClamped, estClamped));
+    const fundingDurationSeconds = cfgSec > 0 ? Math.max(15, cfgSec) : estClamped;
 
     // Add main instruction
     // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
@@ -296,8 +296,10 @@ export async function runFullFlow(
     const metaSymbol = "LUMI";
     const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
     const kCap = Math.floor(config.hardCapLamports / config.tauLamports);
-    const rosterShardsTotal = Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
-    const { initLaunchTx } = await (sdk as any).initLaunchTx({
+    const rosterShardsTotal = (config as any).rosterShardsTotal && (config as any).rosterShardsTotal > 0
+      ? Math.min(65535, (config as any).rosterShardsTotal)
+      : Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
+    const { initLaunchTx } = await sdk.initLaunchTx({
       creator: admin.publicKey,
       projectId,
       hardCapLamports: new BN(config.hardCapLamports),
@@ -314,12 +316,15 @@ export async function runFullFlow(
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
       creatorMaxDepositLamports: new BN((config as any).creatorMaxDepositLamports ?? config.creatorInitialDepositLamports),
+      provider,
       xyberMint,
       name: metaName,
       symbol: metaSymbol,
       uri: metaUri,
       isMutable: true,
       sellerFeeBasisPoints: 0,
+      teamAllocationBasisPoints: (config as any).teamAllocationBasisPoints ?? 1000,
+      teamVestingDurationSec: (config as any).teamVestingDurationSec ?? 1, // tests can set to 1s to claim immediately
     });
     const signature = await provider.sendAndConfirm!(initLaunchTx, []);
 
@@ -329,6 +334,15 @@ export async function runFullFlow(
 
     addLog(`   -> Launch initialized. Signature: ${signature}`);
     addLog(`   -> Launch PDA: ${testLaunchState.toBase58()}`);
+
+    // Initialize team vesting early so it exists throughout the flow
+    try {
+      await sdk.initTeamVesting({ launch: testLaunchState });
+      addLog(`   -> Team vesting initialized`);
+    } catch (e: any) {
+      const msg = String(e?.message || e);
+      addLog(`   -> Team vesting init skipped: ${msg}`);
+    }
 
     // Compute expected k_capacity and public target tickets to ensure full sale coverage
     const kCapacityExpected = Math.floor(config.hardCapLamports / config.tauLamports);
@@ -348,10 +362,16 @@ export async function runFullFlow(
     // We'll generate enough users to reach at least k_pub tickets
     const MAX_TICKETS_PER_USER = Math.max(1, simConfig.maxTicketsPerUser);
     const usersNeeded = Math.ceil(kPubExpected / MAX_TICKETS_PER_USER);
-    const numShards = Math.ceil(usersNeeded / config.rosterShardCap);
+    const requestedUsers = simConfig.numUsers && simConfig.numUsers > 0 ? simConfig.numUsers : usersNeeded;
+    const maxUsersCapacity = rosterShardsTotal * config.rosterShardCap;
+    const TARGET_USERS = Math.min(requestedUsers, maxUsersCapacity);
+    const numShards = Math.min(Math.ceil(TARGET_USERS / config.rosterShardCap), rosterShardsTotal);
     addLog(
-      `\n[3/10] Calculated ${numShards} shards needed for ~${usersNeeded} users to cover k_pub=${kPubExpected} with cap=${config.rosterShardCap}. Initializing...`
+      `\n[3/10] Calculated ${numShards}/${rosterShardsTotal} shards for ${TARGET_USERS} target users (k_pub=${kPubExpected}, cap=${config.rosterShardCap}). Initializing...`
     );
+    if (requestedUsers > TARGET_USERS) {
+      addLog(`   -> Requested ${requestedUsers} users exceeds shard capacity (${maxUsersCapacity}). Capped to ${TARGET_USERS}.`);
+    }
     const balanceBeforeShards = await provider.connection.getBalance(admin.publicKey);
     for (let i = 0; i < numShards; i++) {
       try {
@@ -371,27 +391,21 @@ export async function runFullFlow(
     const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
     // 3. Simulate deposits to reach at least k_pub tickets
-    const TARGET_USERS = usersNeeded;
     const MAX_TICKETS = MAX_TICKETS_PER_USER;
     const usersWithDeposits = new Map<
       string,
       { keypair: Keypair; tickets: number; shardId: number }
     >();
 
-    addLog(`\n[3/10] Simulating deposits to cover k_pub tickets...`);
+    addLog(`\n[3/10] Simulating deposits for ${TARGET_USERS} users...`);
 
-    // Step 1: Generate deterministic users to hit k_pubExpected tickets
-    let remainingTickets = kPubExpected;
     const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
-    let idx = 0;
-    while (remainingTickets > 0) {
-      const tickets = Math.min(remainingTickets, MAX_TICKETS);
+    for (let i = 0; i < TARGET_USERS; i++) {
+      const tickets = Math.max(1, Math.floor(Math.random() * MAX_TICKETS) + 1);
       const keypair = Keypair.generate();
       const depositAmount = new BN(config.tauLamports).mul(new BN(tickets));
-      const shardId = Math.floor(idx / config.rosterShardCap);
+      const shardId = Math.floor(i / config.rosterShardCap);
       provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
-      remainingTickets -= tickets;
-      idx++;
     }
     let users = provisionalUsers;
 
@@ -439,17 +453,27 @@ export async function runFullFlow(
 
     // concurrency runner moved to helpers
 
+    const fundingConcurrency = Math.min(200, numUsersToSimulate);
     addLog(`   -> Funding ${numUsersToSimulate} users with transfers from admin (parallel)...`);
-    await fundUsersParallel({ provider, admin: admin.publicKey, users, addLog });
+    addLog(`      - Concurrency: ${fundingConcurrency}`);
+    await fundUsersParallel({ provider, admin: admin.publicKey, users, concurrency: fundingConcurrency, addLog });
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, using pre-calculated shard IDs
+    const depositConcurrency = Math.min(200, numUsersToSimulate);
+    const uniqueShardsInUse = new Set(users.map(u => u.shardId)).size;
+    const totalTicketsSim = users.reduce((acc, u) => acc + u.tickets, 0);
+    const avgTicketsSim = totalTicketsSim / Math.max(1, numUsersToSimulate);
     addLog(`   -> Sending ${numUsersToSimulate} deposit transactions in parallel...`);
-    // record for later claims
-    for (const user of users) {
-      usersWithDeposits.set(user.keypair.publicKey.toBase58(), { keypair: user.keypair, tickets: user.tickets, shardId: user.shardId });
+    addLog(`      - Concurrency: ${depositConcurrency}`);
+    addLog(`      - Shards involved: ${uniqueShardsInUse}/${rosterShardsTotal} (cap per shard ${config.rosterShardCap})`);
+    addLog(`      - Tickets: total=${totalTicketsSim}, avgPerUser=${avgTicketsSim.toFixed(2)}`);
+    const depositResults = await depositUsersParallel({ sdk, launchPda: testLaunchState, users, concurrency: depositConcurrency, addLog });
+    for (const result of depositResults) {
+      const k = result.pubkey.toBase58();
+      const user = users.find(u => u.keypair.publicKey.toBase58() === k)!;
+      usersWithDeposits.set(k, { keypair: user.keypair, tickets: user.tickets, shardId: result.shardId });
     }
-    await depositUsersParallel({ sdk, launchPda: testLaunchState, users, addLog });
     addLog("   -> All deposits completed.");
 
     // 4. Wait for Funding to End
@@ -500,6 +524,52 @@ export async function runFullFlow(
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
     const crankingCost = balanceBeforeCranking - balanceAfterCranking;
 
+    addLog(`\n[6.5/10] Sealing and closing roster shards...`);
+    {
+      const launch: any = await sdk.fetchLaunch(testLaunchState);
+      const totalShards: number = Number(launch.rosterShards ?? 0);
+      for (let shardId = 0; shardId < totalShards; shardId++) {
+        const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
+        let shardAcc: any = null;
+        try {
+          shardAcc = await (program.account as any).rosterShard.fetch(rosterShardPda);
+        } catch (_) {
+          shardAcc = null;
+        }
+        const wallets: PublicKey[] = (shardAcc?.wallets as PublicKey[]) || [];
+        const BATCH = 20;
+        for (let from = 0; from < wallets.length; from += BATCH) {
+          const end = Math.min(from + BATCH, wallets.length);
+          const slice = wallets.slice(from, end);
+          const { transaction } = await (sdk as any).sealRosterShardTx({
+            launch: testLaunchState,
+            shardId,
+            from,
+            max: slice.length,
+            walletsSlice: slice,
+          });
+          try {
+            await provider.sendAndConfirm!(transaction, []);
+            addLog(`   -> Shard ${shardId}: sealed users [${from}..${end - 1}]`);
+          } catch (e: any) {
+            addLog(`   -> Shard ${shardId}: seal batch failed [${from}..${end - 1}]: ${e?.message || e}`);
+            throw e;
+          }
+        }
+        const before = await provider.connection.getBalance(admin.publicKey);
+        const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId });
+        try {
+          await provider.sendAndConfirm!(closeTx, []);
+          const after = await provider.connection.getBalance(admin.publicKey);
+          const delta = after - before;
+          addLog(`   -> Shard ${shardId} closed. Payer delta: ${(delta / 1e9).toFixed(9)} SOL`);
+        } catch (e: any) {
+          addLog(`   -> Shard ${shardId}: close failed: ${e?.message || e}`);
+          throw e;
+        }
+      }
+    }
+
     // 7. Create Pool (prepare, Raydium CLMM creation, add liquidity)
     addLog(`\n[7/10] Prepare Pool Creation...`);
     await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
@@ -510,7 +580,11 @@ export async function runFullFlow(
       addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
     } catch (e: any) {
       const msg = String(e?.message || e || "");
-      if (msg.includes("mintForTest is unavailable")) {
+      if (
+        msg.includes("mintForTest") ||
+        msg.includes("unavailable") ||
+        msg.includes("not a function")
+      ) {
         const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
         // Auto-select CLMM program if not provided: devnet -> DRay..., else CAMMC...
         let clmmProgramStr = String(config.clmmProgram || "");
@@ -571,7 +645,7 @@ export async function runFullFlow(
       try {
         // @ts-ignore
         if (typeof Buffer !== "undefined" && Buffer.from) return new Uint8Array(Buffer.from(b64, "base64"));
-      } catch {}
+      } catch { }
       const bin = typeof atob === "function" ? atob(b64) : "";
       const out = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
@@ -617,7 +691,7 @@ export async function runFullFlow(
         const latest = await provider.connection.getLatestBlockhash();
         transaction.feePayer = provider.wallet.publicKey;
         transaction.recentBlockhash = latest.blockhash ?? latest;
-        try { transaction.partialSign(demoUser.keypair); } catch {}
+        try { transaction.partialSign(demoUser.keypair); } catch { }
         let sim: any;
         try {
           sim = await provider.connection.simulateTransaction(transaction, { sigVerify: false, replaceRecentBlockhash: true } as any);
@@ -804,6 +878,7 @@ export async function runFullFlow(
     }
 
     let totalTokensClaimedByCreator = 0;
+    let totalTokensClaimedByTeam = 0;
     let creatorClaimCost = 0;
     // 10. Test Creator Token Claiming (if creator deposit was made)
     if (config.creatorInitialDepositLamports > 0) {
@@ -967,12 +1042,76 @@ export async function runFullFlow(
     addLog(`     -> Crank cost per SOL raised: ${crankCostPerSOL.toFixed(12)} SOL`);
     addLog(`--- END COST ANALYSIS ---`);
 
+    // Team vesting claim (best-effort; logs on-chain state, multi-claim if needed)
+    try {
+      const vestSec = (config as any).teamVestingDurationSec ?? 1;
+      const launchForTeam: any = await sdk.fetchLaunch(testLaunchState);
+      let teamOnChain: any = null;
+      try { teamOnChain = await sdk.fetchTeamVesting(testLaunchState); } catch (_) { }
+      if (teamOnChain) {
+        const now = Math.floor(Date.now() / 1000);
+        addLog(`[Team Vesting] State before claim: total=${(Number(teamOnChain.totalAllocation) / 1e9).toFixed(6)}, claimed=${(Number(teamOnChain.claimed) / 1e9).toFixed(6)}, duration=${Number(teamOnChain.durationSec)}, start=${Number(teamOnChain.startTs)}, now=${now}`);
+        addLog(`[Team Vesting] Launch config: team_bps=${Number(launchForTeam.teamAllocationBasisPoints)}, base_total_allocation=${(Number(launchForTeam.baseTotalAllocation) / 1e9).toFixed(6)}`);
+      }
+      await new Promise(res => setTimeout(res, Math.max(1, vestSec) * 1000 + 600));
+      const teamCreatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+      try {
+        const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
+        if (!ataInfo) {
+          const { ix } = sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: testBaseMint.publicKey });
+          await provider.sendAndConfirm!(new Transaction().add(ix), []);
+        }
+      } catch (_) { }
+      const attemptClaim = async () => {
+        const before = await getTokenBalance(teamCreatorAta);
+        const { transaction } = await sdk.claimTeamTokensTx({
+          launch: testLaunchState,
+          baseMint: testBaseMint.publicKey,
+          creator: admin.publicKey,
+          creatorAta: teamCreatorAta,
+          createAtaIfMissing: true,
+        });
+        try { transaction.instructions.unshift(ComputeBudgetProgram.setComputeUnitLimit({ units: 3_000_000 })); } catch (_) { }
+        transaction.feePayer = admin.publicKey;
+        try {
+          const latest = await provider.connection.getLatestBlockhash();
+          (transaction as any).recentBlockhash = (latest as any)?.blockhash ?? latest;
+        } catch (_) { }
+        await provider.wallet.signTransaction(transaction as any);
+        await provider.sendAndConfirm!(transaction, []);
+        const after = await getTokenBalance(teamCreatorAta);
+        const delta = Math.max(0, after - before);
+        totalTokensClaimedByTeam += delta;
+        return delta;
+      };
+      let retries = 3;
+      while (retries-- > 0) {
+        try {
+          const got = await attemptClaim();
+          if (got > 0) addLog(`[Team Vesting] Claimed ${got.toFixed(6)} tokens`);
+          if (got === 0) break;
+        } catch (e: any) {
+          const msg = String(e?.message || e);
+          if (msg.includes("NothingToClaim")) break;
+          if (msg.includes("TeamClaimTooFrequent")) {
+            await new Promise(res => setTimeout(res, 1100));
+            continue;
+          }
+          addLog(`[Team Vesting] Claim skipped: ${msg}`);
+          break;
+        }
+      }
+    } catch (e: any) {
+      addLog(`[Team Vesting] initTeamVesting skipped: ${String(e?.message || e)}`);
+    }
+
     addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);
     addLog(`   Total SOL collected:      ${(totalSOLCollected / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
     addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);
     addLog(`   Total claimed by creator: ${totalTokensClaimedByCreator.toFixed(6)}`);
+    addLog(`   Total claimed by team:    ${totalTokensClaimedByTeam.toFixed(6)}`);
     addLog(`   ------------------------------------`);
-    const totalDistributed = tokensClaimed + totalTokensClaimedByCreator;
+    const totalDistributed = tokensClaimed + totalTokensClaimedByCreator + totalTokensClaimedByTeam;
     addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);
     addLog(`--- END SUMMARY ---\n`);
 

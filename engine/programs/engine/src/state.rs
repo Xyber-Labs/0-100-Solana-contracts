@@ -56,6 +56,8 @@ pub struct LaunchState {
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
     pub pool_creation_grace_period_sec: i64,
+    pub team_allocation_basis_points: u64,
+    pub team_vesting_duration_sec: i64,
 }
 
 impl LaunchState {
@@ -92,6 +94,11 @@ pub struct UserContribution {
     // Sharded roster placement (assigned on first deposit)
     pub shard_id: u16,
     pub idx_in_shard: u32,
+
+    // --- appended for upgrade safety: finalized snapshot for claims ---
+    pub finalized_snapshot: bool,   // default: false
+    pub final_t_base: u32,          // shard_base + prefix[u]
+    pub final_ticket_count: u32,    // counts[u] at seal time
 }
 
 #[account]

@@ -22,6 +22,8 @@ pub use prepare_pool_creation::*;
 pub use set_seed::*;
 pub use update_engine_config::*;
 pub use withdraw::*;
+pub use seal_roster_shard::*;
+pub use close_roster_shard::*;
 
 mod add_clmm_liquidity;
 mod claim_clmm_fees;
@@ -35,6 +37,8 @@ mod creator_deposit;
 mod creator_withdraw;
 mod deposit;
 mod finalize_roster_shard;
+mod seal_roster_shard;
+mod close_roster_shard;
 mod get_liquidity_range;
 mod init_engine_config;
 mod init_launch;
