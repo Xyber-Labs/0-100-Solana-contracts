@@ -560,21 +560,20 @@ export class TxBuilder {
     ]);
     const rosterShard =
       params.rosterShard ??
-      (params.shardId !== undefined
-        ? this.getRosterShardPda(params.launch, params.shardId)[0]
-        : (() => { throw new Error("Provide shardId or rosterShard for claimRefund"); })());
+      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
     // escrow removed
 
-    const instruction = await this.program.methods
-      .claimRefund()
-      .accounts({
-        user: params.user,
-        launchState: params.launch,
-        userContribution: userContribution,
-        rosterShard,
-        // escrow removed
-      } as any)
-      .instruction();
+    const method = this.program.methods.claimRefund();
+    // Build accounts object conditionally to allow omitting optional roster_shard
+    const acct: any = {
+      user: params.user,
+      launchState: params.launch,
+      userContribution,
+      // escrow removed
+    };
+    // Some Anchor client versions still expect the account present even if optional; provide harmless fallback
+    acct.rosterShard = rosterShard ?? params.launch;
+    const instruction = await (method as any).accounts(acct).instruction();
 
     return { instruction, userContribution };
   }
@@ -607,9 +606,7 @@ export class TxBuilder {
     ]);
     const rosterShard =
       params.rosterShard ??
-      (params.shardId !== undefined
-        ? this.getRosterShardPda(params.launch, params.shardId)[0]
-        : (() => { throw new Error("Provide shardId or rosterShard for claimTokens"); })());
+      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [poolState] = this.getPda(["pool", params.launch]);
     const userAta =
@@ -647,19 +644,20 @@ export class TxBuilder {
       }
     }
 
-    const claimIx = await this.program.methods
-      .claimTokens()
-      .accounts({
-        user: params.user,
-        launchState: params.launch,
-        userContribution,
-        rosterShard,
-        baseMint: params.baseMint,
-        escrowAuthority,
-        baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
-        userAta,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      } as any)
+    const method = this.program.methods.claimTokens();
+    const accts: any = {
+      user: params.user,
+      launchState: params.launch,
+      userContribution,
+      baseMint: params.baseMint,
+      escrowAuthority,
+      baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
+      userAta,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    };
+    accts.rosterShard = rosterShard ?? params.launch;
+    const claimIx = await (method as any)
+      .accounts(accts)
       .remainingAccounts([
         { pubkey: poolState, isSigner: false, isWritable: false },
       ])
@@ -668,6 +666,48 @@ export class TxBuilder {
     instructions.push(claimIx);
 
     return { instructions, userAta };
+  }
+
+  async sealRosterShardIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    shardId: number;
+    from: number;
+    max: number;
+    walletsSlice: web3.PublicKey[]; // wallets[from..end] in exact order
+  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
+    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    const method = (this.program.methods as any).sealRosterShard(params.shardId, params.from, params.max);
+    const ixBuilder = method.accounts({
+      payer: params.payer,
+      systemProgram: web3.SystemProgram.programId,
+      launchState: params.launch,
+      rosterShard,
+    });
+    const remaining = params.walletsSlice.map((w) => {
+      const [userPda] = this.getPda(["user", params.launch, w]);
+      return { pubkey: userPda, isSigner: false, isWritable: true };
+    });
+    const instruction = await ixBuilder.remainingAccounts(remaining).instruction();
+    return { instruction, rosterShard };
+  }
+
+  async closeRosterShardIx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    shardId: number;
+  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
+    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    const method = (this.program.methods as any).closeRosterShard(params.shardId);
+    const instruction = await method
+      .accounts({
+        payer: params.payer,
+        launchState: params.launch,
+        rosterShard,
+        systemProgram: web3.SystemProgram.programId,
+      } as any)
+      .instruction();
+    return { instruction, rosterShard };
   }
 
   async claimTokensTx(params: {

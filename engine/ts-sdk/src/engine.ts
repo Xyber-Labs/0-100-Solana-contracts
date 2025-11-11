@@ -702,6 +702,86 @@ const EngineSDK = {
       return { signature };
     }
 
+    async function sealRosterShard(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+      from: number;
+      max: number;
+      walletsSlice: anchor.web3.PublicKey[];
+      payerKeypair?: anchor.web3.Keypair;
+    }): Promise<{ signature: string }> {
+      const { instruction } = await txBuilder.sealRosterShardIx({
+        payer,
+        launch: args.launch,
+        shardId: args.shardId,
+        from: args.from,
+        max: args.max,
+        walletsSlice: args.walletsSlice,
+      });
+      const tx = new anchor.web3.Transaction().add(instruction);
+      tx.feePayer = payer;
+      const signers = args.payerKeypair ? [args.payerKeypair] : (adminKeypair ? [adminKeypair] : []);
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
+    }
+
+    async function closeRosterShard(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+      payerKeypair?: anchor.web3.Keypair;
+    }): Promise<{ signature: string }> {
+      const { instruction } = await txBuilder.closeRosterShardIx({
+        payer,
+        launch: args.launch,
+        shardId: args.shardId,
+      });
+      const tx = new anchor.web3.Transaction().add(instruction);
+      tx.feePayer = payer;
+      const signers = args.payerKeypair ? [args.payerKeypair] : (adminKeypair ? [adminKeypair] : []);
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+      const signature = await provider.sendAndConfirm(tx, signers);
+      return { signature };
+    }
+
+    async function sealRosterShardTx(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+      from: number;
+      max: number;
+      walletsSlice: anchor.web3.PublicKey[];
+    }): Promise<{ transaction: anchor.web3.Transaction }> {
+      const { instruction } = await txBuilder.sealRosterShardIx({
+        payer,
+        launch: args.launch,
+        shardId: args.shardId,
+        from: args.from,
+        max: args.max,
+        walletsSlice: args.walletsSlice,
+      });
+      const transaction = new anchor.web3.Transaction().add(instruction);
+      transaction.feePayer = payer;
+      return { transaction };
+    }
+
+    async function closeRosterShardTx(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+    }): Promise<{ transaction: anchor.web3.Transaction }> {
+      const { instruction } = await txBuilder.closeRosterShardIx({
+        payer,
+        launch: args.launch,
+        shardId: args.shardId,
+      });
+      const transaction = new anchor.web3.Transaction().add(instruction);
+      transaction.feePayer = payer;
+      return { transaction };
+    }
+
     // openClaims removed; preparePoolCreation now finalizes and opens claims
 
     async function claimCreatorTokens(args: {
@@ -1098,6 +1178,10 @@ const EngineSDK = {
       claimTokens,
       initRosterShard,
       finalizeRosterShard,
+      sealRosterShard,
+      closeRosterShard,
+      sealRosterShardTx,
+      closeRosterShardTx,
       claimRefundTx,
       claimTokensTx,
       claimCreatorTokens,

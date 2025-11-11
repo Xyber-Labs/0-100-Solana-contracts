@@ -512,6 +512,52 @@ export async function runFullFlow(
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
     const crankingCost = balanceBeforeCranking - balanceAfterCranking;
 
+    addLog(`\n[6.5/10] Sealing and closing roster shards...`);
+    {
+      const launch: any = await sdk.fetchLaunch(testLaunchState);
+      const totalShards: number = Number(launch.rosterShards ?? 0);
+      for (let shardId = 0; shardId < totalShards; shardId++) {
+        const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
+        let shardAcc: any = null;
+        try {
+          shardAcc = await (program.account as any).rosterShard.fetch(rosterShardPda);
+        } catch (_) {
+          shardAcc = null;
+        }
+        const wallets: PublicKey[] = (shardAcc?.wallets as PublicKey[]) || [];
+        const BATCH = 20;
+        for (let from = 0; from < wallets.length; from += BATCH) {
+          const end = Math.min(from + BATCH, wallets.length);
+          const slice = wallets.slice(from, end);
+          const { transaction } = await (sdk as any).sealRosterShardTx({
+            launch: testLaunchState,
+            shardId,
+            from,
+            max: slice.length,
+            walletsSlice: slice,
+          });
+          try {
+            await provider.sendAndConfirm!(transaction, []);
+            addLog(`   -> Shard ${shardId}: sealed users [${from}..${end - 1}]`);
+          } catch (e: any) {
+            addLog(`   -> Shard ${shardId}: seal batch failed [${from}..${end - 1}]: ${e?.message || e}`);
+            throw e;
+          }
+        }
+        const before = await provider.connection.getBalance(admin.publicKey);
+        const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId });
+        try {
+          await provider.sendAndConfirm!(closeTx, []);
+          const after = await provider.connection.getBalance(admin.publicKey);
+          const delta = after - before;
+          addLog(`   -> Shard ${shardId} closed. Payer delta: ${(delta / 1e9).toFixed(9)} SOL`);
+        } catch (e: any) {
+          addLog(`   -> Shard ${shardId}: close failed: ${e?.message || e}`);
+          throw e;
+        }
+      }
+    }
+
     // 7. Create Pool (prepare, Raydium CLMM creation, add liquidity)
     addLog(`\n[7/10] Prepare Pool Creation...`);
     await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
@@ -522,7 +568,11 @@ export async function runFullFlow(
       addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
     } catch (e: any) {
       const msg = String(e?.message || e || "");
-      if (msg.includes("mintForTest is unavailable")) {
+      if (
+        msg.includes("mintForTest") ||
+        msg.includes("unavailable") ||
+        msg.includes("not a function")
+      ) {
         const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
         // Auto-select CLMM program if not provided: devnet -> DRay..., else CAMMC...
         let clmmProgramStr = String(config.clmmProgram || "");
