@@ -17,6 +17,8 @@ export interface LaunchConfig {
   ammConfig?: string;
   clmmProgram?: string;
   rosterShardsTotal?: number;
+  teamAllocationBasisPoints?: number; // default 1000 (10%)
+  teamVestingDurationSec?: number;    // default 1 year; can set to 1 for tests
 }
 
 

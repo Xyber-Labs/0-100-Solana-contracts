@@ -38,6 +38,7 @@ pub const TEAM_BASIS_POINTS: u64 = 1_000;
 
 #[constant]
 pub const TEAM_VESTING_DURATION_SEC: i64 = 365 * 24 * 60 * 60;
+// pub const TEAM_VESTING_DURATION_SEC: i64 = 1;
 
 #[constant]
 pub const TEAM_CLAIM_MIN_INTERVAL_SEC: i64 = 1;

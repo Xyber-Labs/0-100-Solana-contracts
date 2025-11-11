@@ -76,6 +76,9 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     finalize_selection(launch_state, &mut ctx.accounts.creator_grant)?;
 
+    // Open claims timestamp
+    launch_state.claims_opened_at = Some(current_time);
+
     // for claims and withdrawal testing, without pool creation
     #[cfg(feature = "test")]
     {

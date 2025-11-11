@@ -119,10 +119,18 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    // Mint base in atomic units: base_total_allocation * 10^decimals
-    let decimals_factor = 10u128.pow(ctx.accounts.base_mint.decimals as u32);
-    let to_mint_u128 = (ctx.accounts.launch_state.base_total_allocation as u128)
-        .saturating_mul(decimals_factor);
+    // Mint base in atomic units: base_total_allocation (already atomic) + team_allocation (atomic)
+    let state = &ctx.accounts.launch_state;
+    let team_bps = if state.team_allocation_basis_points > 0 {
+        state.team_allocation_basis_points
+    } else {
+        crate::constants::TEAM_BASIS_POINTS
+    } as u128;
+    let base_total_atomic = state.base_total_allocation as u128;
+    let team_alloc_atomic = base_total_atomic
+        .saturating_mul(team_bps)
+        .saturating_div(10_000u128);
+    let to_mint_u128 = base_total_atomic.saturating_add(team_alloc_atomic);
     let to_mint = to_mint_u128 as u64;
 
     // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]

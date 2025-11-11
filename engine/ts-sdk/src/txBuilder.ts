@@ -139,6 +139,8 @@ export class TxBuilder {
     uri: string;
     isMutable?: boolean;
     sellerFeeBasisPoints?: number;
+    teamVestingDurationSec?: number;
+    teamAllocationBasisPoints?: number;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -169,6 +171,9 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
+      team_allocation_basis_points: typeof params.teamAllocationBasisPoints === "number"
+        ? params.teamAllocationBasisPoints
+        : 1000,
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
       saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
       unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
@@ -179,6 +184,7 @@ export class TxBuilder {
       creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
       creatorMaxDeposit: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
+      team_vesting_duration_sec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
       name: params.name,
       symbol: params.symbol,
       uri: params.uri,
@@ -249,6 +255,9 @@ export class TxBuilder {
     uri: string;
     isMutable?: boolean;
     sellerFeeBasisPoints?: number;
+    // Missing optional fields to be forwarded to initLaunchIx:
+    teamVestingDurationSec?: number;
+    teamAllocationBasisPoints?: number;
   }): Promise<{
     initLaunchTx: web3.Transaction;
     launchState: web3.PublicKey;
@@ -286,6 +295,9 @@ export class TxBuilder {
       uri: params.uri,
       isMutable: params.isMutable,
       sellerFeeBasisPoints: params.sellerFeeBasisPoints,
+      // Forward team vesting config so we don't silently fall back to 1y default
+      teamAllocationBasisPoints: params.teamAllocationBasisPoints,
+      teamVestingDurationSec: params.teamVestingDurationSec,
     });
 
     const initLaunchTx = new web3.Transaction().add(initLaunchIx);

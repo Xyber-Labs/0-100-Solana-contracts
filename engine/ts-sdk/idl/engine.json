@@ -4801,6 +4801,10 @@
             "type": "u64"
           },
           {
+            "name": "team_allocation_basis_points",
+            "type": "u64"
+          },
+          {
             "name": "funding_duration_seconds",
             "type": "i64"
           },
@@ -4838,6 +4842,10 @@
           },
           {
             "name": "pool_creation_grace_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "team_vesting_duration_sec",
             "type": "i64"
           },
           {
@@ -5084,6 +5092,14 @@
           },
           {
             "name": "pool_creation_grace_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "team_allocation_basis_points",
+            "type": "u64"
+          },
+          {
+            "name": "team_vesting_duration_sec",
             "type": "i64"
           }
         ]

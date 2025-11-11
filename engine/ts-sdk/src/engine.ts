@@ -167,6 +167,8 @@ const EngineSDK = {
       uri: string;
       isMutable?: boolean;
       sellerFeeBasisPoints?: number;
+      teamAllocationBasisPoints?: number;
+      teamVestingDurationSec?: number;
     }): Promise<{
       launchPda: anchor.web3.PublicKey;
       escrowPda: anchor.web3.PublicKey;
@@ -215,6 +217,8 @@ const EngineSDK = {
           uri: metaUri,
           isMutable: metaMutable,
           sellerFeeBasisPoints: metaSellerFeeBps,
+        teamAllocationBasisPoints: args.teamAllocationBasisPoints ?? 1000,
+        teamVestingDurationSec: args.teamVestingDurationSec ?? 365 * 24 * 60 * 60,
         }
       );
 
@@ -1240,3 +1244,4 @@ const EngineSDK = {
 
 export default EngineSDK;
 export type { EngineIDL };
+export type EngineClient = ReturnType<typeof EngineSDK.create>;

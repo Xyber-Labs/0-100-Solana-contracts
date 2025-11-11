@@ -93,6 +93,7 @@ pub struct InitLaunchParams {
     pub tau_lamports: u64,
     pub base_total_allocation: u64,
     pub base_sale_basis_points: u64,
+    pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub sale_start_time_sec: i64,
     pub unlock_time_sec: i64,
@@ -105,6 +106,7 @@ pub struct InitLaunchParams {
     pub creator_claim_lock_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
+    pub team_vesting_duration_sec: i64,
 
     // Base token metadata config
     pub name: String,
@@ -173,6 +175,7 @@ pub fn init_launch(
     state.tau_lamports = params.tau_lamports;
     state.base_total_allocation = params.base_total_allocation;
     state.base_sale_basis_points = params.base_sale_basis_points;
+    state.team_allocation_basis_points = params.team_allocation_basis_points;
     state.unlock_time_sec = params.unlock_time_sec;
     state.roster_shard_cap = params.roster_shard_cap;
 
@@ -217,6 +220,7 @@ pub fn init_launch(
     state.claims_opened_at = None;
     state.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
     state.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
+    state.team_vesting_duration_sec = params.team_vesting_duration_sec;
 
     // Handle creator deposit and grant initialization
     let amount = params.creator_initial_deposit_lamports;

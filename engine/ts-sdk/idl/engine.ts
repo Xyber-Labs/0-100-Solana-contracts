@@ -4807,6 +4807,10 @@ export type Engine = {
             "type": "u64"
           },
           {
+            "name": "teamAllocationBasisPoints",
+            "type": "u64"
+          },
+          {
             "name": "fundingDurationSeconds",
             "type": "i64"
           },
@@ -4844,6 +4848,10 @@ export type Engine = {
           },
           {
             "name": "poolCreationGracePeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "teamVestingDurationSec",
             "type": "i64"
           },
           {
@@ -5090,6 +5098,14 @@ export type Engine = {
           },
           {
             "name": "poolCreationGracePeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "teamAllocationBasisPoints",
+            "type": "u64"
+          },
+          {
+            "name": "teamVestingDurationSec",
             "type": "i64"
           }
         ]

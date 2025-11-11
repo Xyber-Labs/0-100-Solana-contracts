@@ -56,6 +56,8 @@ pub struct LaunchState {
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
     pub pool_creation_grace_period_sec: i64,
+    pub team_allocation_basis_points: u64,
+    pub team_vesting_duration_sec: i64,
 }
 
 impl LaunchState {

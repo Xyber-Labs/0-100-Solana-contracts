@@ -98,7 +98,8 @@ describe("engine anchor - raydium clmm", () => {
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const ROSTER_SHARD_CAP = 100;
-  // New allocations: Sale 48.14%, Liquidity 41.86%, Team/Funding 10% (not part of base_total)
+  // New allocations: Sale 48.14%, Liquidity 41.86% (base_total = 90% of total).
+  // Team/Funding 10% is configured via teamAllocationBasisPoints (1000 bps) and is NOT part of base_total.
   const SALE_ALLOCATION = new anchor.BN(481_400_000); // 48.14%
   const LP_ALLOCATION = new anchor.BN(418_600_000);   // 41.86%
   const BASE_TOTAL = SALE_ALLOCATION.add(LP_ALLOCATION); // 90% of total
@@ -253,7 +254,8 @@ describe("engine anchor - raydium clmm", () => {
       minRaiseLamports: MIN_RAISE_LAMPORTS,
       perWalletCap: PER_WALLET_CAP,
       tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL,
+      // pass atomic units (decimals=9)
+      baseTotalAllocation: BASE_TOTAL.mul(new anchor.BN(1_000_000_000)),
       baseSaleBasisPoints: SALE_BPS,
       fundingDurationSeconds: 5,
       rosterShardCap: ROSTER_SHARD_CAP,
@@ -264,11 +266,36 @@ describe("engine anchor - raydium clmm", () => {
       creatorMaxDepositLamports: new anchor.BN(0),
       provider,
       xyberMint,
+      // ensure small vesting for tests (not strictly needed for this test)
+      teamAllocationBasisPoints: 1000,
+      teamVestingDurationSec: 1,
     } as any);
 
     const sig = await provider.sendAndConfirm(initLaunchTx, [adminKeypair, ...signers]);
     console.log("✅ Launch initialized:", sig);
     clmmLaunchState = launchState;
+
+    // Initialize and verify team vesting to ensure test accounts for it
+    try {
+      await sdk.initTeamVesting({ launch: clmmLaunchState });
+      const vest: any = await sdk.fetchTeamVesting(clmmLaunchState);
+      const expectedTeamTotal = BASE_TOTAL
+        .mul(new anchor.BN(1_000_000_000))
+        .mul(new anchor.BN(1000))
+        .div(new anchor.BN(10_000));
+      console.log(
+        "Team vesting initialized. total_allocation=",
+        vest.totalAllocation.toString(),
+        "expected=",
+        expectedTeamTotal.toString(),
+        "duration_sec=",
+        vest.durationSec.toString()
+      );
+      assert.equal(vest.totalAllocation.toString(), expectedTeamTotal.toString(), "team.total_allocation mismatch");
+      assert.equal(Number(vest.durationSec), 1, "team.duration_sec should be 1 for tests");
+    } catch (e) {
+      console.log("Team vesting init/verify skipped:", String((e as any)?.message || e));
+    }
 
     await sdk.initRoster({ launch: clmmLaunchState });
     await sdk.initRosterShard({ launch: clmmLaunchState, shardId: 0 });

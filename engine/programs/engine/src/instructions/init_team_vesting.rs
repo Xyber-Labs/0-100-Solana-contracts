@@ -30,24 +30,35 @@ pub struct InitTeamVesting<'info> {
 pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
     let state = &ctx.accounts.launch_state;
 
-    require!(
-        state.base_sale_basis_points <= 10_000u64.saturating_sub(TEAM_BASIS_POINTS),
-        ErrorCode::InvalidShareSum
-    );
+    let team_bps = if state.team_allocation_basis_points > 0 {
+        state.team_allocation_basis_points
+    } else {
+        TEAM_BASIS_POINTS
+    };
+    require!(state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps), ErrorCode::InvalidShareSum);
 
-    let total_alloc = state
-        .base_total_allocation
-        .checked_mul(TEAM_BASIS_POINTS)
-        .and_then(|v| v.checked_div(10_000))
+    // Compute in u128 to avoid overflow, then downcast to u64
+    let total_alloc_u128 = (state.base_total_allocation as u128)
+        .checked_mul(team_bps as u128)
+        .and_then(|v| v.checked_div(10_000u128))
         .ok_or(ErrorCode::ArithmeticOverflow)?;
+    require!(total_alloc_u128 <= u64::MAX as u128, ErrorCode::U64ConversionOverflow);
+    let total_alloc = total_alloc_u128 as u64;
 
     let team = &mut ctx.accounts.team_vesting;
     team.launch = state.key();
     team.creator = state.creator;
     team.total_allocation = total_alloc;
     team.claimed = 0;
-    team.start_ts = 0;
-    team.duration_sec = TEAM_VESTING_DURATION_SEC;
+    // Start vesting now (or from claims_opened_at if present)
+    let now = Clock::get()?.unix_timestamp;
+    team.start_ts = state.claims_opened_at.unwrap_or(now);
+    let duration = if state.team_vesting_duration_sec > 0 {
+        state.team_vesting_duration_sec
+    } else {
+        TEAM_VESTING_DURATION_SEC
+    };
+    team.duration_sec = duration;
     team.min_interval_sec = TEAM_CLAIM_MIN_INTERVAL_SEC;
     team.last_claim_ts = 0;
 
