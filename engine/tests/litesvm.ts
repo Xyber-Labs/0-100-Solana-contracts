@@ -645,10 +645,30 @@ describe("engine litesvm", () => {
     );
   });
 
-  it.skip("Creates pool with blockhash verification", async () => {
+  it("Creates pool with blockhash verification", async () => {
     console.log("\n=== Creating Pool ===");
 
-    const existingLaunchPda = launchState;
+    // Use a fresh launch to avoid interfering with prior tests' time advances
+    const nextIdForPool = await sdk.getNextProjectId();
+    const { initLaunchTx: initForPoolTx, launchState: existingLaunchPda } = await sdk.initLaunchTx({
+      creator: admin.publicKey,
+      projectId: nextIdForPool,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
+      fundingDurationSeconds: 60,
+      rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      provider,
+      xyberMint,
+    });
+    await safeSendAndConfirm(provider, client, initForPoolTx, [admin.payer]);
     const [earlyPoolState] = sdk.getPoolPda(existingLaunchPda);
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
@@ -698,8 +718,8 @@ describe("engine litesvm", () => {
 
       // Skip second early simulation under LiteSVM to reduce flakiness
 
-      // 3) Advance time beyond funding period
-      await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
+      // 3) Advance time beyond funding period (fundingDurationSeconds was set to 60)
+      await advanceTime(client, { slots: BigInt(2000), seconds: BigInt(70) });
 
       // 4) Set VRF seed, finalize shard
       await sdk.setSeed({ launch: existingLaunchPda });
