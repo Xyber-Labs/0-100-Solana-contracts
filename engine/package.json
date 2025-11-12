@@ -14,6 +14,10 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
+    "@metaplex-foundation/mpl-token-metadata": "^3.4.0",
+    "@metaplex-foundation/umi": "^1.4.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.0.0",
+    "@metaplex-foundation/umi-web3js-adapters": "^1.0.0",
     "@raydium-io/raydium-sdk-v2": "^0.2.30-alpha",
     "@solana/spl-token": "^0.4.14",
     "@xyber-labs/0-100-sdk": "file:./ts-sdk",

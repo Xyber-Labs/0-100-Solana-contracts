@@ -2,10 +2,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{self, Mint, MintTo, Token},
+    metadata::Metadata,
+    token::{Mint, Token},
 };
 
-use crate::{errors::ErrorCode, state::LaunchState, SEED_ROOT};
+use crate::{
+    errors::ErrorCode,
+    state::{LaunchState, TokenMetadataConfig},
+    utils::mint as mint_utils,
+    SEED_ROOT,
+};
 
 // Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
@@ -35,11 +41,24 @@ pub struct MintForTest<'info> {
         bump
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
+    /// CHECK: Metaplex metadata account PDA for base_mint
+    #[account(
+        mut,
+        seeds = [b"metadata", token_metadata_program.key().as_ref(), base_mint.key().as_ref()],
+        bump,
+        seeds::program = token_metadata_program.key()
+    )]
+    pub metadata_account: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
+    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
     pub base_token_program: Program<'info, Token>,
+    pub token_metadata_program: Program<'info, Metadata>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
+/// Flagged as a test feature in engine/programs/engine/src/lib.rs — used only for testing to bypass pool creation and liquidity transfer.
 pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
     require!(ctx.accounts.launch_state.selection_finalized, ErrorCode::NotFinalized);
     require!(
@@ -53,53 +72,37 @@ pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
         ErrorCode::ShardsNotFullyFinalized
     );
 
-    create_base_escrow_ata(&ctx)?;
-    mint_sale_tokens_to_escrow(&ctx)?;
+    mint_utils::create_ata_for_authority(
+        &ctx.accounts.associated_token_program.to_account_info(),
+        &ctx.accounts.payer.to_account_info(),
+        &ctx.accounts.base_escrow_ata.to_account_info(),
+        &ctx.accounts.escrow_authority.to_account_info(),
+        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        &ctx.accounts.base_token_program.to_account_info(),
+    )?;
+
+    let to_mint = ctx.accounts.launch_state.base_total_allocation;
+    mint_utils::mint_to_escrow_for_launch(
+        &ctx.accounts.base_token_program.to_account_info(),
+        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.base_escrow_ata.to_account_info(),
+        &ctx.accounts.escrow_authority.to_account_info(),
+        &ctx.accounts.launch_state.key(),
+        to_mint,
+    )?;
+    mint_utils::ensure_token_metadata_for_launch(
+        &ctx.accounts.token_metadata_program.to_account_info(),
+        &ctx.accounts.metadata_account.to_account_info(),
+        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.escrow_authority.to_account_info(),
+        &ctx.accounts.payer.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        &ctx.accounts.rent.to_account_info(),
+        &ctx.accounts.token_metadata_config,
+        &ctx.accounts.launch_state.key(),
+    )?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
-    Ok(())
-}
-
-fn create_base_escrow_ata(ctx: &Context<MintForTest>) -> Result<()> {
-    anchor_spl::associated_token::create(CpiContext::new(
-        ctx.accounts.associated_token_program.to_account_info(),
-        anchor_spl::associated_token::Create {
-            payer: ctx.accounts.payer.to_account_info(),
-            associated_token: ctx.accounts.base_escrow_ata.to_account_info(),
-            authority: ctx.accounts.escrow_authority.to_account_info(),
-            mint: ctx.accounts.base_mint.to_account_info(),
-            system_program: ctx.accounts.system_program.to_account_info(),
-            token_program: ctx.accounts.base_token_program.to_account_info(),
-        },
-    ))?;
-
-    Ok(())
-}
-
-fn mint_sale_tokens_to_escrow(ctx: &Context<MintForTest>) -> Result<()> {
-    let to_mint = ctx.accounts.launch_state.base_total_allocation;
-
-    // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]
-    let seeds: &[&[u8]] = &[
-        SEED_ROOT,
-        b"escrow_authority",
-        &ctx.accounts.launch_state.key().to_bytes(),
-        &[LaunchState::mint_auth_bump_for(
-            &ctx.accounts.launch_state.key(),
-        )],
-    ];
-    let signer_seeds = &[seeds];
-    let mint_accounts = MintTo {
-        mint: ctx.accounts.base_mint.to_account_info(),
-        to: ctx.accounts.base_escrow_ata.to_account_info(),
-        authority: ctx.accounts.escrow_authority.to_account_info(),
-    };
-    let mint_ctx = CpiContext::new_with_signer(
-        ctx.accounts.base_token_program.to_account_info(),
-        mint_accounts,
-        signer_seeds,
-    );
-    token::mint_to(mint_ctx, to_mint)?;
-
     Ok(())
 }

@@ -15,6 +15,7 @@ pub struct CloseRosterShard<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         mut,
+        close = payer,
         seeds = [SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &shard_id.to_le_bytes()],
         bump,
         constraint = roster_shard.launch == launch_state.key()
@@ -32,19 +33,6 @@ pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Resu
         EngineErrorCode::ShardNotFinalized
     );
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
-
-    // Close the shard account and return lamports to payer
-    let lamports = shard.to_account_info().lamports();
-    **ctx.accounts
-        .payer
-        .to_account_info()
-        .lamports
-        .borrow_mut() += lamports;
-    **shard.to_account_info().lamports.borrow_mut() = 0;
-    shard
-        .to_account_info()
-        .assign(&anchor_lang::solana_program::system_program::ID);
-    shard.to_account_info().realloc(0, false)?;
 
     Ok(())
 }

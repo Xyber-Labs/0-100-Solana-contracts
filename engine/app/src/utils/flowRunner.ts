@@ -25,6 +25,7 @@ import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersPara
 interface SimulationConfig {
   numUsers: number;
   maxTicketsPerUser: number;
+  useTestMintForBase?: boolean;
 }
 
 export async function runFullFlow(
@@ -575,64 +576,51 @@ export async function runFullFlow(
     await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
 
     let mintedBaseMint: PublicKey | null = null;
-    try {
+    const wantTestMint = !!(simConfig && (simConfig as any).useTestMintForBase);
+    if (wantTestMint) {
       mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
       addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
-    } catch (e: any) {
-      const msg = String(e?.message || e || "");
-      if (
-        msg.includes("mintForTest") ||
-        msg.includes("unavailable") ||
-        msg.includes("not a function")
-      ) {
-        const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
-        // Auto-select CLMM program if not provided: devnet -> DRay..., else CAMMC...
-        let clmmProgramStr = String(config.clmmProgram || "");
-        if (!clmmProgramStr) {
-          const ep = (provider as any)?.connection?.rpcEndpoint || "";
-          clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
-          addLog?.(`      - Using default CLMM Program: ${clmmProgramStr}`);
-          (config as any).clmmProgram = clmmProgramStr;
-        }
-        const quoteMintPk = new PublicKey(quoteMintStr);
-        const clmmProgramPk = new PublicKey(clmmProgramStr);
-        addLog("      - Falling back to Raydium pool creation (mints sale tokens to escrow)...");
-        const createPool = await (sdk as any).createClmmPoolTx({
+    } else {
+      const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
+      let clmmProgramStr = String((config as any).clmmProgram || "");
+      if (!clmmProgramStr) {
+        const ep = (provider as any)?.connection?.rpcEndpoint || "";
+        clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+        (config as any).clmmProgram = clmmProgramStr;
+      }
+      const quoteMintPk = new PublicKey(quoteMintStr);
+      const clmmProgramPk = new PublicKey(clmmProgramStr);
+      const createPool = await (sdk as any).createClmmPoolTx({
+        payer: (provider as any).wallet.publicKey,
+        launch: testLaunchState,
+        quoteMint: quoteMintPk,
+        baseMint: testBaseMint,
+        clmmProgram: clmmProgramPk,
+        provider,
+      });
+      const sig = await (provider as any).sendAndConfirm(createPool.transaction, createPool.signers);
+      addLog(`      - CLMM pool created. Signature: ${sig}`);
+      mintedBaseMint = testBaseMint.publicKey;
+      try {
+        const sqrtLower = await (sdk as any).getSqrtPriceLowerX64ForPool({ launch: testLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
+        const baseAmount = new BN(1_000_000_000);
+        const quoteAmount = new BN(100_000_000);
+        const addLiq = await (sdk as any).addClmmLiquidityTx({
           payer: (provider as any).wallet.publicKey,
           launch: testLaunchState,
           quoteMint: quoteMintPk,
-          baseMint: testBaseMint,
+          baseMint: testBaseMint.publicKey,
+          baseTokenAta: createPool.baseTokenAta,
           clmmProgram: clmmProgramPk,
           provider,
+          baseAmount,
+          quoteAmount,
+          sqrtPriceLowerX64: sqrtLower,
         });
-        const sig = await (provider as any).sendAndConfirm(createPool.transaction, createPool.signers);
-        addLog(`      - CLMM pool created. Signature: ${sig}`);
-        mintedBaseMint = testBaseMint.publicKey;
-
-        // Add minimal initial liquidity to open claims (sets pool_state.claims_ready = true)
-        try {
-          const sqrtLower = await (sdk as any).getSqrtPriceLowerX64ForPool({ launch: testLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
-          const baseAmount = new BN(1_000_000_000); // 1 base token (decimals=9)
-          const quoteAmount = new BN(100_000_000);  // 0.1 SOL (lamports)
-          const addLiq = await (sdk as any).addClmmLiquidityTx({
-            payer: (provider as any).wallet.publicKey,
-            launch: testLaunchState,
-            quoteMint: quoteMintPk,
-            baseMint: testBaseMint.publicKey,
-            baseTokenAta: createPool.baseTokenAta,
-            clmmProgram: clmmProgramPk,
-            provider,
-            baseAmount,
-            quoteAmount,
-            sqrtPriceLowerX64: sqrtLower,
-          });
-          const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
-          addLog(`      - Initial liquidity added. Signature: ${sigL}`);
-        } catch (liqErr: any) {
-          addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
-        }
-      } else {
-        throw e;
+        const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
+        addLog(`      - Initial liquidity added. Signature: ${sigL}`);
+      } catch (liqErr: any) {
+        addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
     }
 
@@ -691,7 +679,6 @@ export async function runFullFlow(
         const latest = await provider.connection.getLatestBlockhash();
         transaction.feePayer = provider.wallet.publicKey;
         transaction.recentBlockhash = latest.blockhash ?? latest;
-        try { transaction.partialSign(demoUser.keypair); } catch { }
         let sim: any;
         try {
           sim = await provider.connection.simulateTransaction(transaction, { sigVerify: false, replaceRecentBlockhash: true } as any);
@@ -705,9 +692,9 @@ export async function runFullFlow(
           addLog(`      simulation error: ${JSON.stringify(sim.value.err)}`);
         } else if (parsed && typeof parsed.amount === "number") {
           const amountUi = parsed.amount / Math.pow(10, 9);
-          addLog(`      would receive: ${amountUi.toFixed(6)} tokens (y_approved=${parsed.yApproved ?? "?"})`);
+          addLog(`simulation:      would receive: ${amountUi.toFixed(6)} tokens (y_approved=${parsed.yApproved ?? "?"})`);
         } else {
-          addLog("      simulation ok (no parsable event in logs)");
+          addLog("simulation:      simulation ok (no parsable event in logs)");
         }
       } catch (e: any) {
         addLog(`      simulation failed: ${e?.message || e}`);
