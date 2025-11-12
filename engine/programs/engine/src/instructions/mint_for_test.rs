@@ -58,6 +58,7 @@ pub struct MintForTest<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+/// Flagged as a test feature in engine/programs/engine/src/lib.rs — used only for testing to bypass pool creation and liquidity transfer.
 pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
     require!(ctx.accounts.launch_state.selection_finalized, ErrorCode::NotFinalized);
     require!(
