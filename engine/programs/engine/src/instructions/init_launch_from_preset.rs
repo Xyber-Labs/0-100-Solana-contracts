@@ -1,19 +1,13 @@
+use crate::{constants::SEED_ROOT, state::{CreatorGrant, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig}};
 use crate::utils::launch_core::{init_launch_core, InitLaunchParams};
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::{
-    constants::SEED_ROOT,
-    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
-};
-use anchor_lang::{prelude::*, solana_program::sysvar::Sysvar};
+use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
-#[instruction(params: InitLaunchParams, project_id: u64)]
-pub struct InitLaunch<'info> {
+#[instruction(preset_id: u8, project_id: u64)]
+pub struct InitLaunchFromPreset<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
-
-    /// Global project counter
     #[account(
         init_if_needed,
         payer = creator,
@@ -22,7 +16,6 @@ pub struct InitLaunch<'info> {
         bump
     )]
     pub project_counter: Account<'info, ProjectCounter>,
-
     #[account(
         init,
         payer = creator,
@@ -31,13 +24,9 @@ pub struct InitLaunch<'info> {
         bump
     )]
     pub launch_state: Account<'info, LaunchState>,
-
-    // base_mint removed from init; it will be created and recorded later during pool/mint setup
-    /// CHECK: Escrow authority PDA without data for SOL storage
+    /// CHECK: PDA for SOL escrow
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
-
-    /// Creator grant account (PDA off launch_state)
     #[account(
         init_if_needed,
         payer = creator,
@@ -46,7 +35,6 @@ pub struct InitLaunch<'info> {
         bump
     )]
     pub creator_grant: Account<'info, CreatorGrant>,
-
     #[account(
         init,
         payer = creator,
@@ -55,37 +43,53 @@ pub struct InitLaunch<'info> {
         bump
     )]
     pub token_metadata_config: Account<'info, TokenMetadataConfig>,
-
-    #[account(
-        seeds = [SEED_ROOT, b"config"],
-        bump
-    )]
+    #[account(seeds = [SEED_ROOT, b"config"], bump)]
     pub engine_config: Account<'info, EngineConfig>,
-
     #[account(mut)]
     pub creator_xyber_ata: Account<'info, TokenAccount>,
     #[account(mut)]
     pub treasury_xyber_ata: Account<'info, TokenAccount>,
-
+    #[account(
+        seeds = [SEED_ROOT, b"preset", &[preset_id]],
+        bump
+    )]
+    pub launch_preset: Account<'info, LaunchPreset>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
-pub fn init_launch(
-    ctx: Context<InitLaunch>,
-    params: InitLaunchParams,
+pub fn init_launch_from_preset(
+    ctx: Context<InitLaunchFromPreset>,
+    _preset_id: u8,
     project_id: u64,
 ) -> Result<()> {
-    // Only admins can call direct init_launch in non-test builds
-    if cfg!(not(feature = "test")) {
-        let is_admin = ctx
-            .accounts
-            .engine_config
-            .admins
-            .iter()
-            .any(|k| *k == ctx.accounts.creator.key());
-        require!(is_admin, EngineErrorCode::Unauthorized);
-    }
+    let p = &ctx.accounts.launch_preset;
+    let params = InitLaunchParams {
+        hard_cap_lamports: p.hard_cap_lamports,
+        min_raise_lamports: p.min_raise_lamports,
+        per_wallet_cap: p.per_wallet_cap,
+        tau_lamports: p.tau_lamports,
+        base_total_allocation: p.base_total_allocation,
+        base_sale_basis_points: p.base_sale_basis_points,
+        team_allocation_basis_points: p.team_allocation_basis_points,
+        funding_duration_seconds: p.funding_duration_seconds,
+        sale_start_time_sec: p.sale_start_time_sec,
+        unlock_time_sec: p.unlock_time_sec,
+        roster_shard_cap: p.roster_shard_cap,
+        roster_shards_total: p.roster_shards_total,
+        creator_initial_deposit_lamports: p.creator_initial_deposit_lamports,
+        creator_daily_lamports_limit: p.creator_daily_lamports_limit,
+        creator_claim_lock_period_sec: p.creator_claim_lock_period_sec,
+        creator_max_deposit: p.creator_max_deposit,
+        pool_creation_grace_period_sec: p.pool_creation_grace_period_sec,
+        team_vesting_duration_sec: p.team_vesting_duration_sec,
+        name: p.name.clone(),
+        symbol: p.symbol.clone(),
+        uri: p.uri.clone(),
+        is_mutable: p.is_mutable,
+        seller_fee_basis_points: p.seller_fee_basis_points,
+    };
+
     init_launch_core(
         &ctx.accounts.creator,
         &mut ctx.accounts.project_counter,
@@ -103,5 +107,4 @@ pub fn init_launch(
     )
 }
 
-#[cfg(test)]
-mod tests {}
+

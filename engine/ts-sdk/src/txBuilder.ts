@@ -106,6 +106,11 @@ export class TxBuilder {
     return this.getPda(["roster_shard", launch, le]);
   }
 
+  getLaunchPresetPda(id: number): [web3.PublicKey, number] {
+    const one = Buffer.from(Uint8Array.of(id & 0xff));
+    return this.getPda(["preset", one]);
+  }
+
   getTokenMetadataConfigPda(launch: web3.PublicKey): [web3.PublicKey, number] {
     return this.getPda(["token_metadata", launch]);
   }
@@ -229,6 +234,153 @@ export class TxBuilder {
       projectCounter,
       creatorGrant,
     };
+  }
+
+  async initLaunchFromPresetIx(params: {
+    creator: web3.PublicKey;
+    presetId: number;
+    projectId: BN | number;
+    xyberMint?: web3.PublicKey;
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    launchState: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    projectCounter: web3.PublicKey;
+    creatorGrant: web3.PublicKey;
+    tokenMetadataConfig: web3.PublicKey;
+    launchPreset: web3.PublicKey;
+  }> {
+    const projectIdLe = (() => {
+      if (BN.isBN(params.projectId as any)) {
+        const n = (params.projectId as BN).toArrayLike(Buffer, "le", 8);
+        return n;
+      }
+      const n = BigInt(params.projectId as number);
+      const buf = Buffer.alloc(8);
+      buf.writeBigUInt64LE(n);
+      return buf;
+    })();
+    const [launchState] = this.getPda(["launch", projectIdLe]);
+    const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
+    const [projectCounter] = this.getPda(["project_counter"]);
+    const [creatorGrant] = this.getPda(["creator", launchState]);
+    const [tokenMetadataConfig] = this.getTokenMetadataConfigPda(launchState);
+    const [engineConfig] = this.getPda(["config"]);
+    const [launchPreset] = this.getLaunchPresetPda(params.presetId);
+
+    // Fetch config to get xyberMint and treasury owner
+    const cfg: any = await (this.program.account as any).engineConfig.fetch(engineConfig);
+    const xyberMint = params.xyberMint ?? (cfg?.xyberMint as web3.PublicKey);
+    const treasuryOwner = cfg?.treasury as web3.PublicKey;
+    const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, params.creator, true);
+    const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryOwner, true);
+
+    const instruction = await (this.program.methods as any)
+      .initLaunchFromPreset(new BN(params.presetId), BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
+      .accountsStrict({
+        creator: params.creator,
+        projectCounter,
+        launchState,
+        escrowAuthority,
+        creatorGrant,
+        tokenMetadataConfig,
+        engineConfig,
+        creatorXyberAta,
+        treasuryXyberAta,
+        launchPreset,
+        systemProgram: web3.SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .instruction();
+
+    return {
+      instruction,
+      launchState,
+      escrowAuthority,
+      projectCounter,
+      creatorGrant,
+      tokenMetadataConfig,
+      launchPreset,
+    };
+  }
+
+  async initLaunchPresetIx(params: {
+    payer: web3.PublicKey;
+    id: number;
+    // Same shape as initLaunchIx
+    hardCapLamports: BN;
+    minRaiseLamports: BN;
+    perWalletCap: BN;
+    tauLamports: BN;
+    baseTotalAllocation: BN;
+    baseSaleBasisPoints: BN;
+    fundingDurationSeconds: number;
+    saleStartTimeSec?: number;
+    unlockTimeSec?: number;
+    rosterShardCap: number;
+    rosterShardsTotal: number;
+    creatorInitialDepositLamports: BN;
+    creatorDailyLamportsLimit: BN;
+    creatorClaimLockPeriodSec: BN;
+    creatorMaxDepositLamports: BN;
+    poolCreationGracePeriodSec?: number;
+    xyberMint?: web3.PublicKey;
+    name: string;
+    symbol: string;
+    uri: string;
+    isMutable?: boolean;
+    sellerFeeBasisPoints?: number;
+    teamVestingDurationSec?: number;
+    teamAllocationBasisPoints?: number;
+    signerAdmins: web3.PublicKey[];
+  }): Promise<{ instruction: web3.TransactionInstruction; launchPreset: web3.PublicKey; engineConfig: web3.PublicKey }> {
+    const [engineConfig] = this.getPda(["config"]);
+    const [launchPreset] = this.getLaunchPresetPda(params.id);
+
+    const initParams: any = {
+      hardCapLamports: params.hardCapLamports,
+      minRaiseLamports: params.minRaiseLamports,
+      perWalletCap: params.perWalletCap,
+      tauLamports: params.tauLamports,
+      baseTotalAllocation: params.baseTotalAllocation,
+      baseSaleBasisPoints: params.baseSaleBasisPoints,
+      teamAllocationBasisPoints: new BN(
+        typeof params.teamAllocationBasisPoints === "number"
+          ? params.teamAllocationBasisPoints
+          : 1000
+      ),
+      fundingDurationSeconds: new BN(params.fundingDurationSeconds),
+      saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
+      unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
+      rosterShardCap: params.rosterShardCap,
+      rosterShardsTotal: params.rosterShardsTotal,
+      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
+      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
+      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
+      creatorMaxDeposit: params.creatorMaxDepositLamports,
+      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
+      teamVestingDurationSec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
+      name: params.name,
+      symbol: params.symbol,
+      uri: params.uri,
+      isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
+      sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
+    };
+
+    const method = this.getIxMethod("initLaunchPreset", "init_launch_preset");
+    if (!method) throw new Error("initLaunchPreset method not found in program IDL");
+    const instruction = await method(new BN(params.id), initParams)
+      .accountsStrict({
+        payer: params.payer,
+        engineConfig,
+        launchPreset,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .remainingAccounts(
+        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
+      )
+      .instruction();
+    return { instruction, launchPreset, engineConfig };
   }
 
   async initLaunchTx(params: {

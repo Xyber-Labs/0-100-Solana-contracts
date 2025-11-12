@@ -3,6 +3,7 @@
 use anchor_lang::prelude::*;
 
 use crate::instructions::*;
+use crate::utils::launch_core::InitLaunchParams;
 use crate::utils::clmm::LiquidityRange;
 
 pub use constants::WSOL_MINT;
@@ -70,6 +71,30 @@ pub mod engine {
     /// Create AMM pool
     pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         instructions::prepare_pool_creation(ctx)
+    }
+
+    pub fn init_launch_from_preset(
+        ctx: Context<InitLaunchFromPreset>,
+        preset_id: u8,
+        project_id: u64,
+    ) -> Result<()> {
+        instructions::init_launch_from_preset(ctx, preset_id, project_id)
+    }
+
+    pub fn init_launch_preset(
+        ctx: Context<InitLaunchPreset>,
+        id: u8,
+        params: InitLaunchParams,
+    ) -> Result<()> {
+        instructions::init_launch_preset(ctx, id, params)
+    }
+
+    pub fn update_launch_preset(
+        ctx: Context<UpdateLaunchPreset>,
+        id: u8,
+        patch: UpdateLaunchParams,
+    ) -> Result<()> {
+        instructions::update_launch_preset(ctx, id, patch)
     }
 
     /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.

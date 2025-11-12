@@ -209,3 +209,35 @@ pub struct TokenMetadataConfig {
     pub is_mutable: bool,
     pub seller_fee_basis_points: u16,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct LaunchPreset {
+    pub id: u8,
+    pub hard_cap_lamports: u64,
+    pub min_raise_lamports: u64,
+    pub per_wallet_cap: u64,
+    pub tau_lamports: u64,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
+    pub team_allocation_basis_points: u64,
+    pub funding_duration_seconds: i64,
+    pub sale_start_time_sec: i64,
+    pub unlock_time_sec: i64,
+    pub roster_shard_cap: u16,
+    pub roster_shards_total: u16,
+    pub creator_initial_deposit_lamports: u64,
+    pub creator_daily_lamports_limit: u64,
+    pub creator_claim_lock_period_sec: i64,
+    pub creator_max_deposit: u64,
+    pub pool_creation_grace_period_sec: i64,
+    pub team_vesting_duration_sec: i64,
+    #[max_len(64)]
+    pub name: String,
+    #[max_len(16)]
+    pub symbol: String,
+    #[max_len(256)]
+    pub uri: String,
+    pub is_mutable: bool,
+    pub seller_fee_basis_points: u16,
+}

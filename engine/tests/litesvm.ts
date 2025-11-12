@@ -291,6 +291,60 @@ describe("engine litesvm", () => {
     }
   });
 
+  it("Creates preset and launches from it", async () => {
+    const presetId = 1;
+    // Prepare preset parameters
+    const params = {
+      hardCapLamports: new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL),
+      minRaiseLamports: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
+      perWalletCap: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
+      tauLamports: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
+      baseTotalAllocation: new anchor.BN(1_000_000),
+      baseSaleBasisPoints: new anchor.BN(8000),
+      fundingDurationSeconds: 10,
+      saleStartTimeSec: 0,
+      unlockTimeSec: 0,
+      rosterShardCap: 100,
+      rosterShardsTotal: 10,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorMaxDepositLamports: new anchor.BN(0),
+      poolCreationGracePeriodSec: 0,
+      name: "PresetToken",
+      symbol: "PST",
+      uri: "https://metadata.xyberlabs.dev/preset/default.json",
+      isMutable: true,
+      sellerFeeBasisPoints: 0,
+      teamVestingDurationSec: 365 * 24 * 60 * 60,
+      teamAllocationBasisPoints: 1000,
+    };
+    // Create preset by admins
+    const { launchPreset } = await (sdk as any).initLaunchPreset({
+      id: presetId,
+      params,
+      adminKeypairs: [adminKeypair, adminBKeypair],
+    });
+    assert.ok(launchPreset);
+
+    // Launch from preset
+    const nextId = await sdk.getNextProjectId();
+    const { launchPda } = await (sdk as any).initLaunchFromPreset({
+      presetId,
+      projectId: nextId,
+    });
+
+    const state = await sdk.fetchLaunch(launchPda);
+    assert.equal(state.projectId.toNumber(), nextId.toNumber ? nextId.toNumber() : Number(nextId));
+    assert.equal(state.hardCapLamports.toNumber(), params.hardCapLamports.toNumber());
+    assert.equal(state.minRaiseLamports.toNumber(), params.minRaiseLamports.toNumber());
+    assert.equal(state.tauLamports.toNumber(), params.tauLamports.toNumber());
+    assert.equal(state.baseTotalAllocation.toNumber(), params.baseTotalAllocation.toNumber());
+    assert.equal(state.baseSaleBasisPoints.toNumber(), params.baseSaleBasisPoints.toNumber());
+    assert.equal(state.rosterShardCap, params.rosterShardCap);
+    assert.equal(state.rosterShards, params.rosterShardsTotal);
+  });
+
   it("Allows deposits", async () => {
     const nextId = await sdk.getNextProjectId();
 
