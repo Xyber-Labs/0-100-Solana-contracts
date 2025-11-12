@@ -30,6 +30,11 @@ pub fn init_launch_preset(
     params: InitLaunchParams,
 ) -> Result<()> {
     let cfg = &ctx.accounts.engine_config;
+    // Ensure caller is an admin and quorum satisfied
+    require!(
+        cfg.admins.iter().any(|k| *k == ctx.accounts.payer.key()),
+        crate::errors::ErrorCode::Unauthorized
+    );
     let signer_set: std::collections::BTreeSet<Pubkey> = ctx
         .remaining_accounts
         .iter()

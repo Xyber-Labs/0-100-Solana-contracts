@@ -1,10 +1,11 @@
-use crate::{constants::SEED_ROOT, state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig}};
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar::{clock::Clock, Sysvar},
-};
-use anchor_spl::token::{Token, TokenAccount};
 use crate::utils::launch_core::{init_launch_core, InitLaunchParams};
+use crate::errors::ErrorCode as EngineErrorCode;
+use crate::{
+    constants::SEED_ROOT,
+    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
+};
+use anchor_lang::{prelude::*, solana_program::sysvar::Sysvar};
+use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
 #[instruction(params: InitLaunchParams, project_id: u64)]
@@ -75,6 +76,16 @@ pub fn init_launch(
     params: InitLaunchParams,
     project_id: u64,
 ) -> Result<()> {
+    // Only admins can call direct init_launch in non-test builds
+    if cfg!(not(feature = "test")) {
+        let is_admin = ctx
+            .accounts
+            .engine_config
+            .admins
+            .iter()
+            .any(|k| *k == ctx.accounts.creator.key());
+        require!(is_admin, EngineErrorCode::Unauthorized);
+    }
     init_launch_core(
         &ctx.accounts.creator,
         &mut ctx.accounts.project_counter,

@@ -294,7 +294,7 @@ export async function runFullFlow(
 
     const metaName = `Lumi Project #${projectId}`;
     const metaSymbol = "LUMI";
-    const metaUri = "https://metadata.xyberlabs.dev/lumi/default.json";
+    const metaUri = "https://ipfs.io/ipfs/QmNb2nS5krQAKq1rMojoGxSu6c5JTgMish4apbP7xCgTVV";
     const kCap = Math.floor(config.hardCapLamports / config.tauLamports);
     const rosterShardsTotal = (config as any).rosterShardsTotal && (config as any).rosterShardsTotal > 0
       ? Math.min(65535, (config as any).rosterShardsTotal)
