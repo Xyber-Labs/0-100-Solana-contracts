@@ -691,7 +691,6 @@ export async function runFullFlow(
         const latest = await provider.connection.getLatestBlockhash();
         transaction.feePayer = provider.wallet.publicKey;
         transaction.recentBlockhash = latest.blockhash ?? latest;
-        try { transaction.partialSign(demoUser.keypair); } catch { }
         let sim: any;
         try {
           sim = await provider.connection.simulateTransaction(transaction, { sigVerify: false, replaceRecentBlockhash: true } as any);
@@ -705,9 +704,9 @@ export async function runFullFlow(
           addLog(`      simulation error: ${JSON.stringify(sim.value.err)}`);
         } else if (parsed && typeof parsed.amount === "number") {
           const amountUi = parsed.amount / Math.pow(10, 9);
-          addLog(`      would receive: ${amountUi.toFixed(6)} tokens (y_approved=${parsed.yApproved ?? "?"})`);
+          addLog(`simulation:      would receive: ${amountUi.toFixed(6)} tokens (y_approved=${parsed.yApproved ?? "?"})`);
         } else {
-          addLog("      simulation ok (no parsable event in logs)");
+          addLog("simulation:      simulation ok (no parsable event in logs)");
         }
       } catch (e: any) {
         addLog(`      simulation failed: ${e?.message || e}`);

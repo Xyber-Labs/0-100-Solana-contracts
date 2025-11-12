@@ -18,6 +18,7 @@ help:
 	@echo "  test-litesvm  - Run tests using litesvm simulator"
 	@echo "  deploy-config - Run EngineConfig migration (migrations/deploy.ts)"
 	@echo "                 Pass CLI args via ARGS=\"--treasury ... --fee ... --admins ... --threshold ... --admin-key ...\""
+	@echo "  mint-spl      - Mint SPL token with metadata (NAME, SYMBOL, URI, DECIMALS, AMOUNT, RECIPIENT or ARGS)"
 	@echo ""
 	@echo "Remote development:"
 	@echo "  config-remote - Set config to remote server (10.186.0.84)"
@@ -28,8 +29,8 @@ help:
 	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
-ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
-# ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
+# ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
+ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
@@ -239,3 +240,19 @@ update-config-auto:
 
 predeploy-setup:
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/pre-deploy-setup.ts --out tmp/predeploy.json --airdrop 2 --supply 1000000000 --decimals 9
+
+# ------------------------------
+# Mint SPL token (defaults)
+# Override via: make mint-spl NAME="MyToken" SYMBOL="MYT" URI="https://..." DECIMALS=9 AMOUNT=0 RECIPIENT=Pubkey
+NAME ?= "Xyber"
+SYMBOL ?= "XBT"
+URI ?= "https://ipfs.io/ipfs/QmSe9d2kRs8VGidC9588NgLjm6FLxW7xXHKZy3mCVMVXKX"
+DECIMALS ?= 9
+AMOUNT ?= 1000000000000000000
+RECIPIENT ?= "Ab5TgPbcB8QVuormXYXHzRVkV7okAbzkS2sU2neKoWvQ"
+ARGS ?=
+
+.PHONY: mint-spl
+mint-spl:
+	@echo "Minting SPL token with metadata..."
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/mint-spl.ts $(if $(NAME),--name $(NAME)) $(if $(SYMBOL),--symbol $(SYMBOL)) $(if $(URI),--uri $(URI)) $(if $(DECIMALS),--decimals $(DECIMALS)) $(if $(AMOUNT),--amount $(AMOUNT)) $(if $(RECIPIENT),--recipient $(RECIPIENT)) $(ARGS)

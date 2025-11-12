@@ -72,7 +72,12 @@ pub struct CreateClmmPool<'info> {
     pub rent: Sysvar<'info, Rent>,
 
     /// CHECK: Metaplex metadata account PDA for base_mint
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"metadata", token_metadata_program.key().as_ref(), base_mint.key().as_ref()],
+        bump,
+        seeds::program = token_metadata_program.key()
+    )]
     pub metadata_account: UncheckedAccount<'info>,
     #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
     pub token_metadata_config: Account<'info, TokenMetadataConfig>,

@@ -2,10 +2,16 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
+    metadata::Metadata,
     token::{Mint, Token},
 };
 
-use crate::{errors::ErrorCode, state::LaunchState, utils::mint as mint_utils, SEED_ROOT};
+use crate::{
+    errors::ErrorCode,
+    state::{LaunchState, TokenMetadataConfig},
+    utils::mint as mint_utils,
+    SEED_ROOT,
+};
 
 // Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
 
@@ -35,9 +41,21 @@ pub struct MintForTest<'info> {
         bump
     )]
     pub base_escrow_ata: UncheckedAccount<'info>,
+    /// CHECK: Metaplex metadata account PDA for base_mint
+    #[account(
+        mut,
+        seeds = [b"metadata", token_metadata_program.key().as_ref(), base_mint.key().as_ref()],
+        bump,
+        seeds::program = token_metadata_program.key()
+    )]
+    pub metadata_account: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
+    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
     pub base_token_program: Program<'info, Token>,
+    pub token_metadata_program: Program<'info, Metadata>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
@@ -71,6 +89,17 @@ pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
         &ctx.accounts.escrow_authority.to_account_info(),
         &ctx.accounts.launch_state.key(),
         to_mint,
+    )?;
+    mint_utils::ensure_token_metadata_for_launch(
+        &ctx.accounts.token_metadata_program.to_account_info(),
+        &ctx.accounts.metadata_account.to_account_info(),
+        &ctx.accounts.base_mint.to_account_info(),
+        &ctx.accounts.escrow_authority.to_account_info(),
+        &ctx.accounts.payer.to_account_info(),
+        &ctx.accounts.system_program.to_account_info(),
+        &ctx.accounts.rent.to_account_info(),
+        &ctx.accounts.token_metadata_config,
+        &ctx.accounts.launch_state.key(),
     )?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
