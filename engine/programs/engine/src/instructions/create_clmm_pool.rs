@@ -1,22 +1,17 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::pubkey::Pubkey;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{self, Mint, MintTo, Token},
-};
+use anchor_lang::solana_program::{instruction::Instruction, program::invoke};
 use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::AmmConfig};
 
 use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
-    LaunchState,
     state::TokenMetadataConfig,
-    SEED_ROOT,
+    LaunchState, SEED_ROOT,
 };
-use anchor_spl::metadata::{self, CreateMetadataAccountsV3, Metadata};
+use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::mpl_token_metadata::types::DataV2;
-
-// Base mint supply is unified with sale mint; minted amount comes from state.sale_allocation + state.lp_allocation
+use anchor_spl::metadata::{self, CreateMetadataAccountsV3, Metadata};
+use anchor_spl::token::{self, Mint, MintTo, Token};
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -78,6 +73,20 @@ pub struct CreateClmmPool<'info> {
     #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
     pub token_metadata_config: Account<'info, TokenMetadataConfig>,
     pub token_metadata_program: Program<'info, Metadata>,
+
+    /// CHECK: Engine program for raw invoke authorization
+    pub engine_program: UncheckedAccount<'info>,
+
+    /// CHECK: Income dispatcher program for raw invoke
+    pub income_dispatcher_program: UncheckedAccount<'info>,
+
+    /// CHECK: Income dispatcher config PDA
+    #[account(mut)]
+    pub income_dispatcher_config: UncheckedAccount<'info>,
+
+    /// CHECK: Income dispatcher project pool PDA
+    #[account(mut)]
+    pub income_dispatcher_project_pool: UncheckedAccount<'info>,
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
@@ -97,6 +106,8 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     mint_sale_tokens_to_escrow(&ctx)?;
     create_token_metadata_if_missing(&ctx)?;
     raydium_create_pool_impl(&ctx)?;
+    init_project_pool(&ctx)?;
+
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
@@ -121,8 +132,8 @@ fn create_base_escrow_ata(ctx: &Context<CreateClmmPool>) -> Result<()> {
 fn mint_sale_tokens_to_escrow(ctx: &Context<CreateClmmPool>) -> Result<()> {
     // Mint base in atomic units: base_total_allocation * 10^decimals
     let decimals_factor = 10u128.pow(ctx.accounts.base_mint.decimals as u32);
-    let to_mint_u128 = (ctx.accounts.launch_state.base_total_allocation as u128)
-        .saturating_mul(decimals_factor);
+    let to_mint_u128 =
+        (ctx.accounts.launch_state.base_total_allocation as u128).saturating_mul(decimals_factor);
     let to_mint = to_mint_u128 as u64;
 
     // signer is escrow_authority PDA [SEED_ROOT, "escrow_authority", launch]
@@ -182,12 +193,114 @@ fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
 }
 
 fn derive_metadata_pda(metaplex_program_id: &Pubkey, mint: &Pubkey) -> Pubkey {
-    let seeds = &[b"metadata".as_ref(), metaplex_program_id.as_ref(), mint.as_ref()];
+    let seeds = &[
+        b"metadata".as_ref(),
+        metaplex_program_id.as_ref(),
+        mint.as_ref(),
+    ];
     Pubkey::find_program_address(seeds, metaplex_program_id).0
 }
 
+fn init_project_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
+    // Discriminator for init_project: sha256("global:init_project")[:8]
+    let discriminator = [0x28, 0x4e, 0x9c, 0x7a, 0x36, 0x55, 0xcc, 0x2e];
+
+    // Instruction data: discriminator + project_id ([u8; 32])
+    let project_id = ctx.accounts.launch_state.project_id;
+    let mut project_id_bytes = [0u8; 32];
+    project_id_bytes[24..32].copy_from_slice(&project_id.to_be_bytes());
+    let mut data = discriminator.to_vec();
+    data.extend_from_slice(&project_id_bytes);
+
+    // Account metas in correct order
+    let account_metas = vec![
+        // creator (writable, signer)
+        anchor_lang::solana_program::instruction::AccountMeta::new(ctx.accounts.payer.key(), true),
+        // engine_authority (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.escrow_authority.key(),
+            false,
+        ),
+        // launch_state (writable)
+        anchor_lang::solana_program::instruction::AccountMeta::new(
+            ctx.accounts.launch_state.key(),
+            false,
+        ),
+        // config (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.income_dispatcher_config.key(),
+            false,
+        ),
+        // project_pool (writable)
+        anchor_lang::solana_program::instruction::AccountMeta::new(
+            ctx.accounts.income_dispatcher_project_pool.key(),
+            false,
+        ),
+        // base_mint (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.base_mint.key(),
+            false,
+        ),
+        // quote_mint (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.quote_mint.key(),
+            false,
+        ),
+        // pool_state (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.raydium_pool_state.key(),
+            false,
+        ),
+        // metadata_program (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.token_metadata_program.key(),
+            false,
+        ),
+        // associated_token_program (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.associated_token_program.key(),
+            false,
+        ),
+        // system_program (readonly)
+        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+            ctx.accounts.system_program.key(),
+            false,
+        ),
+    ];
+
+    // Create instruction
+    let instruction = Instruction {
+        program_id: ctx.accounts.income_dispatcher_program.key(),
+        accounts: account_metas,
+        data,
+    };
+
+    // Invoke
+    invoke(
+        &instruction,
+        &[
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.escrow_authority.to_account_info(),
+            ctx.accounts.launch_state.to_account_info(),
+            ctx.accounts.income_dispatcher_config.to_account_info(),
+            ctx.accounts.income_dispatcher_project_pool.to_account_info(),
+            ctx.accounts.base_mint.to_account_info(),
+            ctx.accounts.quote_mint.to_account_info(),
+            ctx.accounts.raydium_pool_state.to_account_info(),
+            ctx.accounts.token_metadata_program.to_account_info(),
+            ctx.accounts.associated_token_program.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
+
+    Ok(())
+}
+
 fn create_token_metadata_if_missing(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    let expected = derive_metadata_pda(&ctx.accounts.token_metadata_program.key(), &ctx.accounts.base_mint.key());
+    let expected = derive_metadata_pda(
+        &ctx.accounts.token_metadata_program.key(),
+        &ctx.accounts.base_mint.key(),
+    );
     require_keys_eq!(ctx.accounts.metadata_account.key(), expected, ErrorCode::InvalidOwner);
 
     if ctx.accounts.metadata_account.lamports() == 0 {
@@ -205,7 +318,9 @@ fn create_token_metadata_if_missing(ctx: &Context<CreateClmmPool>) -> Result<()>
             SEED_ROOT,
             b"escrow_authority",
             &ctx.accounts.launch_state.key().to_bytes(),
-            &[LaunchState::mint_auth_bump_for(&ctx.accounts.launch_state.key())],
+            &[LaunchState::mint_auth_bump_for(
+                &ctx.accounts.launch_state.key(),
+            )],
         ];
         let signer_seeds = &[seeds];
 

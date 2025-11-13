@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::Token;
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface};
+use anchor_spl::token_interface::{Mint as InterfaceMint, TokenAccount};
 use engine::cpi as engine_cpi;
 use raydium_amm_v3::libraries::big_num::U256;
 use raydium_amm_v3::libraries::full_math::MulDiv;
@@ -15,10 +15,9 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
     let base_balance_before = ctx.accounts.base_vault.amount;
 
     let cpi_accounts = engine_cpi::accounts::ClaimClmmFees {
-        income_dispatcher_authority: ctx.accounts.project_authority.to_account_info(),
+        income_dispatcher_authority: ctx.accounts.income_dispatcher_authority.to_account_info(),
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
-        base_mint: ctx.accounts.base_mint.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.position_nft_account.to_account_info(),
@@ -36,17 +35,14 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
         memo_program: ctx.accounts.memo_program.to_account_info(),
         vault_0_mint: ctx.accounts.quote_mint.to_account_info(),
         vault_1_mint: ctx.accounts.base_mint.to_account_info(),
-        base_token_program: ctx.accounts.base_token_program.to_account_info(),
-        quote_token_program: ctx.accounts.quote_token_program.to_account_info(),
     };
 
-    let project_authority_seeds = &[
+    let income_dispatcher_authority_seeds = &[
         crate::SEED_ROOT,
-        b"project_authority",
-        &ctx.accounts.launch_state.project_id.to_be_bytes(),
-        &[ctx.bumps.project_authority],
+        b"authority",
+        &[ctx.bumps.income_dispatcher_authority],
     ];
-    let signers = &[&project_authority_seeds[..]];
+    let signers = &[&income_dispatcher_authority_seeds[..]];
 
     let cpi_context = CpiContext::new_with_signer(
         ctx.accounts.engine_program.to_account_info(),
@@ -82,8 +78,8 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
     let base_claimed_as_quote = (base_claimed as f64) * price;
     let quote_claimed_as_base = (quote_claimed as f64) / price;
 
-    // Convert to u64/u128 for storage (truncate fractional parts)
-    let base_claimed_as_quote_u128 = base_claimed_as_quote as u128;
+    // Convert to u64 for storage (truncate fractional parts)
+    let base_claimed_as_quote_u64 = base_claimed_as_quote as u64;
     let quote_claimed_as_base_u64 = quote_claimed_as_base as u64;
 
     // Update total claimed values
@@ -91,7 +87,7 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
         .accounts
         .project_pool
         .total_claimed_in_quote
-        .saturating_add(base_claimed_as_quote_u128 as u64)
+        .saturating_add(base_claimed_as_quote_u64)
         .saturating_add(quote_claimed);
 
     ctx.accounts.project_pool.total_claimed_in_base = ctx
@@ -104,7 +100,7 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
     Ok(())
 }
 
-fn calculate_price(sqrt_price_x64: u128) -> Result<f64> {
+pub fn calculate_price(sqrt_price_x64: u128) -> Result<f64> {
     let sqrt_price_u256 = U256::from(sqrt_price_x64);
     let price_squared_u256 = sqrt_price_u256
         .mul_div_floor(sqrt_price_u256, U256::from(1u128))
@@ -149,30 +145,40 @@ pub struct HarvestPool<'info> {
     /// Project pool account for tracking total claims
     #[account(
         mut,
-        seeds = [crate::SEED_ROOT, b"project_pool", launch_state.project_id.to_be_bytes().as_ref()],
+        seeds = [crate::SEED_ROOT, b"project_pool", &launch_state.project_id.to_be_bytes()],
         bump,
     )]
     pub project_pool: Account<'info, crate::state::ProjectPool>,
 
+    /// CHECK: Income dispatcher authority PDA - will be signer for engine call
+    #[account(
+        seeds = [crate::SEED_ROOT, b"authority"],
+        bump,
+        seeds::program = crate::ID
+    )]
+    pub income_dispatcher_authority: UncheckedAccount<'info>,
+
     /// CHECK: Project authority PDA derived from launch state's project_id
     #[account(
-        seeds = [crate::SEED_ROOT, b"project_authority", launch_state.project_id.to_be_bytes().as_ref()],
+        seeds = [crate::SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
         bump,
         seeds::program = crate::ID
     )]
     pub project_authority: UncheckedAccount<'info>,
 
-    /// Quote mint (WSOL)
-    #[account(address = anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112"))]
+    /// Quote mint from project pool
+    #[account(
+        constraint = quote_mint.key() == project_pool.quote_mint @ crate::errors::ErrorCode::InvalidTokenMint
+    )]
     pub quote_mint: InterfaceAccount<'info, InterfaceMint>,
 
-    /// Base mint from launch state
+    /// Base mint from project pool
     #[account(
-        constraint = launch_state.base_mint == Some(base_mint.key())
+        constraint = base_mint.key() == project_pool.base_mint @ crate::errors::ErrorCode::InvalidTokenMint
     )]
     pub base_mint: InterfaceAccount<'info, InterfaceMint>,
 
-    /// CHECK: Quote vault (WSOL) - init-if-needed associated token account owned by project_authority
+    /// Quote vault - init-if-needed associated token account owned by project_authority
     #[account(
         init_if_needed,
         payer = payer,
@@ -181,7 +187,7 @@ pub struct HarvestPool<'info> {
     )]
     pub quote_vault: InterfaceAccount<'info, TokenAccount>,
 
-    /// CHECK: Base vault - init-if-needed associated token account owned by project_authority
+    /// Base vault - init-if-needed associated token account owned by project_authority
     #[account(
         init_if_needed,
         payer = payer,
@@ -190,10 +196,8 @@ pub struct HarvestPool<'info> {
     )]
     pub base_vault: InterfaceAccount<'info, TokenAccount>,
 
-    /// Engine program
     pub engine_program: Program<'info, engine::program::Engine>,
 
-    /// CHECK: Raydium CLMM program - validated by address in CPI call
     pub raydium_program: Program<'info, AmmV3>,
 
     /// CHECK: Escrow authority PDA - validated by engine CPI
@@ -210,7 +214,18 @@ pub struct HarvestPool<'info> {
     /// CHECK: Personal position state - validated by engine CPI
     #[account(mut)]
     pub personal_position: UncheckedAccount<'info>,
-    /// CHECK: Pool state - validated by engine CPI
+    /// CHECK: Pool state - validated by engine CPI and pool address constraint
+    #[account(
+        constraint = pool_state.key() == project_pool.pool_state @ crate::errors::ErrorCode::InvalidPoolState,
+        constraint = {
+            let pool_data = PoolState::try_deserialize(&mut &pool_state.data.borrow()[..])?;
+            pool_data.token_mint_0 == base_mint.key() || pool_data.token_mint_1 == base_mint.key()
+        } @ crate::errors::ErrorCode::InvalidPoolState,
+        constraint = {
+            let pool_data = PoolState::try_deserialize(&mut &pool_state.data.borrow()[..])?;
+            pool_data.token_mint_0 == quote_mint.key() || pool_data.token_mint_1 == quote_mint.key()
+        } @ crate::errors::ErrorCode::InvalidPoolState
+    )]
     #[account(mut)]
     pub pool_state: UncheckedAccount<'info>,
     /// CHECK: Protocol position state - validated by engine CPI
@@ -231,10 +246,8 @@ pub struct HarvestPool<'info> {
     #[account(mut)]
     pub tick_array_upper: UncheckedAccount<'info>,
 
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
     pub token_program_2022: Program<'info, Token2022>,
-    pub base_token_program: Program<'info, Token>,
-    pub quote_token_program: Interface<'info, TokenInterface>,
 
     /// CHECK: Memo program - validated by address constraint
     #[account(address = anchor_spl::memo::spl_memo::id())]

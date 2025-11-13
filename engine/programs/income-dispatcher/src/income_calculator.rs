@@ -1,17 +1,17 @@
 use anchor_lang::prelude::*;
-use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::errors::ErrorCode;
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, InitSpace)]
+#[account]
+#[derive(InitSpace)]
 pub struct IncomeCalculator {
-    price_in_quote: u128,
     base_decimals: u8,
     #[max_len(32)]
     rules: Vec<DistributionRule>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, InitSpace)]
+#[account]
+#[derive(InitSpace)]
 pub struct DistributionRule {
     market_cap: u128,
     recipient: Pubkey,
@@ -20,7 +20,7 @@ pub struct DistributionRule {
 }
 
 impl DistributionRule {
-    fn new(market_cap: u128, recipient: Pubkey, share: u128, priority: u8) -> Self {
+    pub fn new(market_cap: u128, recipient: Pubkey, share: u128, priority: u8) -> Self {
         Self {
             market_cap,
             recipient,
@@ -31,19 +31,20 @@ impl DistributionRule {
 }
 
 #[derive(Default, Clone)]
-struct Income {
-    recipient: Pubkey,
-    base_token: u128,
-    quote_token: u128,
+pub struct Income {
+    pub recipient: Pubkey,
+    pub base_token: u128,
+    pub quote_token: u128,
 }
 
-struct Distribution {
-    incomes: Vec<Income>,
-    price_in_quote: u128,
-    base_decimals: u8,
+pub struct Distribution {
+    pub incomes: Vec<Income>,
+    pub price_in_quote: u128,
+    pub base_decimals: u8,
 }
 
 impl Distribution {
+    #[cfg(test)]
     fn get(&self, recipient: &Pubkey) -> Result<&Income> {
         self.incomes
             .iter()
@@ -64,6 +65,7 @@ impl Distribution {
         base_in_quote.checked_add(income.quote_token).ok_or(ErrorCode::ArithmeticOverflow.into())
     }
 
+    #[cfg(test)]
     fn len(&self) -> usize {
         self.incomes.len()
     }
@@ -72,16 +74,15 @@ impl Distribution {
 impl IncomeCalculator {
     const BASIS_POINTS: u128 = 10_000;
 
-    pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Result<Self> {
+    pub fn new(base_decimals: u8) -> Result<Self> {
         require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
         Ok(Self {
-            price_in_quote,
             base_decimals,
             rules: Vec::default(),
         })
     }
 
-    pub(super) fn add_rule(mut self, rule: DistributionRule) -> Self {
+    pub fn add_rule(mut self, rule: DistributionRule) -> Self {
         let insert_pos = self
             .rules
             .binary_search_by_key(&(rule.market_cap, rule.priority), |r| (r.market_cap, r.priority))
@@ -90,6 +91,7 @@ impl IncomeCalculator {
         self
     }
 
+    #[cfg(test)]
     pub(super) fn is_valid(&self) -> bool {
         if self.rules.is_empty() {
             return true;
@@ -114,7 +116,7 @@ impl IncomeCalculator {
         share_sum == Self::BASIS_POINTS
     }
 
-    pub(super) fn get_distribution(
+    pub fn get_distribution(
         &self,
         market_cap: u128,
         base_token_volume: u128,
@@ -127,8 +129,20 @@ impl IncomeCalculator {
 
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
 
+        // Calculate price dynamically: price_in_quote = (quote_volume * 10^base_decimals) / base_volume
+        let price_in_quote = if base_token_volume > 0 {
+            quote_token_volume
+                .checked_mul(base_decimals_divisor)
+                .ok_or(ErrorCode::ArithmeticOverflow)?
+                .checked_div(base_token_volume)
+                .ok_or(ErrorCode::ArithmeticOverflow)?
+        } else {
+            // If no base tokens claimed yet, use a default price of 1:1
+            base_decimals_divisor
+        };
+
         let base_in_quote = base_token_volume
-            .checked_mul(self.price_in_quote)
+            .checked_mul(price_in_quote)
             .ok_or(ErrorCode::ArithmeticOverflow)?
             .checked_div(base_decimals_divisor)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
@@ -154,7 +168,7 @@ impl IncomeCalculator {
             let base_needed = rem_share_in_quote
                 .checked_mul(base_decimals_divisor)
                 .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_div(self.price_in_quote)
+                .checked_div(price_in_quote)
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
             let base_taken = rem_base.min(base_needed);
             rem_base = rem_base.checked_sub(base_taken).expect("Not reachable: rem_b < taken_b");
@@ -168,7 +182,7 @@ impl IncomeCalculator {
 
         Ok(Distribution {
             incomes: distributions,
-            price_in_quote: self.price_in_quote,
+            price_in_quote,
             base_decimals: self.base_decimals,
         })
     }
@@ -322,12 +336,12 @@ mod tests {
         assert!(total_platform + total_community + total_creator > 0);
     }
 
-    fn create_calculator_with_tiers(price_in_quote: u128, base_decimals: u8) -> TestSetup {
+    fn create_calculator_with_tiers(_price_in_quote: u128, base_decimals: u8) -> TestSetup {
         let platform = Pubkey::new_unique();
         let community = Pubkey::new_unique();
         let creator = Pubkey::new_unique();
 
-        let calculator = IncomeCalculator::new(price_in_quote, base_decimals)
+        let calculator = IncomeCalculator::new(base_decimals)
             .expect("Expected to be created well")
             .add_rule(DistributionRule::new(0, platform, 6000, 1))
             .add_rule(DistributionRule::new(0, creator, 2500, 2))

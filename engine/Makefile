@@ -81,11 +81,13 @@ deploy:
 deploy-local: config-local
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster localnet --program-keypair ./deploy-keypair.json
+	anchor deploy --program-name income-dispatcher --provider.cluster localnet --program-keypair ./target/deploy/income_dispatcher-keypair.json
 
 .PHONY: deploy-devnet
 deploy-devnet:
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
+	anchor deploy --program-name income-dispatcher --provider.cluster devnet --program-keypair ./target/deploy/income_dispatcher-keypair.json
 
 .PHONY: build-deploy
 build-deploy: build deploy

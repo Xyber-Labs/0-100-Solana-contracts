@@ -4,7 +4,6 @@ use crate::SEED_ROOT;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_2022::Token2022;
-use anchor_spl::token_interface::TokenInterface;
 use engine::cpi as engine_cpi;
 use raydium_amm_v3::program::AmmV3;
 
@@ -17,7 +16,6 @@ pub fn claim_clmm_fees_by_admin<'info>(
         income_dispatcher_authority: ctx.accounts.income_dispatcher_authority.to_account_info(),
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
-        base_mint: ctx.accounts.base_mint.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.position_nft_mint.to_account_info(),
         position_nft_account: ctx.accounts.position_nft_account.to_account_info(),
@@ -35,8 +33,6 @@ pub fn claim_clmm_fees_by_admin<'info>(
         memo_program: ctx.accounts.memo_program.to_account_info(),
         vault_0_mint: ctx.accounts.vault_0_mint.to_account_info(),
         vault_1_mint: ctx.accounts.vault_1_mint.to_account_info(),
-        base_token_program: ctx.accounts.base_token_program.to_account_info(),
-        quote_token_program: ctx.accounts.quote_token_program.to_account_info(),
     };
 
     let income_dispatcher_authority_seeds = &[
@@ -86,9 +82,6 @@ pub struct ClaimClmmFeesByAdmin<'info> {
     #[account(mut)]
     pub launch_state: UncheckedAccount<'info>,
 
-    /// CHECK: Base token mint - validated by engine CPI
-    pub base_mint: UncheckedAccount<'info>,
-
     /// CHECK: Escrow authority PDA - validated by engine CPI
     #[account(mut)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -134,8 +127,6 @@ pub struct ClaimClmmFeesByAdmin<'info> {
     // Token programs
     pub token_program: Program<'info, Token>,
     pub token_program_2022: Program<'info, Token2022>,
-    pub base_token_program: Program<'info, Token>,
-    pub quote_token_program: Interface<'info, TokenInterface>,
 
     /// CHECK: Memo program - validated by address constraint
     #[account(address = anchor_spl::memo::spl_memo::id())]

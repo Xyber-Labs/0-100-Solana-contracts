@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::Token,
-    token_2022::Token2022,
-    token_interface::{Mint as InterfaceMint, TokenInterface},
-};
+use anchor_spl::{token::Token, token_2022::Token2022};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{
@@ -25,11 +21,6 @@ pub struct ClaimClmmFees<'info> {
 
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
-
-    #[account(
-        constraint = launch_state.clmm_base_mint == Some(base_mint.key())
-    )]
-    pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
 
     /// CHECK: Escrow authority PDA - owner of the position NFT
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -91,9 +82,6 @@ pub struct ClaimClmmFees<'info> {
 
     /// CHECK: Vault 1 mint
     pub vault_1_mint: UncheckedAccount<'info>,
-
-    pub base_token_program: Program<'info, Token>,
-    pub quote_token_program: Interface<'info, TokenInterface>,
     // Remaining accounts passed to Raydium for tick array bitmap extension
 }
 

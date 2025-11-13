@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 
 pub mod errors;
-#[cfg(test)]
-mod income_calculator;
+pub mod income_calculator;
 pub mod instructions;
 pub mod state;
 
@@ -19,18 +18,11 @@ pub mod income_dispatcher {
 
     pub fn initialize(
         ctx: Context<Initialize>,
-        platform_wallet: Pubkey,
         income_source: Pubkey,
         project_initializer: Pubkey,
+        community_claim_signer: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, platform_wallet, income_source, project_initializer)
-    }
-
-    pub fn update_platform_wallet(
-        ctx: Context<UpdatePlatformWallet>,
-        new_platform_wallet: Pubkey,
-    ) -> Result<()> {
-        instructions::update_platform_wallet(ctx, new_platform_wallet)
+        instructions::initialize(ctx, income_source, project_initializer, community_claim_signer)
     }
 
     pub fn claim_clmm_fees_by_admin<'info>(
@@ -47,10 +39,7 @@ pub mod income_dispatcher {
         instructions::harvest_pool(ctx)
     }
 
-    pub fn init_project(
-        ctx: Context<InitProject>,
-        project_id: [u8; 32],
-    ) -> Result<()> {
+    pub fn init_project(ctx: Context<InitProject>, project_id: u64) -> Result<()> {
         instructions::init_project(ctx, project_id)
     }
 }

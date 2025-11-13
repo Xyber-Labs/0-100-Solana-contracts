@@ -459,9 +459,6 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "baseMint"
-        },
-        {
           "name": "escrowAuthority",
           "writable": true,
           "pda": {
@@ -572,13 +569,6 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "quoteTokenProgram"
         }
       ],
       "args": []
@@ -1795,6 +1785,20 @@ export type Engine = {
         {
           "name": "tokenMetadataProgram",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "engineProgram"
+        },
+        {
+          "name": "incomeDispatcherProgram"
+        },
+        {
+          "name": "incomeDispatcherConfig",
+          "writable": true
+        },
+        {
+          "name": "incomeDispatcherProjectPool",
+          "writable": true
         }
       ],
       "args": []

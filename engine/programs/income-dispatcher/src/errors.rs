@@ -16,4 +16,8 @@ pub enum ErrorCode {
     InvalidShareSum,
     #[msg("Income calculator not set")]
     IncomeCalculatorNotSet,
+    #[msg("Invalid pool state account")]
+    InvalidPoolState,
+    #[msg("Invalid token mint")]
+    InvalidTokenMint,
 }
