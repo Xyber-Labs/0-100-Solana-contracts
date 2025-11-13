@@ -52,6 +52,8 @@ describe("engine anchor - raydium clmm", () => {
   const adminKeypair = (provider.wallet as any).payer as anchor.web3.Keypair;
   const sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
   //const txBuilder = new TxBuilder(program, adminKeypair);
+  // Optional external admin for creator actions (to satisfy admin gating)
+  let externalAdminKeypair: anchor.web3.Keypair | undefined = undefined;
 
   function tryLoadPredeploy(): null | {
     xyberMint?: string;
@@ -106,6 +108,15 @@ describe("engine anchor - raydium clmm", () => {
   const SALE_BPS = new anchor.BN(Math.floor((SALE_ALLOCATION.toNumber() * 10000) / BASE_TOTAL.toNumber()));
 
   before(async () => {
+    // Try to load external admin keypair if provided
+    try {
+      const path = "tmp/admin-1.json";
+      const raw = fs.readFileSync(path, "utf8");
+      const arr = JSON.parse(raw);
+      const secret = Uint8Array.from(arr);
+      externalAdminKeypair = anchor.web3.Keypair.fromSecretKey(secret);
+      console.log("Loaded external admin keypair:", externalAdminKeypair.publicKey.toBase58());
+    } catch (_) {}
     // Prefer predeploy payload if available
     const payload = tryLoadPredeploy();
     let creationFee = new anchor.BN(1_000_000);
@@ -242,13 +253,33 @@ describe("engine anchor - raydium clmm", () => {
           } catch {}
         }
       } catch {}
+      // Ensure external admin ATA exists and is funded if using external admin as creator
+      if (externalAdminKeypair) {
+        try {
+          const extCreatorAta = getAssociatedTokenAddressSync(xyberMint, externalAdminKeypair.publicKey, true);
+          const extInfo = await provider.connection.getAccountInfo(extCreatorAta);
+          if (!extInfo) {
+            const ix = createAssociatedTokenAccountInstruction(admin.publicKey, extCreatorAta, externalAdminKeypair.publicKey, xyberMint);
+            await provider.sendAndConfirm(new anchor.web3.Transaction().add(ix), [adminKeypair]);
+          }
+          // Try minting fee amount; ignore if mint authority mismatch
+          try {
+            const minAmount = BigInt(creationFee.toString());
+            await provider.sendAndConfirm(
+              new anchor.web3.Transaction().add(createMintToInstruction(xyberMint, extCreatorAta, admin.publicKey, minAmount)),
+              [adminKeypair]
+            );
+          } catch {}
+        } catch {}
+      }
     } catch {}
   });
 
   it("Initializes launch (no deposits here)", async () => {
     const nextId = await sdk.getNextProjectId();
+    const creatorPk = externalAdminKeypair?.publicKey ?? admin.publicKey;
     const { initLaunchTx, signers, launchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
+      creator: creatorPk,
       projectId: nextId,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
@@ -271,7 +302,10 @@ describe("engine anchor - raydium clmm", () => {
       teamVestingDurationSec: 1,
     } as any);
 
-    const sig = await provider.sendAndConfirm(initLaunchTx, [adminKeypair, ...signers]);
+    const sig = await provider.sendAndConfirm(
+      initLaunchTx,
+      externalAdminKeypair ? [externalAdminKeypair, ...signers] : [adminKeypair, ...signers]
+    );
     console.log("✅ Launch initialized:", sig);
     clmmLaunchState = launchState;
 

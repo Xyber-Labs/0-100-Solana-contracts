@@ -724,22 +724,21 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const rosterShard =
-      params.rosterShard ??
-      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
+    const rosterShard = params.rosterShard; // do not auto-fill or fallback; omit when not provided
     // escrow removed
 
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const method = this.program.methods.claimRefund();
-    // Build accounts object conditionally to allow omitting optional roster_shard
     const acct: any = {
       user: params.user,
       launchState: params.launch,
       userContribution,
-      // escrow removed
+      escrowAuthority,
+      systemProgram: web3.SystemProgram.programId,
     };
-    // Some Anchor client versions still expect the account present even if optional; provide harmless fallback
-    acct.rosterShard = rosterShard ?? params.launch;
-    const instruction = await (method as any).accounts(acct).instruction();
+    // Optional account must be present for accountsStrict; pass null when absent
+    acct.rosterShard = rosterShard ?? null;
+    const instruction = await (method as any).accountsStrict(acct).instruction();
 
     return { instruction, userContribution };
   }
@@ -770,9 +769,7 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const rosterShard =
-      params.rosterShard ??
-      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
+    const rosterShard = params.rosterShard; // do not auto-fill; omit when not provided
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [poolState] = this.getPda(["pool", params.launch]);
     const userAta =
@@ -815,19 +812,16 @@ export class TxBuilder {
       user: params.user,
       launchState: params.launch,
       userContribution,
+      poolState,
       baseMint: params.baseMint,
       escrowAuthority,
       baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
       userAta,
       tokenProgram: TOKEN_PROGRAM_ID,
     };
-    accts.rosterShard = rosterShard ?? params.launch;
-    const claimIx = await (method as any)
-      .accounts(accts)
-      .remainingAccounts([
-        { pubkey: poolState, isSigner: false, isWritable: false },
-      ])
-      .instruction();
+    // Optional account must be present for accountsStrict; pass null when absent
+    accts.rosterShard = rosterShard ?? null;
+    const claimIx = await (method as any).accountsStrict(accts).instruction();
 
     instructions.push(claimIx);
 
@@ -1253,20 +1247,20 @@ export class TxBuilder {
     })();
     const ammConfigForPool = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
 
-    const [poolState] = web3.PublicKey.findProgramAddressSync(
+    const [raydiumPoolState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool"), ammConfigForPool.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
     const [observationState] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("observation"), poolState.toBuffer()],
+      [Buffer.from("observation"), raydiumPoolState.toBuffer()],
       params.clmmProgram
     );
 
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
-        poolState.toBuffer(),
+        raydiumPoolState.toBuffer(),
         params.quoteMint.toBuffer(),
       ],
       params.clmmProgram
@@ -1275,14 +1269,14 @@ export class TxBuilder {
     const [baseVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
-        poolState.toBuffer(),
+        raydiumPoolState.toBuffer(),
         baseMint.toBuffer(),
       ],
       params.clmmProgram
     );
 
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
+      [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolState.toBuffer()],
       params.clmmProgram
     );
 
@@ -1294,18 +1288,20 @@ export class TxBuilder {
 
 
     const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+    const [enginePoolState] = this.getPda(["pool", params.launch]);
 
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        poolState: enginePoolState,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
         quoteMint: params.quoteMint,
         raydiumAmmConfig,
-        raydiumPoolState: poolState,
+        raydiumPoolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
         raydiumObservationState: observationState,
@@ -1342,7 +1338,7 @@ export class TxBuilder {
       signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
       baseMint: baseMint,
       baseTokenAta,
-      poolState,
+      poolState: raydiumPoolState,
       tickArrayBitmap,
     };
   }
