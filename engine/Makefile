@@ -273,3 +273,4 @@ ARGS ?=
 mint-spl:
 	@echo "Minting SPL token with metadata..."
 	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/mint-spl.ts $(if $(NAME),--name $(NAME)) $(if $(SYMBOL),--symbol $(SYMBOL)) $(if $(URI),--uri $(URI)) $(if $(DECIMALS),--decimals $(DECIMALS)) $(if $(AMOUNT),--amount $(AMOUNT)) $(if $(RECIPIENT),--recipient $(RECIPIENT)) $(ARGS)
+
