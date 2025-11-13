@@ -100,11 +100,10 @@ describe("engine anchor - raydium clmm", () => {
   const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
   const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
   const ROSTER_SHARD_CAP = 100;
-  // New allocations: Sale 48.14%, Liquidity 41.86% (base_total = 90% of total).
-  // Team/Funding 10% is configured via teamAllocationBasisPoints (1000 bps) and is NOT part of base_total.
+  // New allocations: Total = 1,000,000,000; Sale 48.14%, Team 10.00% (bps set below), LP = 40.74%
   const SALE_ALLOCATION = new anchor.BN(481_400_000); // 48.14%
-  const LP_ALLOCATION = new anchor.BN(418_600_000);   // 41.86%
-  const BASE_TOTAL = SALE_ALLOCATION.add(LP_ALLOCATION); // 90% of total
+  const LP_ALLOCATION = new anchor.BN(407_400_000);   // 40.74%
+  const BASE_TOTAL = new anchor.BN(1_000_000_000);    // Total supply base
   const SALE_BPS = new anchor.BN(Math.floor((SALE_ALLOCATION.toNumber() * 10000) / BASE_TOTAL.toNumber()));
 
   before(async () => {
@@ -307,8 +306,8 @@ describe("engine anchor - raydium clmm", () => {
       name: "Test",
       symbol: "TST",
       uri: "https://example.com/meta.json",
-      // ensure small vesting for tests (not strictly needed for this test)
-      teamAllocationBasisPoints: 1000,
+      // Team vesting bps (portion of BASE_TOTAL)
+      teamAllocationBasisPoints: 1112,
       teamVestingDurationSec: 1,
     } as any);
 
@@ -322,7 +321,7 @@ describe("engine anchor - raydium clmm", () => {
       const vest: any = await sdk.fetchTeamVesting(clmmLaunchState);
       const expectedTeamTotal = BASE_TOTAL
         .mul(new anchor.BN(1_000_000_000))
-        .mul(new anchor.BN(1000))
+        .mul(new anchor.BN(1112))
         .div(new anchor.BN(10_000));
       console.log(
         "Team vesting initialized. total_allocation=",

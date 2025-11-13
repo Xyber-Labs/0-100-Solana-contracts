@@ -111,15 +111,8 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     )?;
 
     let state = &ctx.accounts.launch_state;
-    let team_bps = if state.team_allocation_basis_points > 0 {
-        state.team_allocation_basis_points
-    } else {
-        crate::constants::TEAM_BASIS_POINTS
-    } as u128;
     let base_total_atomic = state.base_total_allocation as u128;
-    let team_alloc_atomic = base_total_atomic.saturating_mul(team_bps).saturating_div(10_000u128);
-    let to_mint_u128 = base_total_atomic.saturating_add(team_alloc_atomic);
-    let to_mint = to_mint_u128 as u64;
+    let to_mint = base_total_atomic as u64;
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),

@@ -58,12 +58,6 @@ export async function runFullFlow(
   addLog(`   -> Sale Allocation (human units): ${Number(config.saleAllocation).toLocaleString()}`);
   addLog(`   -> LP Allocation (human units): ${Number((config as any).lpAllocation).toLocaleString()}`);
   addLog(`   -> Team Allocation (bps of base_total): ${(config as any).teamAllocationBasisPoints}`);
-  try {
-    const expectedBase = Number(config.saleAllocation) + Number((config as any).lpAllocation);
-    const teamBps = Number((config as any).teamAllocationBasisPoints);
-    const expectedMinted = expectedBase + Math.floor((expectedBase * teamBps) / 10000);
-    addLog(`   -> Expected minted tokens: ${expectedMinted.toLocaleString()}`);
-  } catch {}
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
@@ -274,8 +268,13 @@ export async function runFullFlow(
       return raw.gte(THRESHOLD) ? raw : raw.mul(DECIMALS_SCALE);
     };
     const saleAllocBN = toAtomic(config.saleAllocation);
-    const lpAllocBN = toAtomic(config.lpAllocation);
-    const baseTotalAllocationBN = saleAllocBN.add(lpAllocBN);
+    const lpAllocBN = toAtomic((config as any).lpAllocation);
+    const teamBpsNum = Number((config as any).teamAllocationBasisPoints ?? 0);
+    const denom = 10000 - Math.max(0, Math.min(10000, teamBpsNum));
+    const baseNonTeamBN = saleAllocBN.add(lpAllocBN);
+    const baseTotalAllocationBN = denom > 0
+      ? baseNonTeamBN.mul(new BN(10000)).div(new BN(denom))
+      : baseNonTeamBN; // fallback if denom==0
     const baseSaleBpsBN = baseTotalAllocationBN.isZero()
       ? new BN(0)
       : saleAllocBN.mul(new BN(10000)).div(baseTotalAllocationBN);
@@ -291,6 +290,7 @@ export async function runFullFlow(
     const rosterShardsTotal = (config as any).rosterShardsTotal && (config as any).rosterShardsTotal > 0
       ? Math.min(65535, (config as any).rosterShardsTotal)
       : Math.min(65535, Math.ceil(kCap / Math.max(1, config.rosterShardCap)));
+    addLog("launch config: " + JSON.stringify(config));
     const { initLaunchTx } = await sdk.initLaunchTx({
       creator: admin.publicKey,
       projectId,
@@ -616,7 +616,7 @@ export async function runFullFlow(
           const baseUi = Number(baseVaultBal.value.uiAmount ?? baseVaultBal.value.uiAmountString ?? "0");
           const quoteUi = Number(quoteVaultBal.value.uiAmount ?? quoteVaultBal.value.uiAmountString ?? "0");
           addLog(`      - Pool liquidity: base=${baseUi} quote=${quoteUi}`);
-        } catch (_) {}
+        } catch (_) { }
       } catch (liqErr: any) {
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
@@ -638,9 +638,9 @@ export async function runFullFlow(
           const deltaUi = Number(deltaAtomic) / 1e9;
           addLog(`      - Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
           addLog(`      - Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
-        } catch (_) {}
+        } catch (_) { }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
@@ -1133,9 +1133,9 @@ export async function runFullFlow(
           const deltaUi = Number(deltaAtomic) / 1e9;
           addLog(`   Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
           addLog(`   Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
-        } catch (_) {}
+        } catch (_) { }
       }
-    } catch (_) {}
+    } catch (_) { }
     addLog(`   ------------------------------------`);
     const totalDistributed = tokensClaimed + totalTokensClaimedByCreator + totalTokensClaimedByTeam;
     addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);
