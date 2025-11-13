@@ -942,11 +942,6 @@ const EngineSDK = {
         creatorClaimLockPeriodSec: BN;
         creatorMaxDepositLamports: BN;
         poolCreationGracePeriodSec?: number;
-        name: string;
-        symbol: string;
-        uri: string;
-        isMutable?: boolean;
-        sellerFeeBasisPoints?: number;
         teamVestingDurationSec?: number;
         teamAllocationBasisPoints?: number;
       };
@@ -967,6 +962,11 @@ const EngineSDK = {
     async function initLaunchFromPreset(args: {
       presetId: number;
       projectId?: BN | number;
+      name: string;
+      symbol: string;
+      uri: string;
+      isMutable?: boolean;
+      sellerFeeBasisPoints?: number;
       creator?: anchor.web3.Keypair;
     }): Promise<{ launchPda: anchor.web3.PublicKey; signature: string }> {
       const creatorPubkey = args.creator?.publicKey ?? payer;
@@ -975,6 +975,11 @@ const EngineSDK = {
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
+        name: args.name,
+        symbol: args.symbol,
+        uri: args.uri,
+        isMutable: typeof args.isMutable === "boolean" ? args.isMutable : true,
+        sellerFeeBasisPoints: typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
       const signers = args.creator ? [args.creator] : [];

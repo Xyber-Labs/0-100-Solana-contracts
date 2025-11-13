@@ -240,6 +240,11 @@ export class TxBuilder {
     creator: web3.PublicKey;
     presetId: number;
     projectId: BN | number;
+    name: string;
+    symbol: string;
+    uri: string;
+    isMutable?: boolean;
+    sellerFeeBasisPoints?: number;
     xyberMint?: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -275,8 +280,19 @@ export class TxBuilder {
     const creatorXyberAta = getAssociatedTokenAddressSync(xyberMint, params.creator, true);
     const treasuryXyberAta = getAssociatedTokenAddressSync(xyberMint, treasuryOwner, true);
 
+    const metaArg = {
+      name: params.name,
+      symbol: params.symbol,
+      uri: params.uri,
+      isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
+      sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
+    };
     const instruction = await (this.program.methods as any)
-      .initLaunchFromPreset(new BN(params.presetId), BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
+      .initLaunchFromPreset(
+        new BN(params.presetId),
+        BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId),
+        metaArg
+      )
       .accountsStrict({
         creator: params.creator,
         projectCounter,
@@ -307,7 +323,6 @@ export class TxBuilder {
   async initLaunchPresetIx(params: {
     payer: web3.PublicKey;
     id: number;
-    // Same shape as initLaunchIx
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -324,12 +339,6 @@ export class TxBuilder {
     creatorClaimLockPeriodSec: BN;
     creatorMaxDepositLamports: BN;
     poolCreationGracePeriodSec?: number;
-    xyberMint?: web3.PublicKey;
-    name: string;
-    symbol: string;
-    uri: string;
-    isMutable?: boolean;
-    sellerFeeBasisPoints?: number;
     teamVestingDurationSec?: number;
     teamAllocationBasisPoints?: number;
     signerAdmins: web3.PublicKey[];
@@ -360,11 +369,6 @@ export class TxBuilder {
       creatorMaxDeposit: params.creatorMaxDepositLamports,
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
       teamVestingDurationSec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
-      name: params.name,
-      symbol: params.symbol,
-      uri: params.uri,
-      isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
-      sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
     };
 
     const method = this.getIxMethod("initLaunchPreset", "init_launch_preset");

@@ -1,7 +1,28 @@
 use crate::{constants::SEED_ROOT, state::EngineConfig};
-use crate::utils::launch_core::InitLaunchParams;
 use crate::{state::LaunchPreset};
 use anchor_lang::prelude::*;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitLaunchPresetParams {
+    pub hard_cap_lamports: u64,
+    pub min_raise_lamports: u64,
+    pub per_wallet_cap: u64,
+    pub tau_lamports: u64,
+    pub base_total_allocation: u64,
+    pub base_sale_basis_points: u64,
+    pub team_allocation_basis_points: u64,
+    pub funding_duration_seconds: i64,
+    pub sale_start_time_sec: i64,
+    pub unlock_time_sec: i64,
+    pub roster_shard_cap: u16,
+    pub roster_shards_total: u16,
+    pub creator_initial_deposit_lamports: u64,
+    pub creator_daily_lamports_limit: u64,
+    pub creator_claim_lock_period_sec: i64,
+    pub creator_max_deposit: u64,
+    pub pool_creation_grace_period_sec: i64,
+    pub team_vesting_duration_sec: i64,
+}
 
 #[derive(Accounts)]
 #[instruction(id: u8)]
@@ -27,7 +48,7 @@ pub struct InitLaunchPreset<'info> {
 pub fn init_launch_preset(
     ctx: Context<InitLaunchPreset>,
     id: u8,
-    params: InitLaunchParams,
+    params: InitLaunchPresetParams,
 ) -> Result<()> {
     let cfg = &ctx.accounts.engine_config;
     // Ensure caller is an admin and quorum satisfied
@@ -69,11 +90,6 @@ pub fn init_launch_preset(
     p.creator_max_deposit = params.creator_max_deposit;
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
     p.team_vesting_duration_sec = params.team_vesting_duration_sec;
-    p.name = params.name;
-    p.symbol = params.symbol;
-    p.uri = params.uri;
-    p.is_mutable = params.is_mutable;
-    p.seller_fee_basis_points = params.seller_fee_basis_points;
 
     Ok(())
 }

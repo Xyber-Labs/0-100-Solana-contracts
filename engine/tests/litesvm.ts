@@ -311,11 +311,6 @@ describe("engine litesvm", () => {
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
       poolCreationGracePeriodSec: 0,
-      name: "PresetToken",
-      symbol: "PST",
-      uri: "https://metadata.xyberlabs.dev/preset/default.json",
-      isMutable: true,
-      sellerFeeBasisPoints: 0,
       teamVestingDurationSec: 365 * 24 * 60 * 60,
       teamAllocationBasisPoints: 1000,
     };
@@ -332,6 +327,11 @@ describe("engine litesvm", () => {
     const { launchPda } = await (sdk as any).initLaunchFromPreset({
       presetId,
       projectId: nextId,
+      name: "PresetToken",
+      symbol: "PST",
+      uri: "https://metadata.xyberlabs.dev/preset/default.json",
+      isMutable: true,
+      sellerFeeBasisPoints: 0,
     });
 
     const state = await sdk.fetchLaunch(launchPda);

@@ -141,8 +141,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
-    saleAllocation: '459460000000000000', // 45.946% of 1B supply with 9 decimals
-    lpAllocation: 500000,
+    // Target allocations for 1B total: Sale 48.14%, LP 41.86%, Team ~10% of total
+    // Provide human units; SDK will scale to atomic
+    saleAllocation: '481400000',
+    lpAllocation: 418600000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 15, // Default custom seconds
     unlockTimeSec: 1, // 1 sec for fast test
@@ -156,7 +158,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     ammConfig: '',
     clmmProgram: '',
     teamVestingDurationSec: 1,
-    teamAllocationBasisPoints: 1000,
+    // To get very close to 1B minted (base_total + floor(base_total * team_bps/10000))
+    // 1111 bps => 999,990,000; 1112 bps => 1,000,080,000
+    teamAllocationBasisPoints: 1112,
   };
 
   // --- New state for simulation config ---

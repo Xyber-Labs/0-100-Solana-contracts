@@ -46,22 +46,8 @@ export async function runFullFlow(
 
   let testLaunchState: PublicKey;
 
-  // --- Simulation Parameters ---
-  const TOTAL_SUPPLY = 1_000_000_000; // 1 Billion
-  const SALE_PERCENTAGE = 0.4814; // 48.14% (align with tests)
-  const LP_PERCENTAGE = 0.4186;    // 41.86% (base total 90%)
+  // --- Simulation Parameters (provided by caller via config) ---
   const TOKEN_DECIMALS = 9;
-
-  // Ensure sale/lp allocations are set in human units (not atomic); override if missing/unreasonable
-  const computedSaleHuman = Math.floor(TOTAL_SUPPLY * SALE_PERCENTAGE);
-  const computedLpHuman = Math.floor(TOTAL_SUPPLY * LP_PERCENTAGE);
-  const parsedSaleHuman = Number.parseInt(String(config.saleAllocation || "0"), 10);
-  if (!Number.isFinite(parsedSaleHuman) || parsedSaleHuman <= 0 || parsedSaleHuman < 1_000_000) {
-    config.saleAllocation = String(computedSaleHuman);
-  }
-  if (!Number.isFinite(config.lpAllocation) || config.lpAllocation <= 0 || config.lpAllocation < 1_000_000) {
-    (config as any).lpAllocation = computedLpHuman;
-  }
 
   // Override creator deposit for this specific test
   const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -69,10 +55,15 @@ export async function runFullFlow(
   // daily limit will be recalculated below to allow full creator claim if needed
 
   addLog(`\n--- Using Simulation Parameters ---`);
-  addLog(`   -> Total Supply: ${TOTAL_SUPPLY.toLocaleString()}`);
-  addLog(`   -> Sale Percentage: ${SALE_PERCENTAGE * 100}%`);
   addLog(`   -> Sale Allocation (human units): ${Number(config.saleAllocation).toLocaleString()}`);
   addLog(`   -> LP Allocation (human units): ${Number((config as any).lpAllocation).toLocaleString()}`);
+  addLog(`   -> Team Allocation (bps of base_total): ${(config as any).teamAllocationBasisPoints}`);
+  try {
+    const expectedBase = Number(config.saleAllocation) + Number((config as any).lpAllocation);
+    const teamBps = Number((config as any).teamAllocationBasisPoints);
+    const expectedMinted = expectedBase + Math.floor((expectedBase * teamBps) / 10000);
+    addLog(`   -> Expected minted tokens: ${expectedMinted.toLocaleString()}`);
+  } catch {}
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
   addLog(`------------------------------------`);
   // --- End Simulation Parameters ---
@@ -619,10 +610,37 @@ export async function runFullFlow(
         });
         const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
         addLog(`      - Initial liquidity added. Signature: ${sigL}`);
+        try {
+          const baseVaultBal = await provider.connection.getTokenAccountBalance(addLiq.baseVault);
+          const quoteVaultBal = await provider.connection.getTokenAccountBalance(addLiq.quoteVault);
+          const baseUi = Number(baseVaultBal.value.uiAmount ?? baseVaultBal.value.uiAmountString ?? "0");
+          const quoteUi = Number(quoteVaultBal.value.uiAmount ?? quoteVaultBal.value.uiAmountString ?? "0");
+          addLog(`      - Pool liquidity: base=${baseUi} quote=${quoteUi}`);
+        } catch (_) {}
       } catch (liqErr: any) {
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
     }
+    try {
+      if (mintedBaseMint) {
+        const supply = await provider.connection.getTokenSupply(mintedBaseMint);
+        const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
+        addLog(`      - Base mint total supply: ${supplyUi}`);
+        try {
+          const launchForSupply: any = await (sdk as any).fetchLaunch(testLaunchState);
+          const baseTotalAtomic = Number(launchForSupply.baseTotalAllocation ?? 0);
+          const teamBps = Number(launchForSupply.teamAllocationBasisPoints ?? 0);
+          const teamAtomic = Math.floor((baseTotalAtomic * teamBps) / 10000);
+          const expectedAtomic = baseTotalAtomic + teamAtomic;
+          const observedAtomic = BigInt(supply.value.amount ?? "0");
+          const expectedUi = (expectedAtomic / 1e9).toFixed(6);
+          const deltaAtomic = BigInt(expectedAtomic) - observedAtomic;
+          const deltaUi = Number(deltaAtomic) / 1e9;
+          addLog(`      - Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
+          addLog(`      - Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
+        } catch (_) {}
+      }
+    } catch (_) {}
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
@@ -1097,6 +1115,27 @@ export async function runFullFlow(
     addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);
     addLog(`   Total claimed by creator: ${totalTokensClaimedByCreator.toFixed(6)}`);
     addLog(`   Total claimed by team:    ${totalTokensClaimedByTeam.toFixed(6)}`);
+    try {
+      if (mintedBaseMint) {
+        const supply = await provider.connection.getTokenSupply(mintedBaseMint);
+        const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
+        addLog(`   Base mint:                ${mintedBaseMint.toBase58()}`);
+        addLog(`   Base mint total supply:   ${supplyUi}`);
+        try {
+          const launchForSupply: any = await (sdk as any).fetchLaunch(testLaunchState);
+          const baseTotalAtomic = Number(launchForSupply.baseTotalAllocation ?? 0);
+          const teamBps = Number(launchForSupply.teamAllocationBasisPoints ?? 0);
+          const teamAtomic = Math.floor((baseTotalAtomic * teamBps) / 10000);
+          const expectedAtomic = baseTotalAtomic + teamAtomic;
+          const observedAtomic = BigInt(supply.value.amount ?? "0");
+          const expectedUi = (expectedAtomic / 1e9).toFixed(6);
+          const deltaAtomic = BigInt(expectedAtomic) - observedAtomic;
+          const deltaUi = Number(deltaAtomic) / 1e9;
+          addLog(`   Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
+          addLog(`   Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
+        } catch (_) {}
+      }
+    } catch (_) {}
     addLog(`   ------------------------------------`);
     const totalDistributed = tokensClaimed + totalTokensClaimedByCreator + totalTokensClaimedByTeam;
     addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);

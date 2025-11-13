@@ -3225,6 +3225,14 @@ export type Engine = {
         {
           "name": "projectId",
           "type": "u64"
+        },
+        {
+          "name": "meta",
+          "type": {
+            "defined": {
+              "name": "tokenMetadataInput"
+            }
+          }
         }
       ]
     },
@@ -3299,7 +3307,7 @@ export type Engine = {
           "name": "params",
           "type": {
             "defined": {
-              "name": "initLaunchParams"
+              "name": "initLaunchPresetParams"
             }
           }
         }
@@ -5504,6 +5512,86 @@ export type Engine = {
       }
     },
     {
+      "name": "initLaunchPresetParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hardCapLamports",
+            "type": "u64"
+          },
+          {
+            "name": "minRaiseLamports",
+            "type": "u64"
+          },
+          {
+            "name": "perWalletCap",
+            "type": "u64"
+          },
+          {
+            "name": "tauLamports",
+            "type": "u64"
+          },
+          {
+            "name": "baseTotalAllocation",
+            "type": "u64"
+          },
+          {
+            "name": "baseSaleBasisPoints",
+            "type": "u64"
+          },
+          {
+            "name": "teamAllocationBasisPoints",
+            "type": "u64"
+          },
+          {
+            "name": "fundingDurationSeconds",
+            "type": "i64"
+          },
+          {
+            "name": "saleStartTimeSec",
+            "type": "i64"
+          },
+          {
+            "name": "unlockTimeSec",
+            "type": "i64"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterShardsTotal",
+            "type": "u16"
+          },
+          {
+            "name": "creatorInitialDepositLamports",
+            "type": "u64"
+          },
+          {
+            "name": "creatorDailyLamportsLimit",
+            "type": "u64"
+          },
+          {
+            "name": "creatorClaimLockPeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "creatorMaxDeposit",
+            "type": "u64"
+          },
+          {
+            "name": "poolCreationGracePeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "teamVestingDurationSec",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "launchInitialized",
       "type": {
         "kind": "struct",
@@ -5656,26 +5744,6 @@ export type Engine = {
           {
             "name": "teamVestingDurationSec",
             "type": "i64"
-          },
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "symbol",
-            "type": "string"
-          },
-          {
-            "name": "uri",
-            "type": "string"
-          },
-          {
-            "name": "isMutable",
-            "type": "bool"
-          },
-          {
-            "name": "sellerFeeBasisPoints",
-            "type": "u16"
           }
         ]
       }
@@ -6279,6 +6347,34 @@ export type Engine = {
       }
     },
     {
+      "name": "tokenMetadataInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "isMutable",
+            "type": "bool"
+          },
+          {
+            "name": "sellerFeeBasisPoints",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "tokensClaimed",
       "type": {
         "kind": "struct",
@@ -6459,36 +6555,6 @@ export type Engine = {
             "name": "teamVestingDurationSec",
             "type": {
               "option": "i64"
-            }
-          },
-          {
-            "name": "name",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "symbol",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "uri",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "isMutable",
-            "type": {
-              "option": "bool"
-            }
-          },
-          {
-            "name": "sellerFeeBasisPoints",
-            "type": {
-              "option": "u16"
             }
           }
         ]

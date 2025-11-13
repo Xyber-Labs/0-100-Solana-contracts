@@ -277,7 +277,14 @@ describe("engine anchor - raydium clmm", () => {
 
   it("Initializes launch (no deposits here)", async () => {
     const nextId = await sdk.getNextProjectId();
-    const creatorPk = externalAdminKeypair?.publicKey ?? admin.publicKey;
+    const creatorPk = admin.publicKey;
+    // Ensure creation fee is zero to avoid XYBER ATA requirement on creator in local envs
+    try {
+      await (sdk as any).updateEngineConfig({
+        newCreationFee: new anchor.BN(0),
+        signerAdmins: [adminKeypair, admin2Keypair],
+      });
+    } catch (_) {}
     const { initLaunchTx, signers, launchState } = await sdk.initLaunchTx({
       creator: creatorPk,
       projectId: nextId,
@@ -297,15 +304,15 @@ describe("engine anchor - raydium clmm", () => {
       creatorMaxDepositLamports: new anchor.BN(0),
       provider,
       xyberMint,
+      name: "Test",
+      symbol: "TST",
+      uri: "https://example.com/meta.json",
       // ensure small vesting for tests (not strictly needed for this test)
       teamAllocationBasisPoints: 1000,
       teamVestingDurationSec: 1,
     } as any);
 
-    const sig = await provider.sendAndConfirm(
-      initLaunchTx,
-      externalAdminKeypair ? [externalAdminKeypair, ...signers] : [adminKeypair, ...signers]
-    );
+    const sig = await provider.sendAndConfirm(initLaunchTx, [adminKeypair, ...signers]);
     console.log("✅ Launch initialized:", sig);
     clmmLaunchState = launchState;
 
