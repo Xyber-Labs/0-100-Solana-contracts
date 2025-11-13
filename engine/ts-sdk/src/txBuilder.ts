@@ -724,22 +724,21 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const rosterShard =
-      params.rosterShard ??
-      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
+    const rosterShard = params.rosterShard; // do not auto-fill or fallback; omit when not provided
     // escrow removed
 
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const method = this.program.methods.claimRefund();
-    // Build accounts object conditionally to allow omitting optional roster_shard
     const acct: any = {
       user: params.user,
       launchState: params.launch,
       userContribution,
-      // escrow removed
+      escrowAuthority,
+      systemProgram: web3.SystemProgram.programId,
     };
-    // Some Anchor client versions still expect the account present even if optional; provide harmless fallback
-    acct.rosterShard = rosterShard ?? params.launch;
-    const instruction = await (method as any).accounts(acct).instruction();
+    // Optional account must be present for accountsStrict; pass null when absent
+    acct.rosterShard = rosterShard ?? null;
+    const instruction = await (method as any).accountsStrict(acct).instruction();
 
     return { instruction, userContribution };
   }
@@ -770,9 +769,7 @@ export class TxBuilder {
       params.launch,
       params.user,
     ]);
-    const rosterShard =
-      params.rosterShard ??
-      (params.shardId !== undefined ? this.getRosterShardPda(params.launch, params.shardId)[0] : undefined);
+    const rosterShard = params.rosterShard; // do not auto-fill; omit when not provided
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [poolState] = this.getPda(["pool", params.launch]);
     const userAta =
@@ -815,19 +812,16 @@ export class TxBuilder {
       user: params.user,
       launchState: params.launch,
       userContribution,
+      poolState,
       baseMint: params.baseMint,
       escrowAuthority,
       baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
       userAta,
       tokenProgram: TOKEN_PROGRAM_ID,
     };
-    accts.rosterShard = rosterShard ?? params.launch;
-    const claimIx = await (method as any)
-      .accounts(accts)
-      .remainingAccounts([
-        { pubkey: poolState, isSigner: false, isWritable: false },
-      ])
-      .instruction();
+    // Optional account must be present for accountsStrict; pass null when absent
+    accts.rosterShard = rosterShard ?? null;
+    const claimIx = await (method as any).accountsStrict(accts).instruction();
 
     instructions.push(claimIx);
 

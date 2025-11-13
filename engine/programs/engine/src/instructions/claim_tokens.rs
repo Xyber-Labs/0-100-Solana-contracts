@@ -15,9 +15,8 @@ pub struct ClaimTokens<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
-    /// CHECK: optional — only required if finalized_snapshot == false
     #[account(mut)]
-    pub roster_shard: Option<AccountInfo<'info>>,
+    pub roster_shard: Option<Account<'info, RosterShard>>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
     pub pool_state: Account<'info, PoolState>,
@@ -74,17 +73,17 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let n = launch_state.public_total_tickets;
 
     let (base, tcount) = if user.finalized_snapshot {
+        // Strong binding when using finalized snapshot
+        require_keys_eq!(user.launch, launch_state.key(), EngineErrorCode::Unauthorized);
         (user.final_t_base, user.final_ticket_count)
     } else {
-        let shard_ai = ctx
+        let shard = ctx
             .accounts
             .roster_shard
             .as_ref()
             .ok_or(EngineErrorCode::ShardNotFinalized)?;
-        require_keys_eq!(*shard_ai.owner, crate::ID, EngineErrorCode::Unauthorized);
-        let data = shard_ai.data.borrow().to_vec();
-        let mut cursor: &[u8] = &data;
-        let shard = RosterShard::try_deserialize(&mut cursor)?;
+        // Additional runtime checks to prevent shard substitution
+        require_keys_eq!(shard.launch, launch_state.key(), EngineErrorCode::Unauthorized);
         require!(
             launch_state.roster_finalized_up_to >= shard.shard_id as i32,
             EngineErrorCode::ShardNotFinalized
@@ -95,6 +94,8 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         );
         require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
         let u = user.idx_in_shard as usize;
+        require!(u < shard.wallets.len(), EngineErrorCode::MappingError);
+        require_keys_eq!(shard.wallets[u], user.wallet, EngineErrorCode::UserNotFoundInRoster);
         let b = shard
             .shard_base
             .checked_add(*shard.prefix.get(u).ok_or(EngineErrorCode::MappingError)?)
