@@ -2,6 +2,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Command } from "commander";
 import EngineSDK from "../ts-sdk/src/engine";
 import * as fs from "fs";
+import * as path from "path";
 
 function parseArgs() {
   const program = new Command();
@@ -10,13 +11,26 @@ function parseArgs() {
     .requiredOption("--payload <path>");
   program.parse(process.argv);
   const opts = program.opts();
-  const raw = fs.readFileSync(String(opts.payload), "utf8");
+  const payloadPath = path.resolve(String(opts.payload));
+  const raw = fs.readFileSync(payloadPath, "utf8");
   const payload = JSON.parse(raw);
   const idStr = payload.id !== undefined ? String(payload.id) : undefined;
   if (idStr === undefined) throw new Error("id is required");
   const id = Number(idStr);
   if (!Number.isInteger(id) || id < 0 || id > 255) throw new Error("id must be 0..255");
-  const adminKeyPaths: string[] = Array.isArray(payload.adminKeyPaths) ? payload.adminKeyPaths.map((p: string) => String(p)) : [];
+  const baseDir = path.dirname(payloadPath);
+  let adminKeyPaths: string[] = Array.isArray(payload.adminKeyPaths)
+    ? payload.adminKeyPaths.map((p: string) => {
+        const s = String(p);
+        return path.isAbsolute(s) ? s : path.resolve(baseDir, s);
+      })
+    : [];
+  // Fallback: if tmp-local paths missing, try tmp/
+  adminKeyPaths = adminKeyPaths.map((p: string) => {
+    if (fs.existsSync(p)) return p;
+    const alt = p.replace(`${path.sep}tmp-local${path.sep}`, `${path.sep}tmp${path.sep}`);
+    return fs.existsSync(alt) ? alt : p;
+  });
   if (!adminKeyPaths.length) throw new Error("adminKeyPaths[] must be provided in payload");
   const p = payload;
   return {
@@ -55,9 +69,9 @@ module.exports = async function (provider: anchor.AnchorProvider) {
   const args = parseArgs();
   const idl = await EngineSDK.loadIdl();
   const programAny: any = (anchor.workspace as any).Engine || new (anchor as any).Program(idl as any, (idl as any).metadata.address, provider as any);
-  const sdk = EngineSDK.create(provider as any, programAny as any);
   const adminKeypairs = (args.adminKeyPaths || []).map(loadKeypair);
   if (!adminKeypairs.length) throw new Error("adminKeyPaths[] in payload is required");
+  const sdk = EngineSDK.create(provider as any, programAny as any, adminKeypairs[0]);
   const res = await (sdk as any).initLaunchPreset({
     id: args.id,
     params: {

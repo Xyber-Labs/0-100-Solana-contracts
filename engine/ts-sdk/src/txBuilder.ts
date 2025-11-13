@@ -387,6 +387,70 @@ export class TxBuilder {
     return { instruction, launchPreset, engineConfig };
   }
 
+  async updateLaunchPresetIx(params: {
+    payer: web3.PublicKey;
+    id: number;
+    patch: {
+      hardCapLamports?: BN;
+      minRaiseLamports?: BN;
+      perWalletCap?: BN;
+      tauLamports?: BN;
+      baseTotalAllocation?: BN;
+      baseSaleBasisPoints?: BN;
+      teamAllocationBasisPoints?: number;
+      fundingDurationSeconds?: number;
+      saleStartTimeSec?: number;
+      unlockTimeSec?: number;
+      rosterShardCap?: number;
+      rosterShardsTotal?: number;
+      creatorInitialDepositLamports?: BN;
+      creatorDailyLamportsLimit?: BN;
+      creatorClaimLockPeriodSec?: BN;
+      creatorMaxDepositLamports?: BN;
+      poolCreationGracePeriodSec?: number;
+      teamVestingDurationSec?: number;
+    };
+    signerAdmins: web3.PublicKey[];
+  }): Promise<{ instruction: web3.TransactionInstruction; launchPreset: web3.PublicKey; engineConfig: web3.PublicKey }> {
+    const [engineConfig] = this.getPda(["config"]);
+    const [launchPreset] = this.getLaunchPresetPda(params.id);
+    const method = this.getIxMethod("updateLaunchPreset", "update_launch_preset");
+    if (!method) throw new Error("updateLaunchPreset method not found in program IDL");
+    const p = params.patch;
+    const ix = await method(
+      new BN(params.id),
+      {
+        hardCapLamports: p.hardCapLamports ?? null,
+        minRaiseLamports: p.minRaiseLamports ?? null,
+        perWalletCap: p.perWalletCap ?? null,
+        tauLamports: p.tauLamports ?? null,
+        baseTotalAllocation: p.baseTotalAllocation ?? null,
+        baseSaleBasisPoints: p.baseSaleBasisPoints ?? null,
+        teamAllocationBasisPoints: typeof p.teamAllocationBasisPoints === "number" ? new BN(p.teamAllocationBasisPoints) : null,
+        fundingDurationSeconds: typeof p.fundingDurationSeconds === "number" ? new BN(p.fundingDurationSeconds) : null,
+        saleStartTimeSec: typeof p.saleStartTimeSec === "number" ? new BN(p.saleStartTimeSec) : null,
+        unlockTimeSec: typeof p.unlockTimeSec === "number" ? new BN(p.unlockTimeSec) : null,
+        rosterShardCap: typeof p.rosterShardCap === "number" ? p.rosterShardCap : null,
+        rosterShardsTotal: typeof p.rosterShardsTotal === "number" ? p.rosterShardsTotal : null,
+        creatorInitialDepositLamports: p.creatorInitialDepositLamports ?? null,
+        creatorDailyLamportsLimit: p.creatorDailyLamportsLimit ?? null,
+        creatorClaimLockPeriodSec: p.creatorClaimLockPeriodSec ?? null,
+        creatorMaxDeposit: p.creatorMaxDepositLamports ?? null,
+        poolCreationGracePeriodSec: typeof p.poolCreationGracePeriodSec === "number" ? new BN(p.poolCreationGracePeriodSec) : null,
+        teamVestingDurationSec: typeof p.teamVestingDurationSec === "number" ? new BN(p.teamVestingDurationSec) : null,
+      }
+    )
+      .accountsStrict({
+        payer: params.payer,
+        engineConfig,
+        launchPreset,
+      })
+      .remainingAccounts(
+        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
+      )
+      .instruction();
+    return { instruction: ix, launchPreset, engineConfig };
+  }
   async initLaunchTx(params: {
     creator: web3.PublicKey;
     projectId: BN | number;

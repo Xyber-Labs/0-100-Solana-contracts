@@ -1,8 +1,8 @@
 {
   "id": 1,
   "adminKeyPaths": [
-    "../tmp-local/admin-1.json",
-    "../tmp-local/admin-2.json"
+    "../tmp/admin-1.json",
+    "../tmp/admin-2.json"
   ],
   "hardCapLamports": "1000000000000",
   "minRaiseLamports": "100000000000",
