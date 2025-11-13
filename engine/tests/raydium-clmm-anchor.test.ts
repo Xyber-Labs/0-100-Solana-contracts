@@ -276,7 +276,8 @@ describe("engine anchor - raydium clmm", () => {
 
   it("Initializes launch (no deposits here)", async () => {
     const nextId = await sdk.getNextProjectId();
-    const creatorPk = admin.publicKey;
+    const creatorKeypair = externalAdminKeypair ?? adminKeypair;
+    const creatorPk = creatorKeypair.publicKey;
     // Ensure creation fee is zero to avoid XYBER ATA requirement on creator in local envs
     try {
       await (sdk as any).updateEngineConfig({
@@ -284,8 +285,16 @@ describe("engine anchor - raydium clmm", () => {
         signerAdmins: [adminKeypair, admin2Keypair],
       });
     } catch (_) {}
-    const { initLaunchTx, signers, launchState } = await sdk.initLaunchTx({
-      creator: creatorPk,
+    // Ensure payer is in admins to satisfy init_launch admin gating and set threshold to 1
+    try {
+      await (sdk as any).updateEngineConfig({
+        newAdmins: [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey],
+        newThreshold: 1,
+        signerAdmins: [adminKeypair, admin2Keypair],
+      });
+    } catch (_) {}
+    const res = await (sdk as any).initLaunch({
+      creator: creatorKeypair,
       projectId: nextId,
       hardCapLamports: HARD_CAP_LAMPORTS,
       minRaiseLamports: MIN_RAISE_LAMPORTS,
@@ -301,7 +310,7 @@ describe("engine anchor - raydium clmm", () => {
       creatorDailyLamportsLimit: new anchor.BN(0),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
-      provider,
+      poolCreationGracePeriodSec: 0,
       xyberMint,
       name: "Test",
       symbol: "TST",
@@ -309,11 +318,9 @@ describe("engine anchor - raydium clmm", () => {
       // Team vesting bps (portion of BASE_TOTAL)
       teamAllocationBasisPoints: 1112,
       teamVestingDurationSec: 1,
-    } as any);
-
-    const sig = await provider.sendAndConfirm(initLaunchTx, [adminKeypair, ...signers]);
-    console.log("✅ Launch initialized:", sig);
-    clmmLaunchState = launchState;
+    });
+    console.log("✅ Launch initialized:", res.signature);
+    clmmLaunchState = res.launchPda;
 
     // Initialize and verify team vesting to ensure test accounts for it
     try {
