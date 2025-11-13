@@ -147,6 +147,7 @@ pub struct PoolState {
     pub created_blockhash: [u8; 32],
     pub created: bool,
     pub claims_ready: bool,
+    pub raydium_pool_state: Option<Pubkey>,
 }
 
 #[account]

@@ -1674,6 +1674,44 @@ export type Engine = {
           "writable": true
         },
         {
+          "name": "poolState",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "escrowAuthority",
           "pda": {
             "seeds": [
@@ -5897,6 +5935,12 @@ export type Engine = {
           {
             "name": "claimsReady",
             "type": "bool"
+          },
+          {
+            "name": "raydiumPoolState",
+            "type": {
+              "option": "pubkey"
+            }
           }
         ]
       }

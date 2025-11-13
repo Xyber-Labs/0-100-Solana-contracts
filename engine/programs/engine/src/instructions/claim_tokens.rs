@@ -53,6 +53,7 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(),
         EngineErrorCode::Unauthorized
     );
+    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
     // Tokens are claimed only if the raise was successful

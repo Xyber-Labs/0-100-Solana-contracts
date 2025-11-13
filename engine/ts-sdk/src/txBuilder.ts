@@ -1253,20 +1253,20 @@ export class TxBuilder {
     })();
     const ammConfigForPool = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
 
-    const [poolState] = web3.PublicKey.findProgramAddressSync(
+    const [raydiumPoolState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool"), ammConfigForPool.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
       params.clmmProgram
     );
 
     const [observationState] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("observation"), poolState.toBuffer()],
+      [Buffer.from("observation"), raydiumPoolState.toBuffer()],
       params.clmmProgram
     );
 
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
-        poolState.toBuffer(),
+        raydiumPoolState.toBuffer(),
         params.quoteMint.toBuffer(),
       ],
       params.clmmProgram
@@ -1275,14 +1275,14 @@ export class TxBuilder {
     const [baseVault] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool_vault"),
-        poolState.toBuffer(),
+        raydiumPoolState.toBuffer(),
         baseMint.toBuffer(),
       ],
       params.clmmProgram
     );
 
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
+      [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolState.toBuffer()],
       params.clmmProgram
     );
 
@@ -1294,18 +1294,20 @@ export class TxBuilder {
 
 
     const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+    const [enginePoolState] = this.getPda(["pool", params.launch]);
 
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        poolState: enginePoolState,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
         quoteMint: params.quoteMint,
         raydiumAmmConfig,
-        raydiumPoolState: poolState,
+        raydiumPoolState,
         raydiumBaseVault: baseVault,
         raydiumQuoteVault: quoteVault,
         raydiumObservationState: observationState,
@@ -1342,7 +1344,7 @@ export class TxBuilder {
       signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
       baseMint: baseMint,
       baseTokenAta,
-      poolState,
+      poolState: raydiumPoolState,
       tickArrayBitmap,
     };
   }

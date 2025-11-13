@@ -9,7 +9,7 @@ use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::Amm
 use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
-    state::TokenMetadataConfig,
+    state::{PoolState, TokenMetadataConfig},
     utils::mint as mint_utils,
     LaunchState, SEED_ROOT,
 };
@@ -27,6 +27,9 @@ pub struct CreateClmmPool<'info> {
         constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
+    pub pool_state: Account<'info, PoolState>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -141,6 +144,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     raydium_create_pool_impl(&ctx)?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
+    ctx.accounts.pool_state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
     Ok(())
 }
 
