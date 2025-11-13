@@ -3,6 +3,15 @@ use crate::utils::launch_core::{init_launch_core, InitLaunchParams};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct TokenMetadataInput {
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub is_mutable: bool,
+    pub seller_fee_basis_points: u16,
+}
+
 #[derive(Accounts)]
 #[instruction(preset_id: u8, project_id: u64)]
 pub struct InitLaunchFromPreset<'info> {
@@ -60,9 +69,11 @@ pub struct InitLaunchFromPreset<'info> {
 
 pub fn init_launch_from_preset(
     ctx: Context<InitLaunchFromPreset>,
-    _preset_id: u8,
+    preset_id: u8,
     project_id: u64,
+    meta: TokenMetadataInput,
 ) -> Result<()> {
+    require!(ctx.accounts.launch_preset.id == preset_id, crate::errors::ErrorCode::Unauthorized);
     let p = &ctx.accounts.launch_preset;
     let params = InitLaunchParams {
         hard_cap_lamports: p.hard_cap_lamports,
@@ -83,11 +94,11 @@ pub fn init_launch_from_preset(
         creator_max_deposit: p.creator_max_deposit,
         pool_creation_grace_period_sec: p.pool_creation_grace_period_sec,
         team_vesting_duration_sec: p.team_vesting_duration_sec,
-        name: p.name.clone(),
-        symbol: p.symbol.clone(),
-        uri: p.uri.clone(),
-        is_mutable: p.is_mutable,
-        seller_fee_basis_points: p.seller_fee_basis_points,
+        name: meta.name,
+        symbol: meta.symbol,
+        uri: meta.uri,
+        is_mutable: meta.is_mutable,
+        seller_fee_basis_points: meta.seller_fee_basis_points,
     };
 
     init_launch_core(

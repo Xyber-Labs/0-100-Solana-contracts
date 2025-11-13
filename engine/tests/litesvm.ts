@@ -311,11 +311,6 @@ describe("engine litesvm", () => {
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
       poolCreationGracePeriodSec: 0,
-      name: "PresetToken",
-      symbol: "PST",
-      uri: "https://metadata.xyberlabs.dev/preset/default.json",
-      isMutable: true,
-      sellerFeeBasisPoints: 0,
       teamVestingDurationSec: 365 * 24 * 60 * 60,
       teamAllocationBasisPoints: 1000,
     };
@@ -327,22 +322,42 @@ describe("engine litesvm", () => {
     });
     assert.ok(launchPreset);
 
+    // Update preset parameters (admin-gated)
+    const patch = {
+      minRaiseLamports: new anchor.BN(7 * anchor.web3.LAMPORTS_PER_SOL),
+      baseSaleBasisPoints: new anchor.BN(7500),
+      rosterShardsTotal: 12,
+      // Optionally also tweak funding duration, etc.
+      // fundingDurationSeconds: 20,
+    };
+    await (sdk as any).updateLaunchPreset({
+      id: presetId,
+      patch,
+      adminKeypairs: [adminKeypair, adminBKeypair],
+    });
+
     // Launch from preset
     const nextId = await sdk.getNextProjectId();
     const { launchPda } = await (sdk as any).initLaunchFromPreset({
       presetId,
       projectId: nextId,
+      name: "PresetToken",
+      symbol: "PST",
+      uri: "https://metadata.xyberlabs.dev/preset/default.json",
+      isMutable: true,
+      sellerFeeBasisPoints: 0,
     });
 
     const state = await sdk.fetchLaunch(launchPda);
     assert.equal(state.projectId.toNumber(), nextId.toNumber ? nextId.toNumber() : Number(nextId));
     assert.equal(state.hardCapLamports.toNumber(), params.hardCapLamports.toNumber());
-    assert.equal(state.minRaiseLamports.toNumber(), params.minRaiseLamports.toNumber());
+    // minRaise and some fields should reflect updated preset values
+    assert.equal(state.minRaiseLamports.toNumber(), (patch.minRaiseLamports as anchor.BN).toNumber());
     assert.equal(state.tauLamports.toNumber(), params.tauLamports.toNumber());
     assert.equal(state.baseTotalAllocation.toNumber(), params.baseTotalAllocation.toNumber());
-    assert.equal(state.baseSaleBasisPoints.toNumber(), params.baseSaleBasisPoints.toNumber());
+    assert.equal(state.baseSaleBasisPoints.toNumber(), (patch.baseSaleBasisPoints as anchor.BN).toNumber());
     assert.equal(state.rosterShardCap, params.rosterShardCap);
-    assert.equal(state.rosterShards, params.rosterShardsTotal);
+    assert.equal(state.rosterShards, patch.rosterShardsTotal as number);
   });
 
   it("Allows deposits", async () => {

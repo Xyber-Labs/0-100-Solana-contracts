@@ -141,8 +141,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 5 * 1e9, // 5 SOL
     tauLamports: 1 * 1e9, // 1 SOL
-    saleAllocation: '459460000000000000', // 45.946% of 1B supply with 9 decimals
-    lpAllocation: 500000,
+    // Target allocations for 1B total: Sale 48.14%, Team 11.12%, LP 40.74%
+    // Provide human units; SDK will scale to atomic; base_total_allocation = 1,000,000,000
+    saleAllocation: '481400000',
+    lpAllocation: 407400000,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 15, // Default custom seconds
     unlockTimeSec: 1, // 1 sec for fast test
@@ -156,7 +158,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     ammConfig: '',
     clmmProgram: '',
     teamVestingDurationSec: 1,
-    teamAllocationBasisPoints: 1000,
+    // Team share inside 1B total supply
+    teamAllocationBasisPoints: 1112,
   };
 
   // --- New state for simulation config ---
@@ -328,7 +331,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
       // Derive launch PDA by projectId (no base mint needed at init)
 
-      const baseTotalAllocationBN = new BN(launchConfig.saleAllocation).add(new BN(String(launchConfig.lpAllocation)));
+      // Mint exactly 1,000,000,000 total supply; sale/team/LP are slices within this total
+      const baseTotalAllocationBN = new BN('1000000000');
       const baseSaleBpsBN = baseTotalAllocationBN.isZero()
         ? new BN(0)
         : new BN(Math.floor(new BN(launchConfig.saleAllocation).toNumber() * 10000 / baseTotalAllocationBN.toNumber()));

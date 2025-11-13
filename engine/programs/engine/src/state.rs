@@ -233,12 +233,4 @@ pub struct LaunchPreset {
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
-    #[max_len(64)]
-    pub name: String,
-    #[max_len(16)]
-    pub symbol: String,
-    #[max_len(256)]
-    pub uri: String,
-    pub is_mutable: bool,
-    pub seller_fee_basis_points: u16,
 }

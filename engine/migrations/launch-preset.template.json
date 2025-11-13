@@ -1,0 +1,27 @@
+{
+  "id": 1,
+  "adminKeyPaths": [
+    "../tmp/admin-1.json",
+    "../tmp/admin-2.json"
+  ],
+  "hardCapLamports": "1000000000000",
+  "minRaiseLamports": "100000000000",
+  "perWalletCap": "5000000000",
+  "tauLamports": "100000000",
+  "baseTotalAllocation": "1000000000000000",
+  "baseSaleBasisPoints": "500",
+  "teamAllocationBasisPoints": 1000,
+  "fundingDurationSeconds": "86400",
+  "saleStartTimeSec": "0",
+  "unlockTimeSec": "0",
+  "rosterShardCap": 5000,
+  "rosterShardsTotal": 16,
+  "creatorInitialDepositLamports": "0",
+  "creatorDailyLamportsLimit": "0",
+  "creatorClaimLockPeriodSec": "86400",
+  "creatorMaxDepositLamports": "1000000000000",
+  "poolCreationGracePeriodSec": "86400",
+  "teamVestingDurationSec": "31536000"
+}
+
+

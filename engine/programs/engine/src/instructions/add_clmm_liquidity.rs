@@ -8,7 +8,8 @@ use anchor_spl::{
 use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
-    constants::AMM_CONFIG_INDEX,
+    constants::{AMM_CONFIG_INDEX, TEAM_BASIS_POINTS},
+    errors::ErrorCode,
     utils::clmm::get_liquidity_range_impl,
     state::PoolState,
     LaunchState,
@@ -113,6 +114,33 @@ pub fn add_clmm_liquidity<'info>(
     quote_amount: u64,
     sqrt_price_lower_x64: u128,
 ) -> Result<()> {
+    let state = &ctx.accounts.launch_state;
+    let team_bps = if state.team_allocation_basis_points > 0 {
+        state.team_allocation_basis_points
+    } else {
+        TEAM_BASIS_POINTS
+    };
+    require!(
+        state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps),
+        ErrorCode::InvalidShareSum
+    );
+    let total_u128 = state.base_total_allocation as u128;
+    let sale_u128 = (total_u128)
+        .checked_mul(state.base_sale_basis_points as u128)
+        .and_then(|v| v.checked_div(10_000u128))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let team_u128 = (total_u128)
+        .checked_mul(team_bps as u128)
+        .and_then(|v| v.checked_div(10_000u128))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let lp_u128 = total_u128
+        .checked_sub(sale_u128)
+        .and_then(|v| v.checked_sub(team_u128))
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    require!(lp_u128 <= u64::MAX as u128, ErrorCode::U64ConversionOverflow);
+    let lp_expected = lp_u128 as u64;
+    require!(base_amount == lp_expected, ErrorCode::Unauthorized);
+
     add_initial_liquidity(&ctx, base_amount, quote_amount, sqrt_price_lower_x64)?;
     ctx.accounts.pool_state.claims_ready = true;
     Ok(())

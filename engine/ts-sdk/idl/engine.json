@@ -3219,6 +3219,14 @@
         {
           "name": "project_id",
           "type": "u64"
+        },
+        {
+          "name": "meta",
+          "type": {
+            "defined": {
+              "name": "TokenMetadataInput"
+            }
+          }
         }
       ]
     },
@@ -3293,7 +3301,7 @@
           "name": "params",
           "type": {
             "defined": {
-              "name": "InitLaunchParams"
+              "name": "InitLaunchPresetParams"
             }
           }
         }
@@ -5498,6 +5506,86 @@
       }
     },
     {
+      "name": "InitLaunchPresetParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hard_cap_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "min_raise_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "per_wallet_cap",
+            "type": "u64"
+          },
+          {
+            "name": "tau_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "base_total_allocation",
+            "type": "u64"
+          },
+          {
+            "name": "base_sale_basis_points",
+            "type": "u64"
+          },
+          {
+            "name": "team_allocation_basis_points",
+            "type": "u64"
+          },
+          {
+            "name": "funding_duration_seconds",
+            "type": "i64"
+          },
+          {
+            "name": "sale_start_time_sec",
+            "type": "i64"
+          },
+          {
+            "name": "unlock_time_sec",
+            "type": "i64"
+          },
+          {
+            "name": "roster_shard_cap",
+            "type": "u16"
+          },
+          {
+            "name": "roster_shards_total",
+            "type": "u16"
+          },
+          {
+            "name": "creator_initial_deposit_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "creator_daily_lamports_limit",
+            "type": "u64"
+          },
+          {
+            "name": "creator_claim_lock_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "creator_max_deposit",
+            "type": "u64"
+          },
+          {
+            "name": "pool_creation_grace_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "team_vesting_duration_sec",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "LaunchInitialized",
       "type": {
         "kind": "struct",
@@ -5650,26 +5738,6 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
-          },
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "symbol",
-            "type": "string"
-          },
-          {
-            "name": "uri",
-            "type": "string"
-          },
-          {
-            "name": "is_mutable",
-            "type": "bool"
-          },
-          {
-            "name": "seller_fee_basis_points",
-            "type": "u16"
           }
         ]
       }
@@ -6273,6 +6341,34 @@
       }
     },
     {
+      "name": "TokenMetadataInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "uri",
+            "type": "string"
+          },
+          {
+            "name": "is_mutable",
+            "type": "bool"
+          },
+          {
+            "name": "seller_fee_basis_points",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokensClaimed",
       "type": {
         "kind": "struct",
@@ -6453,36 +6549,6 @@
             "name": "team_vesting_duration_sec",
             "type": {
               "option": "i64"
-            }
-          },
-          {
-            "name": "name",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "symbol",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "uri",
-            "type": {
-              "option": "string"
-            }
-          },
-          {
-            "name": "is_mutable",
-            "type": {
-              "option": "bool"
-            }
-          },
-          {
-            "name": "seller_fee_basis_points",
-            "type": {
-              "option": "u16"
             }
           }
         ]

@@ -40,11 +40,6 @@ pub struct UpdateLaunchParams {
     pub creator_max_deposit: Option<u64>,
     pub pool_creation_grace_period_sec: Option<i64>,
     pub team_vesting_duration_sec: Option<i64>,
-    pub name: Option<String>,
-    pub symbol: Option<String>,
-    pub uri: Option<String>,
-    pub is_mutable: Option<bool>,
-    pub seller_fee_basis_points: Option<u16>,
 }
 
 pub fn update_launch_preset(
@@ -86,11 +81,6 @@ pub fn update_launch_preset(
     if let Some(v) = patch.creator_max_deposit { p.creator_max_deposit = v; }
     if let Some(v) = patch.pool_creation_grace_period_sec { p.pool_creation_grace_period_sec = v; }
     if let Some(v) = patch.team_vesting_duration_sec { p.team_vesting_duration_sec = v; }
-    if let Some(v) = patch.name { p.name = v; }
-    if let Some(v) = patch.symbol { p.symbol = v; }
-    if let Some(v) = patch.uri { p.uri = v; }
-    if let Some(v) = patch.is_mutable { p.is_mutable = v; }
-    if let Some(v) = patch.seller_fee_basis_points { p.seller_fee_basis_points = v; }
 
     Ok(())
 }

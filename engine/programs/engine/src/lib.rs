@@ -77,14 +77,15 @@ pub mod engine {
         ctx: Context<InitLaunchFromPreset>,
         preset_id: u8,
         project_id: u64,
+        meta: TokenMetadataInput,
     ) -> Result<()> {
-        instructions::init_launch_from_preset(ctx, preset_id, project_id)
+        instructions::init_launch_from_preset(ctx, preset_id, project_id, meta)
     }
 
     pub fn init_launch_preset(
         ctx: Context<InitLaunchPreset>,
         id: u8,
-        params: InitLaunchParams,
+        params: InitLaunchPresetParams,
     ) -> Result<()> {
         instructions::init_launch_preset(ctx, id, params)
     }

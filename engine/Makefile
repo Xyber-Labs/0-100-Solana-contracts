@@ -18,6 +18,10 @@ help:
 	@echo "  test-litesvm  - Run tests using litesvm simulator"
 	@echo "  deploy-config - Run EngineConfig migration (migrations/deploy.ts)"
 	@echo "                 Pass CLI args via ARGS=\"--treasury ... --fee ... --admins ... --threshold ... --admin-key ...\""
+	@echo "  init-launch-preset - Initialize Launch Preset from JSON payload"
+	@echo "                 Use PAYLOAD=path/to/payload.json (default: migrations/launch-preset.template.json)"
+	@echo "  update-launch-preset - Update Launch Preset from JSON payload"
+	@echo "                 Uses the same PAYLOAD file as init-launch-preset"
 	@echo "  mint-spl      - Mint SPL token with metadata (NAME, SYMBOL, URI, DECIMALS, AMOUNT, RECIPIENT or ARGS)"
 	@echo ""
 	@echo "Remote development:"
@@ -29,8 +33,8 @@ help:
 	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
-# ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
-ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
+ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
+# ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
@@ -240,6 +244,19 @@ update-config-auto:
 
 predeploy-setup:
 	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) ts-node scripts/pre-deploy-setup.ts --out tmp/predeploy.json --airdrop 2 --supply 1000000000 --decimals 9
+
+# ------------------------------
+# Preset migration
+PAYLOAD ?= migrations/launch-preset.template.json
+.PHONY: init-launch-preset
+init-launch-preset:
+	@echo "Initializing Launch Preset from payload: $(PAYLOAD)"
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/init-launch-preset.ts --payload $(PAYLOAD)
+
+.PHONY: update-launch-preset
+update-launch-preset:
+	@echo "Updating Launch Preset from payload: $(PAYLOAD)"
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/update-launch-preset.ts --payload $(PAYLOAD)
 
 # ------------------------------
 # Mint SPL token (defaults)

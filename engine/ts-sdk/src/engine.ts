@@ -47,6 +47,42 @@ const EngineSDK = {
       return txBuilder.getPda(["launch", baseMint]);
     }
 
+    async function updateLaunchPreset(args: {
+      id: number;
+      patch: {
+        hardCapLamports?: BN;
+        minRaiseLamports?: BN;
+        perWalletCap?: BN;
+        tauLamports?: BN;
+        baseTotalAllocation?: BN;
+        baseSaleBasisPoints?: BN;
+        teamAllocationBasisPoints?: number;
+        fundingDurationSeconds?: number;
+        saleStartTimeSec?: number;
+        unlockTimeSec?: number;
+        rosterShardCap?: number;
+        rosterShardsTotal?: number;
+        creatorInitialDepositLamports?: BN;
+        creatorDailyLamportsLimit?: BN;
+        creatorClaimLockPeriodSec?: BN;
+        creatorMaxDepositLamports?: BN;
+        poolCreationGracePeriodSec?: number;
+        teamVestingDurationSec?: number;
+      };
+      adminKeypairs: anchor.web3.Keypair[];
+    }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
+      const { instruction, launchPreset } = await txBuilder.updateLaunchPresetIx({
+        payer,
+        id: args.id,
+        patch: args.patch,
+        signerAdmins: args.adminKeypairs.map((k) => k.publicKey),
+      });
+      const signers = args.adminKeypairs;
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(new anchor.web3.Transaction().add(instruction), signers);
+      return { launchPreset, signature };
+    }
+
     function getLaunchPdaByProjectId(projectId: number | BN): [anchor.web3.PublicKey, number] {
       const le = BN.isBN(projectId)
         ? (projectId as BN).toArrayLike(Buffer, "le", 8)
@@ -942,11 +978,6 @@ const EngineSDK = {
         creatorClaimLockPeriodSec: BN;
         creatorMaxDepositLamports: BN;
         poolCreationGracePeriodSec?: number;
-        name: string;
-        symbol: string;
-        uri: string;
-        isMutable?: boolean;
-        sellerFeeBasisPoints?: number;
         teamVestingDurationSec?: number;
         teamAllocationBasisPoints?: number;
       };
@@ -967,6 +998,11 @@ const EngineSDK = {
     async function initLaunchFromPreset(args: {
       presetId: number;
       projectId?: BN | number;
+      name: string;
+      symbol: string;
+      uri: string;
+      isMutable?: boolean;
+      sellerFeeBasisPoints?: number;
       creator?: anchor.web3.Keypair;
     }): Promise<{ launchPda: anchor.web3.PublicKey; signature: string }> {
       const creatorPubkey = args.creator?.publicKey ?? payer;
@@ -975,6 +1011,11 @@ const EngineSDK = {
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
+        name: args.name,
+        symbol: args.symbol,
+        uri: args.uri,
+        isMutable: typeof args.isMutable === "boolean" ? args.isMutable : true,
+        sellerFeeBasisPoints: typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
       const signers = args.creator ? [args.creator] : [];
@@ -1279,6 +1320,7 @@ const EngineSDK = {
       estimateQuoteForBase,
       initLaunchFromPreset,
       initLaunchPreset,
+      updateLaunchPreset,
 
       initLaunchTx: txBuilder.initLaunchTx.bind(txBuilder),
       initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
