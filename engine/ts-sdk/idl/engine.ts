@@ -1785,20 +1785,6 @@ export type Engine = {
         {
           "name": "tokenMetadataProgram",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-        },
-        {
-          "name": "engineProgram"
-        },
-        {
-          "name": "incomeDispatcherProgram"
-        },
-        {
-          "name": "incomeDispatcherConfig",
-          "writable": true
-        },
-        {
-          "name": "incomeDispatcherProjectPool",
-          "writable": true
         }
       ],
       "args": []

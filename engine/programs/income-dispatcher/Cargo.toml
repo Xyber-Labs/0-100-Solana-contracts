@@ -25,4 +25,4 @@ devnet = ["raydium-amm-v3/devnet"]
 anchor-lang = "0.31.1"
 anchor-spl = "0.31.1"
 engine = { path = "../engine", features = ["cpi", "no-entrypoint"] }
-raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = ["no-entrypoint", "cpi"] }
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", rev = "d4ec101534724a20e1eb38a9b997f8b391c5100f", features = ["no-entrypoint", "cpi"] }

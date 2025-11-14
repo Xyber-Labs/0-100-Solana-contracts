@@ -20,4 +20,8 @@ pub enum ErrorCode {
     InvalidPoolState,
     #[msg("Invalid token mint")]
     InvalidTokenMint,
+    #[msg("Invalid authority")]
+    InvalidAuthority,
+    #[msg("Invalid project id")]
+    InvalidProjectId,
 }

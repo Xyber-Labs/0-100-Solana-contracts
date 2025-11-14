@@ -9,7 +9,18 @@ use raydium_amm_v3::libraries::full_math::MulDiv;
 use raydium_amm_v3::program::AmmV3;
 use raydium_amm_v3::states::PoolState;
 
+use crate::income_calculator::{IncomeCalculator, Role};
+
 pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) -> Result<()> {
+    // Populate project_pool
+    {
+        let project_pool = &mut ctx.accounts.project_pool;
+        project_pool.project_id = ctx.accounts.launch_state.project_id;
+        project_pool.base_mint = ctx.accounts.base_mint.key();
+        project_pool.base_decimals = ctx.accounts.base_mint.decimals;
+        project_pool.quote_mint = ctx.accounts.quote_mint.key();
+        project_pool.quote_decimals = ctx.accounts.quote_mint.decimals;
+    }
     // Get balances before claim
     let quote_balance_before = ctx.accounts.quote_vault.amount;
     let base_balance_before = ctx.accounts.base_vault.amount;
@@ -53,6 +64,18 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
 
     engine_cpi::claim_clmm_fees(cpi_context)?;
 
+    // Initialize project_pool if newly created
+    let project_pool = &mut ctx.accounts.project_pool;
+    if project_pool.project_id == 0 {
+        project_pool.project_id = ctx.accounts.launch_state.project_id;
+        project_pool.base_mint = ctx.accounts.base_mint.key();
+        project_pool.base_decimals = ctx.accounts.base_mint.decimals;
+        project_pool.quote_mint = ctx.accounts.quote_mint.key();
+        project_pool.quote_decimals = ctx.accounts.quote_mint.decimals;
+        project_pool.pool_state = ctx.accounts.pool_state.key();
+        // income_calculator: None
+    }
+
     // Reload accounts to get updated balances
     ctx.accounts.quote_vault.reload()?;
     ctx.accounts.base_vault.reload()?;
@@ -61,46 +84,91 @@ pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>) 
     let quote_claimed = ctx.accounts.quote_vault.amount.saturating_sub(quote_balance_before);
     let base_claimed = ctx.accounts.base_vault.amount.saturating_sub(base_balance_before);
 
-    // Update accumulators
-    ctx.accounts.project_pool.total_quote_claimed =
-        ctx.accounts.project_pool.total_quote_claimed.saturating_add(quote_claimed);
-    ctx.accounts.project_pool.total_base_claimed =
-        ctx.accounts.project_pool.total_base_claimed.saturating_add(base_claimed);
+    msg!("Claimed base: {}", base_claimed);
+    msg!("Claimed quote: {}", quote_claimed);
 
     // Calculate and log current pool price
     let pool_state_data =
         PoolState::try_deserialize(&mut &ctx.accounts.pool_state.data.borrow()[..])?;
-    let price = calculate_price(pool_state_data.sqrt_price_x64)?;
-    msg!("Current pool price (token_1/token_0): {:.10}", price);
+    let price =
+        calculate_price(pool_state_data.sqrt_price_x64, ctx.accounts.project_pool.base_decimals)?;
+    let price_float = (price as f64) / 10f64.powf(ctx.accounts.project_pool.base_decimals as f64);
+    msg!("Current pool price (token_1/token_0): {:.10}", price_float);
 
-    // Calculate equivalent values using the current price
-    // price_float is in token_1/token_0 format (quote/base)
-    let base_claimed_as_quote = (base_claimed as f64) * price;
-    let quote_claimed_as_base = (quote_claimed as f64) / price;
+    let base_decimals_pow = 10u128.pow(ctx.accounts.project_pool.base_decimals as u32);
+    let supply_u128 = ctx.accounts.base_mint.supply as u128;
+    let market_cap = price
+        .checked_mul(supply_u128)
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?
+        .checked_div(base_decimals_pow)
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
-    // Convert to u64 for storage (truncate fractional parts)
-    let base_claimed_as_quote_u64 = base_claimed_as_quote as u64;
-    let quote_claimed_as_base_u64 = quote_claimed_as_base as u64;
+    let mut income_calculator = IncomeCalculator::new(ctx.accounts.project_pool.base_decimals)?;
+    for rule in ctx.accounts.config.distribution_rules.iter() {
+        income_calculator = income_calculator.add_rule(rule.clone());
+    }
+    let dist = income_calculator.get_distribution(
+        market_cap,
+        base_claimed as u128,
+        quote_claimed as u128,
+    )?;
+    for income in dist.incomes {
+        match income.recipient {
+            Role::Platform => {
+                ctx.accounts
+                    .project_pool
+                    .earned_base_by_platform
+                    .checked_add(income.base_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+                ctx.accounts
+                    .project_pool
+                    .earned_quote_by_platform
+                    .checked_add(income.quote_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+            }
+            Role::Creator => {
+                ctx.accounts
+                    .project_pool
+                    .earned_base_by_creator
+                    .checked_add(income.base_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+                ctx.accounts
+                    .project_pool
+                    .earned_quote_by_creator
+                    .checked_add(income.quote_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+            }
+            Role::Community => {
+                ctx.accounts
+                    .project_pool
+                    .earned_base_by_community
+                    .checked_add(income.base_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+                ctx.accounts
+                    .project_pool
+                    .earned_quote_by_community
+                    .checked_add(income.quote_token as _)
+                    .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+            }
+        }
+    }
 
-    // Update total claimed values
-    ctx.accounts.project_pool.total_claimed_in_quote = ctx
-        .accounts
+    // Add to total harvested
+    ctx.accounts
         .project_pool
-        .total_claimed_in_quote
-        .saturating_add(base_claimed_as_quote_u64)
-        .saturating_add(quote_claimed);
-
-    ctx.accounts.project_pool.total_claimed_in_base = ctx
-        .accounts
+        .total_harvested_base
+        .checked_add(base_claimed as _)
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts
         .project_pool
-        .total_claimed_in_base
-        .saturating_add(quote_claimed_as_base_u64)
-        .saturating_add(base_claimed);
+        .total_harvested_quote
+        .checked_add(quote_claimed as _)
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
     Ok(())
 }
 
-pub fn calculate_price(sqrt_price_x64: u128) -> Result<f64> {
+pub fn calculate_price(sqrt_price_x64: u128, base_decimals: u8) -> Result<u128> {
     let sqrt_price_u256 = U256::from(sqrt_price_x64);
     let price_squared_u256 = sqrt_price_u256
         .mul_div_floor(sqrt_price_u256, U256::from(1u128))
@@ -112,24 +180,16 @@ pub fn calculate_price(sqrt_price_x64: u128) -> Result<f64> {
         price_q64_u256.as_u128()
     };
 
-    let price_float = if price_q64 == 0 {
-        0.0
-    } else {
-        const MAX_SAFE_FLOAT_EXPONENT: i32 = 308;
-        const MIN_SAFE_FLOAT_EXPONENT: i32 = -308;
-
-        let leading_zeros = price_q64.leading_zeros() as i32;
-        let significant_bits = 128 - leading_zeros;
-        let exponent = significant_bits - 64;
-
-        if !(MIN_SAFE_FLOAT_EXPONENT..=MAX_SAFE_FLOAT_EXPONENT).contains(&exponent) {
-            return Err(crate::errors::ErrorCode::ArithmeticOverflow.into());
-        }
-
-        (price_q64 as f64) / 2.0_f64.powi(64)
-    };
-
-    Ok(price_float)
+    let ten_pow_decimals = U256::from(10u128).pow(U256::from(base_decimals));
+    let price_q64_u256 = U256::from(price_q64);
+    let scaled_u256 = price_q64_u256
+        .checked_mul(ten_pow_decimals)
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+    let price_scaled_u256 = scaled_u256 >> 64;
+    if price_scaled_u256 > U256::from(u128::MAX) {
+        return Err(crate::errors::ErrorCode::ArithmeticOverflow.into());
+    }
+    Ok(price_scaled_u256.as_u128())
 }
 
 #[derive(Accounts)]
@@ -138,17 +198,26 @@ pub struct HarvestPool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// Launch state account to get project_id
+    /// Config account
+    #[account(
+        seeds = [crate::SEED_ROOT, b"config"],
+        bump,
+    )]
+    pub config: Box<Account<'info, crate::state::Config>>,
+
+    /// Launch state account
     #[account(mut)]
-    pub launch_state: Account<'info, engine::state::LaunchState>,
+    pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
     /// Project pool account for tracking total claims
     #[account(
-        mut,
+        init_if_needed,
+        payer = payer,
+        space = 8 + crate::state::ProjectPool::INIT_SPACE,
         seeds = [crate::SEED_ROOT, b"project_pool", &launch_state.project_id.to_be_bytes()],
         bump,
     )]
-    pub project_pool: Account<'info, crate::state::ProjectPool>,
+    pub project_pool: Box<Account<'info, crate::state::ProjectPool>>,
 
     /// CHECK: Income dispatcher authority PDA - will be signer for engine call
     #[account(
@@ -167,14 +236,11 @@ pub struct HarvestPool<'info> {
     pub project_authority: UncheckedAccount<'info>,
 
     /// Quote mint from project pool
-    #[account(
-        constraint = quote_mint.key() == project_pool.quote_mint @ crate::errors::ErrorCode::InvalidTokenMint
-    )]
     pub quote_mint: InterfaceAccount<'info, InterfaceMint>,
 
     /// Base mint from project pool
     #[account(
-        constraint = base_mint.key() == project_pool.base_mint @ crate::errors::ErrorCode::InvalidTokenMint
+        constraint = Some(base_mint.key()) == launch_state.base_mint @ crate::errors::ErrorCode::InvalidTokenMint
     )]
     pub base_mint: InterfaceAccount<'info, InterfaceMint>,
 
@@ -215,17 +281,6 @@ pub struct HarvestPool<'info> {
     #[account(mut)]
     pub personal_position: UncheckedAccount<'info>,
     /// CHECK: Pool state - validated by engine CPI and pool address constraint
-    #[account(
-        constraint = pool_state.key() == project_pool.pool_state @ crate::errors::ErrorCode::InvalidPoolState,
-        constraint = {
-            let pool_data = PoolState::try_deserialize(&mut &pool_state.data.borrow()[..])?;
-            pool_data.token_mint_0 == base_mint.key() || pool_data.token_mint_1 == base_mint.key()
-        } @ crate::errors::ErrorCode::InvalidPoolState,
-        constraint = {
-            let pool_data = PoolState::try_deserialize(&mut &pool_state.data.borrow()[..])?;
-            pool_data.token_mint_0 == quote_mint.key() || pool_data.token_mint_1 == quote_mint.key()
-        } @ crate::errors::ErrorCode::InvalidPoolState
-    )]
     #[account(mut)]
     pub pool_state: UncheckedAccount<'info>,
     /// CHECK: Protocol position state - validated by engine CPI

@@ -1,52 +1,43 @@
-use crate::income_calculator::IncomeCalculator;
+use crate::income_calculator::DistributionRule;
 use anchor_lang::prelude::*;
 
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
-    pub income_source: Pubkey,
     pub platform_wallet: Pubkey,
     pub community_claim_signer: Pubkey,
+    #[max_len(32)]
+    pub distribution_rules: Vec<DistributionRule>,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct ProjectPool {
     pub project_id: u64,
-    pub creator: Pubkey,
     pub base_mint: Pubkey,
     pub base_decimals: u8,
     pub quote_mint: Pubkey,
     pub quote_decimals: u8,
     pub pool_state: Pubkey,
-    pub total_base_claimed: u64,
-    pub total_quote_claimed: u64,
-    pub total_claimed_in_base: u64,
-    pub total_claimed_in_quote: u64,
-    pub income_calculator: Option<IncomeCalculator>,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct ClaimedInfo {
-    pub claimed_base: u64,
-    pub claimed_quote: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
-pub enum BeneficiaryKey {
-    Platform,
-    Creator,
-    Community,
-}
-
-impl BeneficiaryKey {
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            BeneficiaryKey::Platform => b"platform",
-            BeneficiaryKey::Creator => b"creator",
-            BeneficiaryKey::Community => b"community",
-        }
-    }
+    // Platform
+    pub earned_base_by_platform: u64,
+    pub earned_quote_by_platform: u64,
+    pub claimed_base_by_platform: u64,
+    pub claimed_quote_by_platform: u64,
+    // Creator
+    pub earned_base_by_creator: u64,
+    pub earned_quote_by_creator: u64,
+    pub claimed_base_by_creator: u64,
+    pub claimed_quote_by_creator: u64,
+    // Community
+    pub earned_base_by_community: u64,
+    pub earned_quote_by_community: u64,
+    pub claimed_base_by_community: u64,
+    pub claimed_quote_by_community: u64,
+    // Total
+    pub total_harvested_base: u64,
+    pub total_harvested_quote: u64,
+    pub total_claimed_base: u64,
+    pub total_claimed_quote: u64,
 }

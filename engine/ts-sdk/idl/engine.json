@@ -1779,20 +1779,6 @@
         {
           "name": "token_metadata_program",
           "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-        },
-        {
-          "name": "engine_program"
-        },
-        {
-          "name": "income_dispatcher_program"
-        },
-        {
-          "name": "income_dispatcher_config",
-          "writable": true
-        },
-        {
-          "name": "income_dispatcher_project_pool",
-          "writable": true
         }
       ],
       "args": []

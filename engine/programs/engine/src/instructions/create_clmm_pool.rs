@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{instruction::Instruction, program::invoke};
 use raydium_amm_v3::{cpi, libraries::fixed_point_64, program::AmmV3, states::AmmConfig};
 
 use crate::{
@@ -73,20 +72,6 @@ pub struct CreateClmmPool<'info> {
     #[account(seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()], bump)]
     pub token_metadata_config: Account<'info, TokenMetadataConfig>,
     pub token_metadata_program: Program<'info, Metadata>,
-
-    /// CHECK: Engine program for raw invoke authorization
-    pub engine_program: UncheckedAccount<'info>,
-
-    /// CHECK: Income dispatcher program for raw invoke
-    pub income_dispatcher_program: UncheckedAccount<'info>,
-
-    /// CHECK: Income dispatcher config PDA
-    #[account(mut)]
-    pub income_dispatcher_config: UncheckedAccount<'info>,
-
-    /// CHECK: Income dispatcher project pool PDA
-    #[account(mut)]
-    pub income_dispatcher_project_pool: UncheckedAccount<'info>,
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
@@ -106,7 +91,6 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     mint_sale_tokens_to_escrow(&ctx)?;
     create_token_metadata_if_missing(&ctx)?;
     raydium_create_pool_impl(&ctx)?;
-    init_project_pool(&ctx)?;
 
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
@@ -199,101 +183,6 @@ fn derive_metadata_pda(metaplex_program_id: &Pubkey, mint: &Pubkey) -> Pubkey {
         mint.as_ref(),
     ];
     Pubkey::find_program_address(seeds, metaplex_program_id).0
-}
-
-fn init_project_pool(ctx: &Context<CreateClmmPool>) -> Result<()> {
-    // Discriminator for init_project: sha256("global:init_project")[:8]
-    let discriminator = [0x28, 0x4e, 0x9c, 0x7a, 0x36, 0x55, 0xcc, 0x2e];
-
-    // Instruction data: discriminator + project_id ([u8; 32])
-    let project_id = ctx.accounts.launch_state.project_id;
-    let mut project_id_bytes = [0u8; 32];
-    project_id_bytes[24..32].copy_from_slice(&project_id.to_be_bytes());
-    let mut data = discriminator.to_vec();
-    data.extend_from_slice(&project_id_bytes);
-
-    // Account metas in correct order
-    let account_metas = vec![
-        // creator (writable, signer)
-        anchor_lang::solana_program::instruction::AccountMeta::new(ctx.accounts.payer.key(), true),
-        // engine_authority (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.escrow_authority.key(),
-            false,
-        ),
-        // launch_state (writable)
-        anchor_lang::solana_program::instruction::AccountMeta::new(
-            ctx.accounts.launch_state.key(),
-            false,
-        ),
-        // config (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.income_dispatcher_config.key(),
-            false,
-        ),
-        // project_pool (writable)
-        anchor_lang::solana_program::instruction::AccountMeta::new(
-            ctx.accounts.income_dispatcher_project_pool.key(),
-            false,
-        ),
-        // base_mint (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.base_mint.key(),
-            false,
-        ),
-        // quote_mint (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.quote_mint.key(),
-            false,
-        ),
-        // pool_state (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.raydium_pool_state.key(),
-            false,
-        ),
-        // metadata_program (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.token_metadata_program.key(),
-            false,
-        ),
-        // associated_token_program (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.associated_token_program.key(),
-            false,
-        ),
-        // system_program (readonly)
-        anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
-            ctx.accounts.system_program.key(),
-            false,
-        ),
-    ];
-
-    // Create instruction
-    let instruction = Instruction {
-        program_id: ctx.accounts.income_dispatcher_program.key(),
-        accounts: account_metas,
-        data,
-    };
-
-    // Invoke
-    invoke(
-        &instruction,
-        &[
-            ctx.accounts.payer.to_account_info(),
-            ctx.accounts.escrow_authority.to_account_info(),
-            ctx.accounts.launch_state.to_account_info(),
-            ctx.accounts.income_dispatcher_config.to_account_info(),
-            ctx.accounts.income_dispatcher_project_pool.to_account_info(),
-            ctx.accounts.base_mint.to_account_info(),
-            ctx.accounts.quote_mint.to_account_info(),
-            ctx.accounts.raydium_pool_state.to_account_info(),
-            ctx.accounts.token_metadata_program.to_account_info(),
-            ctx.accounts.associated_token_program.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
-
-    Ok(())
 }
 
 fn create_token_metadata_if_missing(ctx: &Context<CreateClmmPool>) -> Result<()> {

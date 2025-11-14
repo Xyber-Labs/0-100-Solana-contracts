@@ -2,6 +2,25 @@ use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
 
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    AnchorSerialize,
+    AnchorDeserialize,
+    InitSpace,
+)]
+pub enum Role {
+    Platform = 0,
+    Creator = 1,
+    Community = 2,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct IncomeCalculator {
@@ -14,13 +33,13 @@ pub struct IncomeCalculator {
 #[derive(InitSpace)]
 pub struct DistributionRule {
     market_cap: u128,
-    recipient: Pubkey,
+    recipient: Role,
     share: u128,
     priority: u8,
 }
 
 impl DistributionRule {
-    pub fn new(market_cap: u128, recipient: Pubkey, share: u128, priority: u8) -> Self {
+    pub fn new(market_cap: u128, recipient: Role, share: u128, priority: u8) -> Self {
         Self {
             market_cap,
             recipient,
@@ -30,9 +49,9 @@ impl DistributionRule {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Income {
-    pub recipient: Pubkey,
+    pub recipient: Role,
     pub base_token: u128,
     pub quote_token: u128,
 }
@@ -45,7 +64,7 @@ pub struct Distribution {
 
 impl Distribution {
     #[cfg(test)]
-    fn get(&self, recipient: &Pubkey) -> Result<&Income> {
+    fn get(&self, recipient: &Role) -> Result<&Income> {
         self.incomes
             .iter()
             .find(|d| d.recipient == *recipient)
@@ -53,7 +72,7 @@ impl Distribution {
     }
 
     #[cfg(test)]
-    fn total_in_quote(&self, recipient: &Pubkey) -> Result<u128> {
+    fn total_in_quote(&self, recipient: &Role) -> Result<u128> {
         let income = self.get(recipient)?;
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
         let base_in_quote = income
@@ -194,9 +213,9 @@ mod tests {
 
     struct TestSetup {
         calculator: IncomeCalculator,
-        platform: Pubkey,
-        community: Pubkey,
-        creator: Pubkey,
+        platform: Role,
+        community: Role,
+        creator: Role,
     }
 
     #[test]
@@ -337,9 +356,9 @@ mod tests {
     }
 
     fn create_calculator_with_tiers(_price_in_quote: u128, base_decimals: u8) -> TestSetup {
-        let platform = Pubkey::new_unique();
-        let community = Pubkey::new_unique();
-        let creator = Pubkey::new_unique();
+        let platform = Role::Platform;
+        let community = Role::Community;
+        let creator = Role::Creator;
 
         let calculator = IncomeCalculator::new(base_decimals)
             .expect("Expected to be created well")

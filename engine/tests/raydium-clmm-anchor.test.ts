@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
+import { ComputeBudgetProgram } from "@solana/web3.js";
 import * as fs from "fs";
-import { createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { createInitializeMintInstruction, createAssociatedTokenAccountInstruction, createMintToInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Program } from "@coral-xyz/anchor";
 import { assert } from "chai";
 
@@ -82,7 +83,7 @@ describe("engine anchor - raydium clmm", () => {
   let xyberMint: anchor.web3.PublicKey;
   let admin2Keypair: anchor.web3.Keypair;
   let admin3Keypair: anchor.web3.Keypair;
-  let communityClaimSignerKeypair: anchor.web3.Keypair;
+  let communityClaimSignerKeypair = anchor.web3.Keypair.fromSeed(new Uint8Array(32).fill(42));
   let positionNftMint: anchor.web3.PublicKey | undefined = undefined;
   let positionNftAccount: anchor.web3.PublicKey | undefined = undefined;
   let personalPosition: anchor.web3.PublicKey | undefined = undefined;
@@ -92,8 +93,6 @@ describe("engine anchor - raydium clmm", () => {
   let baseVault: anchor.web3.PublicKey | undefined = undefined;
   let tickArrayLower: anchor.web3.PublicKey | undefined = undefined;
   let tickArrayUpper: anchor.web3.PublicKey | undefined = undefined;
-  let projectPoolPda: anchor.web3.PublicKey | undefined = undefined;
-  let projectId: anchor.BN | undefined = undefined;
   const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
   const HARD_CAP_LAMPORTS = new anchor.BN(500 * anchor.web3.LAMPORTS_PER_SOL);
@@ -281,43 +280,32 @@ describe("engine anchor - raydium clmm", () => {
     console.log("=== Setting up Income-Dispatcher Program ===");
     const configPda = getIncomeDispatcherConfigPda();
 
-    // Check if config already exists
-    try {
-      await incomeDispatcherProgram.account.config.fetch(configPda);
-      console.log("✅ Income-dispatcher already initialized, skipping setup");
-      return;
-    } catch (error) {
-      // Config doesn't exist, proceed with initialization
-      console.log("Config not found, initializing income-dispatcher...");
-    }
-
-    communityClaimSignerKeypair = anchor.web3.Keypair.generate();
-
     // Initialize income-dispatcher config
-    const initTx = await incomeDispatcherProgram.methods
-      .initialize(
-        clmmLaunchState, // income_source (the launch state)
-        admin.publicKey, // platform_wallet
-        communityClaimSignerKeypair.publicKey, // community_claim_signer
-      )
-      .accountsStrict({
-        admin: admin.publicKey,
-        config: configPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([adminKeypair])
-      .transaction();
+    try {
+      const initTx = await incomeDispatcherProgram.methods
+        .initialize(
+          admin.publicKey, // platform_wallet
+          communityClaimSignerKeypair.publicKey, // community_claim_signer
+        )
+        .accountsStrict({
+          admin: admin.publicKey,
+          config: configPda,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([adminKeypair])
+        .transaction();
 
-    const initSig = await provider.sendAndConfirm(initTx, [adminKeypair]);
-    console.log("✅ Income-dispatcher initialized:", initSig);
+      const initSig = await provider.sendAndConfirm(initTx, [adminKeypair]);
+      console.log("✅ Income-dispatcher initialized:", initSig);
+    } catch (e) {
+      console.log("Income-dispatcher config already exists, skipping initialization.");
+    }
 
     // Verify config was created
     const configAccount = await incomeDispatcherProgram.account.config.fetch(configPda);
     assert.equal(configAccount.admin.toString(), admin.publicKey.toString());
-    assert.equal(configAccount.incomeSource.toString(), clmmLaunchState.toString());
     assert.equal(configAccount.platformWallet.toString(), admin.publicKey.toString());
-
-    console.log("✅ Income-dispatcher config verified");
+    assert.equal(configAccount.communityClaimSigner.toString(), communityClaimSignerKeypair.publicKey.toString());
   });
 
   it("Creates CLMM pool and adds liquidity in separate transactions", async () => {
@@ -656,361 +644,206 @@ describe("engine anchor - raydium clmm", () => {
       console.log("Trading test skipped due to Raydium compatibility issues on localnet");
     }
 
-    console.log("✅ Trading completed successfully");
-  });
+  console.log("✅ Trading completed successfully");
+});
 
-  it("Claims CLMM fees through income-dispatcher", async () => {
-    console.log("=== Claiming CLMM Fees through Income-Dispatcher ===");
+it("Harvests CLMM fees through income-dispatcher", async () => {
+  console.log("=== Harvesting CLMM Fees through Income-Dispatcher ===");
 
-    // Skip if Raydium not available
-    const raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-    const raydiumInfo = await provider.connection.getAccountInfo(raydiumProgramId);
-    if (!raydiumInfo) {
-      console.log("Raydium CLMM program not found. Skipping fee claiming test.");
-      return;
-    }
+  // Skip if Raydium not available
+  const raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+  const raydiumInfo = await provider.connection.getAccountInfo(raydiumProgramId);
+  if (!raydiumInfo) {
+    console.log("Raydium CLMM program not found. Skipping fee harvesting test.");
+    return;
+  }
 
-    try {
+  // Get required accounts for the harvest
+  const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
+  const escrowAuthority = sdk.getEscrowAuthorityPda(clmmLaunchState)[0];
 
-    // Get required accounts for the claim
-    const launchStateData = await sdk.fetchLaunch(clmmLaunchState);
-    const escrowAuthority = sdk.getEscrowAuthorityPda(clmmLaunchState)[0];
-    const escrowAccount = sdk.getEscrowPda(clmmLaunchState)[0];
+  // Use position information from add liquidity test
+  if (!positionNftMint || !positionNftAccount || !personalPosition || !protocolPosition || !raydiumPoolState || !quoteVault || !baseVault || !tickArrayLower || !tickArrayUpper) {
+    console.log("Position information not available, skipping fee harvesting test");
+    return;
+  }
 
-    // Use position information from add liquidity test
-    if (!positionNftMint || !positionNftAccount || !personalPosition || !protocolPosition || !raydiumPoolState || !quoteVault || !baseVault || !tickArrayLower || !tickArrayUpper) {
-      console.log("Position information not available, skipping fee claiming test");
-      console.log("Current values:", {
-        positionNftMint,
-        positionNftAccount,
-        personalPosition,
-        protocolPosition,
-        raydiumPoolState,
-        quoteVault,
-        baseVault,
-        tickArrayLower,
-        tickArrayUpper,
-      });
-      return;
-    }
+  const sqrtLower = await sdk.getSqrtPriceLowerX64ForPool({ launch: clmmLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
+  const range = await sdk.getLiquidityRange({ launch: clmmLaunchState, sqrtPriceLowerX64: sqrtLower });
 
-    console.log("Using position info:", {
-      positionNftMint: positionNftMint.toString(),
-      positionNftAccount: positionNftAccount.toString(),
-      personalPosition: personalPosition.toString(),
-      protocolPosition: protocolPosition.toString(),
-      raydiumPoolState: raydiumPoolState.toString(),
-      quoteVault: quoteVault.toString(),
-      baseVault: baseVault.toString(),
-      tickArrayLower: tickArrayLower.toString(),
-      tickArrayUpper: tickArrayUpper.toString(),
-    });
+  // Use stored tick arrays from add liquidity operation
+  const poolState = raydiumPoolState;
 
-    const sqrtLower = await sdk.getSqrtPriceLowerX64ForPool({ launch: clmmLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
-    const range = await sdk.getLiquidityRange({ launch: clmmLaunchState, sqrtPriceLowerX64: sqrtLower });
+  // Determine token vault order based on mint addresses
+  // token_mint_0 is the smaller address, token_mint_1 is the larger
+  const isBaseSmaller = baseMintKeypair.publicKey.toString() > WSOL_MINT.toString();
 
-    // Use stored tick arrays from add liquidity operation
-    const poolState = raydiumPoolState;
+  const tokenVault0 = isBaseSmaller ? baseVault : quoteVault;
+  const tokenVault1 = isBaseSmaller ? quoteVault : baseVault;
 
-    // Get protocol position account
-    const tickLowerBuffer = Buffer.alloc(4);
-    tickLowerBuffer.writeInt32BE(range.tickArrayLower, 0);
-    const tickUpperBuffer = Buffer.alloc(4);
-    tickUpperBuffer.writeInt32BE(range.tickArrayUpper, 0);
+  // For fee collection, remaining accounts
+  const remainingAccounts: any[] = [];
 
-    // Get recipient token accounts (ATA for escrow authority)
-    const recipientTokenAccount0 = getAssociatedTokenAddressSync(WSOL_MINT, escrowAuthority, true); // WSOL
-    const recipientTokenAccount1 = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, escrowAuthority, true); // Base token
+  // Check if tick array bitmap extension is needed
+  const poolStateAccount = await provider.connection.getAccountInfo(poolState);
+  if (poolStateAccount) {
+    const poolStateData = poolStateAccount.data;
+    const tickSpacing = poolStateData.readUInt16LE(84);
 
-    // Vault mints
-    const vault0Mint = WSOL_MINT; // WSOL
-    const vault1Mint = baseMintKeypair.publicKey; // Base token
+    const tickArrayLowerAccount = await provider.connection.getAccountInfo(tickArrayLower);
+    const tickArrayUpperAccount = await provider.connection.getAccountInfo(tickArrayUpper);
 
-    // For fee collection (liquidity=0), no remaining accounts needed
-    const remainingAccounts: any[] = [];
+    if (tickArrayLowerAccount && tickArrayUpperAccount) {
+      const tickArrayLowerStartIndex = tickArrayLowerAccount.data.readInt32LE(8);
+      const tickArrayUpperStartIndex = tickArrayUpperAccount.data.readInt32LE(8);
 
-    // Check if tick array bitmap extension is needed
-    const poolStateAccount = await provider.connection.getAccountInfo(poolState);
-    if (poolStateAccount) {
-      // Parse pool state to check if tick array bitmap extension is needed
-      // This is a simplified check - in production you'd want more robust parsing
-      const poolStateData = poolStateAccount.data;
-      const tickSpacing = poolStateData.readUInt16LE(84); // tick_spacing offset
+      const maxTickInBitmap = tickSpacing * 512 * 8;
 
-      // Get tick array start indices from the stored tick arrays
-      const tickArrayLowerAccount = await provider.connection.getAccountInfo(tickArrayLower);
-      const tickArrayUpperAccount = await provider.connection.getAccountInfo(tickArrayUpper);
+      const needsExtension = tickArrayLowerStartIndex < -maxTickInBitmap ||
+                             tickArrayUpperStartIndex >= maxTickInBitmap ||
+                             tickArrayLowerStartIndex >= maxTickInBitmap ||
+                             tickArrayUpperStartIndex < -maxTickInBitmap;
 
-      if (tickArrayLowerAccount && tickArrayUpperAccount) {
-        const tickArrayLowerStartIndex = tickArrayLowerAccount.data.readInt32LE(8); // start_tick_index offset
-        const tickArrayUpperStartIndex = tickArrayUpperAccount.data.readInt32LE(8);
+      if (needsExtension) {
+        const [tickArrayBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
+          [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
+          raydiumProgramId
+        );
 
-        // Calculate max tick in default bitmap (simplified version)
-        const maxTickInBitmap = tickSpacing * 512 * 8; // tick_spacing * 512 * 8
-
-        // Check if tick arrays are outside default bitmap range
-        const needsExtension = tickArrayLowerStartIndex < -maxTickInBitmap ||
-                               tickArrayUpperStartIndex >= maxTickInBitmap ||
-                               tickArrayLowerStartIndex >= maxTickInBitmap ||
-                               tickArrayUpperStartIndex < -maxTickInBitmap;
-
-        if (needsExtension) {
-          // Derive tick array bitmap extension account
-          const [tickArrayBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("pool_tick_array_bitmap_extension"), poolState.toBuffer()],
-            raydiumProgramId
-          );
-
-          remainingAccounts.push({
-            pubkey: tickArrayBitmapExtension,
-            isWritable: true,
-            isSigner: false,
-          });
-
-          console.log("Added tick array bitmap extension account:", tickArrayBitmapExtension.toString());
-        }
+        remainingAccounts.push({
+          pubkey: tickArrayBitmapExtension,
+          isWritable: true,
+          isSigner: false,
+        });
       }
     }
+  }
 
-    // Use stored vaults from add liquidity operation
-    const tokenVault0 = quoteVault;
-    const tokenVault1 = baseVault;
+  // Get PDAs
+  const projectPoolPda = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("income-dispatcher"), Buffer.from("project_pool"), Buffer.from(new anchor.BN(launchStateData.projectId).toArray('be', 8))],
+    incomeDispatcherProgram.programId
+  )[0];
+  const projectAuthorityPda = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("income-dispatcher"), Buffer.from("project_authority"), Buffer.from(new anchor.BN(launchStateData.projectId).toArray('be', 8))],
+    incomeDispatcherProgram.programId
+  )[0];
+  const baseVaultPda = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, projectAuthorityPda, true);
+  const quoteVaultPda = getAssociatedTokenAddressSync(WSOL_MINT, projectAuthorityPda, true);
 
-    // Create the claim transaction
-    const claimTx = await incomeDispatcherProgram.methods
-      .claimClmmFeesByAdmin()
-      .accountsStrict({
-        admin: admin.publicKey,
-        config: getIncomeDispatcherConfigPda(),
-        incomeDispatcherAuthority: getIncomeDispatcherAuthorityPda(),
-        engineProgram: program.programId,
-        raydiumProgram: raydiumProgramId,
-        launchState: clmmLaunchState,
-        escrowAuthority,
-        positionNftMint,
-        positionNftAccount,
-        personalPosition,
-        poolState,
-        protocolPosition,
-        tokenVault0,
-        tokenVault1,
-        tickArrayLower,
-        tickArrayUpper,
-        recipientTokenAccount0,
-        recipientTokenAccount1,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-        memoProgram: MEMO_PROGRAM_ID,
-        vault0Mint,
-        vault1Mint,
-      })
-      .remainingAccounts(remainingAccounts)
-      .signers([adminKeypair])
-      .transaction();
+  // Harvest transaction
+  const harvestTx = await incomeDispatcherProgram.methods
+    .harvestPool()
+    .accountsStrict({
+      payer: admin.publicKey,
+      config: getIncomeDispatcherConfigPda(),
+      launchState: clmmLaunchState,
+      projectPool: projectPoolPda,
+      incomeDispatcherAuthority: getIncomeDispatcherAuthorityPda(),
+      projectAuthority: projectAuthorityPda,
+      quoteMint: WSOL_MINT,
+      baseMint: baseMintKeypair.publicKey,
+      quoteVault: quoteVaultPda,
+      baseVault: baseVaultPda,
+      engineProgram: program.programId,
+      raydiumProgram: raydiumProgramId,
+      escrowAuthority,
+      positionNftMint,
+      positionNftAccount,
+      personalPosition,
+      poolState,
+      protocolPosition,
+      tokenVault0: tokenVault0,
+      tokenVault1: tokenVault1,
+      tickArrayLower,
+      tickArrayUpper,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+      memoProgram: MEMO_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    })
+    .remainingAccounts(remainingAccounts)
+    .signers([adminKeypair])
+    .transaction();
 
-    const claimSig = await provider.sendAndConfirm(claimTx, [adminKeypair], {
-      skipPreflight: true
-    });
-    console.log("✅ CLMM fees claimed:", claimSig);
-    console.log("Explorer:", getExplorerUrl(provider, claimSig));
+  // Add compute budget instruction to increase CU limit
+  harvestTx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 2_000_000 }));
 
-    console.log("✅ Fee claiming completed successfully");
-  } catch (error) {
-      console.error("❌ Fee claiming failed:", error.message);
+  const harvestSig = await provider.sendAndConfirm(harvestTx, [adminKeypair], { skipPreflight: true });
+  console.log("✅ CLMM fees harvested:", harvestSig);
 
-      // Try to extract transaction signature from the error
-      if (error.txid) {
-        console.log("Transaction signature:", error.txid);
-        console.log("Explorer:", getExplorerUrl(provider, error.txid));
-      } else {
-        // Fallback: try to extract from the message
-        const txMatch = error.message.match(/([A-Za-z0-9]{88})/);
-        if (txMatch) {
-          console.log("Transaction signature:", txMatch[1]);
-          console.log("Explorer:", getExplorerUrl(provider, txMatch[1]));
-        }
-      }
+  // Now claim for platform
+  const platformWallet = admin.publicKey;
+  const platformBaseAta = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, platformWallet, true);
+  const platformQuoteAta = getAssociatedTokenAddressSync(WSOL_MINT, platformWallet, true);
 
-      throw error; // Re-throw to fail the test
-    }
+  await incomeDispatcherProgram.methods.claimPlatform().accountsStrict({
+    payer: admin.publicKey,
+    platformWallet: admin.publicKey,
+    config: getIncomeDispatcherConfigPda(),
+    projectPool: projectPoolPda,
+    projectAuthority: projectAuthorityPda,
+    baseVault: baseVaultPda,
+    quoteVault: quoteVaultPda,
+    platformBaseAta,
+    platformQuoteAta,
+    baseMint: baseMintKeypair.publicKey,
+    quoteMint: WSOL_MINT,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: anchor.web3.SystemProgram.programId,
+  }).signers([adminKeypair]).rpc();
+
+  console.log("✅ Platform fees claimed");
+
+  // Claim for creator (assume admin is creator)
+  const creator = admin.publicKey;
+  const creatorBaseAta = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, creator, true);
+  const creatorQuoteAta = getAssociatedTokenAddressSync(WSOL_MINT, creator, true);
+
+  await incomeDispatcherProgram.methods.claimCreator().accountsStrict({
+    creator: admin.publicKey,
+    launchState: clmmLaunchState,
+    projectPool: projectPoolPda,
+    projectAuthority: projectAuthorityPda,
+    baseVault: baseVaultPda,
+    quoteVault: quoteVaultPda,
+    creatorBaseAta,
+    creatorQuoteAta,
+    baseMint: baseMintKeypair.publicKey,
+    quoteMint: WSOL_MINT,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: anchor.web3.SystemProgram.programId,
+  }).signers([adminKeypair]).rpc();
+
+  console.log("✅ Creator fees claimed");
+
+  // Claim for community
+  const communityBaseAta = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, admin.publicKey, true);
+  const communityQuoteAta = getAssociatedTokenAddressSync(WSOL_MINT, admin.publicKey, true);
+
+  await incomeDispatcherProgram.methods.claimCommunity(new anchor.BN(1000000), new anchor.BN(1000000)).accountsStrict({
+    payer: admin.publicKey,
+    config: getIncomeDispatcherConfigPda(),
+    communityClaimSigner: communityClaimSignerKeypair.publicKey,
+    tokenRecipient: admin.publicKey,
+    projectPool: projectPoolPda,
+    projectAuthority: projectAuthorityPda,
+    baseVault: baseVaultPda,
+    quoteVault: quoteVaultPda,
+    communityBaseAta,
+    communityQuoteAta,
+    baseMint: baseMintKeypair.publicKey,
+    quoteMint: WSOL_MINT,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: anchor.web3.SystemProgram.programId,
+  }).signers([adminKeypair, communityClaimSignerKeypair]).rpc();
+
+  console.log("✅ Community fees claimed");
+
+  console.log("✅ Fee harvesting and claiming completed successfully");
   });
-
-  it("Harvests pool fees through income-dispatcher", async () => {
-    console.log("=== Harvesting Pool Fees through Income-Dispatcher ===");
-
-    // Skip if Raydium not available or project pool not initialized
-    const raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-    const raydiumInfo = await provider.connection.getAccountInfo(raydiumProgramId);
-    if (!raydiumInfo || !projectPoolPda || !projectId || !raydiumPoolState || !baseMintKeypair) {
-      console.log("Raydium CLMM program not available or project pool not initialized. Skipping harvest test.");
-      return;
-    }
-
-    // Get project authority PDA (must match program constraint using launch state's project_id)
-    const harvestLaunchStateData = await sdk.fetchLaunch(clmmLaunchState);
-    const [projectAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
-      [INCOME_DISPATCHER_SEED_ROOT, Buffer.from("project_authority"), Buffer.from(harvestLaunchStateData.projectId.toArray('be', 8))],
-      INCOME_DISPATCHER_PROGRAM_ID
-    );
-
-    // Get income dispatcher authority PDA for harvest_pool CPI
-    const [incomeDispatcherAuthority] = anchor.web3.PublicKey.findProgramAddressSync(
-      [INCOME_DISPATCHER_SEED_ROOT, Buffer.from("authority")],
-      INCOME_DISPATCHER_PROGRAM_ID
-    );
-
-    // Get escrow authority
-    const [escrowAuthority] = sdk.getEscrowAuthorityPda(clmmLaunchState);
-
-    // Get quote and base vault addresses (project's associated token accounts)
-    const projectQuoteVault = getAssociatedTokenAddressSync(WSOL_MINT, projectAuthority, true);
-    const projectBaseVault = getAssociatedTokenAddressSync(baseMintKeypair.publicKey, projectAuthority, true);
-
-    // Create associated token accounts for project vaults (since init_if_needed may not work with PDA authority)
-    const vaultCreationIxs: anchor.web3.TransactionInstruction[] = [];
-
-    const quoteVaultAccountInfo = await provider.connection.getAccountInfo(projectQuoteVault);
-    if (!quoteVaultAccountInfo) {
-      vaultCreationIxs.push(createAssociatedTokenAccountInstruction(
-        admin.publicKey, // payer
-        projectQuoteVault, // ata
-        projectAuthority, // owner
-        WSOL_MINT // mint
-      ));
-    }
-
-    const baseVaultAccountInfo = await provider.connection.getAccountInfo(projectBaseVault);
-    if (!baseVaultAccountInfo) {
-      vaultCreationIxs.push(createAssociatedTokenAccountInstruction(
-        admin.publicKey, // payer
-        projectBaseVault, // ata
-        projectAuthority, // owner
-        baseMintKeypair.publicKey // mint
-      ));
-    }
-
-    if (vaultCreationIxs.length > 0) {
-      const createVaultsTx = new anchor.web3.Transaction().add(...vaultCreationIxs);
-      await provider.sendAndConfirm(createVaultsTx, [adminKeypair]);
-      console.log("✅ Created associated token accounts for project vaults");
-    }
-
-    // Get remaining accounts (tick array bitmap extension if needed)
-    const remainingAccounts: any[] = [];
-
-    // Check if tick array bitmap extension is needed (reuse logic from claim test)
-    if (tickArrayLower && tickArrayUpper) {
-      const poolStateAccount = await provider.connection.getAccountInfo(raydiumPoolState);
-      if (poolStateAccount) {
-        const poolStateData = poolStateAccount.data;
-        const tickSpacing = poolStateData.readUInt16LE(84); // tick_spacing offset
-
-        const tickArrayLowerAccount = await provider.connection.getAccountInfo(tickArrayLower);
-        const tickArrayUpperAccount = await provider.connection.getAccountInfo(tickArrayUpper);
-
-        if (tickArrayLowerAccount && tickArrayUpperAccount) {
-          const tickArrayLowerStartIndex = tickArrayLowerAccount.data.readInt32LE(8);
-          const tickArrayUpperStartIndex = tickArrayUpperAccount.data.readInt32LE(8);
-
-          const maxTickInBitmap = tickSpacing * 512 * 8;
-
-          const needsExtension = tickArrayLowerStartIndex < -maxTickInBitmap ||
-                                 tickArrayUpperStartIndex >= maxTickInBitmap ||
-                                 tickArrayLowerStartIndex >= maxTickInBitmap ||
-                                 tickArrayUpperStartIndex < -maxTickInBitmap;
-
-          if (needsExtension) {
-            const [tickArrayBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
-              [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolState.toBuffer()],
-              raydiumProgramId
-            );
-
-            remainingAccounts.push({
-              pubkey: tickArrayBitmapExtension,
-              isWritable: true,
-              isSigner: false,
-            });
-
-            console.log("Added tick array bitmap extension account for harvest:", tickArrayBitmapExtension.toString());
-          }
-        }
-      }
-    }
-
-    // Get balances before harvest to verify changes
-    const projectPoolBefore = await incomeDispatcherProgram.account.projectPool.fetch(projectPoolPda);
-    const quoteVaultInfo = await provider.connection.getAccountInfo(projectQuoteVault);
-    const baseVaultInfo = await provider.connection.getAccountInfo(projectBaseVault);
-
-    const quoteBalanceBefore = quoteVaultInfo ? new anchor.BN(quoteVaultInfo.data.slice(64, 72), "le") : new anchor.BN(0);
-    const baseBalanceBefore = baseVaultInfo ? new anchor.BN(baseVaultInfo.data.slice(64, 72), "le") : new anchor.BN(0);
-
-    console.log("Balances before harvest:");
-    console.log(`  Quote vault: ${quoteBalanceBefore.toString()} lamports`);
-    console.log(`  Base vault: ${baseBalanceBefore.toString()} tokens`);
-    console.log(`  Project pool total quote claimed: ${projectPoolBefore.totalQuoteClaimed.toString()}`);
-    console.log(`  Project pool total base claimed: ${projectPoolBefore.totalBaseClaimed.toString()}`);
-
-    // Call harvest_pool instruction
-    const harvestTx = await incomeDispatcherProgram.methods
-      .harvestPool()
-      .accountsStrict({
-        payer: admin.publicKey,
-        launchState: clmmLaunchState,
-        projectPool: projectPoolPda,
-        incomeDispatcherAuthority,
-        projectAuthority,
-        quoteMint: WSOL_MINT,
-        baseMint: baseMintKeypair.publicKey,
-        quoteVault: projectQuoteVault,
-        baseVault: projectBaseVault,
-        engineProgram: program.programId,
-        raydiumProgram: raydiumProgramId,
-        escrowAuthority,
-        positionNftMint,
-        positionNftAccount,
-        personalPosition,
-        poolState: raydiumPoolState,
-        protocolPosition,
-        tokenVault0: quoteVault, // Raydium pool's quote vault (from global variable)
-        tokenVault1: baseVault,  // Raydium pool's base vault (from global variable)
-        tickArrayLower,
-        tickArrayUpper,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-        memoProgram: MEMO_PROGRAM_ID,
-        associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .remainingAccounts(remainingAccounts)
-      .signers([adminKeypair])
-      .transaction();
-
-    const harvestSig = await provider.sendAndConfirm(harvestTx, [adminKeypair], {
-      skipPreflight: true
-    });
-    console.log("✅ Pool fees harvested:", harvestSig);
-    console.log("Explorer:", getExplorerUrl(provider, harvestSig));
-
-    // Reload accounts to check changes
-    const projectPoolAfter = await incomeDispatcherProgram.account.projectPool.fetch(projectPoolPda);
-    const quoteVaultInfoAfter = await provider.connection.getAccountInfo(projectQuoteVault);
-    const baseVaultInfoAfter = await provider.connection.getAccountInfo(projectBaseVault);
-
-    const quoteBalanceAfter = quoteVaultInfoAfter ? new anchor.BN(quoteVaultInfoAfter.data.slice(64, 72), "le") : new anchor.BN(0);
-    const baseBalanceAfter = baseVaultInfoAfter ? new anchor.BN(baseVaultInfoAfter.data.slice(64, 72), "le") : new anchor.BN(0);
-
-    // Calculate claimed amounts
-    const quoteClaimed = quoteBalanceAfter.sub(quoteBalanceBefore);
-    const baseClaimed = baseBalanceAfter.sub(baseBalanceBefore);
-
-    console.log("Harvest results:");
-    console.log(`  Quote claimed: ${quoteClaimed.toString()} lamports`);
-    console.log(`  Base claimed: ${baseClaimed.toString()} tokens`);
-    console.log(`  Project pool total quote claimed: ${projectPoolAfter.totalQuoteClaimed.toString()}`);
-    console.log(`  Project pool total base claimed: ${projectPoolAfter.totalBaseClaimed.toString()}`);
-
-    console.log("✅ Pool fee harvesting completed successfully");
-  });
-
 });

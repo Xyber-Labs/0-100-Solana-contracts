@@ -48,15 +48,6 @@ export class TxBuilder {
     return this.getPda(["config"]);
   }
 
-  async getProjectPoolPda(launch: web3.PublicKey): Promise<[web3.PublicKey, number]> {
-    const launchState: any = await this.program.account.launchState.fetch(launch);
-    const projectIdBytes = launchState.projectId.toArray('be', 8);
-    return web3.PublicKey.findProgramAddressSync(
-      [INCOME_DISPATCHER_SEED_ROOT, Buffer.from("project_pool"), projectIdBytes],
-      INCOME_DISPATCHER_PROGRAM_ID
-    );
-  }
-
   async getSqrtPriceLowerX64ForPool(params: {
     launch: web3.PublicKey;
     priceBumpMultiplier?: number; // e.g. 1.15
@@ -1104,9 +1095,6 @@ export class TxBuilder {
 
     const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
 
-    const [incomeDispatcherConfig] = this.getIncomeDispatcherConfigPda();
-    const [projectPool] = await this.getProjectPoolPda(params.launch);
-
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
       .accountsStrict({
@@ -1135,10 +1123,6 @@ export class TxBuilder {
         ], METADATA_PROGRAM_ID)[0],
         tokenMetadataConfig: this.getTokenMetadataConfigPda(params.launch)[0],
         tokenMetadataProgram: METADATA_PROGRAM_ID,
-        incomeDispatcherProgram: INCOME_DISPATCHER_PROGRAM_ID,
-        incomeDispatcherConfig: incomeDispatcherConfig,
-        incomeDispatcherProjectPool: projectPool,
-        engineProgram: this.program.programId,
       })
       .instruction();
 
