@@ -295,6 +295,11 @@ describe("engine anchor - raydium clmm", () => {
         signerAdmins: [adminKeypair, admin2Keypair],
       });
     } catch (_) {}
+
+    // Fund the creator with enough lamports for initLaunch
+    const airdropSig = await provider.connection.requestAirdrop(creatorPk, 2 * anchor.web3.LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(airdropSig, "confirmed");
+
     const res = await (sdk as any).initLaunch({
       creator: creatorKeypair,
       projectId: nextId,
