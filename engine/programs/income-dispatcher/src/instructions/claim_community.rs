@@ -77,7 +77,22 @@ pub fn claim_community(ctx: Context<ClaimCommunity>, base_amount: u64, quote_amo
         .checked_add(quote_to_claim)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
+    emit!(CommunityClaim {
+        user: ctx.accounts.token_recipient.key(),
+        base_amount: base_to_claim,
+        quote_amount: quote_to_claim,
+        project_id: project_pool.project_id,
+    });
+
     Ok(())
+}
+
+#[event]
+pub struct CommunityClaim {
+    pub user: Pubkey,
+    pub base_amount: u64,
+    pub quote_amount: u64,
+    pub project_id: u64,
 }
 
 #[derive(Accounts)]
