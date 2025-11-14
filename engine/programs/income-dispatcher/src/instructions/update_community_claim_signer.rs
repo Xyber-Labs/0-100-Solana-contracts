@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct UpdatePlatformWallet<'info> {
+pub struct UpdateCommunityClaimSigner<'info> {
     #[account(
         mut,
         seeds = [crate::SEED_ROOT, b"config"],
@@ -15,11 +15,11 @@ pub struct UpdatePlatformWallet<'info> {
     pub admin: Signer<'info>,
 }
 
-pub fn update_platform_wallet(
-    ctx: Context<UpdatePlatformWallet>,
-    new_platform_wallet: Pubkey,
+pub fn update_community_claim_signer(
+    ctx: Context<UpdateCommunityClaimSigner>,
+    new_community_claim_signer: Pubkey,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
-    config.platform_wallet = new_platform_wallet;
+    config.community_claim_signer = new_community_claim_signer;
     Ok(())
 }

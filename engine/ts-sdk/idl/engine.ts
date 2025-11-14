@@ -371,6 +371,7 @@ export type Engine = {
       "accounts": [
         {
           "name": "incomeDispatcherAuthority",
+          "signer": true,
           "pda": {
             "seeds": [
               {
@@ -456,9 +457,6 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
-        },
-        {
-          "name": "baseMint"
         },
         {
           "name": "escrowAuthority",
@@ -571,13 +569,6 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "quoteTokenProgram"
         }
       ],
       "args": []

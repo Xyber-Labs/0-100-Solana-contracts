@@ -16,7 +16,7 @@ mod events;
 #[cfg(test)]
 mod income_calculator;
 mod instructions;
-mod state;
+pub mod state;
 pub mod utils;
 
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");

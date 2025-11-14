@@ -12,6 +12,8 @@ import { getConstant } from "./utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
+const INCOME_DISPATCHER_PROGRAM_ID = new web3.PublicKey("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
+const INCOME_DISPATCHER_SEED_ROOT = "income-dispatcher";
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -36,6 +38,10 @@ export class TxBuilder {
   private getIxMethod(primary: string, fallback: string) {
     const methods: any = (this.program as any).methods;
     return methods?.[primary] ?? methods?.[fallback];
+  }
+
+  getIncomeDispatcherConfigPda(): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync([Buffer.from(INCOME_DISPATCHER_SEED_ROOT), Buffer.from("config")], INCOME_DISPATCHER_PROGRAM_ID);
   }
 
   getConfigPda(): [web3.PublicKey, number] {

@@ -135,6 +135,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.launch_state.key(),
     )?;
     raydium_create_pool_impl(&ctx)?;
+
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.pool_state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
