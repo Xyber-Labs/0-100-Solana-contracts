@@ -18,16 +18,16 @@ async function main() {
     const projectId = new BN(opts.projectId);
     const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
 
-    console.log("Initializing roster:");
+    console.log("Preparing pool creation:");
     console.log("  Project ID:", projectId.toString());
     console.log("  Launch PDA:", launchPda.toBase58());
 
-    const result = await sdk.initRoster({
+    const result = await sdk.preparePoolCreation({
       launch: launchPda,
+      computeUnits: 400000,
     });
 
     console.log("✅ Success!");
-    console.log("Roster PDA:", result.rosterPda.toBase58());
     console.log("Transaction signature:", result.signature);
     console.log("Explorer:", getExplorerUrl(provider, result.signature));
   });

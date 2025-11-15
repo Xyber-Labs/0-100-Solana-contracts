@@ -3,7 +3,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "build": "anchor build -- --features test && cp target/types/engine.ts ts-sdk/idl/engine.ts && cp target/idl/engine.json ts-sdk/idl/engine.json && cd ts-sdk && yarn install && yarn build",
+    "build": "anchor build -- --features test,anchor-test && cp target/types/engine.ts ts-sdk/idl/engine.ts && cp target/idl/engine.json ts-sdk/idl/engine.json && cd ts-sdk && yarn install -f && yarn build",
     "dump:raydium": "bash tests/dump-raydium.sh",
     "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
     "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",

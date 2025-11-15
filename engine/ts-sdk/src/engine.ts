@@ -331,15 +331,13 @@ const EngineSDK = {
     async function initRoster(args: {
       launch: anchor.web3.PublicKey;
     }): Promise<{ rosterPda: anchor.web3.PublicKey; signature: string }> {
-      const [rosterPda] = getRosterPda(args.launch);
-
-      const rpc = program.methods.initRoster().accountsStrict({
-        payer: payer,
-        launchState: args.launch,
-        roster: rosterPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
+      const { transaction, rosterPda } = await txBuilder.initRosterTx({
+        launch: args.launch,
+        payer,
       });
-      const signature = await rpc.rpc();
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signers = adminKeypair ? [adminKeypair] : [];
+      const signature = await provider.sendAndConfirm(transaction, signers);
       return { rosterPda, signature };
     }
 
@@ -595,36 +593,95 @@ const EngineSDK = {
     async function createClmmPool(args: {
       launch: anchor.web3.PublicKey;
       quoteMint: anchor.web3.PublicKey;
-      baseMint?: anchor.web3.Keypair;
-      ammConfig: anchor.web3.PublicKey;
-      clmmProgram: anchor.web3.PublicKey;
+      signers: anchor.web3.Keypair[];
     }): Promise<{
       signature: string;
       baseMint: anchor.web3.PublicKey;
       baseTokenAta: anchor.web3.PublicKey;
+      quoteVault: anchor.web3.PublicKey;
+      baseVault: anchor.web3.PublicKey;
     }> {
-      const baseMint = args.baseMint ?? anchor.web3.Keypair.generate();
+      const payerPubkey = args.signers[0]?.publicKey ?? payer;
 
       const result = await txBuilder.createClmmPoolTx({
-        payer,
+        payer: payerPubkey,
         launch: args.launch,
         quoteMint: args.quoteMint,
-        baseMint,
-        ammConfig: args.ammConfig,
-        clmmProgram: args.clmmProgram,
+        clmmProgram: txBuilder.getRaydiumClmmProgramId(),
+        provider,
+      });
+
+      console.log("createClmmPool transaction details:");
+      console.log("  Instructions count:", result.transaction.instructions.length);
+      console.log("  Signers:", args.signers.map(s => s.publicKey.toString()));
+      console.log("  baseMint:", result.baseMint.toString());
+      console.log("  baseTokenAta:", result.baseTokenAta.toString());
+      console.log("  poolState:", result.poolState.toString());
+      console.log("  tickArrayBitmap:", result.tickArrayBitmap.toString());
+      console.log("  quoteVault:", result.quoteVault.toString());
+      console.log("  baseVault:", result.baseVault.toString());
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+
+      const allSigners = [...args.signers, ...result.signers];
+
+      try {
+        const signature = await provider.sendAndConfirm(result.transaction, allSigners);
+        return {
+          signature,
+          baseMint: result.baseMint,
+          baseTokenAta: result.baseTokenAta,
+          quoteVault: result.quoteVault,
+          baseVault: result.baseVault,
+        };
+      } catch (error: any) {
+        console.error("Transaction failed:", error.message);
+        if (error.logs) {
+          console.error("Transaction logs:", error.logs);
+        }
+        throw error;
+      }
+    }
+
+    async function addClmmLiquidity(args: {
+      launch: anchor.web3.PublicKey;
+      quoteMint: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      signers: anchor.web3.Keypair[];
+    }): Promise<{
+      signature: string;
+    }> {
+      const payerPubkey = args.signers[0]?.publicKey ?? payer;
+      const [escrowAuthority] = txBuilder.getPda(["escrow_authority", args.launch]);
+      const baseTokenAta = txBuilder.getAssociatedTokenAddress(escrowAuthority, args.baseMint);
+
+      const result = await txBuilder.addClmmLiquidityTx({
+        payer: payerPubkey,
+        launch: args.launch,
+        quoteMint: args.quoteMint,
+        baseMint: args.baseMint,
+        baseTokenAta: baseTokenAta,
         provider,
       });
 
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      // Note: observationKeypair is NOT a signer, it's just a writable account
-      const signature = await provider.sendAndConfirm(result.transaction, result.signers);
-      return {
-        signature,
-        baseMint: result.baseMint,
-        baseTokenAta: result.baseTokenAta,
-      };
+
+      const allSigners = [...args.signers, ...result.signers];
+
+      try {
+        const signature = await provider.sendAndConfirm(result.transaction, allSigners);
+        return { signature };
+      } catch (error: any) {
+        console.error("Transaction failed:", error.message);
+        if (error.logs) {
+          console.error("Transaction logs:", error.logs);
+        }
+        throw error;
+      }
     }
 
     async function mintForTest(args: {
@@ -709,7 +766,11 @@ const EngineSDK = {
       } as any);
     }
 
-    async function initRosterShard(args: { launch: anchor.web3.PublicKey; shardId: number }): Promise<{
+    async function initRosterShard(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+      signers: anchor.web3.Keypair[];
+    }): Promise<{
       rosterShard: anchor.web3.PublicKey;
       signature: string
     }> {
@@ -719,16 +780,18 @@ const EngineSDK = {
         shardId: args.shardId,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      tx.feePayer = payer;
-      const signers = adminKeypair ? [adminKeypair] : [];
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, args.signers);
       return { rosterShard, signature };
     }
 
-    async function finalizeRosterShard(args: { launch: anchor.web3.PublicKey; shardId: number }): Promise<{
+    async function finalizeRosterShard(args: {
+      launch: anchor.web3.PublicKey;
+      shardId: number;
+      signers: anchor.web3.Keypair[];
+    }): Promise<{
       signature: string
     }> {
       const { instruction } = await txBuilder.finalizeRosterShardIx({
@@ -737,12 +800,10 @@ const EngineSDK = {
         shardId: args.shardId,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      tx.feePayer = payer;
-      const signers = adminKeypair ? [adminKeypair] : [];
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, args.signers);
       return { signature };
     }
 
@@ -1063,8 +1124,14 @@ const EngineSDK = {
       });
     }
 
-    async function getLiquidityRange(args: { launch: anchor.web3.PublicKey; sqrtPriceLowerX64: BN }) {
-      return txBuilder.getLiquidityRange({ launch: args.launch, sqrtPriceLowerX64: args.sqrtPriceLowerX64 });
+    async function getLiquidityRange(args: {
+      launch: anchor.web3.PublicKey;
+      baseMint: anchor.web3.PublicKey;
+      quoteMint: anchor.web3.PublicKey;
+      raydiumQuoteVault: anchor.web3.PublicKey;
+      raydiumBaseVault: anchor.web3.PublicKey;
+    }) {
+      return txBuilder.getLiquidityRange(args);
     }
 
     async function getSqrtPriceLowerX64ForPool(args: { launch: anchor.web3.PublicKey; priceBumpMultiplier?: number; lowerRangePow10?: number }) {
@@ -1314,6 +1381,7 @@ const EngineSDK = {
       claimTeamTokensTx,
       preparePoolCreation,
       createClmmPool,
+      addClmmLiquidity,
       mintForTest,
       getLiquidityRange,
       getSqrtPriceLowerX64ForPool,
@@ -1349,6 +1417,12 @@ const EngineSDK = {
       findProjectById,
       getProjectByLaunchPda,
       getConfigPda: (txBuilder as any).getConfigPda?.bind(txBuilder) ?? (() => txBuilder.getPda(["config"])),
+      getAmmConfigIndex: txBuilder.getAmmConfigIndex.bind(txBuilder),
+      getRaydiumClmmProgramId: txBuilder.getRaydiumClmmProgramId.bind(txBuilder),
+      getRaydiumAmmConfigPda: txBuilder.getRaydiumAmmConfigPda.bind(txBuilder),
+      getRaydiumPoolPda: txBuilder.getRaydiumPoolPda.bind(txBuilder),
+      getRaydiumPoolVaultPda: txBuilder.getRaydiumPoolVaultPda.bind(txBuilder),
+      getAssociatedTokenAddress: txBuilder.getAssociatedTokenAddress.bind(txBuilder),
 
       initEngineConfig,
       updateEngineConfig,

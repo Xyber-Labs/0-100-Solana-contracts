@@ -1,7 +1,7 @@
-export function getConstant(
+export function getConstantRaw(
   name: string,
   idl: { constants?: [{ name: string; value: any }] }
-): Uint8Array {
+): any {
   if (!idl.constants) {
     throw new Error(`IDL does not contain constants section`);
   }
@@ -18,5 +18,13 @@ export function getConstant(
     );
   }
 
-  return new Uint8Array(JSON.parse(constant.value));
+  return constant.value;
+}
+
+export function getConstant(
+  name: string,
+  idl: { constants?: [{ name: string; value: any }] }
+): Uint8Array {
+  const value = getConstantRaw(name, idl);
+  return new Uint8Array(JSON.parse(value));
 }

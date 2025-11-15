@@ -8,7 +8,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
-import { getConstant } from "./utils";
+import { getConstant, getConstantRaw } from "./utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
@@ -17,20 +17,53 @@ export class TxBuilder {
   private program: Program<EngineIDL>;
   private seedRoot: Buffer;
   private ammConfigIndex: number;
+  private raydiumClmmProgramId: web3.PublicKey;
 
   constructor(program: Program<EngineIDL>, _admin?: web3.Keypair) {
     this.program = program;
     this.seedRoot = Buffer.from(getConstant("seedRoot", program.idl as any));
-    const constants: any[] = ((this.program as any).idl?.constants ?? []) as any[];
-    const idxConst = constants.find((c: any) => c.name === "AMM_CONFIG_INDEX");
-    this.ammConfigIndex = Number(idxConst?.value ?? 4);
+    this.ammConfigIndex = Number(getConstantRaw("ammConfigIndex", program.idl as any));
+    this.raydiumClmmProgramId = new web3.PublicKey(getConstantRaw("raydiumClmmProgramId", program.idl as any));
   }
 
-  private getRaydiumAmmConfigPda(): [web3.PublicKey, number] {
-    const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+  getAmmConfigIndex(): number {
+    return this.ammConfigIndex;
+  }
+
+  getRaydiumClmmProgramId(): web3.PublicKey {
+    return this.raydiumClmmProgramId;
+  }
+
+  getRaydiumAmmConfigPda(): [web3.PublicKey, number] {
     const indexBuffer = Buffer.alloc(2);
-    indexBuffer.writeUInt16BE(Number.isFinite(this.ammConfigIndex) ? this.ammConfigIndex : 4, 0);
-    return web3.PublicKey.findProgramAddressSync([Buffer.from("amm_config"), indexBuffer], RAYDIUM_CLMM_PROGRAM_ID);
+    indexBuffer.writeUInt16BE(this.ammConfigIndex, 0);
+    return web3.PublicKey.findProgramAddressSync([Buffer.from("amm_config"), indexBuffer], this.raydiumClmmProgramId);
+  }
+
+  getRaydiumPoolPda(quoteMint: web3.PublicKey, baseMint: web3.PublicKey): [web3.PublicKey, number] {
+    const ammConfig = this.getRaydiumAmmConfigPda()[0];
+    const [mint0, mint1] = quoteMint.toBuffer().compare(baseMint.toBuffer()) < 0
+      ? [quoteMint, baseMint]
+      : [baseMint, quoteMint];
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool"), ammConfig.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
+      this.raydiumClmmProgramId
+    );
+  }
+
+  getRaydiumPoolVaultPda(poolPda: web3.PublicKey, mint: web3.PublicKey): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("pool_vault"), poolPda.toBuffer(), mint.toBuffer()],
+      this.raydiumClmmProgramId
+    );
+  }
+
+  getAssociatedTokenAddress(owner: web3.PublicKey, mint: web3.PublicKey): web3.PublicKey {
+    return getAssociatedTokenAddressSync(
+      mint,
+      owner,
+      true
+    );
   }
 
   private getIxMethod(primary: string, fallback: string) {
@@ -86,7 +119,9 @@ export class TxBuilder {
     return new BN(quoteLamports.toString());
   }
 
-  getPda(seeds: (string | Buffer | web3.PublicKey | { publicKey?: web3.PublicKey } | Uint8Array)[]): [web3.PublicKey, number] {
+  getPda(seeds: (string | Buffer | web3.PublicKey | {
+    publicKey?: web3.PublicKey
+  } | Uint8Array)[]): [web3.PublicKey, number] {
     const toSeedBuffer = (seed: any): Buffer => {
       if (typeof seed === "string") return Buffer.from(seed);
       if (Buffer.isBuffer(seed)) return seed;
@@ -204,7 +239,8 @@ export class TxBuilder {
     try {
       const cfg: any = (await (this.program.account as any).engineConfig.fetch(engineConfig)) as any;
       treasury = (cfg?.treasury as web3.PublicKey) ?? undefined;
-    } catch {}
+    } catch {
+    }
     // Fallback to creator as treasury owner if config fetch fails on some clusters
     const treasuryOwner = treasury ?? params.creator;
     const creatorXyberAta = getAssociatedTokenAddressSync(params.xyberMint, params.creator, true);
@@ -342,7 +378,11 @@ export class TxBuilder {
     teamVestingDurationSec?: number;
     teamAllocationBasisPoints?: number;
     signerAdmins: web3.PublicKey[];
-  }): Promise<{ instruction: web3.TransactionInstruction; launchPreset: web3.PublicKey; engineConfig: web3.PublicKey }> {
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    launchPreset: web3.PublicKey;
+    engineConfig: web3.PublicKey
+  }> {
     const [engineConfig] = this.getPda(["config"]);
     const [launchPreset] = this.getLaunchPresetPda(params.id);
 
@@ -411,7 +451,11 @@ export class TxBuilder {
       teamVestingDurationSec?: number;
     };
     signerAdmins: web3.PublicKey[];
-  }): Promise<{ instruction: web3.TransactionInstruction; launchPreset: web3.PublicKey; engineConfig: web3.PublicKey }> {
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    launchPreset: web3.PublicKey;
+    engineConfig: web3.PublicKey
+  }> {
     const [engineConfig] = this.getPda(["config"]);
     const [launchPreset] = this.getLaunchPresetPda(params.id);
     const method = this.getIxMethod("updateLaunchPreset", "update_launch_preset");
@@ -451,6 +495,7 @@ export class TxBuilder {
       .instruction();
     return { instruction: ix, launchPreset, engineConfig };
   }
+
   async initLaunchTx(params: {
     creator: web3.PublicKey;
     projectId: BN | number;
@@ -558,7 +603,11 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
       })
       .remainingAccounts(
-        params.admins.map((pubkey) => ({ pubkey, isSigner: params.signerAdmins.some((s) => s.equals(pubkey)), isWritable: false }))
+        params.admins.map((pubkey) => ({
+          pubkey,
+          isSigner: params.signerAdmins.some((s) => s.equals(pubkey)),
+          isWritable: false
+        }))
       )
       .instruction();
     return { instruction: ix, engineConfig };
@@ -1040,7 +1089,6 @@ export class TxBuilder {
     return { transaction, creatorAta };
   }
 
-  
 
   async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
@@ -1177,7 +1225,9 @@ export class TxBuilder {
     return { transaction };
   }
 
-  async creatorDepositIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{ instruction: web3.TransactionInstruction }> {
+  async creatorDepositIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{
+    instruction: web3.TransactionInstruction
+  }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [creatorGrant] = this.getPda(["creator", params.launch]);
     const instruction = await (this.program.methods as any)
@@ -1193,7 +1243,9 @@ export class TxBuilder {
     return { instruction };
   }
 
-  async creatorWithdrawIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{ instruction: web3.TransactionInstruction }> {
+  async creatorWithdrawIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{
+    instruction: web3.TransactionInstruction
+  }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [creatorGrant] = this.getPda(["creator", params.launch]);
     const instruction = await (this.program.methods as any)
@@ -1213,7 +1265,6 @@ export class TxBuilder {
     const [creatorGrantPda] = this.getPda(["creator", launch]);
     return this.program.account.creatorGrant.fetch(creatorGrantPda);
   }
-
 
 
   async preparePoolCreationTx(params: {
@@ -1262,8 +1313,6 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.Keypair | web3.PublicKey; // create and initialize if Keypair provided
-    ammConfig: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
     preIxs?: web3.TransactionInstruction[];
@@ -1274,46 +1323,20 @@ export class TxBuilder {
     baseTokenAta: web3.PublicKey;
     poolState: web3.PublicKey;
     tickArrayBitmap: web3.PublicKey;
+    quoteVault: web3.PublicKey;
+    baseVault: web3.PublicKey;
   }> {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    
-    const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
-    const baseMint = (isKeypair
-      ? (params.baseMint as any).publicKey
-      : (params.baseMint as web3.PublicKey)
-    );
-    const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
-    if (isKeypair) {
-      let existing: any = null;
-      try {
-        existing = await this.program.provider.connection.getAccountInfo(baseMint);
-      } catch (_) {
-        existing = null; // LiteSVM throws if account missing
-      }
-      if (!existing) {
-        const createMintAccountIx = web3.SystemProgram.createAccount({
-          fromPubkey: params.payer,
-          newAccountPubkey: baseMint,
-          space: 82,
-          lamports: await this.program.provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        });
-        const initializeMintIx = createInitializeMintInstruction(
-          baseMint,
-          9,
-          escrowAuthority,
-          null
-        );
-        maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
-      }
-    }
+
+    const baseMintKeypair = web3.Keypair.generate();
+    const baseMint = baseMintKeypair.publicKey;
 
     const [mint0, mint1] = (() => {
       return params.quoteMint.toBuffer().compare(baseMint.toBuffer()) < 0
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
-    const ammConfigForPool = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+    const ammConfigForPool = this.getRaydiumAmmConfigPda()[0];
 
     const [raydiumPoolState] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool"), ammConfigForPool.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
@@ -1355,7 +1378,7 @@ export class TxBuilder {
     );
 
 
-    const raydiumAmmConfig = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+    const raydiumAmmConfig = this.getRaydiumAmmConfigPda()[0];
     const [enginePoolState] = this.getPda(["pool", params.launch]);
 
     const createClmmPoolIx = await (this.program.methods as any)
@@ -1396,18 +1419,19 @@ export class TxBuilder {
 
     const transaction = new web3.Transaction();
     if (params.preIxs?.length) transaction.add(...params.preIxs);
-    if (maybeCreateMintIxs.length) transaction.add(...maybeCreateMintIxs);
     transaction
       .add(computeBudgetIx)
       .add(createClmmPoolIx);
 
     return {
       transaction,
-      signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
+      signers: [baseMintKeypair],
       baseMint: baseMint,
       baseTokenAta,
       poolState: raydiumPoolState,
       tickArrayBitmap,
+      quoteVault,
+      baseVault,
     };
   }
 
@@ -1426,8 +1450,8 @@ export class TxBuilder {
 
     const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
     const baseMint = (isKeypair
-      ? (params.baseMint as any).publicKey
-      : (params.baseMint as web3.PublicKey)
+        ? (params.baseMint as any).publicKey
+        : (params.baseMint as web3.PublicKey)
     );
 
     const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
@@ -1493,14 +1517,9 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     quoteMint: web3.PublicKey;
-    baseMint: web3.PublicKey; // ignored; use baseMint from launch
+    baseMint: web3.PublicKey;
     baseTokenAta: web3.PublicKey;
-    ammConfig?: web3.PublicKey;
-    clmmProgram: web3.PublicKey;
     provider: any;
-    baseAmount: BN;
-    quoteAmount: BN;
-    sqrtPriceLowerX64: BN;
   }): Promise<{
     transaction: web3.Transaction;
     signers: web3.Keypair[];
@@ -1511,7 +1530,7 @@ export class TxBuilder {
     positionNftAccount: web3.PublicKey;
     personalPosition: web3.PublicKey;
     protocolPosition: web3.PublicKey;
-    quoteTokenAta: web3.PublicKey;
+    quoteEscrowAta: web3.PublicKey;
     ammConfig: web3.PublicKey;
     tickArrayLower: web3.PublicKey;
     tickArrayUpper: web3.PublicKey;
@@ -1519,7 +1538,7 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     tickArrayBitmap: web3.PublicKey;
   }> {
-    
+
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const launchState = await this.program.account.launchState.fetch(params.launch);
     const baseMint = launchState.baseMint as web3.PublicKey;
@@ -1529,20 +1548,21 @@ export class TxBuilder {
         ? [params.quoteMint, baseMint]
         : [baseMint, params.quoteMint];
     })();
-    const ammConfigForAdd = params.ammConfig ?? this.getRaydiumAmmConfigPda()[0];
+    const ammConfigForAdd = this.getRaydiumAmmConfigPda()[0];
+    const clmmProgram = this.getRaydiumClmmProgramId();
 
     const [raydiumPoolPda] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool"), ammConfigForAdd.toBuffer(), mint0.toBuffer(), mint1.toBuffer()],
-      params.clmmProgram
+      clmmProgram
     );
 
     const [bitmapExtension] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolPda.toBuffer()],
-      params.clmmProgram
+      clmmProgram
     );
     const [tickArrayBitmap] = web3.PublicKey.findProgramAddressSync(
       [Buffer.from("tick_array_bitmap"), raydiumPoolPda.toBuffer()],
-      params.clmmProgram
+      clmmProgram
     );
 
     const [quoteVault] = web3.PublicKey.findProgramAddressSync(
@@ -1551,7 +1571,7 @@ export class TxBuilder {
         raydiumPoolPda.toBuffer(),
         params.quoteMint.toBuffer(),
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
     const [baseVault] = web3.PublicKey.findProgramAddressSync(
@@ -1560,10 +1580,10 @@ export class TxBuilder {
         raydiumPoolPda.toBuffer(),
         baseMint.toBuffer(),
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
-    const quoteTokenAta = getAssociatedTokenAddressSync(
+    const quoteEscrowAta = getAssociatedTokenAddressSync(
       params.quoteMint,
       escrowAuthority,
       true
@@ -1577,19 +1597,20 @@ export class TxBuilder {
       TOKEN_2022_PROGRAM_ID
     );
 
-    
-
     const [personalPosition] = web3.PublicKey.findProgramAddressSync(
       [
         Buffer.from("position"),
         positionNftMint.publicKey.toBuffer(),
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
     const range = await this.getLiquidityRange({
       launch: params.launch,
-      sqrtPriceLowerX64: params.sqrtPriceLowerX64,
+      baseMint: params.baseMint,
+      quoteMint: params.quoteMint,
+      raydiumQuoteVault: quoteVault,
+      raydiumBaseVault: baseVault,
     });
     const tickLowerIndex = range.tickArrayLower;
     const tickUpperIndex = range.tickArrayUpper;
@@ -1607,7 +1628,7 @@ export class TxBuilder {
         tickLowerBuffer,
         tickUpperBuffer,
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
     const tickArrayLowerStartIndex = range.tickArrayLowerStartIndex;
@@ -1625,7 +1646,7 @@ export class TxBuilder {
         raydiumPoolPda.toBuffer(),
         tickArrayLowerBuffer,
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
     const [tickArrayUpper] = web3.PublicKey.findProgramAddressSync(
@@ -1634,15 +1655,16 @@ export class TxBuilder {
         raydiumPoolPda.toBuffer(),
         tickArrayUpperBuffer,
       ],
-      params.clmmProgram
+      clmmProgram
     );
 
     const [poolState] = this.getPda(["pool", params.launch]);
+
     const addLiquidityIx = await this.program.methods
-      .addClmmLiquidity(params.baseAmount, params.quoteAmount, params.sqrtPriceLowerX64)
+      .addClmmLiquidity()
       .accountsStrict({
         payer: params.payer,
-        raydiumProgram: params.clmmProgram,
+        raydiumProgram: clmmProgram,
         launchState: params.launch,
         baseMint: baseMint,
         escrowAuthority: escrowAuthority,
@@ -1659,7 +1681,7 @@ export class TxBuilder {
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
-        quoteTokenAta: quoteTokenAta,
+        quoteEscrowAta: quoteEscrowAta,
         token2022Program: TOKEN_2022_PROGRAM_ID,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
@@ -1680,10 +1702,6 @@ export class TxBuilder {
       .add(computeBudgetIx)
       .add(addLiquidityIx);
 
-    try {
-      transaction.partialSign(positionNftMint);
-    } catch {}
-
     return {
       transaction,
       signers: [positionNftMint],
@@ -1694,7 +1712,7 @@ export class TxBuilder {
       positionNftAccount,
       personalPosition,
       protocolPosition,
-      quoteTokenAta,
+      quoteEscrowAta,
       ammConfig: ammConfigForAdd,
       tickArrayLower,
       tickArrayUpper,
@@ -1706,7 +1724,10 @@ export class TxBuilder {
 
   async getLiquidityRange(params: {
     launch: web3.PublicKey;
-    sqrtPriceLowerX64: BN;
+    baseMint: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    raydiumQuoteVault: web3.PublicKey;
+    raydiumBaseVault: web3.PublicKey;
   }): Promise<{
     tickArrayLower: number;
     tickArrayUpper: number;
@@ -1717,18 +1738,30 @@ export class TxBuilder {
 
     try {
       const res = await (this.program.methods as any)
-        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .getLiquidityRange()
         .accountsStrict({
           launchState: params.launch,
+          baseMint: params.baseMint,
+          quoteMint: params.quoteMint,
+          raydiumQuoteVault: params.raydiumQuoteVault,
+          raydiumBaseVault: params.raydiumBaseVault,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
+          baseTokenProgram: TOKEN_PROGRAM_ID,
           raydiumAmmConfig: ammConfig,
         })
         .view();
       return res as any;
     } catch (_) {
       const tx = await (this.program.methods as any)
-        .getLiquidityRange(params.sqrtPriceLowerX64)
+        .getLiquidityRange()
         .accountsStrict({
           launchState: params.launch,
+          baseMint: params.baseMint,
+          quoteMint: params.quoteMint,
+          raydiumQuoteVault: params.raydiumQuoteVault,
+          raydiumBaseVault: params.raydiumBaseVault,
+          quoteTokenProgram: TOKEN_PROGRAM_ID,
+          baseTokenProgram: TOKEN_PROGRAM_ID,
           raydiumAmmConfig: ammConfig,
         })
         .transaction();
@@ -1755,7 +1788,8 @@ export class TxBuilder {
       // Ensure the tx is signed before simulation (LiteSVM requires signatures)
       try {
         tx.partialSign(providerAny.wallet.payer);
-      } catch (_) {}
+      } catch (_) {
+      }
 
       let simulation: any;
       if (conn && typeof conn.simulateTransaction === "function") {

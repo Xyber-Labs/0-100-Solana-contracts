@@ -45,6 +45,11 @@ solana program dump -u $NET $TOKEN_2022_ID ./tmp/spl_token_2022.so
 echo "📥 Downloading Raydium AMM config..."
 solana account -u $NET $AMM_CONFIG_ID --output json > ./tmp/amm_config.json
 
+# 3) Download Raydium CLMM IDL (optional, not required for operation)
+echo "📥 Attempting to download Raydium CLMM IDL..."
+ANCHOR_NET=$([ "$NET" = "mainnet-beta" ] && echo "mainnet" || echo "$NET")
+anchor idl fetch $CLMM_ID --provider.cluster $ANCHOR_NET -o ./tmp/raydium_clmm_idl.json && echo "✅ Raydium IDL downloaded" || echo "ℹ️  Raydium IDL not available (not required)"
+
 echo "✅ All programs downloaded to ./tmp/"
 echo "📋 Downloaded programs:"
 ls -la ./tmp/

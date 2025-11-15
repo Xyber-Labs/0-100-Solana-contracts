@@ -1,6 +1,9 @@
-use crate::{constants::SEED_ROOT, state::EngineConfig};
-use crate::{state::LaunchPreset};
 use anchor_lang::prelude::*;
+
+use crate::{
+    constants::SEED_ROOT,
+    state::{EngineConfig, LaunchPreset},
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitLaunchPresetParams {
@@ -56,12 +59,8 @@ pub fn init_launch_preset(
         cfg.admins.iter().any(|k| *k == ctx.accounts.payer.key()),
         crate::errors::ErrorCode::Unauthorized
     );
-    let signer_set: std::collections::BTreeSet<Pubkey> = ctx
-        .remaining_accounts
-        .iter()
-        .filter(|ai| ai.is_signer)
-        .map(|ai| ai.key())
-        .collect();
+    let signer_set: std::collections::BTreeSet<Pubkey> =
+        ctx.remaining_accounts.iter().filter(|ai| ai.is_signer).map(|ai| ai.key()).collect();
     let mut signed = 0u8;
     for k in cfg.admins.iter() {
         if signer_set.contains(k) {
@@ -93,5 +92,3 @@ pub fn init_launch_preset(
 
     Ok(())
 }
-
-

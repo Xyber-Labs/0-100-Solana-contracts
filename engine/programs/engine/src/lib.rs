@@ -2,13 +2,14 @@
 
 use anchor_lang::prelude::*;
 
-use crate::instructions::*;
-use crate::utils::launch_core::InitLaunchParams;
-use crate::utils::clmm::LiquidityRange;
-
-pub use constants::WSOL_MINT;
 use constants::*;
+pub use constants::WSOL_MINT;
 use state::*;
+
+use crate::{
+    instructions::*,
+    utils::{clmm::LiquidityRange, launch_core::InitLaunchParams},
+};
 
 mod constants;
 pub mod errors;
@@ -55,7 +56,12 @@ pub mod engine {
     }
 
     /// Seal roster shard by snapshotting user ticket ranges into UserContribution
-    pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32, max: u16) -> Result<()> {
+    pub fn seal_roster_shard(
+        ctx: Context<SealRosterShard>,
+        shard_id: u16,
+        from: u32,
+        max: u16,
+    ) -> Result<()> {
         instructions::seal_roster_shard(ctx, shard_id, from, max)
     }
 
@@ -134,11 +140,8 @@ pub mod engine {
 
     pub fn add_clmm_liquidity<'info>(
         ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
-        base_amount: u64,
-        quote_amount: u64,
-        sqrt_price_lower_x64: u128,
     ) -> Result<()> {
-        instructions::add_clmm_liquidity(ctx, base_amount, quote_amount, sqrt_price_lower_x64)
+        instructions::add_clmm_liquidity(ctx)
     }
 
     /// Creator can increase special deposit during funding window
@@ -166,9 +169,8 @@ pub mod engine {
 
     pub fn get_liquidity_range(
         ctx: Context<GetLiquidityRange>,
-        sqrt_price_lower_x64: u128,
     ) -> Result<LiquidityRange> {
-        instructions::get_liquidity_range(ctx, sqrt_price_lower_x64)
+        instructions::get_liquidity_range(ctx)
     }
 
     pub fn init_engine_config(

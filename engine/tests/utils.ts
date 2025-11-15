@@ -1,5 +1,45 @@
 import { Clock } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
+
+export function parsePresetParams(p: any) {
+  return {
+    hardCapLamports: new BN(String(p.hardCapLamports)),
+    minRaiseLamports: new BN(String(p.minRaiseLamports)),
+    perWalletCap: new BN(String(p.perWalletCap)),
+    tauLamports: new BN(String(p.tauLamports)),
+    baseTotalAllocation: new BN(String(p.baseTotalAllocation)),
+    baseSaleBasisPoints: new BN(String(p.baseSaleBasisPoints)),
+    teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : 1000,
+    fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : 0,
+    saleStartTimeSec: p.saleStartTimeSec !== undefined ? Number(p.saleStartTimeSec) : 0,
+    unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : 0,
+    rosterShardCap: Number(p.rosterShardCap),
+    rosterShardsTotal: Number(p.rosterShardsTotal),
+    creatorInitialDepositLamports: new BN(String(p.creatorInitialDepositLamports ?? "0")),
+    creatorDailyLamportsLimit: new BN(String(p.creatorDailyLamportsLimit ?? "0")),
+    creatorClaimLockPeriodSec: new BN(String(p.creatorClaimLockPeriodSec)),
+    creatorMaxDepositLamports: new BN(String(p.creatorMaxDepositLamports)),
+    poolCreationGracePeriodSec: p.poolCreationGracePeriodSec !== undefined ? Number(p.poolCreationGracePeriodSec) : 0,
+    teamVestingDurationSec: p.teamVestingDurationSec !== undefined ? Number(p.teamVestingDurationSec) : 365 * 24 * 60 * 60,
+  };
+}
+
+export function getExplorerUrl(
+  provider: anchor.AnchorProvider,
+  signature: string
+): string {
+  const cluster = provider.connection.rpcEndpoint.includes("devnet")
+    ? "devnet"
+    : provider.connection.rpcEndpoint.includes("testnet")
+    ? "testnet"
+    : provider.connection.rpcEndpoint.includes("localhost") ||
+      provider.connection.rpcEndpoint.includes("127.0.0.1")
+    ? "custom&customUrl=" + encodeURIComponent(provider.connection.rpcEndpoint)
+    : "mainnet-beta";
+
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+}
 
 export async function advanceTime(
   client: any,
