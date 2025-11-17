@@ -1,16 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import * as fs from "fs";
 
-import { getExplorerUrl, runWithSdk } from "./utils";
-
-function loadKeypair(keyPath: string): anchor.web3.Keypair {
-  const raw = fs.readFileSync(keyPath, "utf8");
-  const arr = JSON.parse(raw);
-  const secret = Uint8Array.from(arr);
-  return anchor.web3.Keypair.fromSecretKey(secret);
-}
+import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();

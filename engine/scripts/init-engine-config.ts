@@ -1,14 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
-import * as fs from "fs";
 
-import { getExplorerUrl, runWithSdk } from "./utils";
-
-function loadKeypairFromFile(filepath: string): anchor.web3.Keypair {
-  const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(filepath, "utf-8")));
-  return anchor.web3.Keypair.fromSecretKey(secretKey);
-}
+import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();
@@ -30,9 +24,9 @@ async function main() {
   const xyberMint = new anchor.web3.PublicKey(opts.xyberMint);
   const threshold = parseInt(opts.threshold);
 
-  const admin1Keypair = loadKeypairFromFile(opts.admin1Keypair);
-  const admin2Keypair = loadKeypairFromFile(opts.admin2Keypair);
-  const admin3Keypair = loadKeypairFromFile(opts.admin3Keypair);
+  const admin1Keypair = loadKeypair(opts.admin1Keypair);
+  const admin2Keypair = loadKeypair(opts.admin2Keypair);
+  const admin3Keypair = loadKeypair(opts.admin3Keypair);
 
   const admin1 = admin1Keypair.publicKey;
   const admin2 = admin2Keypair.publicKey;
