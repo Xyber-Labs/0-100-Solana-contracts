@@ -24,4 +24,6 @@ pub enum ErrorCode {
     InvalidAuthority,
     #[msg("Invalid project id")]
     InvalidProjectId,
+    #[msg("Invalid nonce")]
+    InvalidNonce,
 }

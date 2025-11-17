@@ -2,7 +2,10 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{transfer_checked, Mint, TokenAccount, TransferChecked};
 
-pub fn claim_community(ctx: Context<ClaimCommunity>, base_amount: u64, quote_amount: u64) -> Result<()> {
+pub fn claim_community(ctx: Context<ClaimCommunity>, base_amount: u64, quote_amount: u64, nonce: u64) -> Result<()> {
+    require!(ctx.accounts.nonce.nonce == nonce, crate::errors::ErrorCode::InvalidNonce);
+    ctx.accounts.nonce.nonce += 1;
+
     let project_pool = &mut ctx.accounts.project_pool;
 
     let available_base = project_pool
@@ -111,6 +114,14 @@ pub struct ClaimCommunity<'info> {
         constraint = community_claim_signer.key() == config.community_claim_signer @ crate::errors::ErrorCode::InvalidAuthority
     )]
     pub community_claim_signer: Signer<'info>,
+
+    /// Nonce to avoid replay attacks
+    #[account(
+        mut,
+        seeds = [crate::SEED_ROOT, b"nonce", token_recipient.key().as_ref()],
+        bump,
+    )]
+    pub nonce: Box<Account<'info, crate::state::Nonce>>,
 
     /// CHECK: User wallet
     pub token_recipient: UncheckedAccount<'info>,

@@ -41,3 +41,8 @@ pub struct ProjectPool {
     pub total_claimed_base: u64,
     pub total_claimed_quote: u64,
 }
+
+#[account]
+pub struct Nonce {
+    pub nonce: u64,
+}

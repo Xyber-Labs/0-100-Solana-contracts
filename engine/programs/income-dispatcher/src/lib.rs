@@ -36,15 +36,26 @@ pub mod income_dispatcher {
         instructions::claim_creator(ctx)
     }
 
-    pub fn claim_community(ctx: Context<ClaimCommunity>, base_amount: u64, quote_amount: u64) -> Result<()> {
-        instructions::claim_community(ctx, base_amount, quote_amount)
+    pub fn claim_community(
+        ctx: Context<ClaimCommunity>,
+        base_amount: u64,
+        quote_amount: u64,
+        nonce: u64,
+    ) -> Result<()> {
+        instructions::claim_community(ctx, base_amount, quote_amount, nonce)
     }
 
-    pub fn update_platform_wallet(ctx: Context<UpdatePlatformWallet>, new_platform_wallet: Pubkey) -> Result<()> {
+    pub fn update_platform_wallet(
+        ctx: Context<UpdatePlatformWallet>,
+        new_platform_wallet: Pubkey,
+    ) -> Result<()> {
         instructions::update_platform_wallet(ctx, new_platform_wallet)
     }
 
-    pub fn update_community_claim_signer(ctx: Context<UpdateCommunityClaimSigner>, new_community_claim_signer: Pubkey) -> Result<()> {
+    pub fn update_community_claim_signer(
+        ctx: Context<UpdateCommunityClaimSigner>,
+        new_community_claim_signer: Pubkey,
+    ) -> Result<()> {
         instructions::update_community_claim_signer(ctx, new_community_claim_signer)
     }
 }
