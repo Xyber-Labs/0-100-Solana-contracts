@@ -127,6 +127,7 @@ pub struct Roster {
 pub struct RosterShard {
     pub launch: Pubkey,
     pub shard_id: u16,
+    pub created_by: Pubkey,
     pub wallets: Vec<Pubkey>,
     pub counts: Vec<u32>,
     pub prefix: Vec<u32>,

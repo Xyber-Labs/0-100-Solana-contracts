@@ -1030,12 +1030,17 @@ export class TxBuilder {
     shardId: number;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    // Read created_by from roster_shard to auto-fill refund_to
+    const shardAcc: any = await (this.program.account as any).rosterShard.fetch(rosterShard);
+    const refundTo: web3.PublicKey =
+      shardAcc.createdBy ?? shardAcc.created_by ?? shardAcc.createdby ?? params.payer;
     const method = (this.program.methods as any).closeRosterShard(params.shardId);
     const instruction = await method
       .accounts({
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
+        refundTo,
         systemProgram: web3.SystemProgram.programId,
       } as any)
       .instruction();

@@ -18,6 +18,7 @@ pub struct InitRosterShard<'info> {
         space = 8 // discriminator
                 + 32 // launch
                 + 2 // shard_id
+                + 32 // created_by
                 + 4 // wallets vec length
                 + 4 // counts vec length
                 + 4 // prefix vec length
@@ -48,6 +49,7 @@ pub fn init_roster_shard(ctx: Context<InitRosterShard>, shard_id: u16) -> Result
     );
     shard.launch = launch_state.key();
     shard.shard_id = shard_id;
+    shard.created_by = ctx.accounts.payer.key();
     shard.total_in_shard = 0;
     shard.shard_base = 0;
     shard.sealed_count = 0;
