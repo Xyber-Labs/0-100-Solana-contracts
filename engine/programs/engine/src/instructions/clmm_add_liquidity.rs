@@ -113,8 +113,6 @@ pub fn add_clmm_liquidity<'info>(
     Ok(())
 }
 
-const RENT_RESERVE: u64 = 903_000_000;
-
 fn add_initial_liquidity<'info>(
     ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
@@ -133,13 +131,6 @@ fn add_initial_liquidity<'info>(
     let range =
         get_liquidity_range_impl(ctx.accounts.raydium_amm_config.tick_spacing, order.price_ratio);
 
-    msg!("=== Calculating amounts from launch_state ===");
-
-    let available_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
-    let transfer_amount = available_balance.saturating_sub(RENT_RESERVE);
-    msg!("Available balance on escrow_authority: {}", available_balance);
-    msg!("Transfer amount (after rent reserve): {}", transfer_amount);
-
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
         SEED_ROOT,
@@ -149,11 +140,6 @@ fn add_initial_liquidity<'info>(
     ];
     let signers = &[&escrow_authority_seeds[..]];
 
-    let quote_supply = if order.base_flag.unwrap() {
-        order.token_0_supply
-    } else {
-        order.token_1_supply
-    };
     anchor_lang::system_program::transfer(
         CpiContext::new_with_signer(
             ctx.accounts.system_program.to_account_info(),
@@ -163,9 +149,9 @@ fn add_initial_liquidity<'info>(
             },
             signers,
         ),
-        quote_supply,
+        order.quote_supply,
     )?;
-    msg!("Transferred lamports to WSOL ATA: {}", quote_supply);
+    msg!("Transferred lamports to WSOL ATA: {}", order.quote_supply);
 
     anchor_spl::token_interface::sync_native(CpiContext::new(
         ctx.accounts.quote_token_program.to_account_info(),
@@ -174,21 +160,6 @@ fn add_initial_liquidity<'info>(
         },
     ))?;
     msg!("Synced native for WSOL ATA");
-
-    msg!("=== Preparing Raydium CPI call ===");
-    msg!("order.token_0_supply: {}", order.token_0_supply);
-    msg!("order.token_1_supply: {}", order.token_1_supply);
-    msg!("order.base_flag: {:?}", order.base_flag);
-    msg!("order.price_ratio: {}", order.price_ratio);
-    msg!("order.sqrt_price: {}", order.sqrt_price);
-    msg!("range.tick_array_lower: {}", range.tick_array_lower);
-    msg!("range.tick_array_upper: {}", range.tick_array_upper);
-    msg!("range.tick_array_lower_start_index: {}", range.tick_array_lower_start_index);
-    msg!("range.tick_array_upper_start_index: {}", range.tick_array_upper_start_index);
-    msg!(
-        "escrow_authority lamports: {}",
-        ctx.accounts.escrow_authority.to_account_info().lamports()
-    );
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
         payer: ctx.accounts.escrow_authority.to_account_info(),

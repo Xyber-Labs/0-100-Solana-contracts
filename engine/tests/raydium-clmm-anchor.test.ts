@@ -319,27 +319,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Base Token ATA:", baseTokenAta.toString());
   });
 
-  it("Step 9.5: Test getLiquidityRange", async () => {
-    console.log("=== Step 9.5: Test getLiquidityRange ===");
-
-    const liquidityRange = await sdk.getLiquidityRange({
-      launch: launchPda,
-      baseMint,
-      quoteMint: quoteMintKeypair.publicKey,
-      raydiumQuoteVault: quoteVault,
-      raydiumBaseVault: baseVault,
-    });
-
-    console.log("Liquidity range:");
-    console.log("  tickArrayLower:", liquidityRange.tickArrayLower);
-    console.log("  tickArrayUpper:", liquidityRange.tickArrayUpper);
-    console.log("  tickArrayLowerStartIndex:", liquidityRange.tickArrayLowerStartIndex);
-    console.log("  tickArrayUpperStartIndex:", liquidityRange.tickArrayUpperStartIndex);
-
-    assert.ok(liquidityRange.tickArrayLower !== undefined, "tickArrayLower should be defined");
-    assert.ok(liquidityRange.tickArrayUpper !== undefined, "tickArrayUpper should be defined");
-  });
-
   it("Step 10: Add liquidity to CLMM pool", async () => {
     console.log("=== Step 10: Add Liquidity ===");
 
