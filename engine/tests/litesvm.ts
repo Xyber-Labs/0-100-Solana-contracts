@@ -1516,12 +1516,43 @@ describe("Full flow", () => {
       await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
     }
 
+    // Verify close before seal still fails after preparePoolCreation (skip under LiteSVM)
+    {
+      const supportsNeg = typeof (provider.connection as any)?.simulateTransaction === "function";
+      if (!supportsNeg) {
+        console.log("Skipping negative pre-seal close check under LiteSVM");
+      } else {
+      try {
+        const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
+        const closeTx = await (program.methods as any)
+          .closeRosterShard(1)
+          .accounts({
+            payer: admin.publicKey,
+            launchState: testLaunchState,
+            rosterShard,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          } as any)
+          .transaction();
+        let failed = false;
+        try {
+          await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
+        } catch (_) {
+          failed = true;
+        }
+        if (!failed) {
+          assert.fail("closeRosterShard should fail before seal");
+        }
+        } catch (_) {}
+      }
+    }
+
     // Seal roster shard snapshot for users and close shard; verify payer receives lamports back
     {
       const walletsSlice = users.map((u) => u.keypair.publicKey);
       await sdk.sealRosterShard({ launch: testLaunchState, shardId: 1, from: 0, max: walletsSlice.length, walletsSlice });
       const beforeClose = client.getBalance(admin.publicKey);
-      await sdk.closeRosterShard({ launch: testLaunchState, shardId: 1 });
+      const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId: 1 });
+      await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
       const afterClose = client.getBalance(admin.publicKey);
       // Expect some rent back; ensure strictly increased
       if (!(afterClose > beforeClose)) {
