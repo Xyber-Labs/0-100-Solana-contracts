@@ -51,9 +51,11 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         launch_state.total_deposited >= launch_state.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
+    // Allow partial finalization: require all used shards to be finalized
     require!(launch_state.roster_shards > 0, EngineErrorCode::ShardsNotFullyFinalized);
+    require!(launch_state.roster_highest_used_shard as i32 >= 1, EngineErrorCode::ShardsNotFullyFinalized);
     require!(
-        launch_state.roster_finalized_up_to == launch_state.roster_shards as i32,
+        launch_state.roster_finalized_up_to >= launch_state.roster_highest_used_shard as i32,
         EngineErrorCode::ShardsNotFullyFinalized
     );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);

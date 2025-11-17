@@ -59,6 +59,8 @@ pub struct LaunchState {
     pub pool_creation_grace_period_sec: i64,
     pub team_allocation_basis_points: u64,
     pub team_vesting_duration_sec: i64,
+    // Highest shard id that has at least one wallet (used to allow partial finalization)
+    pub roster_highest_used_shard: u16,
 }
 
 impl LaunchState {

@@ -5680,6 +5680,10 @@ export type Engine = {
           {
             "name": "teamVestingDurationSec",
             "type": "i64"
+          },
+          {
+            "name": "rosterHighestUsedShard",
+            "type": "u16"
           }
         ]
       }

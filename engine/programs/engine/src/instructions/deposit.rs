@@ -129,6 +129,10 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         // Start counts at 0 for first deposit; we'll add the delta below.
         shard.counts.push(0);
         shard.prefix.clear(); // invalidate prefix if already built
+        // Track highest used shard id
+        if shard.shard_id as u16 > launch_state.roster_highest_used_shard {
+            launch_state.roster_highest_used_shard = shard.shard_id as u16;
+        }
     } else {
         // must stay in the same shard
         require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);

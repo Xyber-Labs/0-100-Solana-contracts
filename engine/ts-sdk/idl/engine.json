@@ -5674,6 +5674,10 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
+          },
+          {
+            "name": "roster_highest_used_shard",
+            "type": "u16"
           }
         ]
       }

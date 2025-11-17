@@ -170,6 +170,7 @@ pub fn init_launch_core<'info>(
     } else {
         crate::constants::TEAM_VESTING_DURATION_SEC
     };
+    state.roster_highest_used_shard = 0;
 
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
