@@ -133,14 +133,6 @@ anchor run init-launch-preset --provider.cluster localnet -- \
   --admin-keypair ./keys/admin3.json
 ```
 
-**Preset structure** (see `presets/deployment.json`):
-
-- Hard cap: 450 SOL
-- Min raise: 100 SOL
-- Per wallet cap: 150 SOL
-- Funding duration: 600 seconds (10 minutes)
-- Base total allocation: 1,000,000,000,000,000,000 (1 billion tokens with decimals=9)
-
 ## Launch Flow (Matches Test Suite)
 
 ### Step 1: Initialize Launch from Preset
@@ -156,15 +148,6 @@ anchor run init-launch-from-preset --provider.cluster localnet -- \
   --uri https://example.com/metadata.json \
   --creator-keypair ./keys/creator.json
 ```
-
-**Parameters:**
-
-- `--preset-id 0` - Preset ID from step 5
-- `--project-id 1` - Unique project ID (increment for each launch)
-- `--name` - Token name
-- `--symbol` - Token symbol (ticker)
-- `--uri` - Metadata URI
-- `--creator-keypair` - Creator's keypair
 
 ### Step 2: Initialize Roster and Shard
 
@@ -204,12 +187,17 @@ anchor run deposit --provider.cluster localnet -- \
   --project-id 1 \
   --amount 150000000000 \
   --user-keypair ./keys/buyer1.json
+```
 
+```bash
 # Deposit 2
 anchor run deposit --provider.cluster localnet -- \
   --project-id 1 \
   --amount 150000000000 \
   --user-keypair ./keys/buyer2.json
+```
+
+```bash
 
 # Deposit 3
 anchor run deposit --provider.cluster localnet -- \
@@ -263,154 +251,33 @@ anchor run set-seed --provider.cluster localnet -- \
 Prepare pool creation by selecting blockhash and finalizing selection:
 
 ```bash
-anchor run prepare-pool-creation --provider.cluster localnet -- \
-  --project-id 1
+anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
 ```
 
 **Parameters:**
 
 - `--project-id 1` - Project ID from step 1
 
-### Step 7: Prepare Quote Mint (WSOL)
-
-The quote mint is Wrapped SOL (WSOL):
-
-```bash
-# WSOL address (native wrapped SOL)
-# So11111111111111111111111111111111111111112
-```
-
-**Note:** WSOL is the native wrapped SOL. No separate minting needed. Base mint will be generated during pool creation.
-
-### Step 8: Skip - WSOL Doesn't Need Minting
-
-WSOL is the native wrapped SOL, no minting step required. This step is skipped in the test flow.
-
-### Step 9: Create CLMM Pool
+### Step 7: Create CLMM Pool
 
 Create the Raydium CLMM pool. This also generates the base mint:
 
 ```bash
-anchor run create-clmm-pool --provider.cluster localnet -- \
-  --project-id 1
+anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 ```
 
 **Parameters:**
 
 - `--project-id 1` - Project ID from step 1
 
-**Output:**
-
-- `baseMint` - Generated base token mint address
-- `baseTokenAta` - Base token associated token account
-- `quoteVault` - Raydium quote vault address
-- `baseVault` - Raydium base vault address
-
-### Step 9.5: Test getLiquidityRange (Optional)
-
-Verify liquidity range calculation:
-
-```bash
-# This is handled internally by the SDK
-# You can verify tick ranges in transaction logs
-```
-
-**Note:** This step is for testing/verification only. The SDK's `addClmmLiquidity` automatically calculates liquidity
-range internally.
-
-### Step 10: Add Liquidity to CLMM Pool
+### Step 8: Add Liquidity to CLMM Pool
 
 Add liquidity to the created CLMM pool:
 
 ```bash
-anchor run add-clmm-liquidity --provider.cluster localnet -- \
-  --project-id 1
+anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 ```
 
 **Parameters:**
 
 - `--project-id 1` - Project ID from step 1
-
-**What happens:**
-
-- Transfers quote tokens (SOL) from escrow to pool
-- Transfers base tokens from escrow to pool
-- Opens a Raydium CLMM position with calculated liquidity range
-- Sets `claims_ready = true` on pool state
-
-**Output verification:**
-
-- Check quote vault balance (should contain deposited SOL)
-- Check base vault balance (should contain base tokens for liquidity)
-- Total deposited SOL visible in launch state
-
-## Environment Variables for Testing
-
-You can calibrate pool pricing by varying deposit amounts:
-
-```bash
-# Example: Run with different deposit amounts
-export BUYER1_AMOUNT=100
-export BUYER2_AMOUNT=100
-export BUYER3_AMOUNT=100
-anchor test --skip-local-validator
-
-# Or single test:
-env BUYER1_AMOUNT=50 BUYER2_AMOUNT=50 BUYER3_AMOUNT=50 anchor test --skip-local-validator
-```
-
-**Default values:** 150 SOL each (450 SOL total)
-
-## Verification
-
-After completing all steps, verify:
-
-1. Launch state shows correct total deposited amount
-2. Raydium pool exists with correct token pair
-3. Quote vault contains deposited SOL
-4. Base vault contains base tokens for liquidity
-5. Pool state has `claims_ready = true`
-
-## Troubleshooting
-
-### "Raydium CLMM program not found"
-
-- Ensure `scripts/start-validator.sh` ran successfully
-- Verify Raydium program loaded: `solana account CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK --url localhost`
-
-### "AmmConfig not found"
-
-- Run `scripts/start-validator.sh` again
-- Check AmmConfig account: `solana account 9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x --url localhost`
-
-### "Insufficient funds"
-
-- Airdrop more SOL to wallets (step 2)
-- Check balances: `solana balance $(solana address -k keys/buyer1.json) --url localhost`
-
-### "Funding period not ended"
-
-- Wait for full funding duration (600 seconds = 10 minutes for test preset)
-- Check `fundingPeriodEnd` in launch state
-
-### "Base mint decimals mismatch"
-
-- Base mint is created with `decimals = 9` automatically
-- Ensure `baseTotalAllocation` in preset has 18 zeros (for 1 billion tokens)
-
-## Testing with Test Suite
-
-To run the full test suite that matches this deployment flow:
-
-```bash
-# Start validator
-scripts/start-validator.sh
-
-# In another terminal, run tests
-anchor test --skip-local-validator
-
-# Or with custom deposit amounts
-env BUYER1_AMOUNT=100 BUYER2_AMOUNT=100 BUYER3_AMOUNT=100 anchor test --skip-local-validator
-```
-
-The test suite in `tests/raydium-clmm-anchor.test.ts` executes all these steps automatically.
