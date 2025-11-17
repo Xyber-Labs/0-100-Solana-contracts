@@ -152,4 +152,8 @@ pub enum ErrorCode {
     InvalidPrice,
     #[msg("Price overflow: result exceeds u128::MAX")]
     PriceOverflow,
+    #[msg("Roster initialization order violated")]
+    InvalidInitOrder,
+    #[msg("Roster shard not fully sealed")]
+    ShardNotSealed,
 }

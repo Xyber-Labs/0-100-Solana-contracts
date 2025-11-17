@@ -154,7 +154,8 @@ pub fn init_launch_core<'info>(
     state.vrf_seed = None;
 
     state.roster_shards = params.roster_shards_total;
-    state.roster_finalized_up_to = -1;
+    state.roster_initialized_up_to = 0;
+    state.roster_finalized_up_to = 0;
     state.public_total_tickets = 0;
 
     state.tokens_per_ticket = None;

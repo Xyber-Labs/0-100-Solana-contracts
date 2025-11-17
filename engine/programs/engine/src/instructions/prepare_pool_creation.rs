@@ -53,7 +53,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     );
     require!(launch_state.roster_shards > 0, EngineErrorCode::ShardsNotFullyFinalized);
     require!(
-        launch_state.roster_finalized_up_to + 1 == launch_state.roster_shards as i32,
+        launch_state.roster_finalized_up_to == launch_state.roster_shards as i32,
         EngineErrorCode::ShardsNotFullyFinalized
     );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);

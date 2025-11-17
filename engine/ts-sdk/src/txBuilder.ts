@@ -695,18 +695,19 @@ export class TxBuilder {
     launch: web3.PublicKey;
     payer: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
-    const [rosterPda] = this.getPda(["roster", params.launch]);
-
-    const instruction = await this.program.methods
-      .initRoster()
-      .accountsStrict({
+    // Legacy wrapper: init first shard (id = 1)
+    const [rosterShard] = this.getRosterShardPda(params.launch, 1);
+    const instruction = await (this.program.methods as any)
+      .initRosterShard(1)
+      .accounts({
         payer: params.payer,
         launchState: params.launch,
-        roster: rosterPda,
+        rosterShard,
         systemProgram: web3.SystemProgram.programId,
-      })
+      } as any)
       .instruction();
-
+    // Keep return shape for backward compatibility
+    const [rosterPda] = this.getPda(["roster", params.launch]);
     return { instruction, rosterPda };
   }
 
@@ -1143,8 +1144,7 @@ export class TxBuilder {
   }
 
   async fetchRoster(launch: web3.PublicKey) {
-    const [pda] = this.getPda(["roster", launch]);
-    return this.program.account.roster.fetch(pda);
+    throw new Error("NotSupported: roster is deprecated; use roster_shard accounts instead");
   }
 
 

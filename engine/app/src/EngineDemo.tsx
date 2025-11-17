@@ -1528,14 +1528,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   if (!sdk || !launchState) return;
                   try {
                     setIsLoading(true);
-                    addLog('Initializing roster shard 0...');
+                    addLog('Initializing roster shard 1...');
                     // Ensure launch account exists
                     try { await sdk.fetchLaunch(launchState); } catch (e) { addLog('ERROR: Launch not found on-chain'); throw e; }
                     const { signature } = await sdk.initRosterShard({
                       launch: launchState,
-                      shardId: 0,
+                      shardId: 1,
                     });
-                    addLog(`SUCCESS: Roster shard 0 initialized - Signature: ${signature}`);
+                    addLog(`SUCCESS: Roster shard 1 initialized - Signature: ${signature}`);
                     try {
                       const [rosterPda] = sdk.getRosterPda(launchState);
                       setRoster(rosterPda);
@@ -1567,12 +1567,12 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   if (!sdk || !launchState) return;
                   try {
                     setIsLoading(true);
-                    addLog('Finalizing roster shard 0...');
+                    addLog('Finalizing roster shard 1...');
                     const { signature } = await sdk.finalizeRosterShard({
                       launch: launchState,
-                      shardId: 0,
+                      shardId: 1,
                     });
-                    addLog(`SUCCESS: Roster shard 0 finalized - Signature: ${signature}`);
+                    addLog(`SUCCESS: Roster shard 1 finalized - Signature: ${signature}`);
                   } catch (error) {
                     addLog(`ERROR: Failed to finalize roster shard - ${error}`);
                   } finally {

@@ -33,6 +33,10 @@ pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Resu
         EngineErrorCode::ShardNotFinalized
     );
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
+    require!(
+        shard.sealed_count as usize == shard.wallets.len(),
+        EngineErrorCode::ShardNotSealed
+    );
 
     Ok(())
 }

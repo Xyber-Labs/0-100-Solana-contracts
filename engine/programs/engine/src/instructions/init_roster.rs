@@ -40,3 +40,4 @@ pub fn init_roster(ctx: Context<InitRoster>) -> Result<()> {
 
     Ok(())
 }
+

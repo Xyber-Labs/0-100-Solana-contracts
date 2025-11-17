@@ -384,9 +384,9 @@ describe("engine litesvm", () => {
 
     await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
 
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
     const initRosterShardTx = await program.methods
-      .initRosterShard(0)
+      .initRosterShard(1)
       .accounts({
         payer: admin.publicKey,
         launchState: testLaunchState,
@@ -449,13 +449,9 @@ describe("engine litesvm", () => {
 
     await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
 
-    await sdk.initRoster({
-      launch: testLaunchState,
-    });
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
     const initRosterShardTx = await program.methods
-      .initRosterShard(0)
+      .initRosterShard(1)
       .accounts({
         payer: admin.publicKey,
         launchState: testLaunchState,
@@ -540,11 +536,10 @@ describe("engine litesvm", () => {
     await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
 
     await sdk.initRoster({ launch: testLaunchState });
-    await sdk.initRosterShard({ launch: testLaunchState, shardId: 0 });
 
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
     await program.methods
       .deposit(depositAmount)
       .accounts({
@@ -561,11 +556,11 @@ describe("engine litesvm", () => {
 
     await advanceTime(client, { seconds: BigInt(12) });
     await sdk.setSeed({ launch: testLaunchState });
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1 });
 
     // seal
     const walletsSlice = [depositor.publicKey];
-    const { transaction: sealTx } = await (sdk as any).sealRosterShardTx({ launch: testLaunchState, shardId: 0, from: 0, max: 1, walletsSlice });
+    const { transaction: sealTx } = await (sdk as any).sealRosterShardTx({ launch: testLaunchState, shardId: 1, from: 0, max: 1, walletsSlice });
     await safeSendAndConfirm(provider, client, sealTx, [admin.payer]);
 
     // close
@@ -575,7 +570,7 @@ describe("engine litesvm", () => {
       beforeLamports = Number(beforeInfo?.lamports ?? 0);
     } catch (_) {}
     const beforePayer = Number(client.getBalance(admin.publicKey));
-    const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId: 0 });
+    const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId: 1 });
     await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
     let afterInfo: any = null;
     try {
@@ -697,7 +692,7 @@ describe("engine litesvm", () => {
     const [directLaunch] = sdk.getLaunchPdaByProjectId(projectId);
     const [directEscrow] = sdk.getEscrowPda(directLaunch);
     const [directRoster] = sdk.getRosterPda(directLaunch);
-    const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 0);
+    const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 1);
     const [directMintAuth] = sdk.getEscrowAuthorityPda(directLaunch);
     const [directProjectCounter] = sdk.getProjectCounterPda();
 
@@ -705,7 +700,7 @@ describe("engine litesvm", () => {
     assert.ok(sdkPdas.escrow.equals(directEscrow));
     assert.ok(sdkPdas.roster.equals(directRoster));
     // selection PDA deprecated; verify roster shard PDA derivation works
-    assert.ok(directRosterShard.equals(sdk.getRosterShardPda(directLaunch, 0)[0]));
+    assert.ok(directRosterShard.equals(sdk.getRosterShardPda(directLaunch, 1)[0]));
     assert.ok(sdkPdas.escrow.equals(directMintAuth));
     assert.ok(sdkPdas.projectCounter.equals(directProjectCounter));
 
@@ -757,13 +752,13 @@ describe("engine litesvm", () => {
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
     let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
     if (!launchAccount.selectionFinalized || !(launchAccount as any).claimsReady) {
-      // 1) Init roster and shard 0
+      // 1) Init roster and shard 1
       await sdk.initRoster({ launch: existingLaunchPda });
-      await sdk.initRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      // initRoster initializes shard 1 in current flow
 
       // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
       let totalDeposited = new anchor.BN(0);
-      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 0);
+      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 1);
       while (totalDeposited.lt(MIN_RAISE_LAMPORTS)) {
         const depositor = await createAndFundAccount(client, 10);
         const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
@@ -792,7 +787,7 @@ describe("engine litesvm", () => {
 
       // 4) Set VRF seed, finalize shard
       await sdk.setSeed({ launch: existingLaunchPda });
-      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 0 });
+      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 1 });
       // claims are opened in preparePoolCreation now
 
       // Refresh state
@@ -929,14 +924,9 @@ describe("engine litesvm", () => {
     }
 
     await sdk.initRoster({ launch: launchPda });
-    {
-      const { instruction } = await (sdk as any).initRosterShardIx({ launch: launchPda, payer: admin.publicKey, shardId: 0 });
-      const tx = new anchor.web3.Transaction().add(instruction);
-      await safeSendAndConfirm(provider, client, tx, [admin.payer]);
-    }
 
     const depositor = await createAndFundAccount(client, 20);
-    const [rosterShard] = sdk.getRosterShardPda(launchPda, 0);
+    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
     const stateAfterInit = await sdk.fetchLaunch(launchPda) as any;
     const tauBn = new anchor.BN((stateAfterInit.tauLamports as anchor.BN).toString());
     const [userContribution] = sdk.getUserContributionPda(launchPda, depositor.publicKey);
@@ -959,7 +949,7 @@ describe("engine litesvm", () => {
 
     await advanceTime(client, { seconds: BigInt(12) });
     await sdk.setSeed({ launch: launchPda });
-    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 0 });
+    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1 });
 
     const state = await sdk.fetchLaunch(launchPda);
     const project = state.projectId.toNumber();
@@ -1440,13 +1430,10 @@ describe("Full flow", () => {
     assert.equal(creatorGrantState.reservedTickets, 0);
     console.log(`Creator grant initialized: ${creatorGrantState.reservedTickets} reserved tickets`);
 
-    console.log("=== Initializing Roster ===");
-    const { rosterPda } = await sdk.initRoster({
-      launch: testLaunchState,
-    });
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 0);
+    console.log("=== Initializing Roster Shard 1 ===");
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
     const initRosterShardTx = await program.methods
-      .initRosterShard(0)
+      .initRosterShard(1)
       .accounts({
         payer: admin.publicKey,
         launchState: testLaunchState,
@@ -1507,9 +1494,13 @@ describe("Full flow", () => {
     await sdk.setSeed({ launch: testLaunchState });
 
     console.log("=== Finalizing Shard ===");
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 0 });
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1 });
 
     console.log("=== Creating Pool (finalizes selection and opens claims) ===");
+    {
+      const st = await sdk.fetchLaunch(testLaunchState) as any;
+      console.log("DEBUG roster_shards:", st.rosterShards, "finalized_up_to:", st.rosterFinalizedUpTo);
+    }
     {
       state = await sdk.fetchLaunch(testLaunchState);
       const projectId = state.projectId.toNumber();
@@ -1521,16 +1512,16 @@ describe("Full flow", () => {
       injectSlotHashesForRange(client, rangeStart, rangeEnd);
     }
     {
-      const res = await sdk.preparePoolCreation({ launch: testLaunchState, computeUnits: 2_000_000 });
-      console.log("preparePoolCreation signature:", res.signature);
+      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunchState, computeUnits: 2_000_000 });
+      await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
     }
 
     // Seal roster shard snapshot for users and close shard; verify payer receives lamports back
     {
       const walletsSlice = users.map((u) => u.keypair.publicKey);
-      await sdk.sealRosterShard({ launch: testLaunchState, shardId: 0, from: 0, max: walletsSlice.length, walletsSlice });
+      await sdk.sealRosterShard({ launch: testLaunchState, shardId: 1, from: 0, max: walletsSlice.length, walletsSlice });
       const beforeClose = client.getBalance(admin.publicKey);
-      await sdk.closeRosterShard({ launch: testLaunchState, shardId: 0 });
+      await sdk.closeRosterShard({ launch: testLaunchState, shardId: 1 });
       const afterClose = client.getBalance(admin.publicKey);
       // Expect some rent back; ensure strictly increased
       if (!(afterClose > beforeClose)) {

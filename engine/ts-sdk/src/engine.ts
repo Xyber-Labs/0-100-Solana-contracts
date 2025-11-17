@@ -575,7 +575,8 @@ const EngineSDK = {
       computeUnits?: number;
       computeUnitPriceMicroLamports?: number;
     }): Promise<{ signature: string }> {
-      const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+      const defaultPayerKp: anchor.web3.Keypair | undefined = (provider as any)?.wallet?.payer;
+      const payerPubkey = args.payerKeypair?.publicKey ?? defaultPayerKp?.publicKey ?? payer;
       const { transaction } = await txBuilder.preparePoolCreationTx({
         payer: payerPubkey,
         launch: args.launch,
@@ -585,7 +586,9 @@ const EngineSDK = {
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signers = args.payerKeypair ? [args.payerKeypair] : [];
+      const signers = args.payerKeypair
+        ? [args.payerKeypair]
+        : (defaultPayerKp ? [defaultPayerKp] as anchor.web3.Keypair[] : []);
       const signature = await provider.sendAndConfirm(transaction, signers);
       return { signature };
     }

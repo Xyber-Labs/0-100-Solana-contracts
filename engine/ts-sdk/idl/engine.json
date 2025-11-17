@@ -26,10 +26,6 @@
           "signer": true
         },
         {
-          "name": "raydium_program",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-        },
-        {
           "name": "launch_state",
           "writable": true
         },
@@ -314,6 +310,10 @@
         {
           "name": "token_2022_program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "raydium_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quote_token_program",
@@ -3346,78 +3346,6 @@
       ]
     },
     {
-      "name": "init_roster",
-      "docs": [
-        "Initialize roster account."
-      ],
-      "discriminator": [
-        231,
-        223,
-        153,
-        129,
-        236,
-        138,
-        47,
-        253
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "init_roster_shard",
       "docs": [
         "Initialize roster shard account"
@@ -3567,208 +3495,6 @@
         {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "mint_for_test",
-      "discriminator": [
-        220,
-        129,
-        50,
-        237,
-        118,
-        129,
-        46,
-        218
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "escrow_authority",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "base_mint",
-          "writable": true
-        },
-        {
-          "name": "base_escrow_ata",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "escrow_authority"
-              },
-              {
-                "kind": "account",
-                "path": "base_token_program"
-              },
-              {
-                "kind": "account",
-                "path": "base_mint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "associated_token_program"
-            }
-          }
-        },
-        {
-          "name": "metadata_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  101,
-                  116,
-                  97,
-                  100,
-                  97,
-                  116,
-                  97
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "token_metadata_program"
-              },
-              {
-                "kind": "account",
-                "path": "base_mint"
-              }
-            ],
-            "program": {
-              "kind": "account",
-              "path": "token_metadata_program"
-            }
-          }
-        },
-        {
-          "name": "token_metadata_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  109,
-                  101,
-                  116,
-                  97,
-                  100,
-                  97,
-                  116,
-                  97
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "base_token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "token_metadata_program",
-          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-        },
-        {
-          "name": "associated_token_program",
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -4385,19 +4111,6 @@
         9,
         88,
         148
-      ]
-    },
-    {
-      "name": "Roster",
-      "discriminator": [
-        211,
-        108,
-        170,
-        22,
-        253,
-        177,
-        162,
-        194
       ]
     },
     {
@@ -5060,6 +4773,26 @@
       "code": 6068,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient fee balance"
+    },
+    {
+      "code": 6069,
+      "name": "InvalidPrice",
+      "msg": "Invalid price: must be finite and positive"
+    },
+    {
+      "code": 6070,
+      "name": "PriceOverflow",
+      "msg": "Price overflow: result exceeds u128::MAX"
+    },
+    {
+      "code": 6071,
+      "name": "InvalidInitOrder",
+      "msg": "Roster initialization order violated"
+    },
+    {
+      "code": 6072,
+      "name": "ShardNotSealed",
+      "msg": "Roster shard not fully sealed"
     }
   ],
   "types": [
@@ -5873,6 +5606,10 @@
             "type": "u16"
           },
           {
+            "name": "roster_initialized_up_to",
+            "type": "i32"
+          },
+          {
             "name": "roster_finalized_up_to",
             "type": "i32"
           },
@@ -6086,44 +5823,6 @@
       }
     },
     {
-      "name": "Roster",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallets",
-            "type": {
-              "vec": "pubkey"
-            }
-          },
-          {
-            "name": "counts",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "prefix",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "total_in_shard",
-            "type": "u32"
-          },
-          {
-            "name": "shard_base",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "RosterInitialized",
       "type": {
         "kind": "struct",
@@ -6172,6 +5871,10 @@
           },
           {
             "name": "shard_base",
+            "type": "u32"
+          },
+          {
+            "name": "sealed_count",
             "type": "u32"
           }
         ]

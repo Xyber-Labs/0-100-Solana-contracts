@@ -336,7 +336,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await utils.doAndCheckError(
       sdk.createClmmPool({
         launch: fakeLaunchState.publicKey,
-        quoteMint: quoteMintKeypair.publicKey,
         signers: [admin1Keypair],
       }),
       "Invalid authority"
@@ -355,7 +354,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const result = await sdk.createClmmPool({
       launch: launchPda,
-      quoteMint: quoteMintKeypair.publicKey,
       signers: [admin1Keypair],
     });
 

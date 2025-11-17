@@ -35,11 +35,6 @@ pub mod engine {
         instructions::init_launch(ctx, params, project_id)
     }
 
-    /// Initialize roster account.
-    pub fn init_roster(ctx: Context<InitRoster>) -> Result<()> {
-        instructions::init_roster(ctx)
-    }
-
     /// Initialize roster shard account
     pub fn init_roster_shard(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
         instructions::init_roster_shard(ctx, shard_id)

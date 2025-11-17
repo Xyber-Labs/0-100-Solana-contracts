@@ -365,7 +365,7 @@ export async function runFullFlow(
       addLog(`   -> Requested ${requestedUsers} users exceeds shard capacity (${maxUsersCapacity}). Capped to ${TARGET_USERS}.`);
     }
     const balanceBeforeShards = await provider.connection.getBalance(admin.publicKey);
-    for (let i = 0; i < numShards; i++) {
+    for (let i = 1; i <= numShards; i++) {
       try {
         await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
         addLog(`   -> Shard ${i} initialized.`);
@@ -396,7 +396,7 @@ export async function runFullFlow(
       const tickets = Math.max(1, Math.floor(Math.random() * MAX_TICKETS) + 1);
       const keypair = Keypair.generate();
       const depositAmount = new BN(config.tauLamports).mul(new BN(tickets));
-      const shardId = Math.floor(i / config.rosterShardCap);
+      const shardId = 1 + Math.floor(i / config.rosterShardCap);
       provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
     }
     let users = provisionalUsers;
@@ -502,7 +502,7 @@ export async function runFullFlow(
     // Ensure ALL shards up to launch_state.roster_shards are finalized
     const launchAfterDeposits: any = await sdk.fetchLaunch(testLaunchState);
     const totalShards: number = Number(launchAfterDeposits.rosterShards ?? 0);
-    for (let i = 0; i < totalShards; i++) {
+    for (let i = 1; i <= totalShards; i++) {
       // initialize shard if it wasn't created earlier (empty shard is OK)
       try {
         await sdk.initRosterShard({ launch: testLaunchState, shardId: i });
@@ -510,7 +510,7 @@ export async function runFullFlow(
         // ignore if exists
       }
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
-      addLog(`   -> Shard ${i}/${totalShards - 1} finalized.`);
+      addLog(`   -> Shard ${i}/${totalShards} finalized.`);
     }
 
     const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
@@ -520,7 +520,7 @@ export async function runFullFlow(
     {
       const launch: any = await sdk.fetchLaunch(testLaunchState);
       const totalShards: number = Number(launch.rosterShards ?? 0);
-      for (let shardId = 0; shardId < totalShards; shardId++) {
+      for (let shardId = 1; shardId <= totalShards; shardId++) {
         const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
         let shardAcc: any = null;
         try {

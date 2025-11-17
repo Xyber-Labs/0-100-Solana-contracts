@@ -38,7 +38,8 @@ pub struct LaunchState {
 
     // Sharded roster and permutation-based selection fields
     pub roster_shards: u16, // number of roster shards allocated for this launch
-    pub roster_finalized_up_to: i32, // -1 until finalization starts; then last finalized shard_id
+    pub roster_initialized_up_to: i32, // 0 until first shard initialized; then last initialized shard_id
+    pub roster_finalized_up_to: i32, // 0 until finalization starts; then last finalized shard_id
     pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
 
     // Claims
@@ -129,6 +130,7 @@ pub struct RosterShard {
     pub prefix: Vec<u32>,
     pub total_in_shard: u32,
     pub shard_base: u32,
+    pub sealed_count: u32,
 }
 
 #[account]
