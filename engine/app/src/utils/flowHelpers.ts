@@ -110,6 +110,7 @@ export async function depositUsersParallel(params: {
   const results: Array<{ pubkey: PublicKey; shardId: number }> = new Array(users.length);
   await runWithConcurrency(users, Math.min(concurrency, total), async (user, index) => {
     const res = await (sdk as any).depositAutoShard({ launch: launchPda, amountLamports: user.depositAmount, userKeypair: user.keypair, preferredShardId: user.shardId });
+    console.log("depositAutoShard res", res);
     results[index] = { pubkey: user.keypair.publicKey, shardId: res.shardId };
     const c = ++completed;
     if (c % step === 0 || c === total) {

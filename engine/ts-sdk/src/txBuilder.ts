@@ -788,7 +788,7 @@ export class TxBuilder {
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
+      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
     // escrow removed; use only escrow_authority PDA
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
@@ -848,7 +848,7 @@ export class TxBuilder {
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
+      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
     const instruction = await this.program.methods

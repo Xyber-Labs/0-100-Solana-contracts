@@ -113,51 +113,41 @@ export function createShardsApi(params: {
     const total: number = Number(launchState.rosterShards);
     const cap: number = Number(launchState.rosterShardCap);
     if (!Number.isFinite(total) || total <= 0) throw new Error("Invalid roster shards");
-    const order = selectRosterShard(args.launch, user, total).order;
-    const tryOrder = typeof args.preferredShardId === "number" ? [args.preferredShardId, ...order.filter((x) => x !== args.preferredShardId)] : order;
     const conn = program.provider.connection;
-    for (const id of tryOrder) {
+    // Prefer deterministic, sequential fill: pick the first shard with prev full and itself not full.
+    // If preferredShardId is provided, try it first, then fall back to sequential scan.
+    const candidates: number[] = [];
+    if (typeof args.preferredShardId === "number") candidates.push(args.preferredShardId);
+    for (let id = 1; id <= total; id++) candidates.push(id);
+    for (const id of candidates) {
+      if (id < 1 || id > total) continue;
       const [rosterShardPda] = getRosterShardPda(args.launch, id);
       const info = await conn.getAccountInfo(rosterShardPda);
       if (!info) {
-        try {
-          const initIx = (await txBuilder.initRosterShardIx({ launch: args.launch, payer, shardId: id })).instruction;
-          const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, shardId: id });
-          const tx = new anchor.web3.Transaction().add(initIx, dep.instruction);
-          const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
-          console.log(`deposit shard=${id} created=true`);
-          return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
-        } catch (e: any) {
-          if (isRosterShardFullError(e)) {
-            console.log(`deposit shard=${id} full=true`);
+        // Expect shards to be pre-initialized; skip missing ones
             continue;
           }
-          throw e;
-        }
-      } else {
-        try {
+      // Load shard to check capacity
           const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
           const used: number = (shard?.wallets?.length ?? 0) as number;
-          if (used >= cap) {
-            continue;
+      if (used >= cap) continue;
+      // Enforce previous shard full for s > 1
+      if (id > 1) {
+        const [prevPda] = getRosterShardPda(args.launch, id - 1);
+        const prevInfo = await conn.getAccountInfo(prevPda);
+        if (!prevInfo) continue;
+        const prev: any = await (program.account as any).rosterShard.fetch(prevPda);
+        const prevUsed: number = (prev?.wallets?.length ?? 0) as number;
+        if (prevUsed < cap) continue;
           }
-          const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda, shardId: id });
+      // Deposit into selected shard (txBuilder will add prev shard as remaining if needed)
+      const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda, shardId: id });
           const tx = new anchor.web3.Transaction().add(dep.instruction);
           const signers = args.userKeypair ? [args.userKeypair] : [];
           if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
           const signature = await (provider as any).sendAndConfirm(tx, signers);
           console.log(`deposit shard=${id} created=false`);
           return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
-        } catch (e: any) {
-          if (isRosterShardFullError(e)) {
-            console.log(`deposit shard=${id} full=true`);
-            continue;
-          }
-          throw e;
-        }
-      }
     }
     throw new Error("All roster shards are full");
   }
