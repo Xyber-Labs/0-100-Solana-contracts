@@ -198,11 +198,6 @@ After the funding period ends (10 minutes for test preset), finalize the roster 
 anchor run finalize-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 0
 ```
 
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
-- `--shard-id 0` - Shard ID (0-based)
-
 ### Step 5: Set VRF Seed
 
 Set the VRF seed for randomness in winner selection:
@@ -218,10 +213,6 @@ Prepare pool creation by selecting blockhash and finalizing selection:
 ```bash
 anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
 ```
-
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
 
 ### Step 7: Create CLMM Pool
 
