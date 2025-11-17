@@ -4,7 +4,7 @@ use crate::{
     events::DepositMade,
     state::{LaunchState, RosterShard, UserContribution},
 };
-use anchor_lang::{prelude::*, solana_program};
+use anchor_lang::{prelude::*, solana_program, AccountDeserialize};
 use solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
@@ -98,6 +98,26 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     // Sharded roster update: assign on first deposit, then O(1) by index
     let shard = &mut ctx.accounts.roster_shard;
     if is_first_deposit {
+        // Enforce sequential fill across shards: s > 1 requires s-1 to be full
+        if shard.shard_id > 1 {
+            let prev_id = shard.shard_id - 1;
+            let (expected_prev_pda, _) = Pubkey::find_program_address(
+                &[SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &prev_id.to_le_bytes()],
+                &crate::ID,
+            );
+            let prev_ai = ctx
+                .remaining_accounts
+                .get(0)
+                .ok_or(EngineErrorCode::MappingError)?;
+            require_keys_eq!(prev_ai.key(), expected_prev_pda, EngineErrorCode::Unauthorized);
+            let data_ref = prev_ai.try_borrow_data()?;
+            let mut read_cursor: &[u8] = &data_ref;
+            let prev: RosterShard = RosterShard::try_deserialize(&mut read_cursor)?;
+            require!(
+                prev.wallets.len() == launch_state.roster_shard_cap as usize,
+                EngineErrorCode::RosterShardFull
+            );
+        }
         // first deposit path: assign shard and index
         require!(
             shard.wallets.len() < launch_state.roster_shard_cap as usize,

@@ -792,7 +792,7 @@ export class TxBuilder {
     // escrow removed; use only escrow_authority PDA
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
-    const instruction = await this.program.methods
+    const method = this.program.methods
       .deposit(params.amount)
       .accounts({
         user: params.user,
@@ -804,8 +804,14 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
+      } as any);
+
+    const prevId = (typeof params.shardId === "number" ? params.shardId : 0) - 1;
+    if (prevId >= 1) {
+      const [prevShard] = this.getRosterShardPda(params.launch, prevId);
+      (method as any).remainingAccounts([{ pubkey: prevShard, isSigner: false, isWritable: false }]);
+    }
+    const instruction = await (method as any).instruction();
 
     return { instruction, userContribution };
   }
