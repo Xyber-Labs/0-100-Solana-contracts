@@ -155,19 +155,11 @@ Initialize roster and roster shard (required before deposits):
 
 ```bash
 # Initialize roster
-anchor run init-roster --provider.cluster localnet -- \
-  --project-id 1
+anchor run init-roster --provider.cluster localnet -- --project-id 1
 
 # Initialize roster shard 0
-anchor run init-roster-shard --provider.cluster localnet -- \
-  --project-id 1 \
-  --shard-id 0
+anchor run init-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 0
 ```
-
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
-- `--shard-id 0` - Shard ID (0-based, start with 0)
 
 **Note:** The test preset has `rosterShardsTotal: 1`, so only shard 0 needs to be initialized.
 
@@ -183,34 +175,14 @@ Make deposits to the launch. You can vary amounts using environment variables:
 # export BUYER3_AMOUNT=100
 
 # Deposit 1
-anchor run deposit --provider.cluster localnet -- \
-  --project-id 1 \
-  --amount 150000000000 \
-  --user-keypair ./keys/buyer1.json
-```
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json
 
-```bash
 # Deposit 2
-anchor run deposit --provider.cluster localnet -- \
-  --project-id 1 \
-  --amount 150000000000 \
-  --user-keypair ./keys/buyer2.json
-```
-
-```bash
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json
 
 # Deposit 3
-anchor run deposit --provider.cluster localnet -- \
-  --project-id 1 \
-  --amount 150000000000 \
-  --user-keypair ./keys/buyer3.json
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json
 ```
-
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
-- `--amount` - Amount in lamports (150000000000 = 150 SOL)
-- `--user-keypair` - Depositor's keypair
 
 **Note:** Total deposited includes creator deposit + all buyer deposits. The test suite uses configurable amounts
 via `BUYER1_AMOUNT`, `BUYER2_AMOUNT`, `BUYER3_AMOUNT` environment variables.
@@ -223,9 +195,7 @@ After the funding period ends (10 minutes for test preset), finalize the roster 
 # Wait for funding period to end (600 seconds from first deposit)
 # Then finalize:
 
-anchor run finalize-roster-shard --provider.cluster localnet -- \
-  --project-id 1 \
-  --shard-id 0
+anchor run finalize-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 0
 ```
 
 **Parameters:**
@@ -238,13 +208,8 @@ anchor run finalize-roster-shard --provider.cluster localnet -- \
 Set the VRF seed for randomness in winner selection:
 
 ```bash
-anchor run set-seed --provider.cluster localnet -- \
-  --project-id 1
+anchor run set-seed --provider.cluster localnet -- --project-id 1
 ```
-
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
 
 ### Step 6: Prepare Pool Creation
 
@@ -266,10 +231,6 @@ Create the Raydium CLMM pool. This also generates the base mint:
 anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 ```
 
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
-
 ### Step 8: Add Liquidity to CLMM Pool
 
 Add liquidity to the created CLMM pool:
@@ -277,7 +238,3 @@ Add liquidity to the created CLMM pool:
 ```bash
 anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 ```
-
-**Parameters:**
-
-- `--project-id 1` - Project ID from step 1
