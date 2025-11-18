@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::Token,
-    token_2022::Token2022,
-    token_interface::{Mint as InterfaceMint, TokenInterface},
-};
+use anchor_spl::{token::Token, token_2022::Token2022, token_interface::Mint as InterfaceMint};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{

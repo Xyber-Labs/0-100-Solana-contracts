@@ -28,7 +28,7 @@ pub struct AddClmmLiquidity<'info> {
         mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
-    pub base_mint: Account<'info, Mint>,
+    pub base_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -40,13 +40,13 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::authority = escrow_authority,
         associated_token::token_program = base_token_program,
     )]
-    pub base_escrow_ata: Account<'info, TokenAccount>,
+    pub base_escrow_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mint::token_program = quote_token_program,
         address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
     )]
-    pub quote_mint: Account<'info, Mint>,
+    pub quote_mint: Box<Account<'info, Mint>>,
 
     #[account(
         init,
@@ -55,7 +55,7 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::authority = escrow_authority,
         associated_token::token_program = quote_token_program,
     )]
-    pub quote_escrow_ata: Account<'info, TokenAccount>,
+    pub quote_escrow_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
@@ -109,6 +109,7 @@ pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
     add_initial_liquidity(&ctx)?;
+    // TODO: base_mint to be used instead of this explicit approach
     ctx.accounts.pool_state.claims_ready = true;
     Ok(())
 }
