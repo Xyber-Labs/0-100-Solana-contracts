@@ -1,12 +1,12 @@
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
-import { LiteSVM, FailedTransactionMetadata } from "litesvm";
+import { FailedTransactionMetadata, LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import { SendTransactionError } from "@solana/web3.js";
 import {
-  createInitializeMintInstruction,
   createAssociatedTokenAccountInstruction,
+  createInitializeMintInstruction,
   createMintToInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
@@ -1012,7 +1012,6 @@ describe("engine litesvm", () => {
     }
 
     const projectId = await sdk.getNextProjectId();
-    const testBaseMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
     const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
     const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
@@ -1034,22 +1033,6 @@ describe("engine litesvm", () => {
       return;
     }
 
-    // Create mint account first
-    const createMintIx = anchor.web3.SystemProgram.createAccount({
-      fromPubkey: admin.publicKey,
-      newAccountPubkey: testBaseMint.publicKey,
-      space: 82,
-      lamports: 2039280, // Fixed rent exemption for 82 bytes
-      programId: TOKEN_PROGRAM_ID,
-    });
-
-    const initMintIx = createInitializeMintInstruction(
-      testBaseMint.publicKey,
-      9,
-      mintAuth,
-      admin.publicKey
-    );
-
     // Initialize launch
     const { initLaunchTx } = await sdk.initLaunchTx({
       creator: admin.publicKey,
@@ -1070,8 +1053,8 @@ describe("engine litesvm", () => {
       creatorMaxDepositLamports: creatorDepositAmount,
       xyberMint,
     });
-    const tx = new anchor.web3.Transaction().add(createMintIx, initMintIx, initLaunchTx);
-    const signature = await safeSendAndConfirm(provider, client, tx, [testBaseMint, admin.payer]);
+    const tx = new anchor.web3.Transaction().add(initLaunchTx);
+    const signature = await safeSendAndConfirm(provider, client, tx, [admin.payer]);
 
     console.log("Launch with creator deposit initialized. Signature:", signature);
 
@@ -1410,7 +1393,6 @@ describe("Full flow", () => {
     }
 
     const projectId = await sdk.getNextProjectId();
-    const testBaseMint = anchor.web3.Keypair.generate();
     const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
     const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
 
@@ -1565,7 +1547,6 @@ describe("Full flow", () => {
       payer: admin.publicKey,
       launch: testLaunchState,
       quoteMint: WSOL_MINT,
-      baseMint: testBaseMint, // unused by SDK, baseMint is taken from launch
       ammConfig: raydiumAmmConfig,
       clmmProgram: raydiumProgramId,
       provider,
@@ -1577,7 +1558,7 @@ describe("Full flow", () => {
         payer: admin.publicKey,
         launch: testLaunchState,
         quoteMint: WSOL_MINT,
-        baseMint: testBaseMint.publicKey,
+        baseMint: clmmCreate.baseMint,
         baseTokenAta: clmmCreate.baseTokenAta,
         ammConfig: raydiumAmmConfig,
         clmmProgram: raydiumProgramId,
@@ -1593,20 +1574,11 @@ describe("Full flow", () => {
     console.log("=== Testing Creator Token Claiming ===");
     // Test creator token claiming (only if creator deposit > 0)
     if (creatorDepositAmount.toNumber() > 0) {
-      const creatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
-
-      // Create creator ATA first
-      const createAtaIx = sdk.buildCreateAtaIx({
-        payer: admin.publicKey,
-        owner: admin.publicKey,
-        mint: testBaseMint.publicKey,
-      }).ix;
-
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(createAtaIx), []);
+      const creatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
 
       const claimResultTx = await sdk.claimCreatorTokensTx({
         launch: testLaunchState,
-        baseMint: testBaseMint.publicKey,
+        baseMint: clmmCreate.baseMint,
         creator: admin.publicKey,
         creatorAta: creatorAta,
         createAtaIfMissing: false,
@@ -1699,12 +1671,12 @@ describe("Full flow", () => {
       return;
     }
     const userAta = sdk.getUserAta(
-      testBaseMint.publicKey,
+      clmmCreate.baseMint,
       testUser.keypair.publicKey
     );
     const { transaction: claimTokensTx } = await sdk.claimTokensTx({
       launch: testLaunchState,
-      baseMint: testBaseMint.publicKey,
+      baseMint: clmmCreate.baseMint,
       userPubkey: testUser.keypair.publicKey,
       createAtaIfMissing: true,
     });
@@ -1750,14 +1722,14 @@ describe("Full flow", () => {
     await sdk.initTeamVesting({ launch: testLaunchState });
 
     // Ensure creator ATA exists (was created earlier for creator claim), but create defensively if missing
-    const teamCreatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+    const teamCreatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
     try {
       const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
       if (!ataInfo) {
         const createAtaIx = sdk.buildCreateAtaIx({
           payer: admin.publicKey,
           owner: admin.publicKey,
-          mint: testBaseMint.publicKey,
+          mint: clmmCreate.baseMint,
         }).ix;
         await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(createAtaIx), []);
       }
@@ -1765,7 +1737,7 @@ describe("Full flow", () => {
       const createAtaIx = sdk.buildCreateAtaIx({
         payer: admin.publicKey,
         owner: admin.publicKey,
-        mint: testBaseMint.publicKey,
+        mint: clmmCreate.baseMint,
       }).ix;
       await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(createAtaIx), []);
     }
@@ -1779,7 +1751,7 @@ describe("Full flow", () => {
 
     const { transaction: claimTeamTx } = await sdk.claimTeamTokensTx({
       launch: testLaunchState,
-      baseMint: testBaseMint.publicKey,
+      baseMint: clmmCreate.baseMint,
       creator: admin.publicKey,
       creatorAta: teamCreatorAta,
       createAtaIfMissing: false,
@@ -1812,7 +1784,7 @@ describe("Full flow", () => {
     if (firstSig) {
       const { transaction } = await sdk.claimTeamTokensTx({
         launch: testLaunchState,
-        baseMint: testBaseMint.publicKey,
+        baseMint: clmmCreate.baseMint,
         creator: admin.publicKey,
         creatorAta: teamCreatorAta,
         createAtaIfMissing: false,
@@ -1833,7 +1805,7 @@ describe("Full flow", () => {
     await advanceTime(client, { seconds: BigInt(400) });
     await sdk.claimTeamTokens({
       launch: testLaunchState,
-      baseMint: testBaseMint.publicKey,
+      baseMint: clmmCreate.baseMint,
       creatorAta: teamCreatorAta,
       createAtaIfMissing: false,
     });
