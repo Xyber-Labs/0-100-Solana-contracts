@@ -20,7 +20,6 @@ pub(crate) struct ClmmOrder<'info> {
     pub(crate) token_0_supply: u64,
     pub(crate) token_1_supply: u64,
     pub(crate) base_flag: Option<bool>,
-    pub(crate) base_supply: u64,
     pub(crate) quote_supply: u64,
 }
 
@@ -79,7 +78,6 @@ impl<'info> ClmmOrder<'info> {
                 token_1_supply: base_clmm_supply as u64,
                 base_flag: Some(true),
                 quote_supply: quote_clmm_supply,
-                base_supply: base_clmm_supply as u64,
             }
         } else {
             let sqrt_price_val = get_sqrt_price(price_ratio);
@@ -98,7 +96,6 @@ impl<'info> ClmmOrder<'info> {
                 token_0_supply: base_clmm_supply as u64,
                 token_1_supply: quote_clmm_supply,
                 base_flag: Some(false),
-                base_supply: base_clmm_supply as u64,
                 quote_supply: quote_clmm_supply,
             }
         }

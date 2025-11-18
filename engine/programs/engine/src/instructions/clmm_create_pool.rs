@@ -95,23 +95,19 @@ pub struct CreateClmmPool<'info> {
 }
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
+    let state = &mut ctx.accounts.launch_state;
     require!(
-        ctx.accounts.launch_state.roster_shards > 0
-            && ctx.accounts.launch_state.roster_finalized_up_to + 1
-                == ctx.accounts.launch_state.roster_shards as i32,
+        state.roster_shards > 0 && state.roster_finalized_up_to + 1 == state.roster_shards as i32,
         ErrorCode::ShardsNotFullyFinalized
     );
-
-    let state = &ctx.accounts.launch_state;
-    let to_mint = state.base_total_allocation as u64;
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
         &ctx.accounts.escrow_authority.to_account_info(),
-        &ctx.accounts.launch_state.key(),
-        to_mint,
+        &state.key(),
+        state.base_total_allocation,
     )?;
 
     mint_utils::ensure_token_metadata_for_launch(
@@ -123,12 +119,13 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.system_program.to_account_info(),
         &ctx.accounts.rent.to_account_info(),
         &ctx.accounts.token_metadata_config,
-        &ctx.accounts.launch_state.key(),
+        &state.key(),
     )?;
-    raydium_create_pool_impl(&ctx)?;
-    ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
-    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
+    state.base_mint = Some(ctx.accounts.base_mint.key());
+    state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     ctx.accounts.pool_state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
+
+    raydium_create_pool_impl(&ctx)?;
 
     Ok(())
 }
