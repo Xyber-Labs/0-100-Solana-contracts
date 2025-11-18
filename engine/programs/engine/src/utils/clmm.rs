@@ -122,8 +122,10 @@ pub fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64) -> Liquidit
     let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
     let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
 
-    let tick_lower_raw = libraries::get_tick_at_sqrt_price(sqrt_price_lower_x64).unwrap();
-    let tick_upper_raw = libraries::get_tick_at_sqrt_price(sqrt_price_upper_x64).unwrap();
+    let tick_lower_raw = libraries::get_tick_at_sqrt_price(sqrt_price_lower_x64)
+        .expect("Expected to be allowed sqrt price range");
+    let tick_upper_raw = libraries::get_tick_at_sqrt_price(sqrt_price_upper_x64)
+        .expect("Expected to be allowed sqrt price range");
 
     let spacing = tick_spacing as i32;
     let tick_array_lower = (tick_lower_raw / spacing) * spacing;
