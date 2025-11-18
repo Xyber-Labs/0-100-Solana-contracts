@@ -3,8 +3,8 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
-import EngineSDK, { loadKeypair } from "@xyber-labs/0-100-sdk";
 
+import EngineSDK, { loadKeypair } from "@xyber-labs/0-100-sdk";
 import { getExplorerUrl } from "../scripts/utils";
 
 async function main() {
@@ -37,14 +37,7 @@ async function main() {
   const admin1Keypair = adminKeypairs[0];
   const p = payload;
 
-  const connection = new anchor.web3.Connection(
-    process.env.ANCHOR_PROVIDER_URL || "http://localhost:8899",
-    "confirmed"
-  );
-  const wallet = new anchor.Wallet(admin1Keypair);
-  const provider = new anchor.AnchorProvider(connection, wallet, {
-    commitment: "confirmed",
-  });
+  const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const engineProgram = anchor.workspace.Engine;
