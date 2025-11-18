@@ -1,11 +1,10 @@
-import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
 
-import EngineSDK, { loadKeypair } from "@xyber-labs/0-100-sdk";
-import { getExplorerUrl } from "../scripts/utils";
+import { loadKeypair } from "@xyber-labs/0-100-sdk";
+import { getExplorerUrl, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();
@@ -34,16 +33,9 @@ async function main() {
   if (!adminKeyPaths.length) throw new Error("At least one --admin-keypair must be provided");
 
   const adminKeypairs = adminKeyPaths.map(loadKeypair);
-  const admin1Keypair = adminKeypairs[0];
   const p = payload;
 
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
-
-  const engineProgram = anchor.workspace.Engine;
-  const sdk = EngineSDK.create(provider, engineProgram, admin1Keypair);
-
-  try {
+  await runWithSdk(async ({ provider, sdk }) => {
     const result = await sdk.initLaunchPreset({
       id,
       params: {
@@ -73,15 +65,7 @@ async function main() {
     console.log("LaunchPreset:", result.launchPreset.toBase58());
     console.log("Transaction signature:", result.signature);
     console.log("Explorer:", getExplorerUrl(provider, result.signature));
-  } catch (error) {
-    console.error("❌ Transaction failed:");
-    console.error(error);
-    if (error.logs) {
-      console.error("Program logs:");
-      error.logs.forEach((log: string) => console.error(log));
-    }
-    process.exit(1);
-  }
+  });
 }
 
 main();
