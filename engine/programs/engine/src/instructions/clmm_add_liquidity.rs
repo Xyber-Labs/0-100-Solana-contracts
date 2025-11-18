@@ -152,7 +152,6 @@ fn add_initial_liquidity_impl<'info>(
         ),
         order.quote_supply,
     )?;
-    msg!("Transferred lamports to WSOL ATA: {}", order.quote_supply);
 
     anchor_spl::token_interface::sync_native(CpiContext::new(
         ctx.accounts.quote_token_program.to_account_info(),
@@ -160,7 +159,6 @@ fn add_initial_liquidity_impl<'info>(
             account: ctx.accounts.quote_escrow_ata.to_account_info(),
         },
     ))?;
-    msg!("Synced native for WSOL ATA");
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
         payer: ctx.accounts.escrow_authority.to_account_info(),
