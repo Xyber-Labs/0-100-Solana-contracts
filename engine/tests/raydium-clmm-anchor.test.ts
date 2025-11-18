@@ -3,13 +3,8 @@ import { BN } from "@coral-xyz/anchor";
 import { assert } from "chai";
 import * as fs from "fs";
 import { createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
-import EngineSDK from "../ts-sdk/src/engine";
+import EngineSDK, { loadKeypair } from "../ts-sdk/src/engine";
 import * as utils from "./utils";
-
-function loadKeypair(path: string): anchor.web3.Keypair {
-  const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(path, "utf8")));
-  return anchor.web3.Keypair.fromSecretKey(secretKey);
-}
 
 describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const provider = anchor.AnchorProvider.env();

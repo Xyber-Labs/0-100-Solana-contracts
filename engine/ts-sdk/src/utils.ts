@@ -1,3 +1,11 @@
+import * as anchor from "@coral-xyz/anchor";
+import * as fs from "fs";
+
+export function loadKeypair(path: string): anchor.web3.Keypair {
+  const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(path, "utf8")));
+  return anchor.web3.Keypair.fromSecretKey(secretKey);
+}
+
 export function getConstantRaw(
   name: string,
   idl: { constants?: [{ name: string; value: any }] }

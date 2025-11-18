@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
-import EngineSDK from "../ts-sdk/src/engine";
 import { Command } from "commander";
-import { getExplorerUrl, runWithSdk, findProject } from "./utils";
+
+import { findProject, getExplorerUrl, runWithSdk } from "./utils";
 
 const program = new Command();
 

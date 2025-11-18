@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Command } from "commander";
+
 import { findProject, getExplorerUrl, runWithSdk } from "./utils";
 
 const program = new Command();

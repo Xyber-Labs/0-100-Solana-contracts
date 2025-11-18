@@ -1,8 +1,8 @@
-import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 
-import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
+import { loadKeypair } from "@xyber-labs/0-100-sdk";
+import { getExplorerUrl, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();

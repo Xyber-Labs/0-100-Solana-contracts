@@ -1436,3 +1436,4 @@ const EngineSDK = {
 export default EngineSDK;
 export type { EngineIDL };
 export type EngineClient = ReturnType<typeof EngineSDK.create>;
+export { loadKeypair } from "./utils";
