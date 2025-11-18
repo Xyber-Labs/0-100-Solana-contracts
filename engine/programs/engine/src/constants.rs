@@ -13,7 +13,7 @@ pub const AMM_CONFIG_INDEX: u16 = 4;
 #[cfg(feature = "devnet")]
 #[constant]
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+    anchor_lang::solana_program::pubkey!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
 
 #[cfg(not(feature = "devnet"))]
 #[constant]
