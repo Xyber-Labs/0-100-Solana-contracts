@@ -55,7 +55,7 @@ pub struct CreateClmmPool<'info> {
     pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(address = WSOL_MINT)]
-    pub quote_mint: Account<'info, Mint>,
+    pub quote_mint: Box<Account<'info, Mint>>,
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
     /// CHECK: Pool state PDA
