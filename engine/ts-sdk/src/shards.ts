@@ -131,14 +131,15 @@ export function createShardsApi(params: {
           const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
           const used: number = (shard?.wallets?.length ?? 0) as number;
       if (used >= cap) continue;
-      // Enforce previous shard full for s > 1
+      // Enforce previous shard sufficiently full (>=80%) for s > 1
       if (id > 1) {
         const [prevPda] = getRosterShardPda(args.launch, id - 1);
         const prevInfo = await conn.getAccountInfo(prevPda);
         if (!prevInfo) continue;
         const prev: any = await (program.account as any).rosterShard.fetch(prevPda);
         const prevUsed: number = (prev?.wallets?.length ?? 0) as number;
-        if (prevUsed < cap) continue;
+        const threshold = Math.floor((cap * 80 + 99) / 100); // ~ceil(0.8*cap)
+        if (prevUsed < threshold) continue;
           }
       // Deposit into selected shard (txBuilder will add prev shard as remaining if needed)
       const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda, shardId: id });

@@ -1,7 +1,7 @@
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::DepositMade,
+    events::{DepositMade, RosterShardFull, RosterShardNearFull},
     state::{LaunchState, RosterShard, UserContribution},
 };
 use anchor_lang::{prelude::*, solana_program, AccountDeserialize};
@@ -113,10 +113,9 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
             let data_ref = prev_ai.try_borrow_data()?;
             let mut read_cursor: &[u8] = &data_ref;
             let prev: RosterShard = RosterShard::try_deserialize(&mut read_cursor)?;
-            require!(
-                prev.wallets.len() == launch_state.roster_shard_cap as usize,
-                EngineErrorCode::RosterShardFull
-            );
+            let cap = launch_state.roster_shard_cap as usize;
+            // Strict: allow deposits into shard s only when shard (s-1) is fully filled
+            require!(prev.wallets.len() == cap, EngineErrorCode::RosterShardFull);
         }
         // first deposit path: assign shard and index
         require!(
@@ -132,6 +131,26 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         // Track highest used shard id
         if shard.shard_id as u16 > launch_state.roster_highest_used_shard {
             launch_state.roster_highest_used_shard = shard.shard_id as u16;
+        }
+        // Emit near/full events on threshold crossings
+        let used = shard.wallets.len() as u16;
+        let cap_u16 = launch_state.roster_shard_cap;
+        let threshold_u16 = ((cap_u16 as u32).saturating_mul(80).saturating_add(99) / 100) as u16;
+        if used == threshold_u16 {
+            emit!(RosterShardNearFull {
+                launch: launch_state.key(),
+                shard_id: shard.shard_id,
+                used,
+                cap: cap_u16,
+                threshold_percent: 80,
+            });
+        }
+        if used == cap_u16 {
+            emit!(RosterShardFull {
+                launch: launch_state.key(),
+                shard_id: shard.shard_id,
+                cap: cap_u16,
+            });
         }
     } else {
         // must stay in the same shard

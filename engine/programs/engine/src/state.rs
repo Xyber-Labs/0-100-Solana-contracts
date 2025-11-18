@@ -41,6 +41,8 @@ pub struct LaunchState {
     pub roster_initialized_up_to: i32, // 0 until first shard initialized; then last initialized shard_id
     pub roster_finalized_up_to: i32, // 0 until finalization starts; then last finalized shard_id
     pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
+    pub roster_shard_cap: u16,
+    pub roster_highest_used_shard: u16, // Highest shard id that has at least one wallet (used to allow partial finalization)
 
     // Claims
     pub tokens_per_ticket: Option<u64>,
@@ -52,15 +54,14 @@ pub struct LaunchState {
     pub creator_claim_lock_period_sec: i64,
     pub creator_initial_deposit: u64,
     pub creator_max_deposit: u64,
-    pub roster_shard_cap: u16,
+
     pub clmm_base_mint: Option<Pubkey>,
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
     pub pool_creation_grace_period_sec: i64,
     pub team_allocation_basis_points: u64,
     pub team_vesting_duration_sec: i64,
-    // Highest shard id that has at least one wallet (used to allow partial finalization)
-    pub roster_highest_used_shard: u16,
+    
 }
 
 impl LaunchState {

@@ -4341,6 +4341,19 @@
       ]
     },
     {
+      "name": "RosterShardFull",
+      "discriminator": [
+        188,
+        123,
+        134,
+        176,
+        96,
+        36,
+        251,
+        182
+      ]
+    },
+    {
       "name": "RosterShardInitialized",
       "discriminator": [
         110,
@@ -4351,6 +4364,19 @@
         114,
         61,
         90
+      ]
+    },
+    {
+      "name": "RosterShardNearFull",
+      "discriminator": [
+        5,
+        204,
+        207,
+        21,
+        163,
+        159,
+        216,
+        110
       ]
     },
     {
@@ -5622,6 +5648,14 @@
             "type": "u32"
           },
           {
+            "name": "roster_shard_cap",
+            "type": "u16"
+          },
+          {
+            "name": "roster_highest_used_shard",
+            "type": "u16"
+          },
+          {
             "name": "tokens_per_ticket",
             "type": {
               "option": "u64"
@@ -5654,10 +5688,6 @@
             "type": "u64"
           },
           {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
             "name": "clmm_base_mint",
             "type": {
               "option": "pubkey"
@@ -5678,10 +5708,6 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
-          },
-          {
-            "name": "roster_highest_used_shard",
-            "type": "u16"
           }
         ]
       }
@@ -5917,6 +5943,26 @@
       }
     },
     {
+      "name": "RosterShardFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "RosterShardInitialized",
       "type": {
         "kind": "struct",
@@ -5928,6 +5974,34 @@
           {
             "name": "shard_id",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RosterShardNearFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "used",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          },
+          {
+            "name": "threshold_percent",
+            "type": "u8"
           }
         ]
       }

@@ -156,6 +156,22 @@ pub struct RosterShardFinalized {
 }
 
 #[event]
+pub struct RosterShardNearFull {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub used: u16,
+    pub cap: u16,
+    pub threshold_percent: u8, // e.g. 80
+}
+
+#[event]
+pub struct RosterShardFull {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub cap: u16,
+}
+
+#[event]
 pub struct TeamVestingInitialized {
     pub launch: Pubkey,
     pub total_allocation: u64,

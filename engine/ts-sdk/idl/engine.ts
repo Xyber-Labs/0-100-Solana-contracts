@@ -4347,6 +4347,19 @@ export type Engine = {
       ]
     },
     {
+      "name": "rosterShardFull",
+      "discriminator": [
+        188,
+        123,
+        134,
+        176,
+        96,
+        36,
+        251,
+        182
+      ]
+    },
+    {
       "name": "rosterShardInitialized",
       "discriminator": [
         110,
@@ -4357,6 +4370,19 @@ export type Engine = {
         114,
         61,
         90
+      ]
+    },
+    {
+      "name": "rosterShardNearFull",
+      "discriminator": [
+        5,
+        204,
+        207,
+        21,
+        163,
+        159,
+        216,
+        110
       ]
     },
     {
@@ -5628,6 +5654,14 @@ export type Engine = {
             "type": "u32"
           },
           {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterHighestUsedShard",
+            "type": "u16"
+          },
+          {
             "name": "tokensPerTicket",
             "type": {
               "option": "u64"
@@ -5660,10 +5694,6 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "rosterShardCap",
-            "type": "u16"
-          },
-          {
             "name": "clmmBaseMint",
             "type": {
               "option": "pubkey"
@@ -5684,10 +5714,6 @@ export type Engine = {
           {
             "name": "teamVestingDurationSec",
             "type": "i64"
-          },
-          {
-            "name": "rosterHighestUsedShard",
-            "type": "u16"
           }
         ]
       }
@@ -5923,6 +5949,26 @@ export type Engine = {
       }
     },
     {
+      "name": "rosterShardFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "rosterShardInitialized",
       "type": {
         "kind": "struct",
@@ -5934,6 +5980,34 @@ export type Engine = {
           {
             "name": "shardId",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rosterShardNearFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "used",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          },
+          {
+            "name": "thresholdPercent",
+            "type": "u8"
           }
         ]
       }
