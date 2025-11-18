@@ -108,13 +108,13 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    add_initial_liquidity(&ctx)?;
+    add_initial_liquidity_impl(&ctx)?;
     // TODO: base_mint to be used instead of this explicit approach
     ctx.accounts.pool_state.claims_ready = true;
     Ok(())
 }
 
-fn add_initial_liquidity<'info>(
+fn add_initial_liquidity_impl<'info>(
     ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
     let order = ClmmOrder::from_inputs(
