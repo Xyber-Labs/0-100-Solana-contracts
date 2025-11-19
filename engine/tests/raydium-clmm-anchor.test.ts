@@ -286,6 +286,23 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("WSOL is the native wrapped SOL, no minting needed");
   });
 
+  it("Step 8.5: Reject pool creation with invalid launch_state owner", async () => {
+    console.log("=== Step 8.5: Reject pool creation with invalid launch_state owner ===");
+
+    const fakeLaunchState = anchor.web3.Keypair.generate();
+
+    await utils.doAndCheckError(
+      sdk.createClmmPool({
+        launch: fakeLaunchState.publicKey,
+        quoteMint: quoteMintKeypair.publicKey,
+        signers: [admin1Keypair],
+      }),
+      "Invalid authority"
+    );
+
+    console.log("✅ Pool creation rejected for invalid launch_state owner");
+  });
+
   it("Step 9: Create CLMM pool", async () => {
     console.log("=== Step 9: Create CLMM Pool ===");
 

@@ -10,6 +10,7 @@ use crate::{
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
+    #[constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     /// CHECK:

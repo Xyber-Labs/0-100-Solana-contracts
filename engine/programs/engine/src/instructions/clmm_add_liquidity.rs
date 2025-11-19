@@ -18,9 +18,7 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    pub raydium_program: Program<'info, AmmV3>,
-
-    #[account(mut)]
+    #[account(mut, constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(
@@ -94,6 +92,7 @@ pub struct AddClmmLiquidity<'info> {
 
     pub token_2022_program: Program<'info, Token2022>,
 
+    pub raydium_program: Program<'info, AmmV3>,
     pub quote_token_program: Program<'info, Token>,
     pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
