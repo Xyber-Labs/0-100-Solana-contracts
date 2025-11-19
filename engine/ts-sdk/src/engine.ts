@@ -1044,8 +1044,9 @@ const EngineSDK = {
       };
       adminKeypairs: anchor.web3.Keypair[];
     }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
+
       const { instruction, launchPreset } = await txBuilder.initLaunchPresetIx({
-        payer,
+        payer: args.adminKeypairs[0].publicKey,
         id: args.id,
         ...args.params,
         signerAdmins: args.adminKeypairs.map((k) => k.publicKey),
