@@ -6661,6 +6661,11 @@ export type Engine = {
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
     },
     {
+      "name": "raydiumClmmProgramId",
+      "type": "pubkey",
+      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+    },
+    {
       "name": "seedRoot",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
