@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::SEED_ROOT,
+    errors::ErrorCode,
     events::RosterShardInitialized,
     state::{LaunchState, RosterShard},
 };

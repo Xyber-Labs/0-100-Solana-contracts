@@ -3,6 +3,7 @@ use raydium_amm_v3::states::AmmConfig;
 
 use crate::{
     constants::{AMM_CONFIG_INDEX, RAYDIUM_CLMM_PROGRAM_ID, WSOL_MINT},
+    errors::ErrorCode,
     LaunchState,
     utils::clmm::{get_liquidity_range_impl, LiquidityRange},
 };

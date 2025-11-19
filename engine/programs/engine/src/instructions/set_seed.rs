@@ -6,7 +6,7 @@ use anchor_lang::{
     },
 };
 
-use crate::{events::SeedSet, state::LaunchState};
+use crate::{errors::ErrorCode, events::SeedSet, state::LaunchState};
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
