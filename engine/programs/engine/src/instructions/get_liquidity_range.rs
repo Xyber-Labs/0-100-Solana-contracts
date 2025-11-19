@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
-    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()],

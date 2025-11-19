@@ -18,7 +18,7 @@ pub struct CreatePool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+        constraint = launch_state.to_account_info().owner == &crate::ID @ EngineErrorCode::InvalidAuthority
     )]
     pub launch_state: Account<'info, LaunchState>,
 

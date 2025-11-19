@@ -14,7 +14,7 @@ pub struct SetSeed<'info> {
     pub payer: Signer<'info>,
     #[account(
         mut,
-        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+        constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority
     )]
     pub launch_state: Account<'info, LaunchState>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.

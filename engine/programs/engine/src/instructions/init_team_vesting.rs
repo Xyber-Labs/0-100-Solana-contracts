@@ -16,7 +16,7 @@ pub struct InitTeamVesting<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+        constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority
     )]
     pub launch_state: Account<'info, LaunchState>,
 

@@ -13,7 +13,7 @@ pub struct ClaimCreatorTokens<'info> {
     #[account(mut, address = launch_state.creator)]
     pub creator: Signer<'info>,
 
-    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ EngineErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]

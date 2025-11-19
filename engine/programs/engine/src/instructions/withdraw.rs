@@ -12,7 +12,7 @@ pub struct Withdraw<'info> {
     pub user: Signer<'info>,
     #[account(
         mut,
-        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+        constraint = launch_state.to_account_info().owner == &crate::ID @ EngineErrorCode::InvalidAuthority
     )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]

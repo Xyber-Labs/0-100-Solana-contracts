@@ -12,7 +12,7 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 pub struct ClaimTokens<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ EngineErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,

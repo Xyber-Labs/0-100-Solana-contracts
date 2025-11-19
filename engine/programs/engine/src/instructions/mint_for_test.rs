@@ -25,7 +25,7 @@ pub struct MintForTest<'info> {
         mut,
         constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
     )]
-    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
