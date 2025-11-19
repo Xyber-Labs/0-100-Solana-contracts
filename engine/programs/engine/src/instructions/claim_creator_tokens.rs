@@ -1,17 +1,19 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::CreatorClaimed,
     state::{CreatorGrant, LaunchState, PoolState},
 };
-use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct ClaimCreatorTokens<'info> {
     #[account(mut, address = launch_state.creator)]
     pub creator: Signer<'info>,
 
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]

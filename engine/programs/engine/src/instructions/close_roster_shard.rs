@@ -11,7 +11,10 @@ use crate::{
 pub struct CloseRosterShard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         mut,
@@ -28,12 +31,8 @@ pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Resu
     let launch = &ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
 
-    require!(
-        launch.roster_finalized_up_to >= shard_id as i32,
-        EngineErrorCode::ShardNotFinalized
-    );
+    require!(launch.roster_finalized_up_to >= shard_id as i32, EngineErrorCode::ShardNotFinalized);
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
 
     Ok(())
 }
-

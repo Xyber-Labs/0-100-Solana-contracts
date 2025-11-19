@@ -1,4 +1,3 @@
-use crate::{events::SeedSet, state::LaunchState};
 use anchor_lang::{
     prelude::*,
     solana_program::{
@@ -7,11 +6,16 @@ use anchor_lang::{
     },
 };
 
+use crate::{events::SeedSet, state::LaunchState};
+
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]

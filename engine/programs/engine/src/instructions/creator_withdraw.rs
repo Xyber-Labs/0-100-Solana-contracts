@@ -1,17 +1,22 @@
+use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::CreatorDepositChanged,
     state::{CreatorGrant, LaunchState},
 };
-use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
 #[derive(Accounts)]
 pub struct CreatorWithdraw<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
 
-    #[account(mut, has_one = creator)]
+    #[account(
+        mut,
+        has_one = creator,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
@@ -59,14 +64,10 @@ pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()
         amount,
     )?;
 
-    grant.locked_lamports = grant
-        .locked_lamports
-        .checked_sub(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    state.total_deposited = state
-        .total_deposited
-        .checked_sub(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    grant.locked_lamports =
+        grant.locked_lamports.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    state.total_deposited =
+        state.total_deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(CreatorDepositChanged {
         launch: state.key(),
@@ -77,5 +78,3 @@ pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()
 
     Ok(())
 }
-
-

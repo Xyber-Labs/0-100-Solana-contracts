@@ -1,16 +1,20 @@
+use anchor_lang::prelude::*;
+
 use crate::{
     constants::SEED_ROOT,
     events::RosterInitialized,
     state::{LaunchState, Roster},
 };
-use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct InitRoster<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(

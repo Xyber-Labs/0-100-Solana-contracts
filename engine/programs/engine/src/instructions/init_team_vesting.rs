@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{SEED_ROOT, TEAM_BASIS_POINTS, TEAM_CLAIM_MIN_INTERVAL_SEC, TEAM_VESTING_DURATION_SEC},
+    constants::{
+        SEED_ROOT, TEAM_BASIS_POINTS, TEAM_CLAIM_MIN_INTERVAL_SEC, TEAM_VESTING_DURATION_SEC,
+    },
     errors::ErrorCode,
     events::TeamVestingInitialized,
     state::{LaunchState, TeamVesting},
@@ -12,7 +14,10 @@ pub struct InitTeamVesting<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -35,7 +40,10 @@ pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
     } else {
         TEAM_BASIS_POINTS
     };
-    require!(state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps), ErrorCode::InvalidShareSum);
+    require!(
+        state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps),
+        ErrorCode::InvalidShareSum
+    );
 
     // Compute in u128 to avoid overflow, then downcast to u64
     let total_alloc_u128 = (state.base_total_allocation as u128)
@@ -72,5 +80,3 @@ pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
 
     Ok(())
 }
-
-

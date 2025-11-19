@@ -1,17 +1,21 @@
+use anchor_lang::prelude::*;
+
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::RosterShardFinalized,
     state::{LaunchState, RosterShard},
 };
-use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(shard_id: u16)]
 pub struct FinalizeRosterShard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         mut,
@@ -47,15 +51,11 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
     let counts = shard.counts.clone();
     shard.prefix.reserve(counts.len());
 
-    
-
     for &c in counts.iter() {
         shard.prefix.push(run);
         run = run.checked_add(c).ok_or(EngineErrorCode::ArithmeticOverflow)?;
     }
     shard.total_in_shard = run;
-
-    
 
     // Assign shard base and update public_total_tickets
     shard.shard_base = launch_state.public_total_tickets;
@@ -63,8 +63,6 @@ pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -
         .public_total_tickets
         .checked_add(shard.total_in_shard)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-    
 
     launch_state.roster_finalized_up_to = shard_id as i32;
 

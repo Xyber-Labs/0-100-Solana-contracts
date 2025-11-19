@@ -12,7 +12,10 @@ pub struct SealRosterShard<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         mut,
@@ -23,15 +26,17 @@ pub struct SealRosterShard<'info> {
     pub roster_shard: Account<'info, RosterShard>,
 }
 
-pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32, max: u16) -> Result<()> {
+pub fn seal_roster_shard(
+    ctx: Context<SealRosterShard>,
+    shard_id: u16,
+    from: u32,
+    max: u16,
+) -> Result<()> {
     let launch = &ctx.accounts.launch_state;
     let shard = &ctx.accounts.roster_shard;
 
     // Shard must already be finalized (prefix and shard_base present)
-    require!(
-        launch.roster_finalized_up_to >= shard_id as i32,
-        EngineErrorCode::ShardNotFinalized
-    );
+    require!(launch.roster_finalized_up_to >= shard_id as i32, EngineErrorCode::ShardNotFinalized);
     require!(
         shard.wallets.len() == shard.counts.len() && shard.prefix.len() == shard.wallets.len(),
         EngineErrorCode::ShardNotFinalized
@@ -39,17 +44,12 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
 
     let start = from as usize;
-    let end = (from as usize)
-        .saturating_add(max as usize)
-        .min(shard.wallets.len());
+    let end = (from as usize).saturating_add(max as usize).min(shard.wallets.len());
     let need = end.saturating_sub(start);
     require!(need > 0, EngineErrorCode::NothingToClaim);
 
     // Expect remaining_accounts submitted in the same order as wallets[start..end]
-    require!(
-        ctx.remaining_accounts.len() == need,
-        EngineErrorCode::MappingError
-    );
+    require!(ctx.remaining_accounts.len() == need, EngineErrorCode::MappingError);
 
     for i in start..end {
         let target = &ctx.remaining_accounts[i - start];
@@ -68,18 +68,9 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
             let needed_lamports = rent.minimum_balance(new_len).saturating_sub(target.lamports());
             if needed_lamports > 0 {
                 // Directly adjust lamports to top up rent
-                **ctx.accounts
-                    .payer
-                    .to_account_info()
-                    .lamports
-                    .borrow_mut() = ctx
-                    .accounts
-                    .payer
-                    .to_account_info()
-                    .lamports()
-                    .saturating_sub(needed_lamports);
-                **target.lamports.borrow_mut() =
-                    target.lamports().saturating_add(needed_lamports);
+                **ctx.accounts.payer.to_account_info().lamports.borrow_mut() =
+                    ctx.accounts.payer.to_account_info().lamports().saturating_sub(needed_lamports);
+                **target.lamports.borrow_mut() = target.lamports().saturating_add(needed_lamports);
             }
             target.realloc(new_len, false)?;
         }
@@ -89,7 +80,10 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
         let mut read_cursor: &[u8] = &data_vec;
         let mut user = UserContribution::try_deserialize(&mut read_cursor)?;
 
-        require!(user.shard_id == shard_id && user.idx_in_shard as usize == i, EngineErrorCode::Unauthorized);
+        require!(
+            user.shard_id == shard_id && user.idx_in_shard as usize == i,
+            EngineErrorCode::Unauthorized
+        );
 
         let base = shard
             .shard_base
@@ -107,4 +101,3 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
 
     Ok(())
 }
-

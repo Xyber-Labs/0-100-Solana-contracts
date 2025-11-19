@@ -3,12 +3,13 @@ use raydium_amm_v3::states::AmmConfig;
 
 use crate::{
     constants::{AMM_CONFIG_INDEX, RAYDIUM_CLMM_PROGRAM_ID, WSOL_MINT},
-    utils::clmm::{get_liquidity_range_impl, LiquidityRange},
     LaunchState,
+    utils::clmm::{get_liquidity_range_impl, LiquidityRange},
 };
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()],
@@ -34,4 +35,3 @@ pub fn get_liquidity_range(
         sqrt_price_lower_x64,
     ))
 }
-

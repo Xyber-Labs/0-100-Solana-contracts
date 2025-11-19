@@ -10,10 +10,9 @@ use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 use crate::{
     constants::{AMM_CONFIG_INDEX, TEAM_BASIS_POINTS},
     errors::ErrorCode,
-    utils::clmm::get_liquidity_range_impl,
-    state::PoolState,
     LaunchState,
     SEED_ROOT,
+    state::PoolState, utils::clmm::get_liquidity_range_impl,
 };
 
 #[derive(Accounts)]
@@ -23,7 +22,10 @@ pub struct AddClmmLiquidity<'info> {
 
     pub raydium_program: Program<'info, AmmV3>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -93,7 +95,6 @@ pub struct AddClmmLiquidity<'info> {
     /// CHECK: Tick array upper
     #[account(mut)]
     pub raydium_tick_array_upper: UncheckedAccount<'info>,
-
 
     pub token_2022_program: Program<'info, Token2022>,
 

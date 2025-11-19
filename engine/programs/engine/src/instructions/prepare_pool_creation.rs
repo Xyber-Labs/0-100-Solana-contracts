@@ -1,3 +1,8 @@
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{self, clock::Clock, Sysvar},
+};
+
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
@@ -5,17 +10,16 @@ use crate::{
     state::{CreatorGrant, LaunchState, PoolState},
     utils::pool,
 };
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar::{self, clock::Clock, Sysvar},
-};
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -164,7 +168,10 @@ fn select_blockhash(
     err!(EngineErrorCode::NoValidBlockhash)
 }
 
-fn finalize_selection(launch_state: &mut LaunchState, creator_grant: &mut CreatorGrant) -> Result<()> {
+fn finalize_selection(
+    launch_state: &mut LaunchState,
+    creator_grant: &mut CreatorGrant,
+) -> Result<()> {
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 

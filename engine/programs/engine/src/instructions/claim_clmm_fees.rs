@@ -24,7 +24,10 @@ pub struct ClaimClmmFees<'info> {
 
     pub raydium_program: Program<'info, AmmV3>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(

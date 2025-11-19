@@ -13,6 +13,7 @@ pub struct ClaimTeamTokens<'info> {
     #[account(mut, address = launch_state.creator)]
     pub creator: Signer<'info>,
 
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
@@ -65,7 +66,10 @@ pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
     require!(now >= team.start_ts, ErrorCode::TeamVestingNotStarted);
 
     if team.last_claim_ts != 0 {
-        require!(now - team.last_claim_ts >= team.min_interval_sec, ErrorCode::TeamClaimTooFrequent);
+        require!(
+            now - team.last_claim_ts >= team.min_interval_sec,
+            ErrorCode::TeamClaimTooFrequent
+        );
     }
 
     let elapsed = now.saturating_sub(team.start_ts).clamp(0, team.duration_sec);
@@ -73,9 +77,7 @@ pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
         .checked_mul(elapsed as u128)
         .and_then(|v| v.checked_div(team.duration_sec as u128))
         .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
-    let claimable = vested
-        .checked_sub(team.claimed)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let claimable = vested.checked_sub(team.claimed).ok_or(ErrorCode::ArithmeticOverflow)?;
     require!(claimable > 0, ErrorCode::NothingToClaim);
 
     let seeds: &[&[u8]] = &[
@@ -112,5 +114,3 @@ pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
 
     Ok(())
 }
-
-

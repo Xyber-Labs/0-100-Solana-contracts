@@ -11,7 +11,10 @@ use solana_program::sysvar::clock::Clock;
 pub struct Deposit<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.to_account_info().owner == &crate::ID @ crate::errors::ErrorCode::InvalidAuthority
+    )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         init_if_needed,
