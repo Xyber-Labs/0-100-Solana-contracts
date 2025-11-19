@@ -90,5 +90,7 @@ pub fn init_launch_preset(
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
     p.team_vesting_duration_sec = params.team_vesting_duration_sec;
 
+    p.is_valid()?;
+
     Ok(())
 }

@@ -75,7 +75,7 @@ pub fn init_launch_core<'info>(
     require!(params.per_wallet_cap >= params.tau_lamports, EngineErrorCode::PerWalletCapTooSmall);
     require!(
         params.min_raise_lamports <= params.hard_cap_lamports,
-        EngineErrorCode::MinRaiseTooHigh
+        EngineErrorCode::MalformedPreset
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
     require!(params.roster_shards_total > 0, EngineErrorCode::InvalidK);

@@ -4959,8 +4959,8 @@ export type Engine = {
     },
     {
       "code": 6047,
-      "name": "minRaiseTooHigh",
-      "msg": "Min raise must be <= hard cap"
+      "name": "malformedPreset",
+      "msg": "Malformed preset"
     },
     {
       "code": 6048,

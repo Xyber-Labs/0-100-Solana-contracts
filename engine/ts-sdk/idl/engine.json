@@ -4953,8 +4953,8 @@
     },
     {
       "code": 6047,
-      "name": "MinRaiseTooHigh",
-      "msg": "Min raise must be <= hard cap"
+      "name": "MalformedPreset",
+      "msg": "Malformed preset"
     },
     {
       "code": 6048,

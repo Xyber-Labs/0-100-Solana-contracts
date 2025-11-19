@@ -127,25 +127,67 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       });
       console.log("✅ Engine config initialized");
     }
+  });
+
+  it("Step 1: Initialize launch preset with validation", async () => {
+    console.log("=== Step 1: Initialize Launch Preset ===");
 
     const [presetPda] = sdk.getLaunchPresetPda(PRESET_ID);
     const presetInfo = await provider.connection.getAccountInfo(presetPda);
 
-    if (!presetInfo) {
-      const presetPath = "presets/test-preset.json";
-      const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
-
-      await sdk.initLaunchPreset({
-        id: Number(presetData.id),
-        params: utils.parsePresetParams(presetData),
-        adminKeypairs: [admin1Keypair, admin2Keypair],
-      });
-      console.log("✅ Launch preset initialized from", presetPath);
+    if (presetInfo) {
+      console.log("⏭️  Preset already exists, skipping");
+      return;
     }
+
+    const presetPath = "presets/test-preset.json";
+    const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
+    const validParams = utils.parsePresetParams(presetData);
+
+    console.log("\n--- Attempt 1: Try with min_raise < AMMV3_CREATION_RESERVE ---");
+    const invalidMinRaise = {
+      ...validParams,
+      minRaiseLamports: new BN(100_000_000),
+    };
+
+    await utils.doAndCheckError(
+      sdk.initLaunchPreset({
+        id: Number(presetData.id),
+        params: invalidMinRaise,
+        adminKeypairs: [admin1Keypair, admin2Keypair],
+      }),
+      "Malformed preset"
+    );
+    console.log("✅ Expected error received");
+
+    console.log("\n--- Attempt 2: Try with min_raise > hard_cap ---");
+    const invalidHardCap = {
+      ...validParams,
+      minRaiseLamports: new BN(200 * anchor.web3.LAMPORTS_PER_SOL),
+      hardCapLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
+    };
+
+    await utils.doAndCheckError(
+      sdk.initLaunchPreset({
+        id: Number(presetData.id),
+        params: invalidHardCap,
+        adminKeypairs: [admin1Keypair, admin2Keypair],
+      }),
+      "Malformed preset"
+    );
+    console.log("✅ Expected error received");
+
+    console.log("\n--- Attempt 3: Initialize with valid parameters ---");
+    await sdk.initLaunchPreset({
+      id: Number(presetData.id),
+      params: validParams,
+      adminKeypairs: [admin1Keypair, admin2Keypair],
+    });
+    console.log("✅ Launch preset initialized successfully from", presetPath);
   });
 
-  it("Step 1: Initialize launch from preset", async () => {
-    console.log("=== Step 1: Initialize Launch from Preset ===");
+  it("Step 2: Initialize launch from preset", async () => {
+    console.log("=== Step 2: Initialize Launch from Preset ===");
 
     const { launchPda: launch, signature } = await sdk.initLaunchFromPreset({
       presetId: PRESET_ID,
@@ -166,8 +208,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     assert.ok(launchData, "Launch should exist");
   });
 
-  it("Step 2: Initialize roster and shard", async () => {
-    console.log("=== Step 2: Initialize Roster ===");
+  it("Step 3: Initialize roster and shard", async () => {
+    console.log("=== Step 3: Initialize Roster ===");
 
     const { signature: rosterSig } = await sdk.initRoster({
       launch: launchPda,

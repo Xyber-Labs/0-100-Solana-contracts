@@ -25,7 +25,7 @@ pub(crate) struct ClmmOrder<'info> {
 
 const MYRIAD: u128 = 10000;
 const PRICE_GROWING_RATE: f64 = 1.15f64;
-const POSITION_CREATION_RESERVE: u64 = 152_500_000;
+pub(crate) const AMMV3_CREATION_RESERVE: u64 = 152_500_000;
 
 impl<'info> ClmmOrder<'info> {
     pub(crate) fn from_inputs(
@@ -40,7 +40,7 @@ impl<'info> ClmmOrder<'info> {
         quote_source: Option<&Account<'info, TokenAccount>>,
     ) -> ClmmOrder<'info> {
         let quote_clmm_supply = min(launch_state.total_deposited, launch_state.hard_cap_lamports)
-            .checked_sub(POSITION_CREATION_RESERVE)
+            .checked_sub(AMMV3_CREATION_RESERVE)
             .expect("quote counted well");
 
         let base_sale_supply = launch_state.base_total_allocation as u128
