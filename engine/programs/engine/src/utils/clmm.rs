@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use anchor_lang::{prelude::*, AnchorDeserialize, AnchorSerialize, Key};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Key, prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use raydium_amm_v3::{libraries::fixed_point_64::Q64, states::TickArrayState};
 
@@ -58,6 +58,9 @@ impl<'info> ClmmOrder<'info> {
             .and_then(|v| v.checked_div(MYRIAD))
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
+        let base_clmm_supply =
+            u64::try_from(base_clmm_supply).map_err(|_| ErrorCode::ArithmeticOverflow)?;
+
         let price_ratio: f64 =
             quote_clmm_supply as f64 / base_sale_supply as f64 * PRICE_GROWING_RATE;
 
@@ -84,7 +87,7 @@ impl<'info> ClmmOrder<'info> {
                 price_ratio: final_price_ratio,
                 sqrt_price: sqrt_price_val,
                 token_0_supply: quote_clmm_supply,
-                token_1_supply: base_clmm_supply as u64,
+                token_1_supply: base_clmm_supply,
                 base_flag: Some(true),
                 quote_supply: quote_clmm_supply,
             })
@@ -102,7 +105,7 @@ impl<'info> ClmmOrder<'info> {
                 token_program_1: quote_program.to_account_info(),
                 price_ratio: price_ratio,
                 sqrt_price: sqrt_price_val,
-                token_0_supply: base_clmm_supply as u64,
+                token_0_supply: base_clmm_supply,
                 token_1_supply: quote_clmm_supply,
                 base_flag: Some(false),
                 quote_supply: quote_clmm_supply,
