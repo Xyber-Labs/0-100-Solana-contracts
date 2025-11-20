@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Key, prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use raydium_amm_v3::{libraries, states::TickArrayState};
+use raydium_amm_v3::{libraries, libraries::fixed_point_64::Q64, states::TickArrayState};
 
 use crate::LaunchState;
 
@@ -56,8 +56,7 @@ impl<'info> ClmmOrder<'info> {
         let price_ratio: f64 =
             quote_clmm_supply as f64 / base_sale_supply as f64 * PRICE_GROWING_RATE;
 
-        let get_sqrt_price =
-            |price: f64| -> u128 { (price.sqrt() * libraries::Q64 as f64) as u128 };
+        let get_sqrt_price = |price: f64| -> u128 { (price.sqrt() * Q64 as f64) as u128 };
 
         if quote_mint.key() < base_mint.key() {
             let final_price_ratio = 1f64 / price_ratio;
