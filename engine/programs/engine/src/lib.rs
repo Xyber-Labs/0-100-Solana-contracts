@@ -167,9 +167,7 @@ pub mod engine {
         instructions::claim_team_tokens(ctx)
     }
 
-    pub fn get_liquidity_range(
-        ctx: Context<GetLiquidityRange>,
-    ) -> Result<LiquidityRange> {
+    pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
         instructions::get_liquidity_range(ctx)
     }
 

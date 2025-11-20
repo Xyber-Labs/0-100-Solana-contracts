@@ -47,6 +47,6 @@ pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityR
         &ctx.accounts.quote_token_program,
         None,
         None,
-    );
+    )?;
     Ok(get_liquidity_range_impl(tick_spacing, order.price_ratio))
 }

@@ -1,10 +1,10 @@
 use std::cmp::min;
 
-use anchor_lang::{AnchorDeserialize, AnchorSerialize, Key, prelude::*};
+use anchor_lang::{prelude::*, AnchorDeserialize, AnchorSerialize, Key};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use raydium_amm_v3::{libraries::fixed_point_64::Q64, states::TickArrayState};
 
-use crate::LaunchState;
+use crate::{errors::ErrorCode, LaunchState};
 
 pub(crate) struct ClmmOrder<'info> {
     pub(crate) token_mint_0: AccountInfo<'info>,
@@ -38,31 +38,41 @@ impl<'info> ClmmOrder<'info> {
         base_program: &Program<'info, Token>,
         base_source: Option<&Account<'info, TokenAccount>>,
         quote_source: Option<&Account<'info, TokenAccount>>,
-    ) -> ClmmOrder<'info> {
+    ) -> Result<ClmmOrder<'info>> {
         let quote_clmm_supply = min(launch_state.total_deposited, launch_state.hard_cap_lamports)
             .checked_sub(POSITION_CREATION_RESERVE)
             .expect("quote counted well");
 
-        let base_sale_supply = launch_state.base_total_allocation as u128
-            * launch_state.base_sale_basis_points as u128
-            / MYRIAD;
+        let base_sale_supply = (launch_state.base_total_allocation as u128)
+            .checked_mul(launch_state.base_sale_basis_points as u128)
+            .and_then(|v| v.checked_div(MYRIAD))
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        let base_clmm_supply = launch_state.base_total_allocation as u128
-            * (MYRIAD
-                - launch_state.base_sale_basis_points as u128
-                - launch_state.team_allocation_basis_points as u128)
-            / MYRIAD;
+        let base_clmm_supply = (launch_state.base_total_allocation as u128)
+            .checked_mul(
+                MYRIAD
+                    .checked_sub(launch_state.base_sale_basis_points as u128)
+                    .and_then(|v| v.checked_sub(launch_state.team_allocation_basis_points as u128))
+                    .ok_or(ErrorCode::ArithmeticOverflow)?,
+            )
+            .and_then(|v| v.checked_div(MYRIAD))
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
         let price_ratio: f64 =
             quote_clmm_supply as f64 / base_sale_supply as f64 * PRICE_GROWING_RATE;
 
-        let get_sqrt_price = |price: f64| -> u128 { (price.sqrt() * Q64 as f64) as u128 };
+        let get_sqrt_price = |price: f64| -> Result<u128> {
+            require!(price.is_finite() && price > 0.0, crate::errors::ErrorCode::InvalidPrice);
+            let sqrt_price = price.sqrt() * Q64 as f64;
+            require!(sqrt_price <= u128::MAX as f64, crate::errors::ErrorCode::PriceOverflow);
+            Ok(sqrt_price as u128)
+        };
 
         if quote_mint.key() < base_mint.key() {
             let final_price_ratio = 1f64 / price_ratio;
-            let sqrt_price_val = get_sqrt_price(final_price_ratio);
+            let sqrt_price_val = get_sqrt_price(final_price_ratio)?;
 
-            Self {
+            Ok(Self {
                 token_mint_0: quote_mint.to_account_info(),
                 token_mint_1: base_mint.to_account_info(),
                 token_source_0: quote_source.map(|a| a.to_account_info()),
@@ -77,11 +87,11 @@ impl<'info> ClmmOrder<'info> {
                 token_1_supply: base_clmm_supply as u64,
                 base_flag: Some(true),
                 quote_supply: quote_clmm_supply,
-            }
+            })
         } else {
-            let sqrt_price_val = get_sqrt_price(price_ratio);
+            let sqrt_price_val = get_sqrt_price(price_ratio)?;
 
-            Self {
+            Ok(Self {
                 token_mint_0: base_mint.to_account_info(),
                 token_mint_1: quote_mint.to_account_info(),
                 token_source_0: base_source.map(|a| a.to_account_info()),
@@ -96,7 +106,7 @@ impl<'info> ClmmOrder<'info> {
                 token_1_supply: quote_clmm_supply,
                 base_flag: Some(false),
                 quote_supply: quote_clmm_supply,
-            }
+            })
         }
     }
 }

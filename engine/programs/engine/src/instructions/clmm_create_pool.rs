@@ -142,7 +142,7 @@ fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.quote_token_program,
         None,
         None,
-    );
+    )?;
     let cpi_accounts = cpi::accounts::CreatePool {
         pool_creator: ctx.accounts.payer.to_account_info(),
         amm_config: ctx.accounts.raydium_amm_config.to_account_info(),

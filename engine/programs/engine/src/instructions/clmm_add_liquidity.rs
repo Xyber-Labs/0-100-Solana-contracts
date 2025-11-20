@@ -127,7 +127,7 @@ fn add_initial_liquidity_impl<'info>(
         &ctx.accounts.quote_token_program,
         Some(&ctx.accounts.base_escrow_ata),
         Some(&ctx.accounts.quote_escrow_ata),
-    );
+    )?;
 
     let range =
         get_liquidity_range_impl(ctx.accounts.raydium_amm_config.tick_spacing, order.price_ratio);

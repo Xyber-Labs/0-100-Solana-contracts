@@ -147,4 +147,9 @@ pub enum ErrorCode {
     InvalidAdminSet,
     #[msg("Insufficient fee balance")]
     InsufficientFeeBalance,
+
+    #[msg("Invalid price: must be finite and positive")]
+    InvalidPrice,
+    #[msg("Price overflow: result exceeds u128::MAX")]
+    PriceOverflow,
 }
