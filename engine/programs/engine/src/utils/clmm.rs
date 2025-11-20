@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Key, prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use raydium_amm_v3::{libraries, libraries::fixed_point_64::Q64, states::TickArrayState};
+use raydium_amm_v3::{libraries::fixed_point_64::Q64, states::TickArrayState};
 
 use crate::LaunchState;
 

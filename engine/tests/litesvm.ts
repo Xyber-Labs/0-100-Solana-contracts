@@ -1053,8 +1053,7 @@ describe("engine litesvm", () => {
       creatorMaxDepositLamports: creatorDepositAmount,
       xyberMint,
     });
-    const tx = new anchor.web3.Transaction().add(initLaunchTx);
-    const signature = await safeSendAndConfirm(provider, client, tx, [admin.payer]);
+    const signature = await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
 
     console.log("Launch with creator deposit initialized. Signature:", signature);
 
