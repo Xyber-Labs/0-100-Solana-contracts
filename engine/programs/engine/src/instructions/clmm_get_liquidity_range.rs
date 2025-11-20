@@ -35,14 +35,12 @@ pub struct GetLiquidityRange<'info> {
     pub raydium_amm_config: Account<'info, AmmConfig>,
 }
 
-pub fn get_liquidity_range(
-    ctx: Context<GetLiquidityRange>,
-) -> Result<LiquidityRange> {
+pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     let order = ClmmOrder::from_inputs(
         &ctx.accounts.launch_state,
-        &ctx.accounts.base_mint,
         &ctx.accounts.quote_mint,
+        &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,
         &ctx.accounts.raydium_base_vault,
         &ctx.accounts.base_token_program,
@@ -50,8 +48,5 @@ pub fn get_liquidity_range(
         None,
         None,
     );
-    Ok(get_liquidity_range_impl(
-        tick_spacing,
-        order.price_ratio,
-    ))
+    Ok(get_liquidity_range_impl(tick_spacing, order.price_ratio))
 }

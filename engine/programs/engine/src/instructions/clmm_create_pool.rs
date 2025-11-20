@@ -134,8 +134,8 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
 fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
     let order = ClmmOrder::from_inputs(
         &ctx.accounts.launch_state,
-        &ctx.accounts.base_mint,
         &ctx.accounts.quote_mint,
+        &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,
         &ctx.accounts.raydium_base_vault,
         &ctx.accounts.base_token_program,

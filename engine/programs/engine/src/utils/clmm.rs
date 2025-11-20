@@ -30,8 +30,8 @@ const POSITION_CREATION_RESERVE: u64 = 152_500_000;
 impl<'info> ClmmOrder<'info> {
     pub(crate) fn from_inputs(
         launch_state: &Account<'info, LaunchState>,
-        base_mint: &Account<'info, Mint>,
         quote_mint: &Account<'info, Mint>,
+        base_mint: &Account<'info, Mint>,
         quote_vault: &UncheckedAccount<'info>,
         base_vault: &UncheckedAccount<'info>,
         quote_program: &Program<'info, Token>,
