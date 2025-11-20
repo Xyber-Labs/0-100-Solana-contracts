@@ -34,3 +34,17 @@ export async function runWithSdk(
     process.exit(1);
   }
 }
+
+export async function findProject(
+  sdk: ReturnType<typeof EngineSDK.create>,
+  projectId: number
+): Promise<{ launchPda: anchor.web3.PublicKey; projectId: number }> {
+  console.log(`Finding project #${projectId}...`);
+  const project = await sdk.findProjectById(projectId);
+  if (!project) {
+    console.error(`Project #${projectId} not found`);
+    process.exit(1);
+  }
+  console.log("Found launch state:", project.launchPda.toBase58());
+  return project;
+}

@@ -11,12 +11,6 @@ pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 pub const AMM_CONFIG_INDEX: u16 = 4;
 
 #[constant]
-#[cfg(feature = "devnet")]
-pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
-
-#[constant]
-#[cfg(not(feature = "devnet"))]
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
     anchor_lang::solana_program::pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 

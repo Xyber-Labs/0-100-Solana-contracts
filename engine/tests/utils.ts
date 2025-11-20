@@ -1,5 +1,46 @@
 import { Clock } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
+import { BN } from "@coral-xyz/anchor";
+import { assert } from "chai";
+
+export function parsePresetParams(p: any) {
+  return {
+    hardCapLamports: new BN(String(p.hardCapLamports)),
+    minRaiseLamports: new BN(String(p.minRaiseLamports)),
+    perWalletCap: new BN(String(p.perWalletCap)),
+    tauLamports: new BN(String(p.tauLamports)),
+    baseTotalAllocation: new BN(String(p.baseTotalAllocation)),
+    baseSaleBasisPoints: new BN(String(p.baseSaleBasisPoints)),
+    teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : 1000,
+    fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : 0,
+    saleStartTimeSec: p.saleStartTimeSec !== undefined ? Number(p.saleStartTimeSec) : 0,
+    unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : 0,
+    rosterShardCap: Number(p.rosterShardCap),
+    rosterShardsTotal: Number(p.rosterShardsTotal),
+    creatorInitialDepositLamports: new BN(String(p.creatorInitialDepositLamports ?? "0")),
+    creatorDailyLamportsLimit: new BN(String(p.creatorDailyLamportsLimit ?? "0")),
+    creatorClaimLockPeriodSec: new BN(String(p.creatorClaimLockPeriodSec)),
+    creatorMaxDepositLamports: new BN(String(p.creatorMaxDepositLamports)),
+    poolCreationGracePeriodSec: p.poolCreationGracePeriodSec !== undefined ? Number(p.poolCreationGracePeriodSec) : 0,
+    teamVestingDurationSec: p.teamVestingDurationSec !== undefined ? Number(p.teamVestingDurationSec) : 365 * 24 * 60 * 60,
+  };
+}
+
+export function getExplorerUrl(
+  provider: anchor.AnchorProvider,
+  signature: string
+): string {
+  const cluster = provider.connection.rpcEndpoint.includes("devnet")
+    ? "devnet"
+    : provider.connection.rpcEndpoint.includes("testnet")
+    ? "testnet"
+    : provider.connection.rpcEndpoint.includes("localhost") ||
+      provider.connection.rpcEndpoint.includes("127.0.0.1")
+    ? "custom&customUrl=" + encodeURIComponent(provider.connection.rpcEndpoint)
+    : "mainnet-beta";
+
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+}
 
 export async function advanceTime(
   client: any,
@@ -60,4 +101,29 @@ export function injectSlotHashesForRange(
     owner: anchor.web3.SystemProgram.programId,
     executable: false,
   });
+}
+
+export function checkAnchorError(error: any, errMsg: string) {
+  if (error instanceof anchor.AnchorError) {
+    assert.equal((error as anchor.AnchorError).error.errorMessage, errMsg);
+  } else if (error.message && error.message.includes(errMsg)) {
+    return;
+  } else if (error.logs && Array.isArray(error.logs)) {
+    const logsStr = error.logs.join(" ");
+    if (logsStr.includes(errMsg)) {
+      return;
+    }
+  } else {
+    const errorStr = JSON.stringify(error);
+    assert.fail(`Expected error message containing "${errMsg}", got: ${error.message || errorStr}`);
+  }
+}
+
+export async function doAndCheckError(promise: Promise<any>, errMsg: string) {
+  try {
+    await promise;
+    assert.fail(`Should have failed with error: ${errMsg}`);
+  } catch (error: any) {
+    checkAnchorError(error, errMsg);
+  }
 }

@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::Token,
-    token_2022::Token2022,
-    token_interface::{Mint as InterfaceMint, TokenInterface},
-};
+use anchor_spl::{token::Token, token_2022::Token2022, token_interface::Mint as InterfaceMint};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{
@@ -94,7 +90,7 @@ pub struct ClaimClmmFees<'info> {
     pub vault_1_mint: UncheckedAccount<'info>,
 
     pub base_token_program: Program<'info, Token>,
-    pub quote_token_program: Interface<'info, TokenInterface>,
+    pub quote_token_program: Program<'info, Token>,
     // Remaining accounts passed to Raydium for tick array bitmap extension
 }
 

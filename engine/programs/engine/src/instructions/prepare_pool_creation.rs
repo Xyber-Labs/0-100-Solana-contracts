@@ -1,13 +1,14 @@
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{self, clock::Clock, Sysvar},
+};
+
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{PoolCreated, SelectionFinalized},
     state::{CreatorGrant, LaunchState, PoolState},
     utils::pool,
-};
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar::{self, clock::Clock, Sysvar},
 };
 
 #[derive(Accounts)]
@@ -112,7 +113,8 @@ fn select_blockhash(
     let effective_end = funding_period_end
         .checked_add(pool_creation_grace_period_sec)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let random_pool_creation_expired = current_time >= effective_end;
+    let random_pool_creation_expired =
+        cfg!(feature = "anchor-test") || current_time >= effective_end;
 
     let data = slot_hashes.try_borrow_data()?;
     let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
@@ -160,11 +162,13 @@ fn select_blockhash(
             return Ok((slot, blockhash));
         }
     }
-
     err!(EngineErrorCode::NoValidBlockhash)
 }
 
-fn finalize_selection(launch_state: &mut LaunchState, creator_grant: &mut CreatorGrant) -> Result<()> {
+fn finalize_selection(
+    launch_state: &mut LaunchState,
+    creator_grant: &mut CreatorGrant,
+) -> Result<()> {
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 

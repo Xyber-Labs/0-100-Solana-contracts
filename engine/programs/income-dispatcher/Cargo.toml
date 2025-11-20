@@ -20,6 +20,7 @@ custom-heap = []
 custom-panic = []
 test = ["engine/test"]
 devnet = ["raydium-amm-v3/devnet"]
+anchor-test = []
 
 [dependencies]
 anchor-lang = "0.31.1"

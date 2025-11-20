@@ -1,0 +1,52 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Mint, Token};
+use raydium_amm_v3::states::AmmConfig;
+
+use crate::{
+    constants::AMM_CONFIG_INDEX,
+    errors::ErrorCode,
+    LaunchState,
+    RAYDIUM_CLMM_PROGRAM_ID, utils::clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange},
+};
+
+#[derive(Accounts)]
+pub struct GetLiquidityRange<'info> {
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
+    pub launch_state: Box<Account<'info, LaunchState>>,
+
+    /// CHECK:
+    pub base_mint: Account<'info, Mint>,
+    /// CHECK:
+    pub quote_mint: Account<'info, Mint>,
+    /// CHECK:
+    pub raydium_quote_vault: UncheckedAccount<'info>,
+    /// CHECK:
+    pub raydium_base_vault: UncheckedAccount<'info>,
+    /// CHECK:
+    pub quote_token_program: Program<'info, Token>,
+    /// CHECK:
+    pub base_token_program: Program<'info, Token>,
+
+    #[account(
+        seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()],
+        bump,
+        seeds::program = RAYDIUM_CLMM_PROGRAM_ID
+    )]
+    pub raydium_amm_config: Account<'info, AmmConfig>,
+}
+
+pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
+    let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
+    let order = ClmmOrder::from_inputs(
+        &ctx.accounts.launch_state,
+        &ctx.accounts.quote_mint,
+        &ctx.accounts.base_mint,
+        &ctx.accounts.raydium_quote_vault,
+        &ctx.accounts.raydium_base_vault,
+        &ctx.accounts.base_token_program,
+        &ctx.accounts.quote_token_program,
+        None,
+        None,
+    )?;
+    Ok(get_liquidity_range_impl(tick_spacing, order.price_ratio))
+}
