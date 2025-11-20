@@ -23,7 +23,7 @@ pub struct CreateClmmPool<'info> {
     #[account(
         mut,
         constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority,
-        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated,
+        constraint = launch_state.clmm_base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
         constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
         constraint = launch_state.total_deposited >= launch_state.min_raise_lamports @ ErrorCode::MinRaiseNotMet,
     )]

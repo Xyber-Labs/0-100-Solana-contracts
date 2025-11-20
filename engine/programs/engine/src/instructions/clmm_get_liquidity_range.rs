@@ -4,13 +4,14 @@ use raydium_amm_v3::states::AmmConfig;
 
 use crate::{
     constants::AMM_CONFIG_INDEX,
+    errors::ErrorCode,
     LaunchState,
     RAYDIUM_CLMM_PROGRAM_ID, utils::clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange},
 };
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
-    #[constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority]
+    #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     /// CHECK:
