@@ -1360,7 +1360,6 @@ export class TxBuilder {
   async createClmmPoolTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
-    quoteMint: web3.PublicKey;
     clmmProgram: web3.PublicKey;
     provider: any;
     preIxs?: web3.TransactionInstruction[];
@@ -1379,9 +1378,9 @@ export class TxBuilder {
     const baseMintKeypair = web3.Keypair.generate();
     const baseMint = baseMintKeypair.publicKey;
 
-    const [raydiumPoolState] = this.getRaydiumPoolPda(params.quoteMint, baseMint);
+    const [raydiumPoolState] = this.getRaydiumPoolPda(WSOL_MINT, baseMint);
     const [observationState] = this.getRaydiumObservationStatePda(raydiumPoolState);
-    const [quoteVault] = this.getRaydiumPoolVaultPda(raydiumPoolState, params.quoteMint);
+    const [quoteVault] = this.getRaydiumPoolVaultPda(raydiumPoolState, WSOL_MINT);
     const [baseVault] = this.getRaydiumPoolVaultPda(raydiumPoolState, baseMint);
     const [tickArrayBitmap] = this.getRaydiumPoolTickArrayBitmapExtensionPda(raydiumPoolState);
 
@@ -1404,7 +1403,7 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
-        quoteMint: params.quoteMint,
+        quoteMint: WSOL_MINT,
         raydiumAmmConfig,
         raydiumPoolState,
         raydiumBaseVault: baseVault,
@@ -1530,9 +1529,7 @@ export class TxBuilder {
   async addClmmLiquidityTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
-    quoteMint: web3.PublicKey;
     baseMint: web3.PublicKey;
-    baseTokenAta: web3.PublicKey;
     provider: any;
   }): Promise<{
     transaction: web3.Transaction;
@@ -1554,20 +1551,24 @@ export class TxBuilder {
   }> {
 
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const launchState = await this.program.account.launchState.fetch(params.launch);
-    const baseMint = launchState.baseMint as web3.PublicKey;
+
+    const baseTokenAta = getAssociatedTokenAddressSync(
+      params.baseMint,
+      escrowAuthority,
+      true
+    );
 
     const ammConfigForAdd = this.getRaydiumAmmConfigPda()[0];
     const clmmProgram = this.getRaydiumClmmProgramId();
 
-    const [raydiumPoolPda] = this.getRaydiumPoolPda(params.quoteMint, baseMint);
+    const [raydiumPoolPda] = this.getRaydiumPoolPda(WSOL_MINT, params.baseMint);
     const [bitmapExtension] = this.getRaydiumPoolTickArrayBitmapExtensionPda(raydiumPoolPda);
     const [tickArrayBitmap] = this.getRaydiumTickArrayBitmapPda(raydiumPoolPda);
-    const [quoteVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, params.quoteMint);
-    const [baseVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, baseMint);
+    const [quoteVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, WSOL_MINT);
+    const [baseVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, params.baseMint);
 
     const quoteEscrowAta = getAssociatedTokenAddressSync(
-      params.quoteMint,
+      WSOL_MINT,
       escrowAuthority,
       true
     );
@@ -1585,7 +1586,7 @@ export class TxBuilder {
     const range = await this.getLiquidityRange({
       launch: params.launch,
       baseMint: params.baseMint,
-      quoteMint: params.quoteMint,
+      quoteMint: WSOL_MINT,
       raydiumQuoteVault: quoteVault,
       raydiumBaseVault: baseVault,
     });
@@ -1606,10 +1607,10 @@ export class TxBuilder {
         payer: params.payer,
         raydiumProgram: clmmProgram,
         launchState: params.launch,
-        baseMint: baseMint,
+        baseMint: params.baseMint,
         escrowAuthority: escrowAuthority,
-        baseEscrowAta: params.baseTokenAta,
-        quoteMint: params.quoteMint,
+        baseEscrowAta: baseTokenAta,
+        quoteMint: WSOL_MINT,
         poolState: poolState,
         raydiumAmmConfig: ammConfigForAdd,
         raydiumPoolState: raydiumPoolPda,

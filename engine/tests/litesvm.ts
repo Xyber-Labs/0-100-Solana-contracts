@@ -1556,11 +1556,7 @@ describe("Full flow", () => {
       const clmmAddLiq = await sdk.addClmmLiquidityTx({
         payer: admin.publicKey,
         launch: testLaunchState,
-        quoteMint: WSOL_MINT,
         baseMint: clmmCreate.baseMint,
-        baseTokenAta: clmmCreate.baseTokenAta,
-        ammConfig: raydiumAmmConfig,
-        clmmProgram: raydiumProgramId,
         provider,
       });
       await safeSendAndConfirm(provider, client, clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);

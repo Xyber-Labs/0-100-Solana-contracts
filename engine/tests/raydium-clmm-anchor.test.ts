@@ -338,9 +338,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const addClmmLiquidityTx = await sdk.addClmmLiquidityTx({
       payer: admin1Keypair.publicKey,
       launch: launchPda,
-      quoteMint: quoteMintKeypair.publicKey,
       baseMint: baseMint,
-      baseTokenAta: baseTokenAta,
       provider,
     });
 

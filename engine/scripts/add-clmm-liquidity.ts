@@ -33,14 +33,10 @@ async function main() {
       process.exit(1);
     }
 
-    const baseMint = launchState.baseMint;
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
     const payerKeypair = (provider.wallet as any).payer as anchor.web3.Keypair;
 
     const result = await sdk.addClmmLiquidity({
       launch: launchPda,
-      quoteMint: WSOL_MINT,
-      baseMint: baseMint,
       signers: [payerKeypair],
     });
 

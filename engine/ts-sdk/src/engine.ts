@@ -592,7 +592,6 @@ const EngineSDK = {
 
     async function createClmmPool(args: {
       launch: anchor.web3.PublicKey;
-      quoteMint: anchor.web3.PublicKey;
       signers: anchor.web3.Keypair[];
     }): Promise<{
       signature: string;
@@ -606,7 +605,6 @@ const EngineSDK = {
       const result = await txBuilder.createClmmPoolTx({
         payer: payerPubkey,
         launch: args.launch,
-        quoteMint: args.quoteMint,
         clmmProgram: txBuilder.getRaydiumClmmProgramId(),
         provider,
       });
@@ -647,22 +645,23 @@ const EngineSDK = {
 
     async function addClmmLiquidity(args: {
       launch: anchor.web3.PublicKey;
-      quoteMint: anchor.web3.PublicKey;
-      baseMint: anchor.web3.PublicKey;
       signers: anchor.web3.Keypair[];
     }): Promise<{
       signature: string;
     }> {
       const payerPubkey = args.signers[0]?.publicKey ?? payer;
-      const [escrowAuthority] = txBuilder.getPda(["escrow_authority", args.launch]);
-      const baseTokenAta = txBuilder.getAssociatedTokenAddress(escrowAuthority, args.baseMint);
+
+      const launchState = await program.account.launchState.fetch(args.launch);
+      const baseMint = launchState.baseMint as anchor.web3.PublicKey;
+
+      if (!baseMint) {
+        throw new Error("Launch state does not have baseMint set. Pool must be created first.");
+      }
 
       const result = await txBuilder.addClmmLiquidityTx({
         payer: payerPubkey,
         launch: args.launch,
-        quoteMint: args.quoteMint,
-        baseMint: args.baseMint,
-        baseTokenAta: baseTokenAta,
+        baseMint: baseMint,
         provider,
       });
 
