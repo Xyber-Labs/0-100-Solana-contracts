@@ -98,8 +98,8 @@ pub enum ErrorCode {
     HardCapNotDivisibleByTau,
     #[msg("Per-wallet cap must be >= tau")]
     PerWalletCapTooSmall,
-    #[msg("Min raise must be <= hard cap")]
-    MinRaiseTooHigh,
+    #[msg("Malformed preset")]
+    MalformedPreset,
     #[msg("Creator claim lock period must be > 0")]
     InvalidClaimLockPeriod,
 
