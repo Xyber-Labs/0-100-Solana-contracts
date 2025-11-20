@@ -127,8 +127,9 @@ pub fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64) -> Liquidit
         .expect("Expected to be allowed sqrt price range");
 
     let spacing = tick_spacing as i32;
-    let tick_array_lower = (tick_lower_raw / spacing) * spacing;
-    let tick_array_upper = ((tick_upper_raw + spacing - 1) / spacing) * spacing;
+    let tick_array_lower = tick_lower_raw - tick_lower_raw.rem_euclid(spacing);
+    let tick_array_upper =
+        tick_upper_raw + (spacing - tick_upper_raw.rem_euclid(spacing)) % spacing;
 
     let tick_array_lower_start_index =
         TickArrayState::get_array_start_index(tick_lower_raw, tick_spacing);
