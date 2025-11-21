@@ -153,7 +153,7 @@ export type Engine = {
           "name": "quoteMint"
         },
         {
-          "name": "quoteTokenAta",
+          "name": "quoteEscrowAta",
           "writable": true,
           "pda": {
             "seeds": [
@@ -322,7 +322,8 @@ export type Engine = {
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
         },
         {
-          "name": "quoteTokenProgram"
+          "name": "quoteTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "baseTokenProgram",
@@ -341,20 +342,7 @@ export type Engine = {
           "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "baseAmount",
-          "type": "u64"
-        },
-        {
-          "name": "quoteAmount",
-          "type": "u64"
-        },
-        {
-          "name": "sqrtPriceLowerX64",
-          "type": "u128"
-        }
-      ]
+      "args": []
     },
     {
       "name": "claimClmmFees",
@@ -371,7 +359,6 @@ export type Engine = {
       "accounts": [
         {
           "name": "incomeDispatcherAuthority",
-          "signer": true,
           "pda": {
             "seeds": [
               {
@@ -457,6 +444,9 @@ export type Engine = {
         {
           "name": "launchState",
           "writable": true
+        },
+        {
+          "name": "baseMint"
         },
         {
           "name": "escrowAuthority",
@@ -569,6 +559,14 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "quoteTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -1753,7 +1751,8 @@ export type Engine = {
         },
         {
           "name": "baseMint",
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "baseEscrowAta",
@@ -1774,8 +1773,41 @@ export type Engine = {
               }
             ],
             "program": {
-              "kind": "account",
-              "path": "associatedTokenProgram"
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
             }
           }
         },
@@ -2445,6 +2477,26 @@ export type Engine = {
           "name": "launchState"
         },
         {
+          "name": "baseMint"
+        },
+        {
+          "name": "quoteMint"
+        },
+        {
+          "name": "raydiumQuoteVault"
+        },
+        {
+          "name": "raydiumBaseVault"
+        },
+        {
+          "name": "quoteTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
           "name": "raydiumAmmConfig",
           "pda": {
             "seeds": [
@@ -2511,12 +2563,7 @@ export type Engine = {
           }
         }
       ],
-      "args": [
-        {
-          "name": "sqrtPriceLowerX64",
-          "type": "u128"
-        }
-      ],
+      "args": [],
       "returns": {
         "defined": {
           "name": "liquidityRange"
@@ -4912,8 +4959,8 @@ export type Engine = {
     },
     {
       "code": 6047,
-      "name": "minRaiseTooHigh",
-      "msg": "Min raise must be <= hard cap"
+      "name": "malformedPreset",
+      "msg": "Malformed preset"
     },
     {
       "code": 6048,
@@ -6650,6 +6697,11 @@ export type Engine = {
       "name": "incomeDispatcherSeedRoot",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "raydiumClmmProgramId",
+      "type": "pubkey",
+      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
     },
     {
       "name": "seedRoot",

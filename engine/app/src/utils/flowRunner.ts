@@ -593,6 +593,7 @@ export async function runFullFlow(
       addLog(`      - CLMM pool created. Signature: ${sig}`);
       mintedBaseMint = testBaseMint.publicKey;
       try {
+        addLog(`      - Base mint: ${mintedBaseMint.toBase58()}`);
         // Derive correct LP amount = base_total - sale - team (all in atomic units)
         const launchOnChain: any = await (sdk as any).fetchLaunch(testLaunchState);
         const baseTotalStr = launchOnChain.baseTotalAllocation?.toString?.() ?? String(launchOnChain.baseTotalAllocation ?? "0");
@@ -661,12 +662,38 @@ export async function runFullFlow(
       if (!claimsReady) {
         addLog(`   -> Claims are not ready (CLMM liquidity not added). Skipping user claims/refunds step.`);
         addLog(`   -> Note: On non-Rayduim networks, addClmmLiquidity may fail; claims stay closed by design.`);
+        try {
+          addLog(`\n--- DISTRIBUTION SUMMARY (claims not ready) ---`);
+          const launchForSummary: any = await (sdk as any).fetchLaunch(testLaunchState);
+          const totalSOLCollected = Number(launchForSummary.totalDeposited ?? 0);
+          addLog(`   Total SOL collected:      ${(totalSOLCollected / 1e9).toFixed(4)} SOL`);
+          if (mintedBaseMint) {
+            addLog(`   Base mint:                ${mintedBaseMint.toBase58()}`);
+            const supply = await provider.connection.getTokenSupply(mintedBaseMint);
+            const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
+            addLog(`   Base mint total supply:   ${supplyUi}`);
+          }
+          addLog(`   ------------------------------------`);
+        } catch (_) {}
         addLog(`\n✅ Full flow finished successfully (claims step skipped due to claims_ready=false).`);
         return { success: true, message: "Flow completed (claims skipped)" };
       }
     } catch (_) {
       // If pool state missing, treat as not ready
       addLog(`   -> Pool state not found; skipping claims step.`);
+      try {
+        addLog(`\n--- DISTRIBUTION SUMMARY (no pool) ---`);
+        const launchForSummary: any = await (sdk as any).fetchLaunch(testLaunchState);
+        const totalSOLCollected = Number(launchForSummary.totalDeposited ?? 0);
+        addLog(`   Total SOL collected:      ${(totalSOLCollected / 1e9).toFixed(4)} SOL`);
+        if (mintedBaseMint) {
+          addLog(`   Base mint:                ${mintedBaseMint.toBase58()}`);
+          const supply = await provider.connection.getTokenSupply(mintedBaseMint);
+          const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
+          addLog(`   Base mint total supply:   ${supplyUi}`);
+        }
+        addLog(`   ------------------------------------`);
+      } catch (_) {}
       addLog(`\n✅ Full flow finished successfully (claims step skipped; pool not created).`);
       return { success: true, message: "Flow completed (no pool yet)" };
     }

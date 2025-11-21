@@ -82,6 +82,8 @@ pub fn update_launch_preset(
     if let Some(v) = patch.pool_creation_grace_period_sec { p.pool_creation_grace_period_sec = v; }
     if let Some(v) = patch.team_vesting_duration_sec { p.team_vesting_duration_sec = v; }
 
+    p.is_valid()?;
+
     Ok(())
 }
 

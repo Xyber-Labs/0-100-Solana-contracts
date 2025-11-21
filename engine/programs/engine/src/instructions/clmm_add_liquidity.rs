@@ -1,19 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::Token,
+    token::{Mint, Token, TokenAccount},
     token_2022::Token2022,
-    token_interface::{Mint as InterfaceMint, TokenAccount, TokenInterface},
 };
 use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
-    constants::{AMM_CONFIG_INDEX, TEAM_BASIS_POINTS},
+    constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
-    utils::clmm::get_liquidity_range_impl,
-    state::PoolState,
     LaunchState,
     SEED_ROOT,
+    state::PoolState, utils::clmm::{ClmmOrder, get_liquidity_range_impl},
 };
 
 #[derive(Accounts)]
@@ -21,16 +19,15 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    pub raydium_program: Program<'info, AmmV3>,
-
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
+    #[account(mut, constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
+    pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(
         constraint = launch_state.clmm_base_mint == Some(base_mint.key()),
+        mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
-    pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
+    pub base_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Escrow authority PDA without data for token ownership and SOL transfers
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -42,13 +39,13 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::authority = escrow_authority,
         associated_token::token_program = base_token_program,
     )]
-    pub base_escrow_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub base_escrow_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mint::token_program = quote_token_program,
         address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
     )]
-    pub quote_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
+    pub quote_mint: Box<Account<'info, Mint>>,
 
     #[account(
         init,
@@ -57,7 +54,7 @@ pub struct AddClmmLiquidity<'info> {
         associated_token::authority = escrow_authority,
         associated_token::token_program = quote_token_program,
     )]
-    pub quote_token_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub quote_escrow_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
@@ -94,10 +91,10 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub raydium_tick_array_upper: UncheckedAccount<'info>,
 
-
     pub token_2022_program: Program<'info, Token2022>,
 
-    pub quote_token_program: Interface<'info, TokenInterface>,
+    pub raydium_program: Program<'info, AmmV3>,
+    pub quote_token_program: Program<'info, Token>,
     pub base_token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
@@ -110,58 +107,30 @@ pub struct AddClmmLiquidity<'info> {
 /// Caller must add ComputeBudgetProgram::setComputeUnitLimit instruction to transaction.
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
-    base_amount: u64,
-    quote_amount: u64,
-    sqrt_price_lower_x64: u128,
 ) -> Result<()> {
-    let state = &ctx.accounts.launch_state;
-    let team_bps = if state.team_allocation_basis_points > 0 {
-        state.team_allocation_basis_points
-    } else {
-        TEAM_BASIS_POINTS
-    };
-    require!(
-        state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps),
-        ErrorCode::InvalidShareSum
-    );
-    let total_u128 = state.base_total_allocation as u128;
-    let sale_u128 = (total_u128)
-        .checked_mul(state.base_sale_basis_points as u128)
-        .and_then(|v| v.checked_div(10_000u128))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let team_u128 = (total_u128)
-        .checked_mul(team_bps as u128)
-        .and_then(|v| v.checked_div(10_000u128))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let lp_u128 = total_u128
-        .checked_sub(sale_u128)
-        .and_then(|v| v.checked_sub(team_u128))
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    require!(lp_u128 <= u64::MAX as u128, ErrorCode::U64ConversionOverflow);
-    let lp_expected = lp_u128 as u64;
-    require!(base_amount == lp_expected, ErrorCode::Unauthorized);
-
-    add_initial_liquidity(&ctx, base_amount, quote_amount, sqrt_price_lower_x64)?;
+    add_initial_liquidity_impl(&ctx)?;
+    // TODO: base_mint to be used instead of this explicit approach
     ctx.accounts.pool_state.claims_ready = true;
     Ok(())
 }
 
-const RENT_RESERVE: u64 = 200_000_000;
-
-fn add_initial_liquidity<'info>(
+fn add_initial_liquidity_impl<'info>(
     ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
-    base_amount: u64,
-    quote_amount: u64,
-    sqrt_price_lower_x64: u128,
 ) -> Result<()> {
-    msg!("=== Input Parameters ===");
-    msg!("Base amount: {}", base_amount);
-    msg!("Quote amount: {}", quote_amount);
+    let order = ClmmOrder::from_inputs(
+        &ctx.accounts.launch_state,
+        &ctx.accounts.quote_mint,
+        &ctx.accounts.base_mint,
+        &ctx.accounts.raydium_quote_vault,
+        &ctx.accounts.raydium_base_vault,
+        &ctx.accounts.base_token_program,
+        &ctx.accounts.quote_token_program,
+        Some(&ctx.accounts.base_escrow_ata),
+        Some(&ctx.accounts.quote_escrow_ata),
+    )?;
 
-    let available_balance = ctx.accounts.escrow_authority.to_account_info().lamports();
-    let transfer_amount = available_balance.saturating_sub(RENT_RESERVE);
-    msg!("Available balance on escrow_authority: {}", available_balance);
-    msg!("Transfer amount (after rent reserve): {}", transfer_amount);
+    let range =
+        get_liquidity_range_impl(ctx.accounts.raydium_amm_config.tick_spacing, order.price_ratio);
 
     let launch_key = ctx.accounts.launch_state.key();
     let escrow_authority_seeds = &[
@@ -177,32 +146,19 @@ fn add_initial_liquidity<'info>(
             ctx.accounts.system_program.to_account_info(),
             anchor_lang::system_program::Transfer {
                 from: ctx.accounts.escrow_authority.to_account_info(),
-                to: ctx.accounts.quote_token_ata.to_account_info(),
+                to: ctx.accounts.quote_escrow_ata.to_account_info(),
             },
             signers,
         ),
-        quote_amount,
+        order.quote_supply,
     )?;
-    msg!("Transferred {} lamports to WSOL ATA", quote_amount);
 
     anchor_spl::token_interface::sync_native(CpiContext::new(
         ctx.accounts.quote_token_program.to_account_info(),
         anchor_spl::token_interface::SyncNative {
-            account: ctx.accounts.quote_token_ata.to_account_info(),
+            account: ctx.accounts.quote_escrow_ata.to_account_info(),
         },
     ))?;
-    msg!("Synced native for WSOL ATA");
-
-    let order = OpenPositionOrder::new(
-        &ctx.accounts.quote_mint.to_account_info(),
-        &ctx.accounts.base_mint.to_account_info(),
-        &ctx.accounts.raydium_quote_vault.to_account_info(),
-        &ctx.accounts.raydium_base_vault.to_account_info(),
-        &ctx.accounts.quote_token_ata.to_account_info(),
-        &ctx.accounts.base_escrow_ata.to_account_info(),
-        quote_amount,
-        base_amount,
-    );
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::OpenPositionWithToken22Nft {
         payer: ctx.accounts.escrow_authority.to_account_info(),
@@ -214,8 +170,8 @@ fn add_initial_liquidity<'info>(
         tick_array_lower: ctx.accounts.raydium_tick_array_lower.to_account_info(),
         tick_array_upper: ctx.accounts.raydium_tick_array_upper.to_account_info(),
         personal_position: ctx.accounts.raydium_personal_position.to_account_info(),
-        token_account_0: order.token_account_0,
-        token_account_1: order.token_account_1,
+        token_account_0: order.token_source_0.expect("Expected token source to be"),
+        token_account_1: order.token_source_1.expect("Expected token source to be"),
         token_vault_0: order.token_vault_0,
         token_vault_1: order.token_vault_1,
         rent: ctx.accounts.rent.to_account_info(),
@@ -234,16 +190,6 @@ fn add_initial_liquidity<'info>(
     )
     .with_remaining_accounts(ctx.remaining_accounts.to_vec());
 
-    let token_0_value = order.amount_0;
-    let token_1_value = order.amount_1;
-
-    let range = get_liquidity_range_impl(
-        ctx.accounts.raydium_amm_config.tick_spacing,
-        7.16 * 10f64.powi(-7),
-        order.base_flag.unwrap(),
-        sqrt_price_lower_x64,
-    );
-
     raydium_amm_v3::cpi::open_position_with_token22_nft(
         cpi_context,
         range.tick_array_lower,
@@ -251,62 +197,11 @@ fn add_initial_liquidity<'info>(
         range.tick_array_lower_start_index,
         range.tick_array_upper_start_index,
         0,
-        token_0_value,
-        token_1_value,
-        true,
+        order.token_0_supply,
+        order.token_1_supply,
+        false,
         order.base_flag,
     )?;
 
     Ok(())
-}
-
-struct OpenPositionOrder<'info> {
-    token_mint_0: AccountInfo<'info>,
-    token_mint_1: AccountInfo<'info>,
-    token_vault_0: AccountInfo<'info>,
-    token_vault_1: AccountInfo<'info>,
-    token_account_0: AccountInfo<'info>,
-    token_account_1: AccountInfo<'info>,
-    amount_0: u64,
-    amount_1: u64,
-    base_flag: Option<bool>,
-}
-
-impl<'info> OpenPositionOrder<'info> {
-    fn new(
-        quote_mint: &AccountInfo<'info>,
-        base_mint: &AccountInfo<'info>,
-        quote_vault: &AccountInfo<'info>,
-        base_vault: &AccountInfo<'info>,
-        quote_account: &AccountInfo<'info>,
-        base_account: &AccountInfo<'info>,
-        quote_amount: u64,
-        base_amount: u64,
-    ) -> Self {
-        if quote_mint.key() < base_mint.key() {
-            Self {
-                token_mint_0: quote_mint.clone(),
-                token_mint_1: base_mint.clone(),
-                token_vault_0: quote_vault.clone(),
-                token_vault_1: base_vault.clone(),
-                token_account_0: quote_account.clone(),
-                token_account_1: base_account.clone(),
-                amount_0: quote_amount,
-                amount_1: base_amount,
-                base_flag: Some(false),
-            }
-        } else {
-            Self {
-                token_mint_0: base_mint.clone(),
-                token_mint_1: quote_mint.clone(),
-                token_vault_0: base_vault.clone(),
-                token_vault_1: quote_vault.clone(),
-                token_account_0: base_account.clone(),
-                token_account_1: quote_account.clone(),
-                amount_0: base_amount,
-                amount_1: quote_amount,
-                base_flag: Some(true),
-            }
-        }
-    }
 }

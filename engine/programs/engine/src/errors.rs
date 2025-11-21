@@ -98,8 +98,8 @@ pub enum ErrorCode {
     HardCapNotDivisibleByTau,
     #[msg("Per-wallet cap must be >= tau")]
     PerWalletCapTooSmall,
-    #[msg("Min raise must be <= hard cap")]
-    MinRaiseTooHigh,
+    #[msg("Malformed preset")]
+    MalformedPreset,
     #[msg("Creator claim lock period must be > 0")]
     InvalidClaimLockPeriod,
 
@@ -147,4 +147,9 @@ pub enum ErrorCode {
     InvalidAdminSet,
     #[msg("Insufficient fee balance")]
     InsufficientFeeBalance,
+
+    #[msg("Invalid price: must be finite and positive")]
+    InvalidPrice,
+    #[msg("Price overflow: result exceeds u128::MAX")]
+    PriceOverflow,
 }

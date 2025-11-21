@@ -1,7 +1,15 @@
-export function getConstant(
+import * as anchor from "@coral-xyz/anchor";
+import * as fs from "fs";
+
+export function loadKeypair(path: string): anchor.web3.Keypair {
+  const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(path, "utf8")));
+  return anchor.web3.Keypair.fromSecretKey(secretKey);
+}
+
+export function getConstantRaw(
   name: string,
   idl: { constants?: [{ name: string; value: any }] }
-): Uint8Array {
+): any {
   if (!idl.constants) {
     throw new Error(`IDL does not contain constants section`);
   }
@@ -18,5 +26,13 @@ export function getConstant(
     );
   }
 
-  return new Uint8Array(JSON.parse(constant.value));
+  return constant.value;
+}
+
+export function getConstant(
+  name: string,
+  idl: { constants?: [{ name: string; value: any }] }
+): Uint8Array {
+  const value = getConstantRaw(name, idl);
+  return new Uint8Array(JSON.parse(value));
 }

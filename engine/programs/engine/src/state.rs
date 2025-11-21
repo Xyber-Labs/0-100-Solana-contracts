@@ -234,3 +234,35 @@ pub struct LaunchPreset {
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
 }
+
+impl LaunchPreset {
+    pub fn is_valid(&self) -> Result<()> {
+        require!(self.tau_lamports > 0, crate::errors::ErrorCode::MalformedPreset);
+        require!(
+            self.hard_cap_lamports % self.tau_lamports == 0,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        require!(
+            self.per_wallet_cap >= self.tau_lamports,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        require!(
+            self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        require!(
+            self.min_raise_lamports <= self.hard_cap_lamports,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        require!(
+            self.creator_claim_lock_period_sec > 0,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        require!(self.roster_shards_total > 0, crate::errors::ErrorCode::MalformedPreset);
+        require!(
+            self.funding_duration_seconds > 0 && self.funding_duration_seconds <= 60 * 60 * 24 * 7,
+            crate::errors::ErrorCode::MalformedPreset
+        );
+        Ok(())
+    }
+}
