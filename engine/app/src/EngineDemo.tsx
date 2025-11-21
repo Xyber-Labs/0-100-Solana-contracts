@@ -13,6 +13,7 @@ import { runFullFlow } from './utils/flowRunner';
 interface SimulationConfig {
   numUsers: number;
   maxTicketsPerUser: number;
+  useTestMintForBase?: boolean;
 }
 
 // Error boundary component
@@ -166,6 +167,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const defaultSimConfig: SimulationConfig = {
     numUsers: 100,
     maxTicketsPerUser: 3,
+    useTestMintForBase: false,
   };
 
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -1218,6 +1220,17 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   className="terminal-input w-full"
                 />
               </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!simConfig.useTestMintForBase}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, useTestMintForBase: e.target.checked }))}
+                  className="terminal-input"
+                />
+                <span className="text-xs terminal-output">
+                  Use test mint for base token (skip Raydium CLMM)
+                </span>
+              </div>
             </div>
           )}
 
@@ -1534,6 +1547,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     const { signature } = await sdk.initRosterShard({
                       launch: launchState,
                       shardId: 1,
+                      signers: [],
                     });
                     addLog(`SUCCESS: Roster shard 1 initialized - Signature: ${signature}`);
                     try {
@@ -1571,6 +1585,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     const { signature } = await sdk.finalizeRosterShard({
                       launch: launchState,
                       shardId: 1,
+                      signers: [],
                     });
                     addLog(`SUCCESS: Roster shard 1 finalized - Signature: ${signature}`);
                   } catch (error) {
