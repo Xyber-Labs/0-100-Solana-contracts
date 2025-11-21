@@ -452,7 +452,7 @@ export async function runFullFlow(
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, using pre-calculated shard IDs
-    const depositConcurrency = Math.min(200, numUsersToSimulate);
+    const depositConcurrency = numUsersToSimulate > 5000 ? 100 : Math.min(200, numUsersToSimulate);
     const uniqueShardsInUse = new Set(users.map(u => u.shardId)).size;
     const totalTicketsSim = users.reduce((acc, u) => acc + u.tickets, 0);
     const avgTicketsSim = totalTicketsSim / Math.max(1, numUsersToSimulate);
@@ -461,10 +461,15 @@ export async function runFullFlow(
     addLog(`      - Shards involved: ${uniqueShardsInUse}/${rosterShardsTotal} (cap per shard ${config.rosterShardCap})`);
     addLog(`      - Tickets: total=${totalTicketsSim}, avgPerUser=${avgTicketsSim.toFixed(2)}`);
     const depositResults = await depositUsersParallel({ sdk, launchPda: testLaunchState, users, concurrency: depositConcurrency, addLog });
-    for (const result of depositResults) {
+    const successfulResults = depositResults.filter((r) => !!r) as Array<{ pubkey: PublicKey; shardId: number }>;
+    const failedCount = depositResults.length - successfulResults.length;
+    for (const result of successfulResults) {
       const k = result.pubkey.toBase58();
       const user = users.find(u => u.keypair.publicKey.toBase58() === k)!;
       usersWithDeposits.set(k, { keypair: user.keypair, tickets: user.tickets, shardId: result.shardId });
+    }
+    if (failedCount > 0) {
+      addLog(`   -> ${failedCount} deposits failed after retries and were skipped.`);
     }
     addLog("   -> All deposits completed.");
 
@@ -524,6 +529,8 @@ export async function runFullFlow(
       const totalShards: number = Number(launch.rosterShards ?? 0);
       let sealCost = 0;
       const sealDetails: { shardId: number; costLamports: number; batches: number }[] = [];
+      let shardsRentRefundLamports = 0;
+      let closedShardsCount = 0;
       for (let shardId = 0; shardId < totalShards; shardId++) {
         const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
         let shardAcc: any = null;
@@ -533,11 +540,13 @@ export async function runFullFlow(
           shardAcc = null;
         }
         const wallets: PublicKey[] = (shardAcc?.wallets as PublicKey[]) || [];
-        const BATCH = 20;
+        const MAX_UNITS = 1_400_000;
+        const MAX_BATCH = 24; // avoid tx size overflow due to remaining accounts
+        let batchSize = Math.min(20, MAX_BATCH);
         const sealBefore = await provider.connection.getBalance(admin.publicKey);
         let batches = 0;
-        for (let from = 0; from < wallets.length; from += BATCH) {
-          const end = Math.min(from + BATCH, wallets.length);
+        for (let from = 0; from < wallets.length;) {
+          const end = Math.min(from + batchSize, wallets.length);
           const slice = wallets.slice(from, end);
           const { transaction } = await (sdk as any).sealRosterShardTx({
             launch: testLaunchState,
@@ -547,10 +556,26 @@ export async function runFullFlow(
             walletsSlice: slice,
           });
           try {
+            try { transaction.instructions.unshift(ComputeBudgetProgram.setComputeUnitLimit({ units: MAX_UNITS })); } catch (_) {}
             await provider.sendAndConfirm!(transaction, []);
             addLog(`   -> Shard ${shardId}: sealed users [${from}..${end - 1}]`);
             batches += 1;
+            from = end;
+            // Try cautiously increasing batch size within safe limit
+            if (batchSize < MAX_BATCH) batchSize = Math.min(MAX_BATCH, batchSize + 2);
           } catch (e: any) {
+            const msg = String(e?.message || "");
+            const cuExceeded = msg.includes("exceeded CUs meter") || msg.includes("consumed 200000 of 200000 compute units") || msg.includes("Program failed to complete");
+            const txTooLarge = msg.includes("Transaction too large") || msg.includes("> 1232");
+            if (cuExceeded && batchSize > 1) {
+              batchSize = Math.max(1, Math.floor(batchSize / 2));
+              addLog(`   -> Shard ${shardId}: CU exceeded, reducing batch size to ${batchSize} and retrying [${from}..${end - 1}]`);
+              continue;
+            } else if (txTooLarge && batchSize > 1) {
+              batchSize = Math.max(1, Math.floor(batchSize * 3 / 4));
+              addLog(`   -> Shard ${shardId}: TX too large, reducing batch size to ${batchSize} and retrying [${from}..${end - 1}]`);
+              continue;
+            }
             addLog(`   -> Shard ${shardId}: seal batch failed [${from}..${end - 1}]: ${e?.message || e}`);
             throw e;
           }
@@ -561,11 +586,17 @@ export async function runFullFlow(
         sealDetails.push({ shardId, costLamports: shardSealCost, batches });
         const before = await provider.connection.getBalance(admin.publicKey);
         const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId });
+        let deltaForShard = 0;
         try {
           await provider.sendAndConfirm!(closeTx, []);
           const after = await provider.connection.getBalance(admin.publicKey);
           const delta = after - before;
           addLog(`   -> Shard ${shardId} closed. Payer delta: ${(delta / 1e9).toFixed(9)} SOL`);
+          if (delta > 0) {
+            shardsRentRefundLamports += delta;
+          }
+          closedShardsCount += 1;
+          deltaForShard = delta;
         } catch (e: any) {
           addLog(`   -> Shard ${shardId}: close failed: ${e?.message || e}`);
           throw e;
@@ -574,6 +605,8 @@ export async function runFullFlow(
         (globalThis as any).__sealCost = (globalThis as any).__sealCost ? (globalThis as any).__sealCost + shardSealCost : shardSealCost;
         const prev = (globalThis as any).__sealDetails || [];
         (globalThis as any).__sealDetails = [...prev, { shardId, costLamports: shardSealCost, batches }];
+        (globalThis as any).__shardsRentRefundLamports = ((globalThis as any).__shardsRentRefundLamports ?? 0) + Math.max(0, deltaForShard);
+        (globalThis as any).__closedShardsCount = ((globalThis as any).__closedShardsCount ?? 0) + 1;
       }
     }
 
@@ -787,8 +820,9 @@ export async function runFullFlow(
       }
     }
 
-    addLog(`   -> Claiming for ${allUsersData.length} users in batches of 50...`);
-    const CLAIM_BATCH_SIZE = 50;
+    const totalClaimUsers = allUsersData.length;
+    const CLAIM_BATCH_SIZE = totalClaimUsers > 2000 ? 20 : 50;
+    addLog(`   -> Claiming for ${totalClaimUsers} users in batches of ${CLAIM_BATCH_SIZE}...`);
     let allResults = [];
 
     for (let i = 0; i < allUsersData.length; i += CLAIM_BATCH_SIZE) {
@@ -796,31 +830,50 @@ export async function runFullFlow(
       addLog(`   -> Processing claim batch ${Math.floor(i / CLAIM_BATCH_SIZE) + 1}...`);
 
       const claimPromises = batch.map(async (userData) => {
+        const userPk = userData.keypair.publicKey;
+        const userAta = sdk.getUserAta(testBaseMint.publicKey, userPk);
+        const initialBalance = await getTokenBalance(userAta);
+        const tryClaimTokens = async () => {
+          let attempt = 0;
+          const maxAttempts = 3;
+          const baseDelay = 200;
+          for (;;) {
+            try {
+              await sdk.claimTokens({
+                launch: testLaunchState,
+                baseMint: testBaseMint.publicKey,
+                userKeypair: userData.keypair,
+                createAtaIfMissing: true,
+                shardId: userData.shardId,
+              });
+              return true;
+            } catch (e: any) {
+              const msg = String(e?.message || "");
+              if (msg.includes("NoTokensToClaim")) return false;
+              const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("not confirmed in 30.00 seconds");
+              attempt++;
+              if (!transient || attempt >= maxAttempts) throw e;
+              const jitter = Math.floor(Math.random() * 100);
+              const delay = baseDelay * Math.min(8, 2 ** (attempt - 1)) + jitter;
+              await new Promise(r => setTimeout(r, delay));
+            }
+          }
+        };
         try {
-          // Attempt to claim tokens for every user
-          const userAta = sdk.getUserAta(
-            testBaseMint.publicKey,
-            userData.keypair.publicKey
-          );
-          const initialBalance = await getTokenBalance(userAta);
-
-          await sdk.claimTokens({
-            launch: testLaunchState,
-            baseMint: testBaseMint.publicKey,
-            userKeypair: userData.keypair,
-            createAtaIfMissing: true,
-            shardId: userData.shardId,
-          });
-
-          const finalBalance = await getTokenBalance(userAta);
-          return {
-            status: "winner",
-            tokensClaimed: finalBalance - initialBalance,
-            tickets: userData.tickets,
-          };
-        } catch (error: any) {
-          // If it fails with "NoTokensToClaim", they are a loser, so claim refund
-          if (error.message && error.message.includes("NoTokensToClaim")) {
+          const won = await tryClaimTokens();
+          if (won) {
+            const finalBalance = await getTokenBalance(userAta);
+            return {
+              status: "winner",
+              tokensClaimed: finalBalance - initialBalance,
+              tickets: userData.tickets,
+            };
+          }
+          // loser: attempt refund with retries
+          let attemptR = 0;
+          const maxAttemptsR = 3;
+          const baseDelayR = 200;
+          for (;;) {
             try {
               await sdk.claimRefund({
                 launch: testLaunchState,
@@ -829,22 +882,29 @@ export async function runFullFlow(
               });
               return { status: "loser", tickets: userData.tickets };
             } catch (refundError: any) {
-              return {
-                status: "failed",
-                type: "refund",
-                error: refundError,
-                publicKey: userData.keypair.publicKey,
-              };
+              const msg = String(refundError?.message || "");
+              const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("not confirmed in 30.00 seconds");
+              attemptR++;
+              if (!transient || attemptR >= maxAttemptsR) {
+                return {
+                  status: "failed",
+                  type: "refund",
+                  error: refundError,
+                  publicKey: userPk,
+                };
+              }
+              const jitter = Math.floor(Math.random() * 100);
+              const delay = baseDelayR * Math.min(8, 2 ** (attemptR - 1)) + jitter;
+              await new Promise(r => setTimeout(r, delay));
             }
-          } else {
-            // If it's another error, log it
-            return {
-              status: "failed",
-              type: "token",
-              error: error,
-              publicKey: userData.keypair.publicKey,
-            };
           }
+        } catch (error: any) {
+          return {
+            status: "failed",
+            type: "token",
+            error,
+            publicKey: userPk,
+          };
         }
       });
 
@@ -1225,6 +1285,17 @@ export async function runFullFlow(
       addLog(`   ------------------------------------`);
       addLog(`   TOTAL NON-REFUNDABLE ADMIN COST:    ${(nonRefundableTotal / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
       addLog(`--- END ADMIN COST SUMMARY ---`);
+    } catch (_) {}
+
+    try {
+      const rentRefundLamports = Number((globalThis as any).__shardsRentRefundLamports ?? 0);
+      addLog(`\n--- RENT REFUND SUMMARY ---`);
+      addLog(`   Total rent returned from closing shards: ${(rentRefundLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      const grossOperationalCost = trueOperationalCost;
+      const netOperationalCost = Math.max(0, grossOperationalCost - rentRefundLamports);
+      addLog(`   Gross operational cost (incl. shard rents): ${(grossOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      addLog(`   Net operational cost after rent return:     ${(netOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      addLog(`--- END RENT REFUND SUMMARY ---`);
     } catch (_) {}
 
     addLog("\n✅ Full flow finished successfully!");
