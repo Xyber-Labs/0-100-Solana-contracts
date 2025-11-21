@@ -16,7 +16,6 @@ pub use init_engine_config::*;
 pub use init_launch::*;
 pub use init_launch_from_preset::*;
 pub use init_launch_preset::*;
-pub use init_roster::*;
 pub use init_roster_shard::*;
 pub use init_team_vesting::*;
 #[cfg(feature = "test")]
@@ -46,7 +45,6 @@ mod init_engine_config;
 mod init_launch;
 mod init_launch_from_preset;
 mod init_launch_preset;
-mod init_roster;
 mod init_roster_shard;
 mod init_team_vesting;
 #[cfg(feature = "test")]
