@@ -64,6 +64,32 @@ export function createShardsApi(params: {
 }) {
   const { program, provider, txBuilder, payer, getRosterPda, getRosterShardPda, fetchLaunch } = params;
 
+  async function sendAndMaybeConfirm(tx: anchor.web3.Transaction, signers: anchor.web3.Signer[] = []): Promise<string> {
+    try {
+      if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      return await (provider as any).sendAndConfirm(tx, signers);
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      const m = msg.match(/Check signature\s+([A-Za-z0-9]+)\s+/);
+      const sig = m?.[1];
+      if (sig) {
+        const conn = program.provider.connection;
+        const started = Date.now();
+        while (Date.now() - started < 30000) {
+          try {
+            const st = await conn.getSignatureStatuses([sig]);
+            const v = st?.value?.[0];
+            if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized" || (typeof v.confirmations === "number" && v.confirmations > 0) || v.err === null)) {
+              return sig;
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      throw e;
+    }
+  }
+
   async function initMissingRosterShards(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ initialized: number[]; signature: string | null }> {
     const launchState: any = await fetchLaunch(args.launch);
     const total: number = Number(launchState.rosterShards);
@@ -125,8 +151,7 @@ export function createShardsApi(params: {
           const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, shardId: id });
           const tx = new anchor.web3.Transaction().add(initIx, dep.instruction);
           const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
+          const signature = await sendAndMaybeConfirm(tx, signers);
           console.log(`deposit shard=${id} created=true`);
           return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
         } catch (e: any) {
@@ -146,8 +171,7 @@ export function createShardsApi(params: {
           const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda });
           const tx = new anchor.web3.Transaction().add(dep.instruction);
           const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
+          const signature = await sendAndMaybeConfirm(tx, signers);
           console.log(`deposit shard=${id} created=false`);
           return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
         } catch (e: any) {

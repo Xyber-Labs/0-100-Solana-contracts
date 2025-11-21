@@ -1,6 +1,6 @@
 {
   "name": "@xyber-labs/0-100-sdk",
-  "version": "0.1.2",
+  "version": "0.1.7",
   "main": "dist/src/engine.js",
   "types": "dist/src/engine.d.ts",
   "scripts": {

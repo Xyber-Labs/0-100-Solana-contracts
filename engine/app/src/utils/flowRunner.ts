@@ -472,8 +472,7 @@ export async function runFullFlow(
     addLog(`\n[4/10] Waiting for funding period to end...`);
     await waitForFundingPeriodEndHelper({ provider, sdk, launchPda: testLaunchState, addLog });
     addLog("   -> Funding period closed.");
-
-    const balanceBeforeCranking = await provider.connection.getBalance(admin.publicKey);
+    const balanceBeforeSetSeed = await provider.connection.getBalance(admin.publicKey);
 
     // 5. Set VRF Seed
     addLog(`\n[5/10] Setting VRF Seed...`);
@@ -496,12 +495,15 @@ export async function runFullFlow(
       if (!seeded) throw new Error("Timeout waiting for funding period to end on-chain");
       addLog("   -> VRF seed set.");
     }
+    const balanceAfterSetSeed = await provider.connection.getBalance(admin.publicKey);
+    const setSeedCost = balanceBeforeSetSeed - balanceAfterSetSeed;
 
     // 6. Finalize shard(s)
     addLog(`\n[6/10] Finalizing roster shards...`);
     // Ensure ALL shards up to launch_state.roster_shards are finalized
     const launchAfterDeposits: any = await sdk.fetchLaunch(testLaunchState);
     const totalShards: number = Number(launchAfterDeposits.rosterShards ?? 0);
+    const balanceBeforeFinalize = await provider.connection.getBalance(admin.publicKey);
     for (let i = 0; i < totalShards; i++) {
       // initialize shard if it wasn't created earlier (empty shard is OK)
       try {
@@ -512,14 +514,16 @@ export async function runFullFlow(
       await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: i });
       addLog(`   -> Shard ${i}/${totalShards - 1} finalized.`);
     }
-
-    const balanceAfterCranking = await provider.connection.getBalance(admin.publicKey);
-    const crankingCost = balanceBeforeCranking - balanceAfterCranking;
+    const balanceAfterFinalize = await provider.connection.getBalance(admin.publicKey);
+    const finalizeCost = balanceBeforeFinalize - balanceAfterFinalize;
+    const crankingCost = setSeedCost + finalizeCost;
 
     addLog(`\n[6.5/10] Sealing and closing roster shards...`);
     {
       const launch: any = await sdk.fetchLaunch(testLaunchState);
       const totalShards: number = Number(launch.rosterShards ?? 0);
+      let sealCost = 0;
+      const sealDetails: { shardId: number; costLamports: number; batches: number }[] = [];
       for (let shardId = 0; shardId < totalShards; shardId++) {
         const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
         let shardAcc: any = null;
@@ -530,6 +534,8 @@ export async function runFullFlow(
         }
         const wallets: PublicKey[] = (shardAcc?.wallets as PublicKey[]) || [];
         const BATCH = 20;
+        const sealBefore = await provider.connection.getBalance(admin.publicKey);
+        let batches = 0;
         for (let from = 0; from < wallets.length; from += BATCH) {
           const end = Math.min(from + BATCH, wallets.length);
           const slice = wallets.slice(from, end);
@@ -543,11 +549,16 @@ export async function runFullFlow(
           try {
             await provider.sendAndConfirm!(transaction, []);
             addLog(`   -> Shard ${shardId}: sealed users [${from}..${end - 1}]`);
+            batches += 1;
           } catch (e: any) {
             addLog(`   -> Shard ${shardId}: seal batch failed [${from}..${end - 1}]: ${e?.message || e}`);
             throw e;
           }
         }
+        const sealAfter = await provider.connection.getBalance(admin.publicKey);
+        const shardSealCost = Math.max(0, sealBefore - sealAfter);
+        sealCost += shardSealCost;
+        sealDetails.push({ shardId, costLamports: shardSealCost, batches });
         const before = await provider.connection.getBalance(admin.publicKey);
         const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId });
         try {
@@ -559,6 +570,10 @@ export async function runFullFlow(
           addLog(`   -> Shard ${shardId}: close failed: ${e?.message || e}`);
           throw e;
         }
+        // Persist seal metrics on the function scope for end summary
+        (globalThis as any).__sealCost = (globalThis as any).__sealCost ? (globalThis as any).__sealCost + shardSealCost : shardSealCost;
+        const prev = (globalThis as any).__sealDetails || [];
+        (globalThis as any).__sealDetails = [...prev, { shardId, costLamports: shardSealCost, batches }];
       }
     }
 
@@ -1194,6 +1209,23 @@ export async function runFullFlow(
     const totalDistributed = tokensClaimed + totalTokensClaimedByCreator + totalTokensClaimedByTeam;
     addLog(`   TOTAL DISTRIBUTED:        ${totalDistributed.toFixed(6)}`);
     addLog(`--- END SUMMARY ---\n`);
+    try {
+      const sealCostLamports = Number((globalThis as any).__sealCost ?? 0);
+      const sealDetails: { shardId: number; costLamports: number; batches: number }[] = (globalThis as any).__sealDetails ?? [];
+      addLog(`\n--- ADMIN NON-REFUNDABLE COST SUMMARY ---`);
+      addLog(`   Crank (set seed):                  ${(setSeedCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      addLog(`   Finalize shards (lottery finalize): ${(finalizeCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      addLog(`   Seal shards total:                  ${(sealCostLamports / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      if (sealDetails.length > 0) {
+        for (const d of sealDetails) {
+          addLog(`     - Shard ${d.shardId}: ${ (d.costLamports / LAMPORTS_PER_SOL).toFixed(6) } SOL in ${d.batches} batch(es)`);
+        }
+      }
+      const nonRefundableTotal = setSeedCost + finalizeCost + sealCostLamports;
+      addLog(`   ------------------------------------`);
+      addLog(`   TOTAL NON-REFUNDABLE ADMIN COST:    ${(nonRefundableTotal / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
+      addLog(`--- END ADMIN COST SUMMARY ---`);
+    } catch (_) {}
 
     addLog("\n✅ Full flow finished successfully!");
     return { success: true, message: "Flow completed successfully" };
