@@ -64,12 +64,38 @@ export function createShardsApi(params: {
 }) {
   const { program, provider, txBuilder, payer, getRosterPda, getRosterShardPda, fetchLaunch } = params;
 
+  async function sendAndMaybeConfirm(tx: anchor.web3.Transaction, signers: anchor.web3.Signer[] = []): Promise<string> {
+    try {
+      if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      return await (provider as any).sendAndConfirm(tx, signers);
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      const m = msg.match(/Check signature\s+([A-Za-z0-9]+)\s+/);
+      const sig = m?.[1];
+      if (sig) {
+        const conn = program.provider.connection;
+        const started = Date.now();
+        while (Date.now() - started < 30000) {
+          try {
+            const st = await conn.getSignatureStatuses([sig]);
+            const v = st?.value?.[0];
+            if (v && (v.confirmationStatus === "confirmed" || v.confirmationStatus === "finalized" || (typeof v.confirmations === "number" && v.confirmations > 0) || v.err === null)) {
+              return sig;
+            }
+          } catch {}
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      throw e;
+    }
+  }
+
   async function initMissingRosterShards(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ initialized: number[]; signature: string | null }> {
     const launchState: any = await fetchLaunch(args.launch);
     const total: number = Number(launchState.rosterShards);
     const conn = program.provider.connection;
     const toInit: number[] = [];
-    for (let id = 0; id < total; id++) {
+    for (let id = 1; id <= total; id++) {
       const [pda] = getRosterShardPda(args.launch, id);
       const info = await conn.getAccountInfo(pda);
       if (!info) toInit.push(id);
@@ -114,42 +140,48 @@ export function createShardsApi(params: {
     const cap: number = Number(launchState.rosterShardCap);
     if (!Number.isFinite(total) || total <= 0) throw new Error("Invalid roster shards");
     const conn = program.provider.connection;
-    // Prefer deterministic, sequential fill: pick the first shard with prev full and itself not full.
-    // If preferredShardId is provided, try it first, then fall back to sequential scan.
     const candidates: number[] = [];
     if (typeof args.preferredShardId === "number") candidates.push(args.preferredShardId);
     for (let id = 1; id <= total; id++) candidates.push(id);
+
     for (const id of candidates) {
       if (id < 1 || id > total) continue;
       const [rosterShardPda] = getRosterShardPda(args.launch, id);
       const info = await conn.getAccountInfo(rosterShardPda);
-      if (!info) {
-        // Expect shards to be pre-initialized; skip missing ones
-            continue;
-          }
-      // Load shard to check capacity
-          const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
-          const used: number = (shard?.wallets?.length ?? 0) as number;
+      if (!info) continue;
+
+      const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
+      const used: number = (shard?.wallets?.length ?? 0) as number;
       if (used >= cap) continue;
-      // Enforce previous shard sufficiently full (>=80%) for s > 1
+
       if (id > 1) {
         const [prevPda] = getRosterShardPda(args.launch, id - 1);
         const prevInfo = await conn.getAccountInfo(prevPda);
         if (!prevInfo) continue;
         const prev: any = await (program.account as any).rosterShard.fetch(prevPda);
         const prevUsed: number = (prev?.wallets?.length ?? 0) as number;
-        const threshold = Math.floor((cap * 80 + 99) / 100); // ~ceil(0.8*cap)
+        const threshold = Math.floor((cap * 80 + 99) / 100);
         if (prevUsed < threshold) continue;
-          }
-      // Deposit into selected shard (txBuilder will add prev shard as remaining if needed)
-      const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda, shardId: id });
-          const tx = new anchor.web3.Transaction().add(dep.instruction);
-          const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
-          console.log(`deposit shard=${id} created=false`);
-          return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
+      }
+
+      try {
+        const dep = await txBuilder.depositIx({
+          launch: args.launch,
+          user,
+          amount: args.amountLamports,
+          rosterShard: rosterShardPda,
+          shardId: id,
+        });
+        const tx = new anchor.web3.Transaction().add(dep.instruction);
+        const signers = args.userKeypair ? [args.userKeypair] : [];
+        const signature = await sendAndMaybeConfirm(tx, signers);
+        return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
+      } catch (e: any) {
+        if (isRosterShardFullError(e)) continue;
+        throw e;
+      }
     }
+
     throw new Error("All roster shards are full");
   }
 

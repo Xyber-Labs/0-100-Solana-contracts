@@ -57,14 +57,24 @@ export async function getChainTimeSec(provider: AnchorProvider): Promise<number>
 
 export async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T, index: number) => Promise<void>) {
   let index = 0;
+  let aborted = false;
+  let firstError: any = null;
   const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (true) {
+      if (aborted) break;
       const current = index++;
       if (current >= items.length) break;
-      await worker(items[current], current);
+      try {
+        await worker(items[current], current);
+      } catch (e) {
+        if (!firstError) firstError = e;
+        aborted = true;
+        break;
+      }
     }
   });
-  await Promise.all(runners);
+  await Promise.allSettled(runners);
+  if (firstError) throw firstError;
 }
 
 export async function fundUsersParallel(params: {
@@ -82,11 +92,26 @@ export async function fundUsersParallel(params: {
   addLog?.(`Funding ${total} users in parallel...`);
   await runWithConcurrency(users, Math.min(concurrency, total), async (user) => {
     const fundingAmount = user.depositAmount.toNumber() + feeBufferLamports;
-    const transferIx = SystemProgram.transfer({ fromPubkey: admin, toPubkey: user.keypair.publicKey, lamports: fundingAmount });
-    const tx = new Transaction().add(transferIx);
-    tx.feePayer = admin;
-    tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
-    await provider.sendAndConfirm(tx, []);
+    let attempt = 0;
+    const maxAttempts = 5;
+    const baseDelay = 200;
+    for (;;) {
+      try {
+        const transferIx = SystemProgram.transfer({ fromPubkey: admin, toPubkey: user.keypair.publicKey, lamports: fundingAmount });
+        const tx = new Transaction().add(transferIx);
+        tx.feePayer = admin;
+        tx.recentBlockhash = (await provider.connection.getLatestBlockhash()).blockhash;
+        await provider.sendAndConfirm(tx, []);
+        break;
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("429") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET");
+        attempt++;
+        if (!transient || attempt >= maxAttempts) throw e;
+        const delay = baseDelay * Math.min(8, 2 ** (attempt - 1));
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
     const c = ++completed;
     if (c % step === 0 || c === total) {
       const percent = Math.round((c / total) * 100);
@@ -109,13 +134,47 @@ export async function depositUsersParallel(params: {
   addLog?.(`Depositing for ${total} users in parallel...`);
   const results: Array<{ pubkey: PublicKey; shardId: number }> = new Array(users.length);
   await runWithConcurrency(users, Math.min(concurrency, total), async (user, index) => {
-    const res = await (sdk as any).depositAutoShard({ launch: launchPda, amountLamports: user.depositAmount, userKeypair: user.keypair, preferredShardId: user.shardId });
-    console.log("depositAutoShard res", res);
-    results[index] = { pubkey: user.keypair.publicKey, shardId: res.shardId };
-    const c = ++completed;
-    if (c % step === 0 || c === total) {
-      const percent = Math.round((c / total) * 100);
-      addLog?.(`Deposits progress: ${c}/${total} (${percent}%)`);
+    let attempt = 0;
+    const maxAttempts = 6;
+    const baseDelay = 250;
+    try {
+      const res = await (async () => {
+        for (;;) {
+          try {
+            return await (sdk as any).depositAutoShard({
+              launch: launchPda,
+              amountLamports: user.depositAmount,
+              userKeypair: user.keypair,
+              preferredShardId: user.shardId,
+            });
+          } catch (e: any) {
+            const msg = String(e?.message || "");
+            const transient =
+              msg.includes("aborted") ||
+              msg.includes("Blockhash") ||
+              msg.includes("429") ||
+              msg.includes("Too many") ||
+              msg.includes("ETIMEDOUT") ||
+              msg.includes("ECONNRESET") ||
+              msg.includes("not confirmed in 30.00 seconds");
+            attempt++;
+            if (!transient || attempt >= maxAttempts) throw e;
+            const jitter = Math.floor(Math.random() * 100);
+            const delay = baseDelay * Math.min(8, 2 ** (attempt - 1)) + jitter;
+            await new Promise((r) => setTimeout(r, delay));
+          }
+        }
+      })();
+      results[index] = { pubkey: user.keypair.publicKey, shardId: res.shardId };
+    } catch (e: any) {
+      addLog?.(`Deposit failed for ${user.keypair.publicKey.toBase58()}: ${String(e?.message || e)}`);
+      results[index] = undefined as any;
+    } finally {
+      const c = ++completed;
+      if (c % step === 0 || c === total) {
+        const percent = Math.round((c / total) * 100);
+        addLog?.(`Deposits progress: ${c}/${total} (${percent}%)`);
+      }
     }
   });
   return results;
