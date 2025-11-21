@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { BN } from "@coral-xyz/anchor";
+const { BN } = anchor;
 import { assert } from "chai";
 import * as fs from "fs";
 import { createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
@@ -33,10 +33,31 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   const PRESET_ID = 0;
   const PROJECT_ID = 1;
+  let projectId = PROJECT_ID;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
   const BUYER2_AMOUNT = parseInt(process.env.BUYER2_AMOUNT || "150");
   const BUYER3_AMOUNT = parseInt(process.env.BUYER3_AMOUNT || "150");
+
+  async function getClusterUnixTime(connection: anchor.web3.Connection): Promise<number> {
+    const accountInfo = await connection.getAccountInfo(anchor.web3.SYSVAR_CLOCK_PUBKEY);
+    if (!accountInfo) {
+      throw new Error("Clock sysvar unavailable");
+    }
+    return Number(accountInfo.data.readBigInt64LE(32));
+  }
+
+  async function waitForClusterTimestamp(connection: anchor.web3.Connection, targetTimestamp: number): Promise<void> {
+    while (true) {
+      const currentTimestamp = await getClusterUnixTime(connection);
+      if (currentTimestamp >= targetTimestamp) {
+        return;
+      }
+      const secondsToWait = Math.min(targetTimestamp - currentTimestamp + 1, 5);
+      console.log(`Waiting ${secondsToWait} seconds for cluster time to reach funding end`);
+      await new Promise((resolve) => setTimeout(resolve, secondsToWait * 1000));
+    }
+  }
 
 
   it("Step 0: Verify Raydium CLMM and AmmConfig are loaded", async () => {
@@ -89,34 +110,34 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const [configPda] = sdk.getConfigPda();
     const configInfo = await provider.connection.getAccountInfo(configPda);
 
-    if (!configInfo) {
-      const xyberMintInfo = await provider.connection.getAccountInfo(xyberMintKeypair.publicKey);
-      if (!xyberMintInfo) {
-        await createMint(
-          provider.connection,
-          admin1Keypair,
-          admin1Keypair.publicKey,
-          null,
-          6,
-          xyberMintKeypair
-        );
-        console.log("✅ XYBER mint created");
-      }
-
-      await getOrCreateAssociatedTokenAccount(
-        provider.connection,
-        creatorKeypair,
-        xyberMintKeypair.publicKey,
-        creatorKeypair.publicKey
-      );
-
-      await getOrCreateAssociatedTokenAccount(
+    const xyberMintInfo = await provider.connection.getAccountInfo(xyberMintKeypair.publicKey);
+    if (!xyberMintInfo) {
+      await createMint(
         provider.connection,
         admin1Keypair,
-        xyberMintKeypair.publicKey,
-        treasuryKeypair.publicKey
+        admin1Keypair.publicKey,
+        null,
+        6,
+        xyberMintKeypair
       );
+      console.log("✅ XYBER mint created");
+    }
 
+    await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      creatorKeypair,
+      xyberMintKeypair.publicKey,
+      creatorKeypair.publicKey
+    );
+
+    await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      admin1Keypair,
+      xyberMintKeypair.publicKey,
+      treasuryKeypair.publicKey
+    );
+
+    if (!configInfo) {
       await sdk.initEngineConfig({
         treasury: treasuryKeypair.publicKey,
         creationFee: new BN(0),
@@ -189,9 +210,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 2: Initialize launch from preset", async () => {
     console.log("=== Step 2: Initialize Launch from Preset ===");
 
+    const nextProjectId = (await sdk.getNextProjectId()).toNumber();
+    projectId = nextProjectId > 0 ? nextProjectId : PROJECT_ID;
+
     const { launchPda: launch, signature } = await sdk.initLaunchFromPreset({
       presetId: PRESET_ID,
-      projectId: PROJECT_ID,
+      projectId,
       name: "TestToken",
       symbol: "TEST",
       uri: "https://example.com/metadata.json",
@@ -219,15 +243,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer:", utils.getExplorerUrl(provider, rosterSig));
 
     console.log("=== Step 3: Initialize Roster Shard ===");
-
-    const { signature: shardSig } = await sdk.initRosterShard({
-      launch: launchPda,
-      shardId: 0,
-      signers: [admin1Keypair],
-    });
-
-    console.log("✅ Roster shard initialized:", shardSig);
-    console.log("Explorer:", utils.getExplorerUrl(provider, shardSig));
+    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
+    const rosterShardInfo = await provider.connection.getAccountInfo(rosterShard);
+    assert.ok(rosterShardInfo, "Roster shard 1 should exist after initRoster");
+    console.log("Roster shard 1 already initialized via initRoster");
   });
 
   it(`Step 3: Make deposits (${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL total)`, async () => {
@@ -237,7 +256,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER1_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer1Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 1 (buyer1: ${BUYER1_AMOUNT} SOL)`);
 
@@ -245,7 +264,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER2_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer2Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 2 (buyer2: ${BUYER2_AMOUNT} SOL)`);
 
@@ -253,7 +272,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER3_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer3Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
 
@@ -268,20 +287,13 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 4: Wait for Funding Period ===");
 
     const launchData = await sdk.fetchLaunch(launchPda);
-    const fundingEndTime = launchData.fundingPeriodEnd.toNumber();
-    const currentTime = Math.floor(Date.now() / 1000);
-    const waitTime = fundingEndTime - currentTime + 1;
-
-    if (waitTime > 0) {
-      console.log(`Waiting ${waitTime} seconds for funding period to end...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
-    }
+    await waitForClusterTimestamp(provider.connection, launchData.fundingPeriodEnd.toNumber());
 
     console.log("=== Step 5: Finalize Roster Shard ===");
 
     const { signature } = await sdk.finalizeRosterShard({
       launch: launchPda,
-      shardId: 0,
+      shardId: 1,
       signers: [admin1Keypair],
     });
 
