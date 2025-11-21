@@ -1598,7 +1598,7 @@ describe("Full flow", () => {
         baseMint: clmmCreate.baseMint,
         creator: admin.publicKey,
         creatorAta: creatorAta,
-        createAtaIfMissing: false,
+        createAtaIfMissing: true,
       });
       const claimSig = await safeSendAndConfirm(provider, client, claimResultTx.transaction, [adminKeypair]);
       console.log("Creator tokens claimed. Signature:", claimSig);
