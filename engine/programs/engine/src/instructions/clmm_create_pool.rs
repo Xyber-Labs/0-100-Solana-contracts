@@ -98,7 +98,13 @@ pub struct CreateClmmPool<'info> {
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
     require!(
-        state.roster_shards > 0 && state.roster_finalized_up_to + 1 == state.roster_shards as i32,
+        state.total_deposited >= state.min_raise_lamports,
+        ErrorCode::MinRaiseNotMet
+    );
+    require!(
+        state.roster_shards > 0
+            && state.roster_highest_used_shard as i32 >= 1
+            && state.roster_finalized_up_to >= state.roster_highest_used_shard as i32,
         ErrorCode::ShardsNotFullyFinalized
     );
 

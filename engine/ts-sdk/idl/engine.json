@@ -26,10 +26,6 @@
           "signer": true
         },
         {
-          "name": "raydium_program",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-        },
-        {
           "name": "launch_state",
           "writable": true
         },
@@ -314,6 +310,10 @@
         {
           "name": "token_2022_program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "raydium_program",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quote_token_program",
@@ -1621,6 +1621,10 @@
               }
             ]
           }
+        },
+        {
+          "name": "refund_to",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -3346,78 +3350,6 @@
       ]
     },
     {
-      "name": "init_roster",
-      "docs": [
-        "Initialize roster account."
-      ],
-      "discriminator": [
-        231,
-        223,
-        153,
-        129,
-        236,
-        138,
-        47,
-        253
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "init_roster_shard",
       "docs": [
         "Initialize roster shard account"
@@ -4388,19 +4320,6 @@
       ]
     },
     {
-      "name": "Roster",
-      "discriminator": [
-        211,
-        108,
-        170,
-        22,
-        253,
-        177,
-        162,
-        194
-      ]
-    },
-    {
       "name": "RosterShard",
       "discriminator": [
         31,
@@ -4624,6 +4543,19 @@
       ]
     },
     {
+      "name": "RosterShardFull",
+      "discriminator": [
+        188,
+        123,
+        134,
+        176,
+        96,
+        36,
+        251,
+        182
+      ]
+    },
+    {
       "name": "RosterShardInitialized",
       "discriminator": [
         110,
@@ -4634,6 +4566,19 @@
         114,
         61,
         90
+      ]
+    },
+    {
+      "name": "RosterShardNearFull",
+      "discriminator": [
+        5,
+        204,
+        207,
+        21,
+        163,
+        159,
+        216,
+        110
       ]
     },
     {
@@ -5060,6 +5005,26 @@
       "code": 6068,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient fee balance"
+    },
+    {
+      "code": 6069,
+      "name": "InvalidPrice",
+      "msg": "Invalid price: must be finite and positive"
+    },
+    {
+      "code": 6070,
+      "name": "PriceOverflow",
+      "msg": "Price overflow: result exceeds u128::MAX"
+    },
+    {
+      "code": 6071,
+      "name": "InvalidInitOrder",
+      "msg": "Roster initialization order violated"
+    },
+    {
+      "code": 6072,
+      "name": "ShardNotSealed",
+      "msg": "Roster shard not fully sealed"
     }
   ],
   "types": [
@@ -5873,12 +5838,24 @@
             "type": "u16"
           },
           {
+            "name": "roster_initialized_up_to",
+            "type": "i32"
+          },
+          {
             "name": "roster_finalized_up_to",
             "type": "i32"
           },
           {
             "name": "public_total_tickets",
             "type": "u32"
+          },
+          {
+            "name": "roster_shard_cap",
+            "type": "u16"
+          },
+          {
+            "name": "roster_highest_used_shard",
+            "type": "u16"
           },
           {
             "name": "tokens_per_ticket",
@@ -5911,10 +5888,6 @@
           {
             "name": "creator_max_deposit",
             "type": "u64"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
           },
           {
             "name": "clmm_base_mint",
@@ -6086,44 +6059,6 @@
       }
     },
     {
-      "name": "Roster",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallets",
-            "type": {
-              "vec": "pubkey"
-            }
-          },
-          {
-            "name": "counts",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "prefix",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "total_in_shard",
-            "type": "u32"
-          },
-          {
-            "name": "shard_base",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "RosterInitialized",
       "type": {
         "kind": "struct",
@@ -6149,6 +6084,10 @@
             "type": "u16"
           },
           {
+            "name": "created_by",
+            "type": "pubkey"
+          },
+          {
             "name": "wallets",
             "type": {
               "vec": "pubkey"
@@ -6172,6 +6111,10 @@
           },
           {
             "name": "shard_base",
+            "type": "u32"
+          },
+          {
+            "name": "sealed_count",
             "type": "u32"
           }
         ]
@@ -6202,6 +6145,26 @@
       }
     },
     {
+      "name": "RosterShardFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "RosterShardInitialized",
       "type": {
         "kind": "struct",
@@ -6213,6 +6176,34 @@
           {
             "name": "shard_id",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RosterShardNearFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u16"
+          },
+          {
+            "name": "used",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          },
+          {
+            "name": "threshold_percent",
+            "type": "u8"
           }
         ]
       }

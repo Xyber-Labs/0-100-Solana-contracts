@@ -32,10 +32,6 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-        },
-        {
           "name": "launchState",
           "writable": true
         },
@@ -320,6 +316,10 @@ export type Engine = {
         {
           "name": "token2022Program",
           "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "raydiumProgram",
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quoteTokenProgram",
@@ -1627,6 +1627,10 @@ export type Engine = {
               }
             ]
           }
+        },
+        {
+          "name": "refundTo",
+          "writable": true
         },
         {
           "name": "systemProgram",
@@ -3352,78 +3356,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "initRoster",
-      "docs": [
-        "Initialize roster account."
-      ],
-      "discriminator": [
-        231,
-        223,
-        153,
-        129,
-        236,
-        138,
-        47,
-        253
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "roster",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "initRosterShard",
       "docs": [
         "Initialize roster shard account"
@@ -4394,19 +4326,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "roster",
-      "discriminator": [
-        211,
-        108,
-        170,
-        22,
-        253,
-        177,
-        162,
-        194
-      ]
-    },
-    {
       "name": "rosterShard",
       "discriminator": [
         31,
@@ -4630,6 +4549,19 @@ export type Engine = {
       ]
     },
     {
+      "name": "rosterShardFull",
+      "discriminator": [
+        188,
+        123,
+        134,
+        176,
+        96,
+        36,
+        251,
+        182
+      ]
+    },
+    {
       "name": "rosterShardInitialized",
       "discriminator": [
         110,
@@ -4640,6 +4572,19 @@ export type Engine = {
         114,
         61,
         90
+      ]
+    },
+    {
+      "name": "rosterShardNearFull",
+      "discriminator": [
+        5,
+        204,
+        207,
+        21,
+        163,
+        159,
+        216,
+        110
       ]
     },
     {
@@ -5066,6 +5011,26 @@ export type Engine = {
       "code": 6068,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
+    },
+    {
+      "code": 6069,
+      "name": "invalidPrice",
+      "msg": "Invalid price: must be finite and positive"
+    },
+    {
+      "code": 6070,
+      "name": "priceOverflow",
+      "msg": "Price overflow: result exceeds u128::MAX"
+    },
+    {
+      "code": 6071,
+      "name": "invalidInitOrder",
+      "msg": "Roster initialization order violated"
+    },
+    {
+      "code": 6072,
+      "name": "shardNotSealed",
+      "msg": "Roster shard not fully sealed"
     }
   ],
   "types": [
@@ -5879,12 +5844,24 @@ export type Engine = {
             "type": "u16"
           },
           {
+            "name": "rosterInitializedUpTo",
+            "type": "i32"
+          },
+          {
             "name": "rosterFinalizedUpTo",
             "type": "i32"
           },
           {
             "name": "publicTotalTickets",
             "type": "u32"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterHighestUsedShard",
+            "type": "u16"
           },
           {
             "name": "tokensPerTicket",
@@ -5917,10 +5894,6 @@ export type Engine = {
           {
             "name": "creatorMaxDeposit",
             "type": "u64"
-          },
-          {
-            "name": "rosterShardCap",
-            "type": "u16"
           },
           {
             "name": "clmmBaseMint",
@@ -6092,44 +6065,6 @@ export type Engine = {
       }
     },
     {
-      "name": "roster",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallets",
-            "type": {
-              "vec": "pubkey"
-            }
-          },
-          {
-            "name": "counts",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "prefix",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "totalInShard",
-            "type": "u32"
-          },
-          {
-            "name": "shardBase",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "rosterInitialized",
       "type": {
         "kind": "struct",
@@ -6155,6 +6090,10 @@ export type Engine = {
             "type": "u16"
           },
           {
+            "name": "createdBy",
+            "type": "pubkey"
+          },
+          {
             "name": "wallets",
             "type": {
               "vec": "pubkey"
@@ -6178,6 +6117,10 @@ export type Engine = {
           },
           {
             "name": "shardBase",
+            "type": "u32"
+          },
+          {
+            "name": "sealedCount",
             "type": "u32"
           }
         ]
@@ -6208,6 +6151,26 @@ export type Engine = {
       }
     },
     {
+      "name": "rosterShardFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
       "name": "rosterShardInitialized",
       "type": {
         "kind": "struct",
@@ -6219,6 +6182,34 @@ export type Engine = {
           {
             "name": "shardId",
             "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rosterShardNearFull",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "shardId",
+            "type": "u16"
+          },
+          {
+            "name": "used",
+            "type": "u16"
+          },
+          {
+            "name": "cap",
+            "type": "u16"
+          },
+          {
+            "name": "thresholdPercent",
+            "type": "u8"
           }
         ]
       }

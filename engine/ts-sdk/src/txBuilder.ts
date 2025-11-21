@@ -695,18 +695,19 @@ export class TxBuilder {
     launch: web3.PublicKey;
     payer: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
-    const [rosterPda] = this.getPda(["roster", params.launch]);
-
-    const instruction = await this.program.methods
-      .initRoster()
-      .accountsStrict({
+    // Legacy wrapper: init first shard (id = 1)
+    const [rosterShard] = this.getRosterShardPda(params.launch, 1);
+    const instruction = await (this.program.methods as any)
+      .initRosterShard(1)
+      .accounts({
         payer: params.payer,
         launchState: params.launch,
-        roster: rosterPda,
+        rosterShard,
         systemProgram: web3.SystemProgram.programId,
-      })
+      } as any)
       .instruction();
-
+    // Keep return shape for backward compatibility
+    const [rosterPda] = this.getPda(["roster", params.launch]);
     return { instruction, rosterPda };
   }
 
@@ -787,11 +788,11 @@ export class TxBuilder {
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
+      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
     // escrow removed; use only escrow_authority PDA
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
-    const instruction = await this.program.methods
+    const method = this.program.methods
       .deposit(params.amount)
       .accounts({
         user: params.user,
@@ -803,8 +804,14 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
+      } as any);
+
+    const prevId = (typeof params.shardId === "number" ? params.shardId : 0) - 1;
+    if (prevId >= 1) {
+      const [prevShard] = this.getRosterShardPda(params.launch, prevId);
+      (method as any).remainingAccounts([{ pubkey: prevShard, isSigner: false, isWritable: false }]);
+    }
+    const instruction = await (method as any).instruction();
 
     return { instruction, userContribution };
   }
@@ -841,7 +848,7 @@ export class TxBuilder {
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 0)[0];
+      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
     const instruction = await this.program.methods
@@ -1023,12 +1030,17 @@ export class TxBuilder {
     shardId: number;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
+    // Read created_by from roster_shard to auto-fill refund_to
+    const shardAcc: any = await (this.program.account as any).rosterShard.fetch(rosterShard);
+    const refundTo: web3.PublicKey =
+      shardAcc.createdBy ?? shardAcc.created_by ?? shardAcc.createdby ?? params.payer;
     const method = (this.program.methods as any).closeRosterShard(params.shardId);
     const instruction = await method
       .accounts({
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
+        refundTo,
         systemProgram: web3.SystemProgram.programId,
       } as any)
       .instruction();
@@ -1143,8 +1155,7 @@ export class TxBuilder {
   }
 
   async fetchRoster(launch: web3.PublicKey) {
-    const [pda] = this.getPda(["roster", launch]);
-    return this.program.account.roster.fetch(pda);
+    throw new Error("NotSupported: roster is deprecated; use roster_shard accounts instead");
   }
 
 

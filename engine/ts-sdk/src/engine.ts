@@ -42,6 +42,41 @@ const EngineSDK = {
     const adminKeypair = admin;
     const txBuilder = new TxBuilder(program, admin);
 
+    async function sendAndMaybeConfirm(
+      tx: anchor.web3.Transaction,
+      signers: anchor.web3.Signer[] = []
+    ): Promise<string> {
+      try {
+        if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+        return await (provider as any).sendAndConfirm(tx, signers);
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        const m = msg.match(/Check signature\s+([A-Za-z0-9]+)\s+/);
+        const sig = m?.[1];
+        if (sig) {
+          const conn = program.provider.connection;
+          const started = Date.now();
+          while (Date.now() - started < 30000) {
+            try {
+              const st = await conn.getSignatureStatuses([sig]);
+              const v = st?.value?.[0];
+              if (
+                v &&
+                (v.confirmationStatus === "confirmed" ||
+                  v.confirmationStatus === "finalized" ||
+                  (typeof v.confirmations === "number" && v.confirmations > 0) ||
+                  v.err === null)
+              ) {
+                return sig;
+              }
+            } catch {}
+            await new Promise((r) => setTimeout(r, 500));
+          }
+        }
+        throw e;
+      }
+    }
+
     // -------------- PDA helpers --------------
     function getLaunchPda(baseMint: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
       return txBuilder.getPda(["launch", baseMint]);
@@ -414,10 +449,7 @@ const EngineSDK = {
         escrow: args.escrow,
       } as any);
       const signers = args.userKeypair ? [args.userKeypair] : [];
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(transaction, signers);
+      const signature = await sendAndMaybeConfirm(transaction, signers);
       return { signature };
     }
 
@@ -575,7 +607,8 @@ const EngineSDK = {
       computeUnits?: number;
       computeUnitPriceMicroLamports?: number;
     }): Promise<{ signature: string }> {
-      const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+      const defaultPayerKp: anchor.web3.Keypair | undefined = (provider as any)?.wallet?.payer;
+      const payerPubkey = args.payerKeypair?.publicKey ?? defaultPayerKp?.publicKey ?? payer;
       const { transaction } = await txBuilder.preparePoolCreationTx({
         payer: payerPubkey,
         launch: args.launch,
@@ -585,7 +618,9 @@ const EngineSDK = {
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signers = args.payerKeypair ? [args.payerKeypair] : [];
+      const signers = args.payerKeypair
+        ? [args.payerKeypair]
+        : (defaultPayerKp ? [defaultPayerKp] as anchor.web3.Keypair[] : []);
       const signature = await provider.sendAndConfirm(transaction, signers);
       return { signature };
     }
@@ -735,10 +770,7 @@ const EngineSDK = {
       } as any);
 
       const signers = args.userKeypair ? [args.userKeypair] : [];
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(transaction, signers);
+      const signature = await sendAndMaybeConfirm(transaction, signers);
       return { signature, userAta };
     }
 

@@ -67,8 +67,9 @@ pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
     );
     require!(
         ctx.accounts.launch_state.roster_shards > 0
-            && ctx.accounts.launch_state.roster_finalized_up_to + 1
-                == ctx.accounts.launch_state.roster_shards as i32,
+            && ctx.accounts.launch_state.roster_highest_used_shard as i32 >= 1
+            && ctx.accounts.launch_state.roster_finalized_up_to
+                >= ctx.accounts.launch_state.roster_highest_used_shard as i32,
         ErrorCode::ShardsNotFullyFinalized
     );
 

@@ -33,8 +33,8 @@ help:
 	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
-# ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
-ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
+ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
+# ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
