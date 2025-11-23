@@ -1,18 +1,14 @@
 use anchor_lang::prelude::*;
 
+use crate::{errors::ErrorCode, state::Config};
+
 #[derive(Accounts)]
 pub struct UpdatePlatformWallet<'info> {
-    #[account(
-        mut,
-        seeds = [crate::SEED_ROOT, b"config"],
-        bump,
-    )]
-    pub config: Account<'info, crate::state::Config>,
-
-    #[account(
-        constraint = admin.key() == config.admin @ crate::errors::ErrorCode::InvalidAuthority
-    )]
+    #[account(address = config.admin @ ErrorCode::InvalidAuthority)]
     pub admin: Signer<'info>,
+
+    #[account(mut, seeds = [crate::SEED_ROOT, b"config"], bump, )]
+    pub config: Account<'info, Config>,
 }
 
 pub fn update_platform_wallet(

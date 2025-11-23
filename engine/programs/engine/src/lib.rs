@@ -11,11 +11,9 @@ use crate::{
     utils::{clmm::LiquidityRange, launch_core::InitLaunchParams},
 };
 
-mod constants;
+pub mod constants;
 pub mod errors;
 mod events;
-#[cfg(test)]
-mod income_calculator;
 mod instructions;
 pub mod state;
 pub mod utils;
@@ -152,11 +150,6 @@ pub mod engine {
     /// Creator can decrease special deposit during funding window
     pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()> {
         instructions::creator_withdraw(ctx, amount)
-    }
-
-    #[cfg(feature = "test")]
-    pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
-        instructions::mint_for_test(ctx)
     }
 
     pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {

@@ -7,11 +7,11 @@ skip-lint = false
 
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
+income_dispatcher = "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
 
 [programs.devnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
+income_dispatcher = "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
 
 [registry]
 url = "https://api.apr.dev"
@@ -60,3 +60,4 @@ create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"
 add-clmm-liquidity = "ts-node scripts/add-clmm-liquidity.ts"
 build-test = "anchor build -- --features test"
 mint-spl = "ts-node scripts/mint-spl.ts"
+dispatcher-init = "ts-node scripts-dispatcher/initialize.ts"

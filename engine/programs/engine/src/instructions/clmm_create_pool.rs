@@ -8,11 +8,11 @@ use anchor_spl::{
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{
+    BASE_TOKEN_DECIMALS,
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT,
-    state::{PoolState, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{PoolState, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -22,8 +22,7 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority,
-        constraint = launch_state.clmm_base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
+        constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
         constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
         constraint = launch_state.total_deposited >= launch_state.min_raise_lamports @ ErrorCode::MinRaiseNotMet,
     )]
@@ -39,7 +38,7 @@ pub struct CreateClmmPool<'info> {
     #[account(
         init,
         payer = payer,
-        mint::decimals = 9,
+        mint::decimals = BASE_TOKEN_DECIMALS,
         mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
@@ -123,8 +122,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &state.key(),
     )?;
     state.base_mint = Some(ctx.accounts.base_mint.key());
-    state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
-    ctx.accounts.pool_state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
+    state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
 
     raydium_create_pool_impl(&ctx)?;
 

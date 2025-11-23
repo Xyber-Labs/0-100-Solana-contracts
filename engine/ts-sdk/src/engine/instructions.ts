@@ -8,7 +8,7 @@ import {
 } from "@solana/spl-token";
 
 // ---- IDL ----
-import type { Engine as EngineIDL } from "../idl/engine";
+import type { Engine as EngineIDL } from "../../idl/engine";
 import { TxBuilder } from "./txBuilder";
 import { createShardsApi, pickShardId, selectRosterShard } from "./shards";
 
@@ -16,7 +16,7 @@ import { createShardsApi, pickShardId, selectRosterShard } from "./shards";
 let idl: any;
 const loadIdl = async () => {
   if (!idl) {
-    const idlModule = await import("../idl/engine.json");
+    const idlModule = await import("../../idl/engine.json");
     idl = idlModule.default;
   }
   return idl;
@@ -1436,4 +1436,3 @@ const EngineSDK = {
 export default EngineSDK;
 export type { EngineIDL };
 export type EngineClient = ReturnType<typeof EngineSDK.create>;
-export { loadKeypair } from "./utils";

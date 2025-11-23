@@ -21,13 +21,16 @@ pub const WSOL_MINT: Pubkey =
 pub const INCOME_DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
 pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey!("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
+    anchor_lang::solana_program::pubkey!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
 // -------------------------------
 // Configuration Constants
 // -------------------------------
 
 pub const DEFAULT_N: u64 = 100; // Default value for N
+
+#[constant]
+pub const BASE_TOKEN_DECIMALS: u8 = 9;
 
 #[constant]
 pub const TEAM_BASIS_POINTS: u64 = 1_000;

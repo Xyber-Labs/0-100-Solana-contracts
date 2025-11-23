@@ -1,7 +1,13 @@
-use crate::{constants::SEED_ROOT, state::{CreatorGrant, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig}};
-use crate::utils::launch_core::{init_launch_core, InitLaunchParams};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+
+use crate::{
+    constants::SEED_ROOT,
+    state::{
+        CreatorGrant, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
+    },
+    utils::launch_core::{init_launch_core, InitLaunchParams},
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct TokenMetadataInput {
@@ -24,7 +30,7 @@ pub struct InitLaunchFromPreset<'info> {
         seeds = [SEED_ROOT, b"project_counter"],
         bump
     )]
-    pub project_counter: Account<'info, ProjectCounter>,
+    pub project_counter: Box<Account<'info, ProjectCounter>>,
     #[account(
         init,
         payer = creator,
@@ -32,7 +38,7 @@ pub struct InitLaunchFromPreset<'info> {
         seeds = [SEED_ROOT, b"launch", &project_id.to_le_bytes()],
         bump
     )]
-    pub launch_state: Account<'info, LaunchState>,
+    pub launch_state: Box<Account<'info, LaunchState>>,
     /// CHECK: PDA for SOL escrow
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -43,7 +49,7 @@ pub struct InitLaunchFromPreset<'info> {
         seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
         bump
     )]
-    pub creator_grant: Account<'info, CreatorGrant>,
+    pub creator_grant: Box<Account<'info, CreatorGrant>>,
     #[account(
         init,
         payer = creator,
@@ -51,18 +57,15 @@ pub struct InitLaunchFromPreset<'info> {
         seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()],
         bump
     )]
-    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
+    pub token_metadata_config: Box<Account<'info, TokenMetadataConfig>>,
     #[account(seeds = [SEED_ROOT, b"config"], bump)]
-    pub engine_config: Account<'info, EngineConfig>,
+    pub engine_config: Box<Account<'info, EngineConfig>>,
     #[account(mut)]
-    pub creator_xyber_ata: Account<'info, TokenAccount>,
+    pub creator_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    pub treasury_xyber_ata: Account<'info, TokenAccount>,
-    #[account(
-        seeds = [SEED_ROOT, b"preset", &[preset_id]],
-        bump
-    )]
-    pub launch_preset: Account<'info, LaunchPreset>,
+    pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
+    #[account(seeds = [SEED_ROOT, b"preset", &[preset_id]], bump)]
+    pub launch_preset: Box<Account<'info, LaunchPreset>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
@@ -117,5 +120,3 @@ pub fn init_launch_from_preset(
         project_id,
     )
 }
-
-

@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import EngineSDK from "@xyber-labs/0-100-sdk";
+import { EngineSDK } from "@xyber-labs/0-100-sdk";
 
 export function initializeSdk() {
   const provider = anchor.AnchorProvider.env();
@@ -47,4 +47,12 @@ export async function findProject(
   }
   console.log("Found launch state:", project.launchPda.toBase58());
   return project;
+}
+
+export function loadKeypair(keyPath: string): anchor.web3.Keypair {
+  const fs = require("fs");
+  const raw = fs.readFileSync(keyPath, "utf8");
+  const arr = JSON.parse(raw);
+  const secret = Uint8Array.from(arr);
+  return anchor.web3.Keypair.fromSecretKey(secret);
 }

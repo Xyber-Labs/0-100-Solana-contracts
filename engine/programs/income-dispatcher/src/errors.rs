@@ -26,4 +26,6 @@ pub enum ErrorCode {
     InvalidProjectId,
     #[msg("Invalid nonce")]
     InvalidNonce,
+    #[msg("Project ID mismatch")]
+    ProjectIdMismatch,
 }

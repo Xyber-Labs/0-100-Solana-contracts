@@ -14,16 +14,16 @@ struct IncomeCalculator {
 struct DistributionRule {
     market_cap: u128,
     recipient: Pubkey,
-    share: u128,
+    rate: u128,
     priority: u8,
 }
 
 impl DistributionRule {
-    fn new(market_cap: u128, recipient: Pubkey, share: u128, priority: u8) -> Self {
+    fn new(market_cap: u128, recipient: Pubkey, rate: u128, priority: u8) -> Self {
         Self {
             market_cap,
             recipient,
-            share,
+            rate,
             priority,
         }
     }
@@ -69,8 +69,6 @@ impl Distribution {
 }
 
 impl IncomeCalculator {
-    const BASIS_POINTS: u128 = 10_000;
-
     pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Result<Self> {
         require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
         Ok(Self {
@@ -105,7 +103,7 @@ impl IncomeCalculator {
                 current_cap = rule.market_cap;
                 share_sum = 0;
             }
-            share_sum = match share_sum.checked_add(rule.share) {
+            share_sum = match share_sum.checked_add(rule.rate) {
                 Some(sum) => sum,
                 None => return false,
             };
@@ -140,7 +138,7 @@ impl IncomeCalculator {
 
         for rule in &self.rules[start..end] {
             let share_in_quote = total_income_in_quote
-                .checked_mul(rule.share)
+                .checked_mul(rule.rate)
                 .ok_or(ErrorCode::ArithmeticOverflow)?
                 .checked_div(Self::BASIS_POINTS)
                 .ok_or(ErrorCode::ArithmeticOverflow)?;

@@ -9,18 +9,18 @@ use crate::{
 
 #[derive(Accounts)]
 pub struct ClaimClmmFees<'info> {
-    /// CHECK: Income dispatcher authority PDA - must be signed by income-dispatcher program
+    /// CHECK: Project authority PDA from income-dispatcher - must be signed
     #[account(
-        seeds = [INCOME_DISPATCHER_SEED_ROOT, b"authority"],
+        seeds = [INCOME_DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
         bump,
         seeds::program = INCOME_DISPATCHER_PROGRAM_ID
     )]
-    pub income_dispatcher_authority: UncheckedAccount<'info>,
+    pub project_authority: UncheckedAccount<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
 
     #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
+    pub launch_state: Box<Account<'info, LaunchState>>,
 
     /// CHECK: Escrow authority PDA - owner of the position NFT
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]

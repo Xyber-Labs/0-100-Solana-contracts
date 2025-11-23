@@ -21,6 +21,7 @@ custom-panic = []
 test = ["engine/test"]
 devnet = ["raydium-amm-v3/devnet"]
 anchor-test = []
+mainnet = []
 
 [dependencies]
 anchor-lang = "0.31.1"
