@@ -6,6 +6,7 @@ import type { LaunchConfig } from './types/launch';
 import { depositUsersParallel, fundUsersParallel, getChainTimeSec, preparePoolCreationWithRetry, mintForTestSafe, type SimUser } from './utils/flowHelpers';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { runFullFlow } from './utils/flowRunner';
+import { executeClmmSwapSmokeTest, fetchClmmPoolSnapshot, performClmmSwap, type ClmmPoolSnapshot } from './utils/poolHelpers';
 
 // Launch configuration interface
 
@@ -87,6 +88,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const [projectSearchId, setProjectSearchId] = useState<string>('');
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isProjectManagerCollapsed, setIsProjectManagerCollapsed] = useState(true);
+  const [poolStateData, setPoolStateData] = useState<any | null>(null);
+  const [raydiumPoolInfo, setRaydiumPoolInfo] = useState<ClmmPoolSnapshot | null>(null);
+  const [isPoolInfoLoading, setIsPoolInfoLoading] = useState(false);
+  const [swapDirection, setSwapDirection] = useState<'buy' | 'sell'>('buy');
+  const [swapAmount, setSwapAmount] = useState('0.1');
+  const [swapPending, setSwapPending] = useState(false);
+  const [swapStatus, setSwapStatus] = useState<string | null>(null);
 
   // --- New state for custom duration ---
   const [durationOption, setDurationOption] = useState('dropdown'); // 'dropdown' or 'custom'
@@ -136,6 +144,23 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     return 0;
   };
 
+  const formatTokenAmount = (value?: number, decimals = 9) => {
+    if (value === undefined || value === null) return "0.0000";
+    return (value / Math.pow(10, decimals)).toFixed(4);
+  };
+
+  const toPublicKey = (value: any): PublicKey | null => {
+    if (!value) return null;
+    if (value instanceof PublicKey) return value;
+    try {
+      if (typeof value === 'string') return new PublicKey(value);
+      if (value?.toString) return new PublicKey(value.toString());
+    } catch (_) {
+      return null;
+    }
+    return null;
+  };
+
   // Default launch configuration (matching tests)
   const defaultConfig: LaunchConfig = {
     hardCapLamports: 450 * 1e9, // 20,000 SOL for large tests
@@ -179,6 +204,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     const logEntry = `[${timestamp}] ${message}`;
     setLogs(prev => [...prev, logEntry]);
   };
+  const resolvedBaseMintPk = toPublicKey(baseMint?.publicKey || launchData?.clmmBaseMint || launchData?.baseMint);
+  const resolvedQuoteMintPk = toPublicKey(launchConfig.quoteMint || 'So11111111111111111111111111111111111111112');
+  const raydiumPoolPublicKey = poolStateData?.raydiumPoolState ? toPublicKey(poolStateData.raydiumPoolState) : null;
+  const poolClaimsReady = !!poolStateData?.claimsReady;
 
   const initializeSDK = useCallback(async () => {
     // Use test wallet if available, otherwise use connected wallet
@@ -308,6 +337,109 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       }
     }
   }, [sdk, launchState, publicKey, testWallet]);
+
+  const refreshPoolInfo = useCallback(async (targetLaunch?: PublicKey) => {
+    if (!sdk) return;
+    const launchPk = targetLaunch ?? launchState;
+    if (!launchPk) return;
+    try {
+      setIsPoolInfoLoading(true);
+      let poolAccount: any = null;
+      try {
+        poolAccount = await sdk.fetchPoolState(launchPk);
+        setPoolStateData(poolAccount);
+        addLog('Pool state refreshed');
+      } catch (error: any) {
+        setPoolStateData(null);
+        setRaydiumPoolInfo(null);
+        if (error?.message?.includes('Account does not exist')) {
+          addLog('Pool state account not found (pool not created yet).');
+        } else {
+          addLog(`ERROR: Failed to fetch pool state - ${error}`);
+        }
+        return;
+      }
+      if (poolAccount?.raydiumPoolState) {
+        try {
+          const poolId = new PublicKey(
+            typeof poolAccount.raydiumPoolState === 'string'
+              ? poolAccount.raydiumPoolState
+              : poolAccount.raydiumPoolState.toString()
+          );
+          const snapshot = await fetchClmmPoolSnapshot({
+            provider: sdk.program.provider,
+            poolId,
+            signer: testWallet || null,
+          });
+          setRaydiumPoolInfo(snapshot);
+        } catch (snapshotError) {
+          setRaydiumPoolInfo(null);
+          addLog(`ERROR: Failed to load Raydium pool snapshot - ${snapshotError}`);
+        }
+      } else {
+        setRaydiumPoolInfo(null);
+      }
+    } finally {
+      setIsPoolInfoLoading(false);
+    }
+  }, [sdk, launchState, addLog, testWallet]);
+
+  const handleManualSwap = useCallback(async () => {
+    if (!sdk) {
+      addLog('ERROR: SDK not initialized');
+      return;
+    }
+    if (!launchState || !raydiumPoolPublicKey) {
+      setSwapStatus('Pool not created yet.');
+      return;
+    }
+    if (!resolvedBaseMintPk || !resolvedQuoteMintPk) {
+      setSwapStatus('Missing mint information.');
+      return;
+    }
+    const parsedAmount = parseFloat(swapAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      setSwapStatus('Enter a valid amount.');
+      return;
+    }
+    const lamports = new BN(Math.round(parsedAmount * 1_000_000_000));
+    const inputMint = swapDirection === 'buy' ? resolvedQuoteMintPk : resolvedBaseMintPk;
+    try {
+      setSwapPending(true);
+      setSwapStatus(null);
+      const { txId } = await performClmmSwap({
+        provider: sdk.program.provider,
+        poolId: raydiumPoolPublicKey,
+        baseMint: resolvedBaseMintPk,
+        quoteMint: resolvedQuoteMintPk,
+        addLog,
+        signer: testWallet || null,
+        inputMint,
+        amountIn: lamports,
+      });
+      const directionLabel = swapDirection === 'buy' ? 'quote→base' : 'base→quote';
+      setSwapStatus(`Swap submitted (${directionLabel}). Tx: ${txId}`);
+      addLog(`Manual CLMM swap submitted. Signature: ${txId}`);
+      await refreshPoolInfo(raydiumPoolPublicKey);
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      setSwapStatus(`Swap failed: ${message}`);
+      addLog(`ERROR: Swap failed - ${message}`);
+    } finally {
+      setSwapPending(false);
+    }
+  }, [
+    sdk,
+    launchState,
+    raydiumPoolPublicKey,
+    resolvedBaseMintPk,
+    resolvedQuoteMintPk,
+    swapAmount,
+    swapDirection,
+    addLog,
+    refreshPoolInfo,
+    testWallet,
+  ]);
 
 
   const fetchBalance = useCallback(async () => {
@@ -644,6 +776,9 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     setLaunchData(null);
     setUserContributions(null);
     setCurrentProjectId(null);
+    setPoolStateData(null);
+    setRaydiumPoolInfo(null);
+    setSwapStatus(null);
     addLog('State reset');
   };
 
@@ -728,6 +863,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         }
 
         setCurrentProjectId(project.id);
+        const restoredLaunch = toPublicKey(project.launchState);
+        if (restoredLaunch) {
+          await refreshPoolInfo(restoredLaunch);
+        }
       } catch (error) {
         addLog(`ERROR: Failed to restore data - ${error}`);
         throw error;
@@ -741,12 +880,14 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [defaultConfig]);
+  }, [defaultConfig, refreshPoolInfo]);
 
   // Derived flags
   const activePublicKey = testWallet?.publicKey || publicKey;
   const creatorPk = (launchData && (launchData as any).creator) ? new PublicKey((launchData as any).creator) : null;
   const isCreator = !!(creatorPk && activePublicKey && creatorPk.equals(activePublicKey));
+
+  const claimsOpened = !!launchData?.claimsOpenedAt;
 
   const deleteProject = useCallback((projectId: string) => {
     const updatedProjects = savedProjects.filter(p => p.id !== projectId);
@@ -917,6 +1058,16 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   }, [publicKey, testWallet, fetchBalance]);
 
   useEffect(() => {
+    if (sdk && launchState) {
+      refreshPoolInfo();
+    }
+  }, [sdk, launchState]); 
+
+  useEffect(() => {
+    setSwapStatus(null);
+  }, [swapDirection]);
+
+  useEffect(() => {
     if (autoScroll && logContainerRef.current) {
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
@@ -954,6 +1105,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       }
       addLog(`--- ❌ FULL TEST FLOW FAILED: ${errorMessage} ---`);
     } finally {
+      await refreshPoolInfo();
       setIsFlowRunning(false);
     }
   }, [sdk, program, launchConfig, addLog, simConfig]);
@@ -1511,13 +1663,67 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   </div>
                   <div className="flex justify-between">
                     <span className="terminal-output">Claims Open:</span>
-                    <span className={launchData.claimsOpen ? 'terminal-success' : 'terminal-error'}>
-                      {launchData.claimsOpen ? 'YES' : 'NO'}
+                    <span className={claimsOpened ? 'terminal-success' : 'terminal-error'}>
+                      {claimsOpened ? 'YES' : 'NO'}
                     </span>
                   </div>
                 </div>
               </div>
             )}
+
+            <div className="mt-4 pt-4 border-t border-gray-600 space-y-1 text-xs">
+              <div className="terminal-prompt mb-2 text-xs">Pool Info:</div>
+              <div className="flex justify-between">
+                <span className="terminal-output">Raydium Pool:</span>
+                <span className={raydiumPoolPublicKey ? 'terminal-success' : 'terminal-error'}>
+                  {raydiumPoolPublicKey ? `${raydiumPoolPublicKey.toString().slice(0, 8)}...` : 'NOT CREATED'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="terminal-output">Pool Created:</span>
+                <span className={poolStateData?.created ? 'terminal-success' : 'terminal-error'}>
+                  {poolStateData?.created ? 'YES' : 'NO'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="terminal-output">Claims Ready:</span>
+                <span className={poolClaimsReady ? 'terminal-success' : 'terminal-error'}>
+                  {poolClaimsReady ? 'YES' : 'NO'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="terminal-output">CLMM Base Mint:</span>
+                <span className={resolvedBaseMintPk ? 'terminal-success' : 'terminal-error'}>
+                  {resolvedBaseMintPk ? `${resolvedBaseMintPk.toString().slice(0, 8)}...` : 'NONE'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="terminal-output">Pool ID:</span>
+                <span className={poolStateData?.poolId ? 'terminal-success' : 'terminal-error'}>
+                  {poolStateData?.poolId ? `#${safeToNumber(poolStateData.poolId)}` : 'N/A'}
+                </span>
+              </div>
+              {raydiumPoolInfo && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="terminal-output">Price (A/B):</span>
+                    <span className="terminal-success">{raydiumPoolInfo.price?.toFixed(6)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="terminal-output">{raydiumPoolInfo.mintA.symbol || 'Base'} Liquidity:</span>
+                    <span className="terminal-success">
+                      {formatTokenAmount(raydiumPoolInfo.mintAmountA, raydiumPoolInfo.mintA.decimals)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="terminal-output">{raydiumPoolInfo.mintB.symbol || 'Quote'} Liquidity:</span>
+                    <span className="terminal-success">
+                      {formatTokenAmount(raydiumPoolInfo.mintAmountB, raydiumPoolInfo.mintB.decimals)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Control Panel */}
@@ -1624,6 +1830,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     }
                     await fetchLaunchData();
                     addLog('SUCCESS: Pool prepared and test mint complete. Claims should be open.');
+                    if (launchState) await refreshPoolInfo(launchState);
                   } catch (error) {
                     addLog(`ERROR: Failed to prepare pool + test mint - ${error}`);
                   } finally {
@@ -1806,6 +2013,104 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
               </div>
             )}
 
+          </div>
+
+          {/* Pool Panel */}
+          <div className="terminal-card lg:col-span-3">
+            <div className="flex justify-between items-center mb-4">
+              <div className="terminal-prompt">
+                <span className="terminal-glow">pool@engine:~$</span>
+                <span className="terminal-command ml-2">clmm-details</span>
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => refreshPoolInfo()}
+                  className="terminal-button text-xs"
+                  disabled={!sdk || !launchState || isPoolInfoLoading}
+                >
+                  {isPoolInfoLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs terminal-output mb-4">
+              Pool existence, claims status, and mint info now live in the status panel above.
+              This section focuses on Raydium-specific metrics and swap controls.
+            </div>
+
+            {raydiumPoolInfo ? (
+              <div className="space-y-1 text-xs mb-4">
+                <div className="flex justify-between">
+                  <span className="terminal-output">Price (A/B):</span>
+                  <span className="terminal-success">{raydiumPoolInfo.price?.toFixed(6)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">{raydiumPoolInfo.mintA.symbol || 'Base'} Liquidity:</span>
+                  <span className="terminal-success">
+                    {formatTokenAmount(raydiumPoolInfo.mintAmountA, raydiumPoolInfo.mintA.decimals)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">{raydiumPoolInfo.mintB.symbol || 'Quote'} Liquidity:</span>
+                  <span className="terminal-success">
+                    {formatTokenAmount(raydiumPoolInfo.mintAmountB, raydiumPoolInfo.mintB.decimals)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="terminal-output">Tick Current:</span>
+                  <span className="terminal-success">{raydiumPoolInfo.tickCurrent}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs terminal-output mb-4">
+                No Raydium snapshot available yet. Create the pool or refresh once it's live.
+              </div>
+            )}
+
+            {raydiumPoolPublicKey && resolvedBaseMintPk && resolvedQuoteMintPk && (
+              <div className="border-t border-gray-700 pt-4">
+                <div className="terminal-output text-xs mb-2">Manual Swap (Raydium CLMM)</div>
+                <div className="flex flex-col md:flex-row md:items-center md:space-x-2 space-y-2 md:space-y-0">
+                  <select
+                    value={swapDirection}
+                    onChange={(e) => setSwapDirection(e.target.value as 'buy' | 'sell')}
+                    className="terminal-input md:w-40"
+                  >
+                    <option value="buy">Buy Base (pay quote)</option>
+                    <option value="sell">Sell Base (receive quote)</option>
+                  </select>
+                  <input
+                    type="number"
+                    value={swapAmount}
+                    onChange={(e) => setSwapAmount(e.target.value)}
+                    className="terminal-input flex-1"
+                    placeholder={swapDirection === 'buy' ? 'Quote amount' : 'Base amount'}
+                    min="0"
+                  />
+                  <button
+                    onClick={handleManualSwap}
+                    className="terminal-button text-xs"
+                    disabled={swapPending}
+                  >
+                    {swapPending ? 'Swapping...' : 'Swap'}
+                  </button>
+                </div>
+                <div className="terminal-output text-xs mt-1">
+                  Input units: {swapDirection === 'buy'
+                    ? (raydiumPoolInfo?.mintB.symbol || 'Quote')
+                    : (raydiumPoolInfo?.mintA.symbol || 'Base')}
+                </div>
+                {swapStatus && (
+                  <div
+                    className={`text-xs mt-2 break-all ${
+                      swapStatus.toLowerCase().includes('failed') ? 'terminal-error' : 'terminal-success'
+                    }`}
+                  >
+                    {swapStatus}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

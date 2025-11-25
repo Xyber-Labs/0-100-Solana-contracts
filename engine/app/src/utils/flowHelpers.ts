@@ -1,6 +1,7 @@
 import { BN, AnchorProvider } from "@coral-xyz/anchor";
 import { SystemProgram, Transaction, PublicKey, Keypair } from "@solana/web3.js";
 import type EngineSDK from "@xyber-labs/0-100-sdk";
+import { Raydium, PoolUtils } from "@raydium-io/raydium-sdk-v2";
 
 export type AddLog = (msg: string) => void;
 

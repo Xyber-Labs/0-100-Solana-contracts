@@ -19,6 +19,7 @@ import {
 // import type EngineSDK from "../../../ts-sdk/src/engine";
 import type { EngineClient } from "@xyber-labs/0-100-sdk";
 import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
+import { executeClmmSwapSmokeTest } from "./poolHelpers";
 
 
 // A simplified SDK type, as we don't have the full type in this context
@@ -27,6 +28,8 @@ interface SimulationConfig {
   maxTicketsPerUser: number;
   useTestMintForBase?: boolean;
 }
+
+const WSOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
 
 export async function runFullFlow(
   sdk: EngineClient,
@@ -655,20 +658,21 @@ export async function runFullFlow(
     addLog(`\n[7/10] Prepare Pool Creation...`);
     await preparePoolCreationWithRetry({ sdk, launchPda: testLaunchState, addLog });
 
+    const quoteMintInput = String(config.quoteMint || WSOL_MINT.toBase58());
+    const quoteMintPk = new PublicKey(quoteMintInput);
+    let raydiumPoolId: PublicKey | null = null;
     let mintedBaseMint: PublicKey | null = null;
     const wantTestMint = !!(simConfig && (simConfig as any).useTestMintForBase);
     if (wantTestMint) {
       mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
       addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
     } else {
-      const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
       let clmmProgramStr = String((config as any).clmmProgram || "");
       if (!clmmProgramStr) {
         const ep = (provider as any)?.connection?.rpcEndpoint || "";
         clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
         (config as any).clmmProgram = clmmProgramStr;
       }
-      const quoteMintPk = new PublicKey(quoteMintStr);
       const clmmProgramPk = new PublicKey(clmmProgramStr);
       const createPool = await (sdk as any).createClmmPoolTx({
         payer: (provider as any).wallet.publicKey,
@@ -681,6 +685,7 @@ export async function runFullFlow(
       addLog(`      - CLMM pool created. Signature: ${sig}`);
       const poolBaseMint = createPool.baseMint;
       mintedBaseMint = poolBaseMint;
+      raydiumPoolId = createPool.poolState;
       try {
         addLog(`      - Base mint: ${poolBaseMint.toBase58()}`);
         const addLiq = await (sdk as any).addClmmLiquidityTx({
@@ -727,6 +732,17 @@ export async function runFullFlow(
         } catch (_) { }
       }
     } catch (_) { }
+
+    if (raydiumPoolId) {
+      await executeClmmSwapSmokeTest({
+        provider,
+        poolId: raydiumPoolId,
+        baseMint: launchBaseMint,
+        quoteMint: quoteMintPk,
+        addLog,
+        signer: adminSigners[0] ?? ((provider as any)?.wallet?.payer ?? null),
+      });
+    }
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
     addLog(`\n[9/10] Testing User Token & Refund Claiming...`);
