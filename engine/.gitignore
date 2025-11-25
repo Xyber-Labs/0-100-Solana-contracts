@@ -12,3 +12,4 @@ log*.txt
 engine/tests/resources/*
 engine/ts-sdk/*.tgz
 *.tgz
+migrations/launch-preset.json

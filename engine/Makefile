@@ -252,11 +252,21 @@ predeploy-setup:
 
 # ------------------------------
 # Preset migration
-PAYLOAD ?= migrations/launch-preset.template.json
+# PAYLOAD ?= migrations/launch-preset.json
+# .PHONY: init-launch-preset
+# init-launch-preset:
+# 	@echo "Initializing Launch Preset from payload: $(PAYLOAD)"
+# 	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/init-launch-preset.ts --payload $(PAYLOAD)
+
+PAYLOAD ?= migrations/launch-preset.json
+
 .PHONY: init-launch-preset
 init-launch-preset:
 	@echo "Initializing Launch Preset from payload: $(PAYLOAD)"
-	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) ANCHOR_WALLET=$(ANCHOR_WALLET) yarn ts-node migrations/init-launch-preset.ts --payload $(PAYLOAD)
+	TS_NODE_COMPILER_OPTIONS='{"target":"ES2020","module":"commonjs"}' \
+	ANCHOR_PROVIDER_URL=$(ANCHOR_PROVIDER_URL) \
+	ANCHOR_WALLET=$(ANCHOR_WALLET) \
+	yarn ts-node scripts/init-launch-preset.ts --payload $(PAYLOAD) --admin-keypair keys/admin1.json --admin-keypair keys/admin2.json --admin-keypair keys/admin3.json
 
 .PHONY: update-launch-preset
 update-launch-preset:

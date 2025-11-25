@@ -260,6 +260,16 @@ export async function runFullFlow(
     // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
     // Convert to atomic units (9 decimals). If values look already atomic, pass-through.
     const DECIMALS_SCALE = new BN(1_000_000_000); // 10^9
+    const PRICE_GROWTH_NUM = new BN(23); // matches PRICE_GROWING_RATE = 23/20 on-chain
+    const PRICE_GROWTH_DEN = new BN(20);
+    const formatAtomicBn = (value: BN) => {
+      const negative = value.isNeg();
+      const abs = negative ? value.neg() : value.clone();
+      const whole = abs.div(DECIMALS_SCALE).toString();
+      const fracRaw = abs.mod(DECIMALS_SCALE).toString().padStart(9, "0").replace(/0+$/, "");
+      const frac = fracRaw.length > 0 ? `.${fracRaw}` : "";
+      return `${negative ? "-" : ""}${whole}${frac}`;
+    };
     const toAtomic = (val: string | number): BN => {
       const raw = new BN(String(val));
       // Heuristic: if already very large (>= 1e13), assume atomic and do not rescale
@@ -268,7 +278,22 @@ export async function runFullFlow(
       return raw.gte(THRESHOLD) ? raw : raw.mul(DECIMALS_SCALE);
     };
     const saleAllocBN = toAtomic(config.saleAllocation);
-    const lpAllocBN = toAtomic((config as any).lpAllocation);
+    let lpAllocBN = toAtomic((config as any).lpAllocation);
+    const expectedLpFromSale = saleAllocBN.mul(PRICE_GROWTH_DEN).div(PRICE_GROWTH_NUM);
+    if (!expectedLpFromSale.isZero()) {
+      const diff = lpAllocBN.sub(expectedLpFromSale).abs();
+      const mismatchPct = diff.mul(new BN(10_000)).div(expectedLpFromSale); // basis points
+      if (!diff.isZero()) {
+        addLog(`   -> Adjusting LP allocation to satisfy Raydium ratio (sale ≈ LP * 1.15).`);
+        addLog(`      - Sale (human units): ${formatAtomicBn(saleAllocBN)}`);
+        addLog(`      - LP before adjustment: ${formatAtomicBn(lpAllocBN)}`);
+        addLog(`      - LP after adjustment:  ${formatAtomicBn(expectedLpFromSale)}`);
+        lpAllocBN = expectedLpFromSale;
+      }
+      if (mismatchPct.gt(new BN(0))) {
+        addLog(`      - Δ vs requested LP: ${(mismatchPct.toNumber() / 100).toFixed(2)}%`);
+      }
+    }
     const teamBpsNum = Number((config as any).teamAllocationBasisPoints ?? 0);
     const denom = 10000 - Math.max(0, Math.min(10000, teamBpsNum));
     const baseNonTeamBN = saleAllocBN.add(lpAllocBN);
@@ -355,7 +380,8 @@ export async function runFullFlow(
     // We'll generate enough users to reach at least k_pub tickets
     const MAX_TICKETS_PER_USER = Math.max(1, simConfig.maxTicketsPerUser);
     const usersNeeded = Math.ceil(kPubExpected / MAX_TICKETS_PER_USER);
-    const requestedUsers = simConfig.numUsers && simConfig.numUsers > 0 ? simConfig.numUsers : usersNeeded;
+    const requestedUsersInput = simConfig.numUsers && simConfig.numUsers > 0 ? simConfig.numUsers : usersNeeded;
+    const requestedUsers = Math.max(usersNeeded, requestedUsersInput);
     const maxUsersCapacity = rosterShardsTotal * config.rosterShardCap;
     const TARGET_USERS = Math.min(requestedUsers, maxUsersCapacity);
     const numShards = Math.min(Math.ceil(TARGET_USERS / config.rosterShardCap), rosterShardsTotal);
@@ -384,7 +410,6 @@ export async function runFullFlow(
     const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
     // 3. Simulate deposits to reach at least k_pub tickets
-    const MAX_TICKETS = MAX_TICKETS_PER_USER;
     const usersWithDeposits = new Map<
       string,
       { keypair: Keypair; tickets: number; shardId: number }
@@ -392,13 +417,28 @@ export async function runFullFlow(
 
     addLog(`\n[3/10] Simulating deposits for ${TARGET_USERS} users...`);
 
+    const ticketsTarget = Math.max(1, kPubExpected);
+    const maxTicketsCapacity = TARGET_USERS * MAX_TICKETS_PER_USER;
+    if (ticketsTarget > maxTicketsCapacity) {
+      addLog(`   -> Warning: roster capacity (${maxTicketsCapacity} tickets) below target k_pub (${ticketsTarget}). Liquidity may be underfunded.`);
+    }
     const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
-    for (let i = 0; i < TARGET_USERS; i++) {
-      const tickets = Math.max(1, Math.floor(Math.random() * MAX_TICKETS) + 1);
+    let ticketsRemaining = ticketsTarget;
+    for (let i = 0; i < TARGET_USERS && ticketsRemaining > 0; i++) {
+      const remainingSlots = TARGET_USERS - i - 1;
+      const remainingSlotsNeeded = Math.min(remainingSlots, Math.max(0, ticketsRemaining - 1));
+      const maxAssignable = Math.min(MAX_TICKETS_PER_USER, Math.max(1, ticketsRemaining - remainingSlotsNeeded));
+      const minAssignable = Math.max(1, Math.min(maxAssignable, ticketsRemaining - remainingSlotsNeeded * MAX_TICKETS_PER_USER));
+      const boundedMax = Math.max(minAssignable, Math.min(maxAssignable, MAX_TICKETS_PER_USER));
+      const tickets = Math.max(1, Math.min(MAX_TICKETS_PER_USER, boundedMax));
       const keypair = Keypair.generate();
       const depositAmount = new BN(config.tauLamports).mul(new BN(tickets));
-      const shardId = 1 + Math.floor(i / config.rosterShardCap);
+      const shardId = 1 + Math.floor(provisionalUsers.length / config.rosterShardCap);
       provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
+      ticketsRemaining -= tickets;
+    }
+    if (ticketsRemaining > 0) {
+      addLog(`   -> Warning: Unable to allocate all target tickets (remaining=${ticketsRemaining}). Consider increasing numUsers or maxTicketsPerUser.`);
     }
     let users = provisionalUsers;
 
@@ -634,40 +674,20 @@ export async function runFullFlow(
         payer: (provider as any).wallet.publicKey,
         launch: testLaunchState,
         quoteMint: quoteMintPk,
-        baseMint: testBaseMint,
         clmmProgram: clmmProgramPk,
         provider,
       });
       const sig = await (provider as any).sendAndConfirm(createPool.transaction, createPool.signers);
       addLog(`      - CLMM pool created. Signature: ${sig}`);
-      mintedBaseMint = testBaseMint.publicKey;
+      const poolBaseMint = createPool.baseMint;
+      mintedBaseMint = poolBaseMint;
       try {
-        addLog(`      - Base mint: ${mintedBaseMint.toBase58()}`);
-        // Derive correct LP amount = base_total - sale - team (all in atomic units)
-        const launchOnChain: any = await (sdk as any).fetchLaunch(testLaunchState);
-        const baseTotalStr = launchOnChain.baseTotalAllocation?.toString?.() ?? String(launchOnChain.baseTotalAllocation ?? "0");
-        const teamBpsNum = Number(launchOnChain.teamAllocationBasisPoints ?? 0);
-        const saleBpsNum = Number(launchOnChain.baseSaleBasisPoints ?? 0);
-        const baseTotal = BigInt(baseTotalStr);
-        const saleAtomic = (baseTotal * BigInt(saleBpsNum)) / 10000n;
-        const teamAtomic = (baseTotal * BigInt(teamBpsNum)) / 10000n;
-        const lpAtomic = baseTotal - saleAtomic - teamAtomic;
-        const baseAmount = new BN(lpAtomic.toString());
-
-        // Estimate quote amount for provided base amount with a small safety bump
-        const quoteAmount = await (sdk as any).estimateQuoteForBase({ launch: testLaunchState, baseAmount, safetyBumpBps: 10200 });
-        const sqrtLower = await (sdk as any).getSqrtPriceLowerX64ForPool({ launch: testLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
+        addLog(`      - Base mint: ${poolBaseMint.toBase58()}`);
         const addLiq = await (sdk as any).addClmmLiquidityTx({
           payer: (provider as any).wallet.publicKey,
           launch: testLaunchState,
-          quoteMint: quoteMintPk,
-          baseMint: testBaseMint.publicKey,
-          baseTokenAta: createPool.baseTokenAta,
-          clmmProgram: clmmProgramPk,
+          baseMint: poolBaseMint,
           provider,
-          baseAmount,
-          quoteAmount,
-          sqrtPriceLowerX64: sqrtLower,
         });
         const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
         addLog(`      - Initial liquidity added. Signature: ${sigL}`);
@@ -682,9 +702,14 @@ export async function runFullFlow(
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
     }
+    if (!mintedBaseMint) {
+      throw new Error("Base mint not initialized after pool setup");
+    }
+    const launchBaseMint = mintedBaseMint;
+
     try {
-      if (mintedBaseMint) {
-        const supply = await provider.connection.getTokenSupply(mintedBaseMint);
+      if (launchBaseMint) {
+        const supply = await provider.connection.getTokenSupply(launchBaseMint);
         const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
         addLog(`      - Base mint total supply: ${supplyUi}`);
         try {
@@ -791,7 +816,7 @@ export async function runFullFlow(
       try {
         const { transaction, userAta } = await (sdk as any).claimTokensTx({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: launchBaseMint,
           userPubkey: demoUser.keypair.publicKey,
           shardId: demoUser.shardId,
           createAtaIfMissing: true,
@@ -832,7 +857,7 @@ export async function runFullFlow(
 
       const claimPromises = batch.map(async (userData) => {
         const userPk = userData.keypair.publicKey;
-        const userAta = sdk.getUserAta(testBaseMint.publicKey, userPk);
+        const userAta = sdk.getUserAta(launchBaseMint, userPk);
         const initialBalance = await getTokenBalance(userAta);
         const tryClaimTokens = async () => {
           let attempt = 0;
@@ -842,7 +867,7 @@ export async function runFullFlow(
             try {
               await sdk.claimTokens({
                 launch: testLaunchState,
-                baseMint: testBaseMint.publicKey,
+                baseMint: launchBaseMint,
                 userKeypair: userData.keypair,
                 createAtaIfMissing: true,
                 shardId: userData.shardId,
@@ -1024,14 +1049,14 @@ export async function runFullFlow(
       addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
       addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);
 
-      const creatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+      const creatorAta = sdk.getUserAta(launchBaseMint, admin.publicKey);
 
       // Ensure creator ATA exists before any claim attempts
       try {
         const { ix } = sdk.buildCreateAtaIx({
           payer: admin.publicKey,
           owner: admin.publicKey,
-          mint: testBaseMint.publicKey,
+          mint: launchBaseMint,
         });
         const tx = new Transaction().add(ix);
         await provider.sendAndConfirm!(tx, []);
@@ -1048,7 +1073,7 @@ export async function runFullFlow(
           const initialBalance = await getTokenBalance(creatorAta);
           await sdk.claimCreatorTokens({
             launch: testLaunchState,
-            baseMint: testBaseMint.publicKey,
+            baseMint: launchBaseMint,
             creatorAta: creatorAta,
             createAtaIfMissing: true,
           });
@@ -1089,7 +1114,7 @@ export async function runFullFlow(
         const initialBalance = await getTokenBalance(creatorAta);
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: launchBaseMint,
           creatorAta: creatorAta,
         });
         const finalBalance = await getTokenBalance(creatorAta);
@@ -1115,7 +1140,7 @@ export async function runFullFlow(
       try {
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: launchBaseMint,
           creatorAta: creatorAta,
         });
         addLog(`   -> ❌ VERIFICATION FAILED: Final claim succeeded when it should have failed.`);
@@ -1189,11 +1214,11 @@ export async function runFullFlow(
         addLog(`[Team Vesting] Launch config: team_bps=${Number(launchForTeam.teamAllocationBasisPoints)}, base_total_allocation=${(Number(launchForTeam.baseTotalAllocation) / 1e9).toFixed(6)}`);
       }
       await new Promise(res => setTimeout(res, Math.max(1, vestSec) * 1000 + 600));
-      const teamCreatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+      const teamCreatorAta = sdk.getUserAta(launchBaseMint, admin.publicKey);
       try {
         const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
         if (!ataInfo) {
-          const { ix } = sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: testBaseMint.publicKey });
+          const { ix } = sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: launchBaseMint });
           await provider.sendAndConfirm!(new Transaction().add(ix), []);
         }
       } catch (_) { }
@@ -1201,7 +1226,7 @@ export async function runFullFlow(
         const before = await getTokenBalance(teamCreatorAta);
         const { transaction } = await sdk.claimTeamTokensTx({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: launchBaseMint,
           creator: admin.publicKey,
           creatorAta: teamCreatorAta,
           createAtaIfMissing: true,

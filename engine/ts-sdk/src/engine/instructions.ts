@@ -609,10 +609,11 @@ const EngineSDK = {
     }): Promise<{ signature: string }> {
       const defaultPayerKp: anchor.web3.Keypair | undefined = (provider as any)?.wallet?.payer;
       const payerPubkey = args.payerKeypair?.publicKey ?? defaultPayerKp?.publicKey ?? payer;
+      const computeUnits = typeof args.computeUnits === "number" ? args.computeUnits : 1_400_000;
       const { transaction } = await txBuilder.preparePoolCreationTx({
         payer: payerPubkey,
         launch: args.launch,
-        computeUnits: args.computeUnits,
+        computeUnits,
         computeUnitPriceMicroLamports: args.computeUnitPriceMicroLamports,
       });
       if (!provider.sendAndConfirm) {
