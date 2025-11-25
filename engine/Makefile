@@ -33,8 +33,8 @@ help:
 	@echo "  setup-remote  - Full remote setup (build + deploy + test)"
 
 # Environment variables
-# ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
-ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
+ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
+# ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
 REMOTE_SOLANA_URL := http://10.186.0.84:8899
 
@@ -87,13 +87,11 @@ deploy:
 deploy-local: config-local
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster localnet --program-keypair ./deploy-keypair.json
-	anchor deploy --program-name income-dispatcher --provider.cluster localnet --program-keypair ./target/deploy/income_dispatcher-keypair.json
 
 .PHONY: deploy-devnet
 deploy-devnet:
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
-	anchor deploy --program-name income-dispatcher --provider.cluster devnet --program-keypair ./target/deploy/income_dispatcher-keypair.json
 
 .PHONY: build-deploy
 build-deploy: build deploy
