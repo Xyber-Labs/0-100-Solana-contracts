@@ -106,6 +106,10 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
             && state.roster_finalized_up_to >= state.roster_highest_used_shard as i32,
         ErrorCode::ShardsNotFullyFinalized
     );
+    require!(
+        !ctx.accounts.pool_state.created,
+        ErrorCode::PoolAlreadyCreated
+    );
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
@@ -131,6 +135,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
 
     raydium_create_pool_impl(&ctx)?;
+    ctx.accounts.pool_state.created = true;
 
     Ok(())
 }

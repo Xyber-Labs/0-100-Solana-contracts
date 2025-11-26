@@ -58,7 +58,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         launch_state.roster_finalized_up_to >= launch_state.roster_highest_used_shard as i32,
         EngineErrorCode::ShardsNotFullyFinalized
     );
-    require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
     let (valid_slot, valid_hash) = select_blockhash(
@@ -75,7 +74,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     pool_state.project_id = launch_state.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
-    pool_state.created = true;
+    pool_state.created = false;
 
     finalize_selection(launch_state, &mut ctx.accounts.creator_grant)?;
 

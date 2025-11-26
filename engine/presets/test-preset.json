@@ -7,7 +7,7 @@
   "baseTotalAllocation": 1000000000000000000,
   "baseSaleBasisPoints": 4814,
   "teamAllocationBasisPoints": 1000,
-  "fundingDurationSeconds": 3,
+  "fundingDurationSeconds": 10,
   "saleStartTimeSec": 0,
   "unlockTimeSec": 0,
   "rosterShardCap": 100,

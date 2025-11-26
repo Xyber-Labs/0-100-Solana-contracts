@@ -865,7 +865,7 @@ describe("engine litesvm", () => {
       computeUnits: 2_000_000
     });
     const signature = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
-    console.log("Pool created successfully!");
+    console.log("Pool prepared successfully!");
     console.log("Signature:", signature);
 
     const poolState = await sdk.fetchPoolState(existingLaunchPda);
@@ -878,7 +878,10 @@ describe("engine litesvm", () => {
       Buffer.from(poolState.createdBlockhash).toString("hex")
     );
 
-    assert.ok(poolState.created, "Pool should be marked as created");
+    assert.isFalse(
+      poolState.created,
+      "Pool should remain uncreated until CLMM deployment"
+    );
     assert.ok(
       poolState.launch.equals(existingLaunchPda),
       "Pool should reference correct launch"
@@ -986,7 +989,10 @@ describe("engine litesvm", () => {
     const sig = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
     assert.isString(sig);
     const poolState = await sdk.fetchPoolState(launchPda);
-    assert.isTrue(poolState.created);
+    assert.isFalse(
+      poolState.created,
+      "Pool should flip to created only after CLMM CPI succeeds"
+    );
   });
 
   it("Initializes launch with creator deposit", async () => {

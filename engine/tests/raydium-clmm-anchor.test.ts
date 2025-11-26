@@ -155,15 +155,39 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const [presetPda] = sdk.getLaunchPresetPda(PRESET_ID);
     const presetInfo = await provider.connection.getAccountInfo(presetPda);
-
-    if (presetInfo) {
-      console.log("⏭️  Preset already exists, skipping");
-      return;
-    }
-
     const presetPath = "presets/test-preset.json";
     const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
     const validParams = utils.parsePresetParams(presetData);
+
+    if (presetInfo) {
+      console.log("Preset already exists, updating parameters from presets/test-preset.json");
+      await sdk.updateLaunchPreset({
+        id: PRESET_ID,
+        patch: {
+          hardCapLamports: validParams.hardCapLamports,
+          minRaiseLamports: validParams.minRaiseLamports,
+          perWalletCap: validParams.perWalletCap,
+          tauLamports: validParams.tauLamports,
+          baseTotalAllocation: validParams.baseTotalAllocation,
+          baseSaleBasisPoints: validParams.baseSaleBasisPoints,
+          teamAllocationBasisPoints: validParams.teamAllocationBasisPoints,
+          fundingDurationSeconds: validParams.fundingDurationSeconds,
+          saleStartTimeSec: validParams.saleStartTimeSec,
+          unlockTimeSec: validParams.unlockTimeSec,
+          rosterShardCap: validParams.rosterShardCap,
+          rosterShardsTotal: validParams.rosterShardsTotal,
+          creatorInitialDepositLamports: validParams.creatorInitialDepositLamports,
+          creatorDailyLamportsLimit: validParams.creatorDailyLamportsLimit,
+          creatorClaimLockPeriodSec: validParams.creatorClaimLockPeriodSec,
+          creatorMaxDepositLamports: validParams.creatorMaxDepositLamports,
+          poolCreationGracePeriodSec: validParams.poolCreationGracePeriodSec,
+          teamVestingDurationSec: validParams.teamVestingDurationSec,
+        },
+        adminKeypairs: [admin1Keypair, admin2Keypair],
+      });
+      console.log("✅ Preset parameters updated");
+      return;
+    }
 
     console.log("\n--- Attempt 1: Try with min_raise < AMMV3_CREATION_RESERVE ---");
     const invalidMinRaise = {
