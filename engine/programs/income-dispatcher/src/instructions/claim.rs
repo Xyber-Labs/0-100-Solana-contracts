@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, TokenAccount, transfer_checked, TransferChecked},
+    token::{transfer_checked, Mint, TokenAccount, TransferChecked},
 };
 
 use crate::{
@@ -45,29 +45,29 @@ pub struct Claim<'info> {
         bump,
         constraint = nonce.nonce == nonce_value @ ErrorCode::InvalidNonce
     )]
-    pub nonce: Account<'info, Nonce>,
+    pub nonce: Box<Account<'info, Nonce>>,
 
     #[account(
         constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint
     )]
-    pub base_mint: Account<'info, Mint>,
+    pub base_mint: Box<Account<'info, Mint>>,
 
     #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
-    pub quote_mint: Account<'info, Mint>,
+    pub quote_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
         associated_token::mint = base_mint,
         associated_token::authority = project_authority,
     )]
-    pub base_vault: Account<'info, TokenAccount>,
+    pub base_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = quote_mint,
         associated_token::authority = project_authority,
     )]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -75,7 +75,7 @@ pub struct Claim<'info> {
         associated_token::mint = base_mint,
         associated_token::authority = recipient,
     )]
-    pub recipient_base_ata: Account<'info, TokenAccount>,
+    pub recipient_base_ata: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -83,7 +83,7 @@ pub struct Claim<'info> {
         associated_token::mint = quote_mint,
         associated_token::authority = recipient,
     )]
-    pub recipient_quote_ata: Account<'info, TokenAccount>,
+    pub recipient_quote_ata: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, anchor_spl::token::Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
