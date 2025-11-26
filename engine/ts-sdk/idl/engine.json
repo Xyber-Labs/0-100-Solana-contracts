@@ -5606,6 +5606,10 @@
             "type": "u64"
           },
           {
+            "name": "creator_initial_deposit_lamports",
+            "type": "u64"
+          },
+          {
             "name": "base_mint",
             "type": "pubkey"
           },

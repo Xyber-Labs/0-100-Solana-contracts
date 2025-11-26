@@ -5612,6 +5612,10 @@ export type Engine = {
             "type": "u64"
           },
           {
+            "name": "creatorInitialDepositLamports",
+            "type": "u64"
+          },
+          {
             "name": "baseMint",
             "type": "pubkey"
           },

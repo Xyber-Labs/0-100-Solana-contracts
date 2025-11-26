@@ -1,4 +1,7 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{program::invoke, system_instruction},
+};
 
 use crate::{
     constants::SEED_ROOT,
@@ -23,7 +26,12 @@ pub struct SealRosterShard<'info> {
     pub roster_shard: Account<'info, RosterShard>,
 }
 
-pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32, max: u16) -> Result<()> {
+pub fn seal_roster_shard<'info>(
+    ctx: Context<'_, '_, '_, 'info, SealRosterShard<'info>>,
+    shard_id: u16,
+    from: u32,
+    max: u16,
+) -> Result<()> {
     let launch = &ctx.accounts.launch_state;
     let shard = &mut ctx.accounts.roster_shard;
 
@@ -53,15 +61,19 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
         EngineErrorCode::MappingError
     );
 
-    for i in start..end {
-        let target = &ctx.remaining_accounts[i - start];
+    let payer_key = ctx.accounts.payer.key();
+    let targets = ctx.remaining_accounts.to_vec();
+
+    for (offset, target) in targets.into_iter().enumerate() {
+        let i = start + offset;
+        let target_key = target.key();
         // Validate PDA for the user contribution account
         let wallet = shard.wallets[i];
         let (expected_pda, _bump) = Pubkey::find_program_address(
             &[SEED_ROOT, b"user", launch.key().as_ref(), wallet.as_ref()],
             &crate::ID,
         );
-        require_keys_eq!(target.key(), expected_pda, EngineErrorCode::UserNotFoundInRoster);
+        require_keys_eq!(target_key, expected_pda, EngineErrorCode::UserNotFoundInRoster);
 
         // Cast to Account<UserContribution>
         let new_len = 8 + UserContribution::INIT_SPACE;
@@ -69,19 +81,11 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
             let rent = Rent::get()?;
             let needed_lamports = rent.minimum_balance(new_len).saturating_sub(target.lamports());
             if needed_lamports > 0 {
-                // Directly adjust lamports to top up rent
-                **ctx.accounts
-                    .payer
-                    .to_account_info()
-                    .lamports
-                    .borrow_mut() = ctx
-                    .accounts
-                    .payer
-                    .to_account_info()
-                    .lamports()
-                    .saturating_sub(needed_lamports);
-                **target.lamports.borrow_mut() =
-                    target.lamports().saturating_add(needed_lamports);
+                let transfer_ix =
+                    system_instruction::transfer(&payer_key, &target_key, needed_lamports);
+                let payer_account = ctx.accounts.payer.to_account_info();
+                let accounts = [payer_account, target.clone()];
+                invoke(&transfer_ix, &accounts)?;
             }
             target.realloc(new_len, false)?;
         }
