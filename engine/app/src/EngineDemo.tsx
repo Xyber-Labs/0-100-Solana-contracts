@@ -402,8 +402,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setSwapStatus('Enter a valid amount.');
       return;
     }
-    const lamports = new BN(Math.round(parsedAmount * 1_000_000_000));
     const inputMint = swapDirection === 'buy' ? resolvedQuoteMintPk : resolvedBaseMintPk;
+    let inputDecimals = 9;
+    if (raydiumPoolInfo) {
+      const mintInfo = swapDirection === 'buy' ? raydiumPoolInfo.mintB : raydiumPoolInfo.mintA;
+      if (typeof mintInfo?.decimals === 'number') {
+        inputDecimals = mintInfo.decimals;
+      }
+    }
+    const lamports = new BN(Math.round(parsedAmount * Math.pow(10, inputDecimals)));
     try {
       setSwapPending(true);
       setSwapStatus(null);
@@ -420,7 +427,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       const directionLabel = swapDirection === 'buy' ? 'quote→base' : 'base→quote';
       setSwapStatus(`Swap submitted (${directionLabel}). Tx: ${txId}`);
       addLog(`Manual CLMM swap submitted. Signature: ${txId}`);
-      await refreshPoolInfo(raydiumPoolPublicKey);
+      await refreshPoolInfo();
     } catch (error: any) {
       const message = error?.message || String(error);
       setSwapStatus(`Swap failed: ${message}`);
@@ -434,6 +441,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     raydiumPoolPublicKey,
     resolvedBaseMintPk,
     resolvedQuoteMintPk,
+    raydiumPoolInfo,
     swapAmount,
     swapDirection,
     addLog,

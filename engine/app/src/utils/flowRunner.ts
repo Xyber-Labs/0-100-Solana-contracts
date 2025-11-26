@@ -734,14 +734,19 @@ export async function runFullFlow(
     } catch (_) { }
 
     if (raydiumPoolId) {
-      await executeClmmSwapSmokeTest({
-        provider,
-        poolId: raydiumPoolId,
-        baseMint: launchBaseMint,
-        quoteMint: quoteMintPk,
-        addLog,
-        signer: adminSigners[0] ?? ((provider as any)?.wallet?.payer ?? null),
-      });
+      const signer = adminSigners[0] ?? ((provider as any)?.wallet?.payer ?? null);
+      if (!signer) {
+        addLog("      - CLMM swap smoke test skipped (no signer available).");
+      } else {
+        await executeClmmSwapSmokeTest({
+          provider,
+          poolId: raydiumPoolId,
+          baseMint: launchBaseMint,
+          quoteMint: quoteMintPk,
+          addLog,
+          signer,
+        });
+      }
     }
 
     // 9. Test User Token & Refund Claiming (must be after pool created)
