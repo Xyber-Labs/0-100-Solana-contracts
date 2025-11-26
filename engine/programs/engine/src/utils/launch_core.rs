@@ -240,6 +240,7 @@ pub fn init_launch_core<'info>(
         project_id,
         creator: creator.key(),
         creator_max_deposit: params.creator_max_deposit,
+        creator_initial_deposit_lamports: params.creator_initial_deposit_lamports,
         base_mint: Pubkey::default(),
         pending_key: pending_key,
         hard_cap_lamports: params.hard_cap_lamports,
@@ -264,5 +265,3 @@ pub fn init_launch_core<'info>(
 
     Ok(())
 }
-
-
