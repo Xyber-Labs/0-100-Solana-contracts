@@ -20,7 +20,11 @@ mod instructions;
 mod state;
 pub mod utils;
 
+#[cfg(feature = "devnet")]
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
+
+#[cfg(not(feature = "devnet"))]
+declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
 
 #[program]
 pub mod engine {
