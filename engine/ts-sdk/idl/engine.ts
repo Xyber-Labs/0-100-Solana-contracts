@@ -228,7 +228,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
@@ -319,7 +319,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "quoteTokenProgram",
@@ -439,7 +439,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "launchState",
@@ -1842,7 +1842,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
@@ -1874,7 +1874,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "quoteTokenProgram",
@@ -2523,45 +2523,45 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                165,
-                213,
-                202,
-                158,
-                4,
-                207,
-                93,
-                181,
-                144,
-                183,
-                20,
-                186,
-                47,
-                227,
-                44,
-                177,
-                89,
-                19,
-                63,
-                193,
-                193,
-                146,
-                183,
-                34,
-                87,
-                253,
-                7,
+                184,
+                152,
+                151,
+                52,
+                252,
+                179,
+                140,
+                145,
+                104,
+                216,
+                83,
+                199,
+                83,
+                182,
+                184,
+                164,
+                54,
+                16,
+                205,
                 211,
-                156,
-                176,
-                64,
-                30
+                37,
+                175,
+                187,
+                199,
+                47,
+                212,
+                21,
+                54,
+                219,
+                205,
+                194,
+                88
               ]
             }
           }
@@ -6682,7 +6682,7 @@ export type Engine = {
     {
       "name": "ammConfigIndex",
       "type": "u16",
-      "value": "4"
+      "value": "2"
     },
     {
       "name": "incomeDispatcherSeedRoot",
@@ -6692,7 +6692,7 @@ export type Engine = {
     {
       "name": "raydiumClmmProgramId",
       "type": "pubkey",
-      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      "value": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
     },
     {
       "name": "seedRoot",
