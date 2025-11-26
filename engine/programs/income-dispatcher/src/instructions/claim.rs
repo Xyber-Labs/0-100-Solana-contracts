@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[derive(Accounts)]
-#[instruction(project_id: u64, role: Role, nonce_value: u64)]
+#[instruction(project_id: u64, role: Role, nonce_value: u64, limit_base_claim: Option<u64>, limit_quote_claim: Option<u64>)]
 pub struct Claim<'info> {
     #[account(mut)]
     pub recipient: Signer<'info>,
@@ -90,7 +90,14 @@ pub struct Claim<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn claim(ctx: Context<Claim>, project_id: u64, role: Role, _nonce_value: u64) -> Result<()> {
+pub fn claim(
+    ctx: Context<Claim>,
+    project_id: u64,
+    role: Role,
+    _nonce_value: u64,
+    limit_base_claim: Option<u64>,
+    limit_quote_claim: Option<u64>,
+) -> Result<()> {
     ctx.accounts.nonce.nonce += 1;
 
     verify_role_authority(&ctx, role)?;
@@ -99,14 +106,22 @@ pub fn claim(ctx: Context<Claim>, project_id: u64, role: Role, _nonce_value: u64
     let role_idx = role as usize;
     let balance = &mut income_config.balances[role_idx];
 
-    let base_to_claim = balance
+    let mut base_to_claim = balance
         .earned_base
         .checked_sub(balance.claimed_base)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let quote_to_claim = balance
+    let mut quote_to_claim = balance
         .earned_quote
         .checked_sub(balance.claimed_quote)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    // Apply limits if provided
+    if let Some(limit) = limit_base_claim {
+        base_to_claim = base_to_claim.min(limit);
+    }
+    if let Some(limit) = limit_quote_claim {
+        quote_to_claim = quote_to_claim.min(limit);
+    }
 
     let project_authority_seeds = &[
         crate::SEED_ROOT,
@@ -150,8 +165,10 @@ pub fn claim(ctx: Context<Claim>, project_id: u64, role: Role, _nonce_value: u64
         )?;
     }
 
-    balance.claimed_base = balance.earned_base;
-    balance.claimed_quote = balance.earned_quote;
+    balance.claimed_base =
+        balance.claimed_base.checked_add(base_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
+    balance.claimed_quote =
+        balance.claimed_quote.checked_add(quote_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
 
     income_config.total_claimed_base = income_config
         .total_claimed_base

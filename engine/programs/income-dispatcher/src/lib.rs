@@ -30,7 +30,10 @@ pub mod income_dispatcher {
         instructions::initialize(ctx, platform_wallet, community_wallet)
     }
 
-    pub fn harvest_pool<'info>(ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>, project_id: u64) -> Result<()> {
+    pub fn harvest_pool<'info>(
+        ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
+        project_id: u64,
+    ) -> Result<()> {
         instructions::harvest_pool(ctx, project_id)
     }
 
@@ -40,7 +43,7 @@ pub mod income_dispatcher {
         role: income_calculator::Role,
         nonce_value: u64,
     ) -> Result<()> {
-        instructions::claim(ctx, project_id, role, nonce_value)
+        instructions::claim(ctx, project_id, role, nonce_value, None, None)
     }
 
     pub fn update_platform_wallet(
