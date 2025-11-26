@@ -4,7 +4,7 @@ import { LiteSVM } from 'litesvm';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 export async function setupRaydiumCLMM(client: LiteSVM) {
-  const RAYDIUM_CLMM_ID = new anchor.web3.PublicKey('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK');
+  const RAYDIUM_CLMM_ID = new anchor.web3.PublicKey('DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH');
   const WSOL_MINT = new anchor.web3.PublicKey('So11111111111111111111111111111111111111112');
   const METADATA_PROGRAM_ID = new anchor.web3.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
@@ -30,7 +30,7 @@ export async function setupRaydiumCLMM(client: LiteSVM) {
   console.log('✅ WSOL mint created');
 
   console.log('Loading Raydium CLMM program...');
-  const raydiumBinary = fs.readFileSync('tests/resources/raydium_clmm.so');
+  const raydiumBinary = fs.readFileSync('tests/resources/raydium_clmm_devnet.so');
   client.addProgram(RAYDIUM_CLMM_ID, raydiumBinary);
   console.log('✅ Raydium CLMM program loaded');
 
@@ -41,7 +41,7 @@ export async function setupRaydiumCLMM(client: LiteSVM) {
 
   // Derive AmmConfig PDA exactly as on-chain seeds expect:
   // seeds = ["amm_config", AMM_CONFIG_INDEX.to_be_bytes()], seeds::program = raydium_program
-  const AMM_CONFIG_INDEX = 4; // must match on-chain constant
+  const AMM_CONFIG_INDEX = 2; // devnet config index (mainnet uses 4)
   const indexBe = Buffer.alloc(2);
   indexBe.writeUInt16BE(AMM_CONFIG_INDEX, 0);
   const [ammConfigPubkey, ammConfigBump] = anchor.web3.PublicKey.findProgramAddressSync(

@@ -5,6 +5,9 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[features.localnet]
+engine = ["test", "anchor-test", "devnet"]
+
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
 income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
@@ -28,16 +31,16 @@ url = "https://api.mainnet-beta.solana.com"
 bind_address = "127.0.0.1"
 
 [[test.genesis]]
-address = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-program = "tmp/raydium_clmm.so"
+address = "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+program = "tmp/raydium_clmm_devnet.so"
 
 [[test.genesis]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 program = "tmp/mpl_token_metadata.so"
 
 [[test.validator.account]]
-address = "9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x"
-filename = "tmp/amm_config.json"
+address = "FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q"
+filename = "tmp/amm_config_devnet.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/raydium-clmm-anchor.test.ts'"

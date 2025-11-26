@@ -63,8 +63,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 0: Verify Raydium CLMM and AmmConfig are loaded", async () => {
     console.log("=== Step 0: Verify Raydium Setup ===");
 
-    const raydiumClmmProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-    const ammConfigAddress = new anchor.web3.PublicKey("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x");
+    const raydiumClmmProgramId = new anchor.web3.PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+    const ammConfigAddress = new anchor.web3.PublicKey("FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q");
 
     const raydiumProgramInfo = await provider.connection.getAccountInfo(raydiumClmmProgramId);
     console.log("Raydium CLMM Program:", raydiumClmmProgramId.toString());

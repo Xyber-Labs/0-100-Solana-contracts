@@ -7,12 +7,21 @@ use anchor_lang::prelude::*;
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
+#[cfg(not(feature = "devnet"))]
 #[constant]
 pub const AMM_CONFIG_INDEX: u16 = 4;
 
+#[cfg(feature = "devnet")]
 #[constant]
-pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+pub const AMM_CONFIG_INDEX: u16 = 2;
+
+#[cfg(feature = "devnet")]
+#[constant]
+pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+
+#[cfg(not(feature = "devnet"))]
+#[constant]
+pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 pub const WSOL_MINT: Pubkey =
     anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112");
