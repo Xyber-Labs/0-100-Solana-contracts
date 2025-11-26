@@ -15,7 +15,7 @@ pub struct ClaimClmmFees<'info> {
         bump,
         seeds::program = INCOME_DISPATCHER_PROGRAM_ID
     )]
-    pub project_authority: UncheckedAccount<'info>,
+    pub project_authority: Signer<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
 
