@@ -359,6 +359,7 @@ export type Engine = {
       "accounts": [
         {
           "name": "projectAuthority",
+          "signer": true,
           "pda": {
             "seeds": [
               {

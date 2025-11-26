@@ -692,6 +692,18 @@
         {
           "name": "nonce_value",
           "type": "u64"
+        },
+        {
+          "name": "limit_base_claim",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "limit_quote_claim",
+          "type": {
+            "option": "u64"
+          }
         }
       ]
     },

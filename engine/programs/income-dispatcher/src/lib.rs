@@ -42,8 +42,10 @@ pub mod income_dispatcher {
         project_id: u64,
         role: income_calculator::Role,
         nonce_value: u64,
+        limit_base_claim: Option<u64>,
+        limit_quote_claim: Option<u64>,
     ) -> Result<()> {
-        instructions::claim(ctx, project_id, role, nonce_value, None, None)
+        instructions::claim(ctx, project_id, role, nonce_value, limit_base_claim, limit_quote_claim)
     }
 
     pub fn update_platform_wallet(
