@@ -458,4 +458,23 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log(`\n${totalDepositedSOL} SOL deposited: base=${baseVaultAmount.toString()}, quote=${quoteVaultAmount.toString()}`);
   });
 
+  it("Step 11: Verify getRaydiumPoolByProjectId and fetch pool price", async () => {
+    console.log("=== Step 11: Verify getRaydiumPoolByProjectId ===");
+
+    const raydiumPoolState = await sdk.getRaydiumPoolByProjectId(projectId);
+    assert.ok(raydiumPoolState, "Raydium pool state should exist");
+    console.log("Raydium Pool State PDA:", raydiumPoolState.toString());
+
+    const raydiumPoolInfo = await provider.connection.getAccountInfo(raydiumPoolState);
+    assert.ok(raydiumPoolInfo, "Raydium pool account should exist on-chain");
+
+    const POOL_STATE_SQRT_PRICE_X64_OFFSET = 253;
+    const sqrtPriceX64Bytes = raydiumPoolInfo.data.slice(POOL_STATE_SQRT_PRICE_X64_OFFSET, POOL_STATE_SQRT_PRICE_X64_OFFSET + 16);
+    const sqrtPriceX64 = new BN(sqrtPriceX64Bytes, "le");
+
+    console.log("sqrtPriceX64 (from Raydium):", sqrtPriceX64.toString());
+
+    console.log("\n✅ getRaydiumPoolByProjectId works correctly");
+  });
+
 });
