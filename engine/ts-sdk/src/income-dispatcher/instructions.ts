@@ -61,6 +61,11 @@ const IncomeDispatcherSDK = {
       return program.account.incomeConfig.fetch(incomeConfig);
     }
 
+    async function fetchNonce(projectId: BN, recipient: anchor.web3.PublicKey) {
+      const [noncePda] = getNoncePda(projectId, recipient);
+      return program.account.nonce.fetch(noncePda);
+    }
+
     async function claim(args: {
       role: { platform: {} } | { creator: {} } | { community: {} };
       projectId: BN;
@@ -196,6 +201,7 @@ const IncomeDispatcherSDK = {
 
       fetchConfig,
       fetchIncomeConfig,
+      fetchNonce,
     };
   },
 };

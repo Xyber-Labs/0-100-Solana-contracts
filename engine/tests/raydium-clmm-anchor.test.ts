@@ -631,7 +631,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       ],
       signers: [buyer1Keypair, communityClaimSignerKeypair],
     });
-    console.log("✅ Community fees claimed");
+
+    const nonceAccount = await dispatcherSdk.fetchNonce(launchStateData.projectId, buyer1Keypair.publicKey);
+    assert.equal(nonceAccount.nonce.toNumber(), 1, "Nonce should be 1 after first claim");
+    console.log("✅ Community fees claimed, nonce verified: 1");
   });
 
   it("Step 11: Verify getRaydiumPoolByProjectId and fetch pool price", async () => {
