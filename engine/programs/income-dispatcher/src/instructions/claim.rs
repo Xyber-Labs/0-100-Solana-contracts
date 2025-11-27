@@ -99,30 +99,14 @@ pub fn claim(
     limit_base_claim: Option<u64>,
     limit_quote_claim: Option<u64>,
 ) -> Result<()> {
-    ctx.accounts.nonce.nonce += 1;
+    let nonce = &mut ctx.accounts.nonce.nonce;
+    *nonce = nonce.checked_add(1).ok_or(ErrorCode::ArithmeticOverflow)?;
 
     verify_role_authority(&ctx, role)?;
 
     let income_config = &mut ctx.accounts.income_config;
     let role_idx = role as usize;
     let balance = &mut income_config.balances[role_idx];
-
-    let mut base_to_claim = balance
-        .earned_base
-        .checked_sub(balance.claimed_base)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let mut quote_to_claim = balance
-        .earned_quote
-        .checked_sub(balance.claimed_quote)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    // Apply limits if provided
-    if let Some(limit) = limit_base_claim {
-        base_to_claim = base_to_claim.min(limit);
-    }
-    if let Some(limit) = limit_quote_claim {
-        quote_to_claim = quote_to_claim.min(limit);
-    }
 
     let project_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
@@ -131,6 +115,15 @@ pub fn claim(
         &[ctx.bumps.project_authority],
     ];
     let signers = &[&project_authority_seeds[..]];
+
+    let mut base_to_claim = balance
+        .earned_base
+        .checked_sub(balance.claimed_base)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    if let Some(limit) = limit_base_claim {
+        base_to_claim = base_to_claim.min(limit);
+    }
 
     if base_to_claim > 0 {
         transfer_checked(
@@ -147,6 +140,15 @@ pub fn claim(
             base_to_claim,
             ctx.accounts.base_mint.decimals,
         )?;
+    }
+
+    let mut quote_to_claim = balance
+        .earned_quote
+        .checked_sub(balance.claimed_quote)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    if let Some(limit) = limit_quote_claim {
+        quote_to_claim = quote_to_claim.min(limit);
     }
 
     if quote_to_claim > 0 {
