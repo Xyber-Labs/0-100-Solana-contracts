@@ -216,7 +216,9 @@ fn distribute_income(
     quote_claimed: u64,
 ) -> Result<()> {
     let pool_data = ctx.accounts.raydium_pool_state.data.borrow();
-
+    if pool_data.len() < POOL_STATE_SQRT_PRICE_X64_OFFSET + 16 {
+        return Err(ErrorCode::InvalidPoolState.into());
+    }
     let sqrt_price_x64 = u128::from_le_bytes(
         pool_data[POOL_STATE_SQRT_PRICE_X64_OFFSET..POOL_STATE_SQRT_PRICE_X64_OFFSET + 16]
             .try_into()
@@ -229,7 +231,7 @@ fn distribute_income(
         quote_claimed as u128,
     )?;
 
-    for income in distribution.incomes.iter() {
+    for income in distribution.incomes {
         let role_idx = income.recipient as usize;
         let balances = &mut ctx.accounts.income_config.balances[role_idx];
         balances.earned_base = balances
