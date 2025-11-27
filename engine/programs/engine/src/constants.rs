@@ -25,12 +25,14 @@ pub const WSOL_MINT: Pubkey = pubkey!("So111111111111111111111111111111111111111
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
 #[cfg(feature = "devnet")]
+#[constant]
 pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
     pubkey!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
 #[cfg(not(feature = "devnet"))]
+#[constant]
 pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
-    pubkey!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6"); // Default value for N
+    pubkey!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
 #[constant]
 pub const BASE_TOKEN_DECIMALS: u8 = 9;

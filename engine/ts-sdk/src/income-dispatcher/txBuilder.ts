@@ -6,11 +6,12 @@ import {
   TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
+import IncomeDispatcherIDLJson from "../../idl/income_dispatcher.json";
 import EngineIDL from "../../idl/engine.json";
-import { getConstantRaw } from "../utils";
+import { getConstant, getConstantRaw } from "../utils";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 
-const SEED_ROOT = Buffer.from("income-dispatcher");
+const SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", IncomeDispatcherIDLJson as any));
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDL as any));
 
