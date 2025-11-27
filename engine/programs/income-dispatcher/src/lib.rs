@@ -16,8 +16,6 @@ declare_id!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 #[constant]
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
-const BASIS_POINTS: u128 = 10_000;
-
 #[program]
 pub mod income_dispatcher {
     use super::*;

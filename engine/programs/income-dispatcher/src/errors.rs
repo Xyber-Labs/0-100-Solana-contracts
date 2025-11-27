@@ -18,4 +18,6 @@ pub enum ErrorCode {
     InvalidTokenMint,
     #[msg("Invalid nonce")]
     InvalidNonce,
+    #[msg("Invalid calculator")]
+    InvalidCalculator,
 }

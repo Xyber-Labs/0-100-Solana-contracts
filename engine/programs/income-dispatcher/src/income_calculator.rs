@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::errors::ErrorCode;
 
-pub(crate) const TOTAL_SUPPLY_TOKENS: f64 = 1_000_000_000.0;
+const BASIS_POINTS: u128 = 10_000;
 
 macro_rules! mcap {
     ($market_cap_sol:expr) => {{
@@ -10,7 +10,8 @@ macro_rules! mcap {
         if mcap == 0.0 {
             u128::MAX
         } else {
-            let inverse_price = $crate::income_calculator::TOTAL_SUPPLY_TOKENS / mcap;
+            const TOTAL_SUPPLY_TOKENS: f64 = 1_000_000_000.0;
+            let inverse_price = TOTAL_SUPPLY_TOKENS / mcap;
             let sqrt_inverse = inverse_price.sqrt();
             (sqrt_inverse * raydium_amm_v3::libraries::fixed_point_64::Q64 as f64) as u128
         }
@@ -20,7 +21,7 @@ macro_rules! mcap {
 pub(crate) use mcap;
 
 #[derive(
-    Clone, Copy, Ord, PartialOrd, Eq, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace,
+    Clone, Copy, PartialEq, Eq, Ord, PartialOrd, AnchorSerialize, AnchorDeserialize, InitSpace,
 )]
 pub enum Role {
     Platform = 0,
@@ -85,7 +86,8 @@ impl Distribution {
         let base_in_quote = income
             .base_token
             .checked_mul(self.price_in_quote)
-            .end_then(|val| val.checked_div(base_decimals_divisor))
+            .ok_or(ErrorCode::ArithmeticOverflow)?
+            .checked_div(base_decimals_divisor)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
         base_in_quote.checked_add(income.quote_token).ok_or(ErrorCode::ArithmeticOverflow.into())
     }
@@ -97,8 +99,6 @@ impl Distribution {
 }
 
 impl IncomeCalculator {
-    const BASIS_POINTS: u128 = 10_000;
-
     pub fn new(base_decimals: u8) -> Result<Self> {
         require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
         Ok(Self {
@@ -118,8 +118,7 @@ impl IncomeCalculator {
         self
     }
 
-    #[cfg(test)]
-    pub(super) fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         if self.rules.is_empty() {
             return true;
         }
@@ -129,7 +128,7 @@ impl IncomeCalculator {
 
         for rule in &self.rules {
             if rule.sqrt_price_x64 != current_price {
-                if share_sum != Self::BASIS_POINTS {
+                if share_sum != BASIS_POINTS {
                     return false;
                 }
                 current_price = rule.sqrt_price_x64;
@@ -140,7 +139,7 @@ impl IncomeCalculator {
                 None => return false,
             };
         }
-        share_sum == Self::BASIS_POINTS
+        share_sum == BASIS_POINTS
     }
 
     pub fn get_rules_by_price(&self, sqrt_price_x64: u128) -> Result<&[DistributionRule]> {
@@ -190,8 +189,7 @@ impl IncomeCalculator {
         for rule in applicable_rules {
             let share_in_quote = total_income_in_quote
                 .checked_mul(rule.rate)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_div(Self::BASIS_POINTS)
+                .and_then(|v| v.checked_div(BASIS_POINTS))
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
 
             let quote_taken = rem_quote.min(share_in_quote);
@@ -201,8 +199,7 @@ impl IncomeCalculator {
                 share_in_quote.checked_sub(quote_taken).expect("Not reachable: share_q < taken_q");
             let base_needed = rem_share_in_quote
                 .checked_mul(base_decimals_divisor)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_div(price_in_quote)
+                .and_then(|v| v.checked_div(price_in_quote))
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
             let base_taken = rem_base.min(base_needed);
             rem_base = rem_base.checked_sub(base_taken).expect("Not reachable: rem_b < taken_b");
@@ -226,9 +223,9 @@ impl IncomeCalculator {
 mod tests {
     use raydium_amm_v3::libraries::Q64;
 
-    use crate::BASIS_POINTS;
-
     use super::*;
+
+    const TOTAL_SUPPLY_TOKENS: f64 = 1_000_000_000.0;
 
     fn sqrt_price_x64_to_market_cap(sqrt_price_x64: u128) -> f64 {
         let sqrt_price = (sqrt_price_x64 as f64) / (Q64 as f64);

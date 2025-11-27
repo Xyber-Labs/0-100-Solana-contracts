@@ -9,7 +9,6 @@ use raydium_amm_v3::program::AmmV3;
 use engine::cpi as engine_cpi;
 
 use crate::{
-    BASIS_POINTS,
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role, state::{Config, IncomeConfig},
@@ -217,25 +216,23 @@ fn distribute_income(
             .map_err(|_| ErrorCode::InvalidPoolState)?,
     );
 
-    let rules = ctx.accounts.config.income_calculator.get_rules_by_price(sqrt_price_x64)?;
+    let distribution = ctx.accounts.config.income_calculator.get_distribution(
+        sqrt_price_x64,
+        base_claimed as u128,
+        quote_claimed as u128,
+    )?;
 
-    for rule in rules {
-        let base_share = (base_claimed as u128)
-            .checked_mul(rule.rate)
-            .and_then(|v| v.checked_div(BASIS_POINTS))
-            .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
-
-        let quote_share = (quote_claimed as u128)
-            .checked_mul(rule.rate)
-            .and_then(|v| v.checked_div(BASIS_POINTS))
-            .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
-
-        let role_idx = rule.recipient as usize;
+    for income in distribution.incomes.iter() {
+        let role_idx = income.recipient as usize;
         let balances = &mut ctx.accounts.income_config.balances[role_idx];
-        balances.earned_base =
-            balances.earned_base.checked_add(base_share).ok_or(ErrorCode::ArithmeticOverflow)?;
-        balances.earned_quote =
-            balances.earned_quote.checked_add(quote_share).ok_or(ErrorCode::ArithmeticOverflow)?;
+        balances.earned_base = balances
+            .earned_base
+            .checked_add(income.base_token as u64)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        balances.earned_quote = balances
+            .earned_quote
+            .checked_add(income.quote_token as u64)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
     }
 
     Ok(())

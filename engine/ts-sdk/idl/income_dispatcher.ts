@@ -1558,6 +1558,11 @@ export type IncomeDispatcher = {
       "code": 6007,
       "name": "invalidNonce",
       "msg": "Invalid nonce"
+    },
+    {
+      "code": 6008,
+      "name": "invalidCalculator",
+      "msg": "Invalid calculator"
     }
   ],
   "types": [

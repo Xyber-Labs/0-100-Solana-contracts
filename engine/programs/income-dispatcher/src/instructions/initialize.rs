@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     DISPATCHER_SEED_ROOT,
+    errors::ErrorCode,
     income_calculator::{DistributionRule, IncomeCalculator, mcap, Role},
     state::Config,
 };
@@ -62,6 +63,6 @@ pub fn initialize(
         .add_rule(DistributionRule::new(mcap!(100_001.0), Role::Platform, 6000, 1))
         .add_rule(DistributionRule::new(mcap!(100_001.0), Role::Creator, 3400, 2))
         .add_rule(DistributionRule::new(mcap!(100_001.0), Role::Community, 600, 3));
-
+    require!(config.income_calculator.is_valid(), ErrorCode::InvalidCalculator);
     Ok(())
 }

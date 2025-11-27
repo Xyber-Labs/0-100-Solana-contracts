@@ -1552,6 +1552,11 @@
       "code": 6007,
       "name": "InvalidNonce",
       "msg": "Invalid nonce"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidCalculator",
+      "msg": "Invalid calculator"
     }
   ],
   "types": [
