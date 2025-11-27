@@ -29,8 +29,13 @@ pub const WSOL_MINT: Pubkey =
 #[constant]
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
+#[cfg(feature = "devnet")]
 pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
     anchor_lang::solana_program::pubkey!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
+
+#[cfg(not(feature = "devnet"))]
+pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
+    anchor_lang::solana_program::pubkey!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
 // -------------------------------
 // Configuration Constants
