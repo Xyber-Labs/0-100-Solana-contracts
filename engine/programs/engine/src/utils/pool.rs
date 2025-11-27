@@ -1,5 +1,6 @@
 use super::U256;
-use crate::constants::DEFAULT_N;
+
+const DEFAULT_N: u64 = 100;
 
 /// Check if a blockhash is within the project's personal range.
 pub fn is_blockhash_in_project_range(
