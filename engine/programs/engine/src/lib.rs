@@ -151,6 +151,11 @@ pub mod engine {
         instructions::creator_withdraw(ctx, amount)
     }
 
+    #[cfg(feature = "test")]
+    pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
+        instructions::mint_for_test(ctx)
+    }
+
     pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
         instructions::init_team_vesting(ctx)
     }

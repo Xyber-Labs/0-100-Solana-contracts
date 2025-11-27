@@ -107,10 +107,9 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    ctx.accounts.pool_state.claims_ready = true;
-
-    add_initial_liquidity_impl(ctx)?;
     // TODO: base_mint to be used instead of this explicit approach
+    ctx.accounts.pool_state.claims_ready = true;
+    add_initial_liquidity_impl(ctx)?;
     Ok(())
 }
 
