@@ -11,7 +11,7 @@ pub mod state;
 declare_id!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("adsf");
+declare_id!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
 #[constant]
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";

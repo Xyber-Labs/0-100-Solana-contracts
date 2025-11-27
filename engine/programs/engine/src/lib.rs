@@ -22,7 +22,7 @@ pub mod utils;
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
+declare_id!("xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p");
 
 #[program]
 pub mod engine {
