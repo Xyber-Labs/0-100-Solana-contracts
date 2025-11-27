@@ -70,34 +70,6 @@ pub struct Distribution {
     pub base_decimals: u8,
 }
 
-impl Distribution {
-    #[cfg(test)]
-    fn get(&self, recipient: &Role) -> Result<&Income> {
-        self.incomes
-            .iter()
-            .find(|d| d.recipient == *recipient)
-            .ok_or(ErrorCode::RecipientNotFound.into())
-    }
-
-    #[cfg(test)]
-    fn total_in_quote(&self, recipient: &Role) -> Result<u128> {
-        let income = self.get(recipient)?;
-        let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
-        let base_in_quote = income
-            .base_token
-            .checked_mul(self.price_in_quote)
-            .ok_or(ErrorCode::ArithmeticOverflow)?
-            .checked_div(base_decimals_divisor)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        base_in_quote.checked_add(income.quote_token).ok_or(ErrorCode::ArithmeticOverflow.into())
-    }
-
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.incomes.len()
-    }
-}
-
 impl IncomeCalculator {
     pub fn new(base_decimals: u8) -> Result<Self> {
         require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
