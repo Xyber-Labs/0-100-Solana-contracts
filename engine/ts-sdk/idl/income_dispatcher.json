@@ -961,10 +961,7 @@
           }
         },
         {
-          "name": "quote_mint",
-          "docs": [
-            "Quote mint from project pool"
-          ]
+          "name": "quote_mint"
         },
         {
           "name": "base_mint",

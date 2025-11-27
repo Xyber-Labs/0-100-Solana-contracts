@@ -967,10 +967,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "quoteMint",
-          "docs": [
-            "Quote mint from project pool"
-          ]
+          "name": "quoteMint"
         },
         {
           "name": "baseMint",

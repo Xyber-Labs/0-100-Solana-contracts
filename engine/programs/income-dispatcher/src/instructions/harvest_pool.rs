@@ -51,7 +51,6 @@ pub struct HarvestPool<'info> {
     pub project_authority: UncheckedAccount<'info>,
 
     #[account(
-        mint::token_program = quote_token_program,
         address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
     )]
     pub quote_mint: Account<'info, Mint>,
@@ -141,8 +140,13 @@ pub fn harvest_pool<'info>(
     ctx.accounts.quote_vault.reload()?;
     ctx.accounts.base_vault.reload()?;
 
-    let quote_claimed = ctx.accounts.quote_vault.amount.saturating_sub(quote_balance_before);
-    let base_claimed = ctx.accounts.base_vault.amount.saturating_sub(base_balance_before);
+    let quote_amount = ctx.accounts.quote_vault.amount;
+    let quote_claimed =
+        quote_amount.checked_sub(quote_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    let base_amount = ctx.accounts.base_vault.amount;
+    let base_claimed =
+        base_amount.checked_sub(base_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
 
     distribute_income(&mut ctx, base_claimed, quote_claimed)?;
 
