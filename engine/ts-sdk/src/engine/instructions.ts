@@ -867,20 +867,22 @@ const EngineSDK = {
     async function closeRosterShard(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
-      payerKeypair?: anchor.web3.Keypair;
+      payer: anchor.web3.PublicKey;
+      refundTo: anchor.web3.PublicKey;
+      signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
       const { instruction } = await txBuilder.closeRosterShardIx({
-        payer,
+        payer: args.payer,
         launch: args.launch,
         shardId: args.shardId,
+        refundTo: args.refundTo,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      tx.feePayer = payer;
-      const signers = args.payerKeypair ? [args.payerKeypair] : (adminKeypair ? [adminKeypair] : []);
+      tx.feePayer = args.payer;
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, args.signers);
       return { signature };
     }
 
@@ -907,14 +909,17 @@ const EngineSDK = {
     async function closeRosterShardTx(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
+      payer: anchor.web3.PublicKey;
+      refundTo: anchor.web3.PublicKey;
     }): Promise<{ transaction: anchor.web3.Transaction }> {
       const { instruction } = await txBuilder.closeRosterShardIx({
-        payer,
+        payer: args.payer,
         launch: args.launch,
         shardId: args.shardId,
+        refundTo: args.refundTo,
       });
       const transaction = new anchor.web3.Transaction().add(instruction);
-      transaction.feePayer = payer;
+      transaction.feePayer = args.payer;
       return { transaction };
     }
 

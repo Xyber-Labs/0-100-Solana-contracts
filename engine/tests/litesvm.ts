@@ -570,7 +570,7 @@ describe("engine litesvm", () => {
       beforeLamports = Number(beforeInfo?.lamports ?? 0);
     } catch (_) {}
     const beforePayer = Number(client.getBalance(admin.publicKey));
-    const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId: 1 });
+    const { transaction: closeTx } = await sdk.closeRosterShardTx({ launch: testLaunchState, shardId: 1, payer: admin.publicKey, refundTo: admin.publicKey });
     await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
     let afterInfo: any = null;
     try {
@@ -1551,7 +1551,7 @@ describe("Full flow", () => {
       const walletsSlice = users.map((u) => u.keypair.publicKey);
       await sdk.sealRosterShard({ launch: testLaunchState, shardId: 1, from: 0, max: walletsSlice.length, walletsSlice });
       const beforeClose = client.getBalance(admin.publicKey);
-      const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId: 1 });
+      const { transaction: closeTx } = await sdk.closeRosterShardTx({ launch: testLaunchState, shardId: 1, payer: admin.publicKey, refundTo: admin.publicKey });
       await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
       const afterClose = client.getBalance(admin.publicKey);
       // Expect some rent back; ensure strictly increased

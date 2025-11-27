@@ -1026,16 +1026,18 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     shardId: number;
+    refundTo: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    const method = (this.program.methods as any).closeRosterShard(params.shardId);
-    const instruction = await method
-      .accounts({
+    const instruction = await this.program.methods
+      .closeRosterShard(params.shardId)
+      .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
+        refundTo: params.refundTo,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
     return { instruction, rosterShard };
   }
