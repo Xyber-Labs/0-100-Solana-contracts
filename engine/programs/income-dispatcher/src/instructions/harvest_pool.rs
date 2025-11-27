@@ -82,10 +82,10 @@ pub struct HarvestPool<'info> {
 
     /// CHECK: Position NFT mint - validated by engine CPI
     #[account(mut)]
-    pub position_nft_mint: UncheckedAccount<'info>,
+    pub raydium_position_nft_mint: UncheckedAccount<'info>,
     /// CHECK: Position NFT account - validated by engine CPI
     #[account(mut)]
-    pub position_nft_account: UncheckedAccount<'info>,
+    pub raydium_position_nft_account: UncheckedAccount<'info>,
 
     /// CHECK: Personal position state - validated by engine CPI
     #[account(mut)]
@@ -168,8 +168,8 @@ fn claim_fees_from_engine<'info>(
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),
-        position_nft_mint: ctx.accounts.position_nft_mint.to_account_info(),
-        position_nft_account: ctx.accounts.position_nft_account.to_account_info(),
+        raydium_position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
+        raydium_position_nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
         personal_position: ctx.accounts.personal_position.to_account_info(),
         pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
         protocol_position: ctx.accounts.protocol_position.to_account_info(),

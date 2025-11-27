@@ -1164,11 +1164,11 @@
           "writable": true
         },
         {
-          "name": "position_nft_mint",
+          "name": "raydium_position_nft_mint",
           "writable": true
         },
         {
-          "name": "position_nft_account",
+          "name": "raydium_position_nft_account",
           "writable": true
         },
         {

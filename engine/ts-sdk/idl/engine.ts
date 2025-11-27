@@ -510,11 +510,11 @@ export type Engine = {
           }
         },
         {
-          "name": "positionNftMint",
+          "name": "raydiumPositionNftMint",
           "writable": true
         },
         {
-          "name": "positionNftAccount",
+          "name": "raydiumPositionNftAccount",
           "writable": true
         },
         {
@@ -6498,6 +6498,11 @@ export type Engine = {
       "name": "dispatcherSeedRoot",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "incomeDispatcherProgramId",
+      "type": "pubkey",
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "raydiumClmmProgramId",

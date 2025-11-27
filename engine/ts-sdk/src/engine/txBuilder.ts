@@ -1538,8 +1538,8 @@ export class TxBuilder {
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
     poolState: web3.PublicKey;
-    positionNftMint: web3.PublicKey;
-    positionNftAccount: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
     personalPosition: web3.PublicKey;
     protocolPosition: web3.PublicKey;
     quoteEscrowAta: web3.PublicKey;
@@ -1574,15 +1574,15 @@ export class TxBuilder {
       true
     );
 
-    const positionNftMint = web3.Keypair.generate();
-    const positionNftAccount = getAssociatedTokenAddressSync(
-      positionNftMint.publicKey,
+    const raydiumPositionNftMint = web3.Keypair.generate();
+    const raydiumPositionNftAccount = getAssociatedTokenAddressSync(
+      raydiumPositionNftMint.publicKey,
       escrowAuthority,
       true,
       TOKEN_2022_PROGRAM_ID
     );
 
-    const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint.publicKey);
+    const [personalPosition] = this.getRaydiumPersonalPositionPda(raydiumPositionNftMint.publicKey);
 
     const range = await this.getLiquidityRange({
       launch: params.launch,
@@ -1617,8 +1617,8 @@ export class TxBuilder {
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
-        raydiumPositionNftMint: positionNftMint.publicKey,
-        raydiumPositionNftAccount: positionNftAccount,
+        raydiumPositionNftMint: raydiumPositionNftMint.publicKey,
+        raydiumPositionNftAccount: raydiumPositionNftAccount,
         raydiumPersonalPosition: personalPosition,
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
@@ -1646,12 +1646,12 @@ export class TxBuilder {
 
     return {
       transaction,
-      signers: [positionNftMint],
+      signers: [raydiumPositionNftMint],
       quoteVault,
       baseVault,
       poolState: raydiumPoolPda,
-      positionNftMint: positionNftMint.publicKey,
-      positionNftAccount,
+      raydiumPositionNftMint: raydiumPositionNftMint.publicKey,
+      raydiumPositionNftAccount,
       personalPosition,
       protocolPosition,
       quoteEscrowAta,

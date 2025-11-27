@@ -38,8 +38,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   let quoteVault: anchor.web3.PublicKey;
   let baseVault: anchor.web3.PublicKey;
 
-  let positionNftMint: anchor.web3.PublicKey;
-  let positionNftAccount: anchor.web3.PublicKey;
+  let raydiumPositionNftMint: anchor.web3.PublicKey;
+  let raydiumPositionNftAccount: anchor.web3.PublicKey;
   let personalPosition: anchor.web3.PublicKey;
   let protocolPosition: anchor.web3.PublicKey;
   let raydiumPoolState: anchor.web3.PublicKey;
@@ -413,8 +413,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("✅ Liquidity added:", addLiquiditySig);
     console.log("Explorer:", utils.getExplorerUrl(provider, addLiquiditySig));
 
-    positionNftMint = addClmmLiquidityTx.positionNftMint;
-    positionNftAccount = addClmmLiquidityTx.positionNftAccount;
+    raydiumPositionNftMint = addClmmLiquidityTx.raydiumPositionNftMint;
+    raydiumPositionNftAccount = addClmmLiquidityTx.raydiumPositionNftAccount;
     personalPosition = addClmmLiquidityTx.personalPosition;
     protocolPosition = addClmmLiquidityTx.protocolPosition;
     raydiumPoolState = addClmmLiquidityTx.poolState;
@@ -567,8 +567,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       quoteMint: WSOL_MINT,
       engineProgram: program.programId,
       escrowAuthority,
-      positionNftMint,
-      positionNftAccount,
+      raydiumPositionNftMint,
+      raydiumPositionNftAccount,
       personalPosition,
       raydiumPoolState,
       protocolPosition,

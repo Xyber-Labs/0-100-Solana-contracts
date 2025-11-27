@@ -504,11 +504,11 @@
           }
         },
         {
-          "name": "position_nft_mint",
+          "name": "raydium_position_nft_mint",
           "writable": true
         },
         {
-          "name": "position_nft_account",
+          "name": "raydium_position_nft_account",
           "writable": true
         },
         {
@@ -6492,6 +6492,11 @@
       "name": "DISPATCHER_SEED_ROOT",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "INCOME_DISPATCHER_PROGRAM_ID",
+      "type": "pubkey",
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "RAYDIUM_CLMM_PROGRAM_ID",

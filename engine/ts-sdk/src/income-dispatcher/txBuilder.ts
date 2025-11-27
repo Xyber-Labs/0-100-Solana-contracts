@@ -77,8 +77,8 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     engineProgram: web3.PublicKey;
     escrowAuthority: web3.PublicKey;
-    positionNftMint: web3.PublicKey;
-    positionNftAccount: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
     personalPosition: web3.PublicKey;
     raydiumPoolState: web3.PublicKey;
     protocolPosition: web3.PublicKey;
@@ -110,8 +110,8 @@ export class TxBuilder {
         engineProgram: params.engineProgram,
         raydiumProgram: RAYDIUM_CLMM_PROGRAM_ID,
         escrowAuthority: params.escrowAuthority,
-        positionNftMint: params.positionNftMint,
-        positionNftAccount: params.positionNftAccount,
+        raydiumPositionNftMint: params.raydiumPositionNftMint,
+        raydiumPositionNftAccount: params.raydiumPositionNftAccount,
         personalPosition: params.personalPosition,
         raydiumPoolState: params.raydiumPoolState,
         protocolPosition: params.protocolPosition,
@@ -137,8 +137,8 @@ export class TxBuilder {
     quoteMint: web3.PublicKey;
     engineProgram: web3.PublicKey;
     escrowAuthority: web3.PublicKey;
-    positionNftMint: web3.PublicKey;
-    positionNftAccount: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
     personalPosition: web3.PublicKey;
     raydiumPoolState: web3.PublicKey;
     protocolPosition: web3.PublicKey;

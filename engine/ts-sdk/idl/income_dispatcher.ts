@@ -1170,11 +1170,11 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "positionNftMint",
+          "name": "raydiumPositionNftMint",
           "writable": true
         },
         {
-          "name": "positionNftAccount",
+          "name": "raydiumPositionNftAccount",
           "writable": true
         },
         {

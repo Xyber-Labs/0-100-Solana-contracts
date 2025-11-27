@@ -143,8 +143,8 @@ const IncomeDispatcherSDK = {
       quoteMint: anchor.web3.PublicKey;
       engineProgram: anchor.web3.PublicKey;
       escrowAuthority: anchor.web3.PublicKey;
-      positionNftMint: anchor.web3.PublicKey;
-      positionNftAccount: anchor.web3.PublicKey;
+      raydiumPositionNftMint: anchor.web3.PublicKey;
+      raydiumPositionNftAccount: anchor.web3.PublicKey;
       personalPosition: anchor.web3.PublicKey;
       raydiumPoolState: anchor.web3.PublicKey;
       protocolPosition: anchor.web3.PublicKey;
@@ -163,8 +163,8 @@ const IncomeDispatcherSDK = {
         quoteMint: args.quoteMint,
         engineProgram: args.engineProgram,
         escrowAuthority: args.escrowAuthority,
-        positionNftMint: args.positionNftMint,
-        positionNftAccount: args.positionNftAccount,
+        raydiumPositionNftMint: args.raydiumPositionNftMint,
+        raydiumPositionNftAccount: args.raydiumPositionNftAccount,
         personalPosition: args.personalPosition,
         raydiumPoolState: args.raydiumPoolState,
         protocolPosition: args.protocolPosition,

@@ -9,11 +9,10 @@ use crate::{
 
 #[derive(Accounts)]
 pub struct ClaimClmmFees<'info> {
-    /// CHECK: Project authority PDA from income-dispatcher - must be signed
     #[account(
         seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
-        bump,
-        seeds::program = INCOME_DISPATCHER_PROGRAM_ID
+        seeds::program = INCOME_DISPATCHER_PROGRAM_ID,
+        bump
     )]
     pub project_authority: Signer<'info>,
 
@@ -28,11 +27,11 @@ pub struct ClaimClmmFees<'info> {
 
     /// CHECK: Position NFT mint (created during liquidity addition)
     #[account(mut)]
-    pub position_nft_mint: UncheckedAccount<'info>,
+    pub raydium_position_nft_mint: UncheckedAccount<'info>,
 
     /// CHECK: Position NFT account owned by escrow_authority
     #[account(mut)]
-    pub position_nft_account: UncheckedAccount<'info>,
+    pub raydium_position_nft_account: UncheckedAccount<'info>,
 
     /// CHECK: Personal position state
     #[account(mut)]
@@ -100,7 +99,7 @@ pub fn claim_clmm_fees<'info>(ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'inf
     // CPI to Raydium decrease_liquidity_v2 with liquidity=0 to collect fees only
     let cpi_accounts = raydium_amm_v3::cpi::accounts::DecreaseLiquidityV2 {
         nft_owner: ctx.accounts.escrow_authority.to_account_info(),
-        nft_account: ctx.accounts.position_nft_account.to_account_info(),
+        nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
         personal_position: ctx.accounts.personal_position.to_account_info(),
         pool_state: ctx.accounts.pool_state.to_account_info(),
         protocol_position: ctx.accounts.protocol_position.to_account_info(),
