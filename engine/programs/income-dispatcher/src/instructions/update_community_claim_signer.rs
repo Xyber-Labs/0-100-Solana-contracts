@@ -4,7 +4,7 @@ use crate::{DISPATCHER_SEED_ROOT, errors::ErrorCode, state::Config};
 
 #[derive(Accounts)]
 pub struct UpdateCommunityClaimSigner<'info> {
-    #[account(address = config.admin @ ErrorCode::InvalidAuthority)]
+    #[account(address = config.admin @ ErrorCode::Unauthorized)]
     pub admin: Signer<'info>,
 
     #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]

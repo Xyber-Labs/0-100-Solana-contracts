@@ -197,13 +197,13 @@ fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
         Role::Platform => {
             require!(
                 ctx.accounts.recipient.key() == ctx.accounts.config.platform_wallet,
-                ErrorCode::InvalidAuthority
+                ErrorCode::Unauthorized
             );
         }
         Role::Creator => {
             require!(
                 ctx.accounts.recipient.key() == ctx.accounts.launch_state.creator,
-                ErrorCode::InvalidAuthority
+                ErrorCode::Unauthorized
             );
         }
         Role::Community => {
@@ -212,7 +212,7 @@ fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
             require!(community_signer.is_signer, ErrorCode::Unauthorized);
             require!(
                 community_signer.key() == ctx.accounts.config.community_wallet,
-                ErrorCode::InvalidAuthority
+                ErrorCode::Unauthorized
             );
         }
     }

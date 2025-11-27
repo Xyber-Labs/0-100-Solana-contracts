@@ -1566,21 +1566,16 @@ export type IncomeDispatcher = {
     },
     {
       "code": 6009,
-      "name": "invalidAuthority",
-      "msg": "Invalid authority"
-    },
-    {
-      "code": 6010,
       "name": "invalidProjectId",
       "msg": "Invalid project id"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "invalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "projectIdMismatch",
       "msg": "Project ID mismatch"
     }

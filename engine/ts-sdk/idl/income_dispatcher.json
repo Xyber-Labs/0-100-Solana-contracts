@@ -1560,21 +1560,16 @@
     },
     {
       "code": 6009,
-      "name": "InvalidAuthority",
-      "msg": "Invalid authority"
-    },
-    {
-      "code": 6010,
       "name": "InvalidProjectId",
       "msg": "Invalid project id"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "InvalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "ProjectIdMismatch",
       "msg": "Project ID mismatch"
     }
