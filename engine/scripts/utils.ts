@@ -4,7 +4,7 @@ import EngineSDK from "@xyber-labs/0-100-sdk";
 export function initializeSdk() {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const engineProgram = anchor.workspace.engine;
+  const engineProgram = anchor.workspace.Engine;
   const sdk = EngineSDK.create(provider, engineProgram);
   return { provider, sdk };
 }

@@ -1234,6 +1234,13 @@ const EngineSDK = {
       return program.account.poolState.fetch(pda);
     }
 
+    async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
+      const [launch] = getLaunchPdaByProjectId(projectId);
+      const [poolStatePda] = getPoolPda(launch);
+      const poolState = await program.account.poolState.fetch(poolStatePda);
+      return poolState.raydiumPoolState ?? null;
+    }
+
     async function fetchTeamVesting(launch: anchor.web3.PublicKey) {
       return txBuilder.fetchTeamVesting(launch);
     }
@@ -1443,6 +1450,7 @@ const EngineSDK = {
       fetchTeamVesting,
       fetchProjectCounter,
       fetchPoolState,
+      getRaydiumPoolByProjectId,
       getNextProjectId,
       fetchAllProjects,
       fetchProjectsByCreator,
@@ -1466,6 +1474,7 @@ const EngineSDK = {
 };
 
 export default EngineSDK;
+export { EngineSDK };
 export type { EngineIDL };
 export type EngineClient = ReturnType<typeof EngineSDK.create>;
 export { loadKeypair } from "./utils";
