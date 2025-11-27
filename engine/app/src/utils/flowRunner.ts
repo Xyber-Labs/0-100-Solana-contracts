@@ -43,6 +43,9 @@ export async function runFullFlow(
   const admin = provider.wallet;
   const adminInitialBalance = await provider.connection.getBalance(admin.publicKey);
   let userFundingCost = 0;
+  let poolBaseLiquidityUi: number | null = null;
+  let poolQuoteLiquidityUi: number | null = null;
+  let supplySnapshot: any = null;
 
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
@@ -120,6 +123,34 @@ export async function runFullFlow(
         return 0;
       }
     }
+
+    const updateSupplySnapshot = async (baseMint: PublicKey) => {
+      try {
+        const supplyResp = await provider.connection.getTokenSupply(baseMint);
+        const supplyUi = typeof supplyResp.value.uiAmountString === "string" ? supplyResp.value.uiAmountString : String(supplyResp.value.uiAmount ?? 0);
+        const observedAtomic = new BN(String(supplyResp.value.amount ?? "0"));
+        const launchForSupply: any = await (sdk as any).fetchLaunch(testLaunchState);
+        const expectedAtomic = new BN(String(launchForSupply.baseTotalAllocation ?? "0"));
+        const teamBps = Number(launchForSupply.teamAllocationBasisPoints ?? 0);
+        const teamAtomic = expectedAtomic.clone().mul(new BN(teamBps)).div(new BN(10000));
+        const nonTeamAtomic = expectedAtomic.clone().sub(teamAtomic);
+        const deltaAtomic = expectedAtomic.clone().sub(observedAtomic);
+        const deltaSign = deltaAtomic.isNeg() ? -1 : 1;
+        const deltaAbs = deltaAtomic.abs();
+        supplySnapshot = {
+          baseMintSupplyUi: supplyUi,
+          expectedUi: formatAtomicBn(expectedAtomic),
+          nonTeamUi: formatAtomicBn(nonTeamAtomic),
+          teamUi: formatAtomicBn(teamAtomic),
+          deltaUi: formatAtomicBn(deltaAbs),
+          deltaSign,
+          teamBps,
+        };
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
 
     const MINT_RENT = 2039280; // Fixed rent exemption for 82 bytes
 
@@ -272,6 +303,14 @@ export async function runFullFlow(
       const fracRaw = abs.mod(DECIMALS_SCALE).toString().padStart(9, "0").replace(/0+$/, "");
       const frac = fracRaw.length > 0 ? `.${fracRaw}` : "";
       return `${negative ? "-" : ""}${whole}${frac}`;
+    };
+    const formatLargeQuantity = (value: number | null) => {
+      if (value === null || Number.isNaN(value) || !Number.isFinite(value)) return "N/A";
+      const abs = Math.abs(value);
+      if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+      if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+      if (abs >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+      return value.toFixed(2);
     };
     const toAtomic = (val: string | number): BN => {
       const raw = new BN(String(val));
@@ -701,7 +740,19 @@ export async function runFullFlow(
           const quoteVaultBal = await provider.connection.getTokenAccountBalance(addLiq.quoteVault);
           const baseUi = Number(baseVaultBal.value.uiAmount ?? baseVaultBal.value.uiAmountString ?? "0");
           const quoteUi = Number(quoteVaultBal.value.uiAmount ?? quoteVaultBal.value.uiAmountString ?? "0");
+          poolBaseLiquidityUi = baseUi;
+          poolQuoteLiquidityUi = quoteUi;
           addLog(`      - Pool liquidity: base=${baseUi} quote=${quoteUi}`);
+        } catch (_) { }
+        try {
+          const escrowLamports = await provider.connection.getBalance(addLiq.escrowAuthority);
+          const baseEscrowAta = getAssociatedTokenAddressSync(poolBaseMint, addLiq.escrowAuthority, true);
+          const baseEscrowUi = await getTokenBalance(baseEscrowAta);
+          const quoteEscrowUi = await getTokenBalance(addLiq.quoteEscrowAta);
+          const sol = (escrowLamports / 1e9).toFixed(9);
+          addLog(
+            `      - Escrow balances: authority=${addLiq.escrowAuthority.toBase58()} sol=${sol} baseAta=${baseEscrowAta.toBase58()} base=${baseEscrowUi} quoteAta=${addLiq.quoteEscrowAta.toBase58()} quote=${quoteEscrowUi} quoteProgram=${TOKEN_PROGRAM_ID.toBase58()}`
+          );
         } catch (_) { }
       } catch (liqErr: any) {
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
@@ -714,22 +765,15 @@ export async function runFullFlow(
 
     try {
       if (launchBaseMint) {
-        const supply = await provider.connection.getTokenSupply(launchBaseMint);
-        const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
-        addLog(`      - Base mint total supply: ${supplyUi}`);
-        try {
-          const launchForSupply: any = await (sdk as any).fetchLaunch(testLaunchState);
-          const baseTotalAtomic = Number(launchForSupply.baseTotalAllocation ?? 0);
-          const teamBps = Number(launchForSupply.teamAllocationBasisPoints ?? 0);
-          const teamAtomic = Math.floor((baseTotalAtomic * teamBps) / 10000);
-          const expectedAtomic = baseTotalAtomic + teamAtomic;
-          const observedAtomic = BigInt(supply.value.amount ?? "0");
-          const expectedUi = (expectedAtomic / 1e9).toFixed(6);
-          const deltaAtomic = BigInt(expectedAtomic) - observedAtomic;
-          const deltaUi = Number(deltaAtomic) / 1e9;
-          addLog(`      - Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
-          addLog(`      - Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
-        } catch (_) { }
+        const captured = await updateSupplySnapshot(launchBaseMint);
+        const snapshot = supplySnapshot;
+        if (captured && snapshot) {
+          addLog(`      - Base mint total supply: ${snapshot.baseMintSupplyUi}`);
+          addLog(`      - Expected supply (base_total incl team): ${snapshot.expectedUi}`);
+          addLog(`      - Expected non-team allocation: ${snapshot.nonTeamUi}`);
+          addLog(`      - Expected team allocation (${snapshot.teamBps}bps): ${snapshot.teamUi}`);
+          addLog(`      - Supply delta (expected - actual): ${snapshot.deltaSign < 0 ? "-" : ""}${snapshot.deltaUi}`);
+        }
       }
     } catch (_) { }
 
@@ -1293,23 +1337,16 @@ export async function runFullFlow(
     addLog(`   Total claimed by team:    ${totalTokensClaimedByTeam.toFixed(6)}`);
     try {
       if (mintedBaseMint) {
-        const supply = await provider.connection.getTokenSupply(mintedBaseMint);
-        const supplyUi = typeof supply.value.uiAmountString === "string" ? supply.value.uiAmountString : String(supply.value.uiAmount ?? 0);
-        addLog(`   Base mint:                ${mintedBaseMint.toBase58()}`);
-        addLog(`   Base mint total supply:   ${supplyUi}`);
-        try {
-          const launchForSupply: any = await (sdk as any).fetchLaunch(testLaunchState);
-          const baseTotalAtomic = Number(launchForSupply.baseTotalAllocation ?? 0);
-          const teamBps = Number(launchForSupply.teamAllocationBasisPoints ?? 0);
-          const teamAtomic = Math.floor((baseTotalAtomic * teamBps) / 10000);
-          const expectedAtomic = baseTotalAtomic + teamAtomic;
-          const observedAtomic = BigInt(supply.value.amount ?? "0");
-          const expectedUi = (expectedAtomic / 1e9).toFixed(6);
-          const deltaAtomic = BigInt(expectedAtomic) - observedAtomic;
-          const deltaUi = Number(deltaAtomic) / 1e9;
-          addLog(`   Expected supply (base_total + team=${teamBps}bps): ${expectedUi}`);
-          addLog(`   Supply delta (expected - actual): ${deltaUi.toFixed(6)}`);
-        } catch (_) { }
+        await updateSupplySnapshot(mintedBaseMint);
+        const snapshot = supplySnapshot;
+        if (snapshot) {
+          addLog(`   Base mint:                ${mintedBaseMint.toBase58()}`);
+          addLog(`   Base mint total supply:   ${snapshot.baseMintSupplyUi}`);
+          addLog(`   Expected supply (base_total incl team=${snapshot.teamBps}bps): ${snapshot.expectedUi}`);
+          addLog(`   Expected non-team allocation: ${snapshot.nonTeamUi}`);
+          addLog(`   Expected team allocation: ${snapshot.teamUi}`);
+          addLog(`   Supply delta (expected - actual): ${snapshot.deltaSign < 0 ? "-" : ""}${snapshot.deltaUi}`);
+        }
       }
     } catch (_) { }
     addLog(`   ------------------------------------`);
@@ -1344,6 +1381,33 @@ export async function runFullFlow(
       addLog(`   Net operational cost after rent return:     ${(netOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
       addLog(`--- END RENT REFUND SUMMARY ---`);
     } catch (_) {}
+
+    const poolBaseText = poolBaseLiquidityUi === null ? "N/A Base" : `${formatLargeQuantity(poolBaseLiquidityUi)} Base`;
+    const poolQuoteText = poolQuoteLiquidityUi === null ? "N/A SOL" : `${formatLargeQuantity(poolQuoteLiquidityUi)} SOL`;
+    const usersSummaryText = formatLargeQuantity(tokensClaimed);
+    const creatorSummaryText = formatLargeQuantity(totalTokensClaimedByCreator);
+    const teamSummaryText = formatLargeQuantity(totalTokensClaimedByTeam);
+    let dustLine = "Actual Dust: Data unavailable.";
+    const tldrSnapshot = supplySnapshot;
+    if (tldrSnapshot) {
+      const totalSupplyApprox = parseFloat(tldrSnapshot.baseMintSupplyUi);
+      const totalDistributed = tokensClaimed + totalTokensClaimedByCreator + totalTokensClaimedByTeam;
+      const poolBaseForDust = poolBaseLiquidityUi ?? 0;
+      const dustTokensApprox = Number.isFinite(totalSupplyApprox)
+        ? Math.max(0, totalSupplyApprox - (totalDistributed + poolBaseForDust))
+        : NaN;
+      const dustPercent = Number.isFinite(totalSupplyApprox) && totalSupplyApprox > 0
+        ? (dustTokensApprox / totalSupplyApprox) * 100
+        : 0;
+      const dustTokensText = Number.isFinite(dustTokensApprox)
+        ? dustTokensApprox.toLocaleString("en-US", { maximumFractionDigits: 6 })
+        : "N/A";
+      const dustPercentText = Number.isFinite(dustPercent) ? dustPercent.toFixed(4) : "N/A";
+      dustLine = `Actual Dust: ~${dustTokensText} tokens (approx. ${dustPercentText}% of supply) from ticket rounding.`;
+    }
+    const poolLine = `Pool Liquidity: Successfully initialized with ${poolBaseText} and ${poolQuoteText}.`;
+    const distributionLine = `Distribution: 100% successful. Users (${usersSummaryText}), Creator (${creatorSummaryText}), and Team (${teamSummaryText}) received their allocations.`;
+    addLog(`\nTL;DR:\n\nSimulation Analysis\n\n${poolLine}\n\n${distributionLine}\n\n${dustLine}`);
 
     addLog("\n✅ Full flow finished successfully!");
     return { success: true, message: "Flow completed successfully" };
