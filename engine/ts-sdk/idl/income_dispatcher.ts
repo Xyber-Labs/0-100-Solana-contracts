@@ -1546,38 +1546,18 @@ export type IncomeDispatcher = {
     },
     {
       "code": 6005,
-      "name": "invalidShareSum",
-      "msg": "Sum of shares in tier must equal 10000 basis points"
-    },
-    {
-      "code": 6006,
-      "name": "incomeCalculatorNotSet",
-      "msg": "Income calculator not set"
-    },
-    {
-      "code": 6007,
       "name": "invalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6008,
+      "code": 6006,
       "name": "invalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6009,
-      "name": "invalidProjectId",
-      "msg": "Invalid project id"
-    },
-    {
-      "code": 6010,
+      "code": 6007,
       "name": "invalidNonce",
       "msg": "Invalid nonce"
-    },
-    {
-      "code": 6011,
-      "name": "projectIdMismatch",
-      "msg": "Project ID mismatch"
     }
   ],
   "types": [

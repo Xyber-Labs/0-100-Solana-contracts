@@ -1540,38 +1540,18 @@
     },
     {
       "code": 6005,
-      "name": "InvalidShareSum",
-      "msg": "Sum of shares in tier must equal 10000 basis points"
-    },
-    {
-      "code": 6006,
-      "name": "IncomeCalculatorNotSet",
-      "msg": "Income calculator not set"
-    },
-    {
-      "code": 6007,
       "name": "InvalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6008,
+      "code": 6006,
       "name": "InvalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6009,
-      "name": "InvalidProjectId",
-      "msg": "Invalid project id"
-    },
-    {
-      "code": 6010,
+      "code": 6007,
       "name": "InvalidNonce",
       "msg": "Invalid nonce"
-    },
-    {
-      "code": 6011,
-      "name": "ProjectIdMismatch",
-      "msg": "Project ID mismatch"
     }
   ],
   "types": [

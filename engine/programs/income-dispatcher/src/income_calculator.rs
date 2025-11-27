@@ -20,17 +20,7 @@ macro_rules! mcap {
 pub(crate) use mcap;
 
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Ord,
-    PartialOrd,
-    Hash,
-    AnchorSerialize,
-    AnchorDeserialize,
-    InitSpace,
+    Clone, Copy, Ord, PartialOrd, Eq, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace,
 )]
 pub enum Role {
     Platform = 0,
@@ -95,8 +85,7 @@ impl Distribution {
         let base_in_quote = income
             .base_token
             .checked_mul(self.price_in_quote)
-            .ok_or(ErrorCode::ArithmeticOverflow)?
-            .checked_div(base_decimals_divisor)
+            .end_then(|val| val.checked_div(base_decimals_divisor))
             .ok_or(ErrorCode::ArithmeticOverflow)?;
         base_in_quote.checked_add(income.quote_token).ok_or(ErrorCode::ArithmeticOverflow.into())
     }
@@ -264,59 +253,21 @@ mod tests {
     fn test_real_sqrt_price_from_raydium() {
         let sqrt_price_x64: u128 = 21723472191457830933981;
         let q64 = Q64 as f64;
-
-        println!("=== From Raydium sqrt_price_x64 ===");
-        println!("sqrt_price_x64:           {}", sqrt_price_x64);
-        println!("Q64:                      {}", Q64);
-
         let sqrt_price = (sqrt_price_x64 as f64) / q64;
-        println!("sqrt_price:               {}", sqrt_price);
-
         let price = sqrt_price * sqrt_price;
-        println!("price (base/quote):       {}", price);
-
         let inverse_price = 1.0 / price;
-        println!("inverse_price (q/b):      {:.10e}", inverse_price);
-
-        println!("\n=== Expected from test params ===");
         let quote_amount = 300.0;
         let base_amount = 481400000.0;
         let price_growing_rate = 1.15;
-
         let expected_price = quote_amount / base_amount * price_growing_rate;
-        println!("quote_amount:             {}", quote_amount);
-        println!("base_amount:              {}", base_amount);
-        println!("PRICE_GROWING_RATE:       {}", price_growing_rate);
-        println!("expected_price (q/b):     {:.10e}", expected_price);
-
         let expected_inverse: f64 = 1.0 / expected_price;
-        println!("expected_inverse (b/q):   {}", expected_inverse);
-
         let expected_sqrt = expected_inverse.sqrt();
-        println!("sqrt(inverse):            {}", expected_sqrt);
-
         let expected_sqrt_x64 = expected_sqrt * q64;
-        println!("sqrt(inverse) * 2^64:     {} (f64)", expected_sqrt_x64);
-        println!("sqrt(inverse) * 2^64:     {} (as u128)", expected_sqrt_x64 as u128);
-        println!(
-            "difference from raydium:  {}",
-            (expected_sqrt_x64 as u128) as i128 - sqrt_price_x64 as i128
-        );
-
-        println!("\n=== Market Cap ===");
         let market_cap = sqrt_price_x64_to_market_cap(sqrt_price_x64);
-        println!("market_cap = {:.2} SOL", market_cap);
-
-        println!("\n=== Rule Selection ===");
         let setup = create_calculator_with_mcap_tiers(6);
         let rules = setup.calculator.get_rules_by_price(sqrt_price_x64).unwrap();
-        println!("Selected rules for sqrt_price_x64={}:", sqrt_price_x64);
-        for rule in rules {
-            println!("  {:?}: {}%", rule.recipient, rule.rate as f64 / 100.0);
-        }
 
         assert!(market_cap > 500.0 && market_cap < 1500.0, "Expected market cap ~721 SOL");
-
         assert_eq!(rules.len(), 3, "Expected 3 rules for tier 501");
 
         let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
@@ -326,7 +277,6 @@ mod tests {
         assert_eq!(platform_rule.rate, 3000, "Platform should be 30%");
         assert_eq!(creator_rule.rate, 5600, "Creator should be 56%");
         assert_eq!(community_rule.rate, 1400, "Community should be 14%");
-
         assert_eq!(
             platform_rule.rate + creator_rule.rate + community_rule.rate,
             BASIS_POINTS,
@@ -353,19 +303,8 @@ mod tests {
         let sqrt_price_x64 = market_cap_to_sqrt_price_x64(market_cap_sol);
         let inverse_price = TOTAL_SUPPLY_TOKENS / market_cap_sol;
 
-        println!("\n=== Testing market_cap = {} SOL ===", market_cap_sol);
-        println!("inverse_price:    {:.6e}", inverse_price);
-        println!("sqrt_price_x64:   {}", sqrt_price_x64);
-
         let setup = create_calculator_with_mcap_tiers(6);
         let rules = setup.calculator.get_rules_by_price(sqrt_price_x64).unwrap();
-
-        println!("Selected rules:");
-        for rule in rules {
-            println!("  {:?}: {}%", rule.recipient, rule.rate as f64 / 100.0);
-        }
-
-        assert_eq!(rules.len(), 3, "Expected 3 rules");
 
         let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
         let creator_rule = rules.iter().find(|r| r.recipient == Role::Creator).unwrap();
