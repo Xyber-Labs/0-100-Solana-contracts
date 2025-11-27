@@ -19,7 +19,7 @@ anchor-debug = []
 custom-heap = []
 custom-panic = []
 test = ["engine/test"]
-devnet = ["raydium-amm-v3/devnet"]
+devnet = ["raydium-amm-v3/devnet", "engine/devnet"]
 anchor-test = []
 mainnet = []
 

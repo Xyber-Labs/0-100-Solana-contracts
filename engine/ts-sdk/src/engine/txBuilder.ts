@@ -701,18 +701,17 @@ export class TxBuilder {
     launch: web3.PublicKey;
     payer: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
-    const [rosterPda] = this.getPda(["roster", params.launch]);
-
+    const [rosterShard] = this.getRosterShardPda(params.launch, 1);
     const instruction = await this.program.methods
-      .initRoster()
+      .initRosterShard(1)
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
-        roster: rosterPda,
+        rosterShard,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
-
+    const [rosterPda] = this.getPda(["roster", params.launch]);
     return { instruction, rosterPda };
   }
 
@@ -1147,12 +1146,6 @@ export class TxBuilder {
   async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
   }
-
-  async fetchRoster(launch: web3.PublicKey) {
-    const [pda] = this.getPda(["roster", launch]);
-    return this.program.account.roster.fetch(pda);
-  }
-
 
   async finalizeRosterShardIx(params: {
     launch: web3.PublicKey;

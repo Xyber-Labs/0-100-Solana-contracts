@@ -1212,9 +1212,6 @@ const EngineSDK = {
       return txBuilder.fetchLaunch(launch);
     }
 
-    async function fetchRoster(launch: anchor.web3.PublicKey) {
-      return txBuilder.fetchRoster(launch);
-    }
 
 
     async function fetchUserContribution(launch: anchor.web3.PublicKey, user: anchor.web3.PublicKey) {
@@ -1236,9 +1233,8 @@ const EngineSDK = {
 
     async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
       const [launch] = getLaunchPdaByProjectId(projectId);
-      const [poolStatePda] = getPoolPda(launch);
-      const poolState = await program.account.poolState.fetch(poolStatePda);
-      return poolState.raydiumPoolState ?? null;
+      const launchState = await program.account.launchState.fetch(launch);
+      return launchState.raydiumPoolState ?? null;
     }
 
     async function fetchTeamVesting(launch: anchor.web3.PublicKey) {
@@ -1444,7 +1440,6 @@ const EngineSDK = {
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
       fetchLaunch,
-      fetchRoster,
       fetchUserContribution,
       fetchCreatorGrant,
       fetchTeamVesting,

@@ -76,10 +76,6 @@ pub struct HarvestPool<'info> {
     )]
     pub base_vault: Account<'info, TokenAccount>,
 
-    pub engine_program: Program<'info, engine::program::Engine>,
-
-    pub raydium_program: Program<'info, AmmV3>,
-
     /// CHECK: Escrow authority PDA - validated by engine CPI
     #[account(mut)]
     pub escrow_authority: UncheckedAccount<'info>,
@@ -114,13 +110,14 @@ pub struct HarvestPool<'info> {
     /// CHECK: Upper tick array - validated by engine CPI
     #[account(mut)]
     pub tick_array_upper: UncheckedAccount<'info>,
+
+    pub engine_program: Program<'info, engine::program::Engine>,
+    pub raydium_program: Program<'info, AmmV3>,
     pub token_program: Program<'info, Token>,
     pub token_program_2022: Program<'info, Token2022>,
-
     /// CHECK: Memo program - validated by address constraint
     #[account(address = anchor_spl::memo::spl_memo::id())]
     pub memo_program: UncheckedAccount<'info>,
-
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }

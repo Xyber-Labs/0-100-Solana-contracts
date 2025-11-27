@@ -4,7 +4,6 @@ import { assert } from "chai";
 import * as fs from "fs";
 import { createMint, getOrCreateAssociatedTokenAccount, } from "@solana/spl-token";
 
-import { assert } from "chai";
 import { EngineSDK } from "../ts-sdk/src/engine";
 import { IncomeDispatcherSDK } from "../ts-sdk/src/income-dispatcher";
 import { PoolUtils, Raydium, TxVersion } from "@raydium-io/raydium-sdk-v2";
@@ -50,7 +49,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   const PRESET_ID = 0;
   const PROJECT_ID = 1;
-  const raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
   let projectId = PROJECT_ID;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
@@ -62,8 +60,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 0: Verify Raydium CLMM and AmmConfig are loaded", async () => {
     console.log("=== Step 0: Verify Raydium Setup ===");
 
-    const raydiumClmmProgramId = new anchor.web3.PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
-    const ammConfigAddress = new anchor.web3.PublicKey("FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q");
+    const raydiumClmmProgramId = sdk.getRaydiumClmmProgramId();
+    const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
 
     const raydiumProgramInfo = await provider.connection.getAccountInfo(raydiumClmmProgramId);
     console.log("Raydium CLMM Program:", raydiumClmmProgramId.toString());
@@ -349,9 +347,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   it("Step 9: Prepare quote mint", async () => {
     console.log("=== Step 9: Prepare Quote Mint ===");
-
-    quoteMintKeypair = { publicKey: WSOL_MINT } as any;
-
     console.log("Quote Mint (WSOL):", WSOL_MINT.toString());
   });
 
@@ -553,7 +548,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
         if (needsExtension) {
           const [tickArrayBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
             [Buffer.from("pool_tick_array_bitmap_extension"), raydiumPoolState.toBuffer()],
-            raydiumProgramId
+            sdk.getRaydiumClmmProgramId()
           );
 
           remainingAccounts.push({

@@ -4,9 +4,6 @@ import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
 import { TxBuilder } from "./txBuilder";
 
-const MEMO_PROGRAM_ID = new anchor.web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-const RAYDIUM_CLMM_PROGRAM_ID = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-
 const IncomeDispatcherSDK = {
   create(
     provider: anchor.Provider,

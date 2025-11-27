@@ -1160,14 +1160,6 @@
           }
         },
         {
-          "name": "engine_program",
-          "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-        },
-        {
-          "name": "raydium_program",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-        },
-        {
           "name": "escrow_authority",
           "writable": true
         },
@@ -1206,6 +1198,14 @@
         {
           "name": "tick_array_upper",
           "writable": true
+        },
+        {
+          "name": "engine_program",
+          "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+        },
+        {
+          "name": "raydium_program",
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "token_program",
@@ -1829,12 +1829,24 @@
             "type": "u16"
           },
           {
+            "name": "roster_initialized_up_to",
+            "type": "i32"
+          },
+          {
             "name": "roster_finalized_up_to",
             "type": "i32"
           },
           {
             "name": "public_total_tickets",
             "type": "u32"
+          },
+          {
+            "name": "roster_shard_cap",
+            "type": "u16"
+          },
+          {
+            "name": "roster_highest_used_shard",
+            "type": "u16"
           },
           {
             "name": "tokens_per_ticket",
@@ -1867,10 +1879,6 @@
           {
             "name": "creator_max_deposit",
             "type": "u64"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
           },
           {
             "name": "funding_period_start",
@@ -1959,7 +1967,7 @@
   ],
   "constants": [
     {
-      "name": "SEED_ROOT",
+      "name": "DISPATCHER_SEED_ROOT",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
     }

@@ -7,11 +7,11 @@ pub mod income_calculator;
 pub mod instructions;
 pub mod state;
 
-#[cfg(not(feature = "mainnet"))]
+#[cfg(feature = "devnet")]
 declare_id!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
-#[cfg(feature = "mainnet")]
-declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
+#[cfg(not(feature = "devnet"))]
+declare_id!("adsf");
 
 #[constant]
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";

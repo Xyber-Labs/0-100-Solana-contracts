@@ -698,6 +698,18 @@ export type IncomeDispatcher = {
         {
           "name": "nonceValue",
           "type": "u64"
+        },
+        {
+          "name": "limitBaseClaim",
+          "type": {
+            "option": "u64"
+          }
+        },
+        {
+          "name": "limitQuoteClaim",
+          "type": {
+            "option": "u64"
+          }
         }
       ]
     },
@@ -1154,14 +1166,6 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "engineProgram",
-          "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-        },
-        {
-          "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-        },
-        {
           "name": "escrowAuthority",
           "writable": true
         },
@@ -1200,6 +1204,14 @@ export type IncomeDispatcher = {
         {
           "name": "tickArrayUpper",
           "writable": true
+        },
+        {
+          "name": "engineProgram",
+          "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
+        },
+        {
+          "name": "raydiumProgram",
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "tokenProgram",
@@ -1823,12 +1835,24 @@ export type IncomeDispatcher = {
             "type": "u16"
           },
           {
+            "name": "rosterInitializedUpTo",
+            "type": "i32"
+          },
+          {
             "name": "rosterFinalizedUpTo",
             "type": "i32"
           },
           {
             "name": "publicTotalTickets",
             "type": "u32"
+          },
+          {
+            "name": "rosterShardCap",
+            "type": "u16"
+          },
+          {
+            "name": "rosterHighestUsedShard",
+            "type": "u16"
           },
           {
             "name": "tokensPerTicket",
@@ -1861,10 +1885,6 @@ export type IncomeDispatcher = {
           {
             "name": "creatorMaxDeposit",
             "type": "u64"
-          },
-          {
-            "name": "rosterShardCap",
-            "type": "u16"
           },
           {
             "name": "fundingPeriodStart",
@@ -1953,7 +1973,7 @@ export type IncomeDispatcher = {
   ],
   "constants": [
     {
-      "name": "seedRoot",
+      "name": "dispatcherSeedRoot",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
     }
