@@ -7,10 +7,8 @@ import { TxBuilder } from "./txBuilder";
 const IncomeDispatcherSDK = {
   create(
     provider: anchor.Provider,
-    program: Program<IncomeDispatcherIDL>,
-    admin?: anchor.web3.Keypair
+    program: Program<IncomeDispatcherIDL>
   ) {
-    const payer = admin?.publicKey ?? provider.publicKey!;
     const txBuilder = new TxBuilder(program);
 
     function getConfigPda(): [anchor.web3.PublicKey, number] {
