@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::ErrorCode, state::Config};
+use crate::{DISPATCHER_SEED_ROOT, errors::ErrorCode, state::Config};
 
 #[derive(Accounts)]
 pub struct UpdateCommunityClaimSigner<'info> {
     #[account(address = config.admin @ ErrorCode::InvalidAuthority)]
     pub admin: Signer<'info>,
 
-    #[account(mut, seeds = [crate::SEED_ROOT, b"config"], bump)]
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]
     pub config: Account<'info, Config>,
 }
 

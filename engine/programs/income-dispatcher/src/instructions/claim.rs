@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{transfer_checked, Mint, TokenAccount, TransferChecked},
+    token::{Mint, TokenAccount, transfer_checked, TransferChecked},
 };
 
 use crate::{
+    DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role,
     state::{Config, IncomeConfig, Nonce},
@@ -16,7 +17,7 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub recipient: Signer<'info>,
 
-    #[account(seeds = [crate::SEED_ROOT, b"config"], bump)]
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]
     pub config: Box<Account<'info, Config>>,
 
     #[account(
@@ -28,20 +29,20 @@ pub struct Claim<'info> {
 
     #[account(
         mut,
-        seeds = [crate::SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
+        seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
         bump
     )]
     pub income_config: Box<Account<'info, IncomeConfig>>,
 
     /// CHECK: Project authority PDA
-    #[account(seeds = [crate::SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
     pub project_authority: AccountInfo<'info>,
 
     #[account(
         init_if_needed,
         payer = recipient,
         space = 8 + Nonce::INIT_SPACE,
-        seeds = [crate::SEED_ROOT, b"nonce", &project_id.to_be_bytes(), recipient.key().as_ref()],
+        seeds = [DISPATCHER_SEED_ROOT, b"nonce", &project_id.to_be_bytes(), recipient.key().as_ref()],
         bump,
         constraint = nonce.nonce == nonce_value @ ErrorCode::InvalidNonce
     )]
@@ -124,7 +125,7 @@ pub fn claim(
     }
 
     let project_authority_seeds = &[
-        crate::SEED_ROOT,
+        DISPATCHER_SEED_ROOT,
         b"project_authority",
         &project_id.to_be_bytes(),
         &[ctx.bumps.project_authority],

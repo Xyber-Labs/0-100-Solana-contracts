@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    income_calculator::{mcap, DistributionRule, IncomeCalculator, Role},
-    SEED_ROOT,
+    DISPATCHER_SEED_ROOT,
+    income_calculator::{DistributionRule, IncomeCalculator, mcap, Role},
     state::Config,
 };
 
@@ -14,7 +14,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + Config::INIT_SPACE,
-        seeds = [SEED_ROOT, b"config"],
+        seeds = [DISPATCHER_SEED_ROOT, b"config"],
         bump
     )]
     pub config: Account<'info, Config>,

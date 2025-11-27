@@ -14,7 +14,7 @@ declare_id!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
 
 #[constant]
-pub const SEED_ROOT: &[u8] = b"income-dispatcher";
+pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
 const BASIS_POINTS: u128 = 10_000;
 

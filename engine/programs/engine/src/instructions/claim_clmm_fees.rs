@@ -3,7 +3,7 @@ use anchor_spl::{token::Token, token_2022::Token2022};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{
-    constants::{INCOME_DISPATCHER_PROGRAM_ID, INCOME_DISPATCHER_SEED_ROOT, SEED_ROOT},
+    constants::{DISPATCHER_SEED_ROOT, INCOME_DISPATCHER_PROGRAM_ID, SEED_ROOT},
     state::LaunchState,
 };
 
@@ -11,7 +11,7 @@ use crate::{
 pub struct ClaimClmmFees<'info> {
     /// CHECK: Project authority PDA from income-dispatcher - must be signed
     #[account(
-        seeds = [INCOME_DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
+        seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
         bump,
         seeds::program = INCOME_DISPATCHER_PROGRAM_ID
     )]

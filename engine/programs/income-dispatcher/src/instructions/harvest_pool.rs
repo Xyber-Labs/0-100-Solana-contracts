@@ -10,9 +10,9 @@ use engine::cpi as engine_cpi;
 
 use crate::{
     BASIS_POINTS,
+    DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role,
-    SEED_ROOT, state::{Config, IncomeConfig},
+    income_calculator::Role, state::{Config, IncomeConfig},
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -25,7 +25,7 @@ pub struct HarvestPool<'info> {
     pub payer: Signer<'info>,
 
     /// Config account
-    #[account(seeds = [SEED_ROOT, b"config"], bump)]
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]
     pub config: Box<Account<'info, Config>>,
 
     /// Launch state account
@@ -42,13 +42,13 @@ pub struct HarvestPool<'info> {
         init_if_needed,
         payer = payer,
         space = 8 + IncomeConfig::INIT_SPACE,
-        seeds = [SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
+        seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
         bump,
     )]
     pub income_config: Box<Account<'info, IncomeConfig>>,
 
     /// CHECK: Project authority PDA derived from project_id
-    #[account(seeds = [SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
     pub project_authority: UncheckedAccount<'info>,
 
     /// Quote mint from project pool
@@ -190,7 +190,7 @@ fn claim_fees_from_engine<'info>(
     };
 
     let project_authority_seeds = &[
-        SEED_ROOT,
+        DISPATCHER_SEED_ROOT,
         b"project_authority",
         &project_id.to_be_bytes(),
         &[ctx.bumps.project_authority],
