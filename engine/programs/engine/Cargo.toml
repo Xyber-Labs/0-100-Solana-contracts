@@ -19,7 +19,6 @@ test = []
 anchor-test = []
 devnet = ["raydium-amm-v3/devnet"]
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-mainnet = []
 
 [dependencies]
 anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
