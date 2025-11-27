@@ -776,7 +776,6 @@
           "docs": [
             "Launch state account"
           ],
-          "writable": true,
           "pda": {
             "seeds": [
               {

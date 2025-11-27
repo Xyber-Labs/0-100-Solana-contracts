@@ -11,7 +11,8 @@ use engine::cpi as engine_cpi;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role, state::{Config, IncomeConfig},
+    income_calculator::Role,
+    state::{Config, IncomeConfig},
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -29,7 +30,6 @@ pub struct HarvestPool<'info> {
 
     /// Launch state account
     #[account(
-        mut,
         seeds = [engine::constants::SEED_ROOT, b"launch", &project_id.to_le_bytes()],
         bump,
         seeds::program = engine::ID
@@ -50,7 +50,10 @@ pub struct HarvestPool<'info> {
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
     pub project_authority: UncheckedAccount<'info>,
 
-    /// Quote mint from project pool
+    #[account(
+        mint::token_program = quote_token_program,
+        address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
+    )]
     pub quote_mint: Account<'info, Mint>,
 
     /// Base mint from project pool

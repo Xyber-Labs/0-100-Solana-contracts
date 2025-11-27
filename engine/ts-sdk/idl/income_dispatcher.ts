@@ -782,7 +782,6 @@ export type IncomeDispatcher = {
           "docs": [
             "Launch state account"
           ],
-          "writable": true,
           "pda": {
             "seeds": [
               {

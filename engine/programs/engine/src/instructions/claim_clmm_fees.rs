@@ -18,7 +18,6 @@ pub struct ClaimClmmFees<'info> {
 
     pub raydium_program: Program<'info, AmmV3>,
 
-    #[account(mut)]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     /// CHECK: Escrow authority PDA - owner of the position NFT
