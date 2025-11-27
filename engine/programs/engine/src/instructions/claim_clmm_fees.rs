@@ -26,7 +26,7 @@ pub struct ClaimClmmFees<'info> {
     pub escrow_authority: UncheckedAccount<'info>,
 
     /// CHECK: Position NFT mint (created during liquidity addition)
-    #[account(mut)]
+    #[account(mut, constraint = Some(raydium_position_nft_mint.key()) == launch_state.raydium_position_nft_mint)]
     pub raydium_position_nft_mint: UncheckedAccount<'info>,
 
     /// CHECK: Position NFT account owned by escrow_authority
@@ -38,7 +38,7 @@ pub struct ClaimClmmFees<'info> {
     pub personal_position: UncheckedAccount<'info>,
 
     /// CHECK: Pool state
-    #[account(mut)]
+    #[account(mut, constraint = Some(pool_state.key()) == launch_state.raydium_pool_state)]
     pub pool_state: UncheckedAccount<'info>,
 
     /// CHECK: Protocol position state
