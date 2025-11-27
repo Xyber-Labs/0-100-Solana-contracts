@@ -25,7 +25,7 @@ pub struct SealRosterShard<'info> {
 
 pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32, max: u16) -> Result<()> {
     let launch = &ctx.accounts.launch_state;
-    let shard = &ctx.accounts.roster_shard;
+    let shard = &mut ctx.accounts.roster_shard;
 
     // Shard must already be finalized (prefix and shard_base present)
     require!(
@@ -38,6 +38,8 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
     );
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
 
+    // Enforce sequential sealing without gaps or duplicates
+    require!(from as usize == shard.sealed_count as usize, EngineErrorCode::InvalidFinalizeOrder);
     let start = from as usize;
     let end = (from as usize)
         .saturating_add(max as usize)
@@ -104,6 +106,11 @@ pub fn seal_roster_shard(ctx: Context<SealRosterShard>, shard_id: u16, from: u32
         let mut write_cursor: &mut [u8] = &mut write_ref;
         user.try_serialize(&mut write_cursor)?;
     }
+
+    shard.sealed_count = shard
+        .sealed_count
+        .checked_add(need as u32)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     Ok(())
 }

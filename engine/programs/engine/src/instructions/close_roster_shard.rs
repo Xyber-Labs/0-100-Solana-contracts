@@ -15,12 +15,15 @@ pub struct CloseRosterShard<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(
         mut,
-        close = payer,
+        close = refund_to,
         seeds = [SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &shard_id.to_le_bytes()],
         bump,
         constraint = roster_shard.launch == launch_state.key()
     )]
     pub roster_shard: Account<'info, RosterShard>,
+    /// CHECK: Lamports sink for closing; must equal roster_shard.created_by
+    #[account(mut, constraint = refund_to.key() == roster_shard.created_by)]
+    pub refund_to: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -33,6 +36,10 @@ pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Resu
         EngineErrorCode::ShardNotFinalized
     );
     require!(shard.shard_id == shard_id, EngineErrorCode::Unauthorized);
+    require!(
+        shard.sealed_count as usize == shard.wallets.len(),
+        EngineErrorCode::ShardNotSealed
+    );
 
     Ok(())
 }

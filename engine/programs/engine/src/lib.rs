@@ -18,7 +18,11 @@ mod instructions;
 pub mod state;
 pub mod utils;
 
+#[cfg(feature = "devnet")]
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
+
+#[cfg(not(feature = "devnet"))]
+declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
 
 #[program]
 pub mod engine {
@@ -31,11 +35,6 @@ pub mod engine {
         project_id: u64,
     ) -> Result<()> {
         instructions::init_launch(ctx, params, project_id)
-    }
-
-    /// Initialize roster account.
-    pub fn init_roster(ctx: Context<InitRoster>) -> Result<()> {
-        instructions::init_roster(ctx)
     }
 
     /// Initialize roster shard account

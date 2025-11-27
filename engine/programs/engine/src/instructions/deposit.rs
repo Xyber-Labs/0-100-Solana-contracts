@@ -1,10 +1,10 @@
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::DepositMade,
+    events::{DepositMade, RosterShardFull, RosterShardNearFull},
     state::{LaunchState, RosterShard, UserContribution},
 };
-use anchor_lang::{prelude::*, solana_program};
+use anchor_lang::{prelude::*, solana_program, AccountDeserialize};
 use solana_program::sysvar::clock::Clock;
 
 #[derive(Accounts)]
@@ -98,6 +98,25 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     // Sharded roster update: assign on first deposit, then O(1) by index
     let shard = &mut ctx.accounts.roster_shard;
     if is_first_deposit {
+        // Enforce sequential fill across shards: s > 1 requires s-1 to be full
+        if shard.shard_id > 1 {
+            let prev_id = shard.shard_id - 1;
+            let (expected_prev_pda, _) = Pubkey::find_program_address(
+                &[SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &prev_id.to_le_bytes()],
+                &crate::ID,
+            );
+            let prev_ai = ctx
+                .remaining_accounts
+                .get(0)
+                .ok_or(EngineErrorCode::MappingError)?;
+            require_keys_eq!(prev_ai.key(), expected_prev_pda, EngineErrorCode::Unauthorized);
+            let data_ref = prev_ai.try_borrow_data()?;
+            let mut read_cursor: &[u8] = &data_ref;
+            let prev: RosterShard = RosterShard::try_deserialize(&mut read_cursor)?;
+            let cap = launch_state.roster_shard_cap as usize;
+            // Strict: allow deposits into shard s only when shard (s-1) is fully filled
+            require!(prev.wallets.len() == cap, EngineErrorCode::RosterShardFull);
+        }
         // first deposit path: assign shard and index
         require!(
             shard.wallets.len() < launch_state.roster_shard_cap as usize,
@@ -109,6 +128,30 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         // Start counts at 0 for first deposit; we'll add the delta below.
         shard.counts.push(0);
         shard.prefix.clear(); // invalidate prefix if already built
+        // Track highest used shard id
+        if shard.shard_id as u16 > launch_state.roster_highest_used_shard {
+            launch_state.roster_highest_used_shard = shard.shard_id as u16;
+        }
+        // Emit near/full events on threshold crossings
+        let used = shard.wallets.len() as u16;
+        let cap_u16 = launch_state.roster_shard_cap;
+        let threshold_u16 = ((cap_u16 as u32).saturating_mul(80).saturating_add(99) / 100) as u16;
+        if used == threshold_u16 {
+            emit!(RosterShardNearFull {
+                launch: launch_state.key(),
+                shard_id: shard.shard_id,
+                used,
+                cap: cap_u16,
+                threshold_percent: 80,
+            });
+        }
+        if used == cap_u16 {
+            emit!(RosterShardFull {
+                launch: launch_state.key(),
+                shard_id: shard.shard_id,
+                cap: cap_u16,
+            });
+        }
     } else {
         // must stay in the same shard
         require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);

@@ -13,6 +13,7 @@ import { runFullFlow } from './utils/flowRunner';
 interface SimulationConfig {
   numUsers: number;
   maxTicketsPerUser: number;
+  useTestMintForBase?: boolean;
 }
 
 // Error boundary component
@@ -166,6 +167,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const defaultSimConfig: SimulationConfig = {
     numUsers: 100,
     maxTicketsPerUser: 3,
+    useTestMintForBase: false,
   };
 
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -1218,6 +1220,17 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   className="terminal-input w-full"
                 />
               </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!simConfig.useTestMintForBase}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, useTestMintForBase: e.target.checked }))}
+                  className="terminal-input"
+                />
+                <span className="text-xs terminal-output">
+                  Use test mint for base token (skip Raydium CLMM)
+                </span>
+              </div>
             </div>
           )}
 
@@ -1528,14 +1541,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   if (!sdk || !launchState) return;
                   try {
                     setIsLoading(true);
-                    addLog('Initializing roster shard 0...');
+                    addLog('Initializing roster shard 1...');
                     // Ensure launch account exists
                     try { await sdk.fetchLaunch(launchState); } catch (e) { addLog('ERROR: Launch not found on-chain'); throw e; }
                     const { signature } = await sdk.initRosterShard({
                       launch: launchState,
-                      shardId: 0,
+                      shardId: 1,
+                      signers: [],
                     });
-                    addLog(`SUCCESS: Roster shard 0 initialized - Signature: ${signature}`);
+                    addLog(`SUCCESS: Roster shard 1 initialized - Signature: ${signature}`);
                     try {
                       const [rosterPda] = sdk.getRosterPda(launchState);
                       setRoster(rosterPda);
@@ -1567,12 +1581,13 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   if (!sdk || !launchState) return;
                   try {
                     setIsLoading(true);
-                    addLog('Finalizing roster shard 0...');
+                    addLog('Finalizing roster shard 1...');
                     const { signature } = await sdk.finalizeRosterShard({
                       launch: launchState,
-                      shardId: 0,
+                      shardId: 1,
+                      signers: [],
                     });
-                    addLog(`SUCCESS: Roster shard 0 finalized - Signature: ${signature}`);
+                    addLog(`SUCCESS: Roster shard 1 finalized - Signature: ${signature}`);
                   } catch (error) {
                     addLog(`ERROR: Failed to finalize roster shard - ${error}`);
                   } finally {

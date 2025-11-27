@@ -154,7 +154,8 @@ pub fn init_launch_core<'info>(
     state.vrf_seed = None;
 
     state.roster_shards = params.roster_shards_total;
-    state.roster_finalized_up_to = -1;
+    state.roster_initialized_up_to = 0;
+    state.roster_finalized_up_to = 0;
     state.public_total_tickets = 0;
 
     state.tokens_per_ticket = None;
@@ -169,6 +170,7 @@ pub fn init_launch_core<'info>(
     } else {
         crate::constants::TEAM_VESTING_DURATION_SEC
     };
+    state.roster_highest_used_shard = 0;
 
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
@@ -238,6 +240,7 @@ pub fn init_launch_core<'info>(
         project_id,
         creator: creator.key(),
         creator_max_deposit: params.creator_max_deposit,
+        creator_initial_deposit_lamports: params.creator_initial_deposit_lamports,
         base_mint: Pubkey::default(),
         pending_key: pending_key,
         hard_cap_lamports: params.hard_cap_lamports,
@@ -262,5 +265,3 @@ pub fn init_launch_core<'info>(
 
     Ok(())
 }
-
-

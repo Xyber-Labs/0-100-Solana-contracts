@@ -16,7 +16,7 @@ pub struct ClaimTokens<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
     pub user_contribution: Account<'info, UserContribution>,
     #[account(mut)]
-    pub roster_shard: Option<Account<'info, RosterShard>>,
+    pub roster_shard: Option<Account<'info, RosterShard>>, // TODO: remove roster shard from here
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
     pub pool_state: Account<'info, PoolState>,

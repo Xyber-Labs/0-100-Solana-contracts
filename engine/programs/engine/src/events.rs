@@ -5,6 +5,7 @@ pub struct LaunchInitialized {
     pub project_id: u64,
     pub creator: Pubkey,
     pub creator_max_deposit: u64,
+    pub creator_initial_deposit_lamports: u64,
     pub base_mint: Pubkey,
     pub pending_key: [u8; 32],
     pub hard_cap_lamports: u64,
@@ -153,6 +154,22 @@ pub struct RosterShardFinalized {
     pub shard_id: u16,
     pub total_in_shard: u32,
     pub shard_base: u32,
+}
+
+#[event]
+pub struct RosterShardNearFull {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub used: u16,
+    pub cap: u16,
+    pub threshold_percent: u8, // e.g. 80
+}
+
+#[event]
+pub struct RosterShardFull {
+    pub launch: Pubkey,
+    pub shard_id: u16,
+    pub cap: u16,
 }
 
 #[event]

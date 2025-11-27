@@ -1,5 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
+import { assert } from "chai";
 import * as fs from "fs";
 import { createMint, getOrCreateAssociatedTokenAccount, } from "@solana/spl-token";
 
@@ -33,7 +34,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
 
   let launchPda: anchor.web3.PublicKey;
-  let quoteMintKeypair: anchor.web3.Keypair;
   let baseMint: anchor.web3.PublicKey;
   let baseTokenAta: anchor.web3.PublicKey;
   let quoteVault: anchor.web3.PublicKey;
@@ -51,6 +51,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const PRESET_ID = 0;
   const PROJECT_ID = 1;
   const raydiumProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
+  let projectId = PROJECT_ID;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
   const BUYER2_AMOUNT = parseInt(process.env.BUYER2_AMOUNT || "150");
@@ -61,8 +62,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 0: Verify Raydium CLMM and AmmConfig are loaded", async () => {
     console.log("=== Step 0: Verify Raydium Setup ===");
 
-    const raydiumClmmProgramId = new anchor.web3.PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
-    const ammConfigAddress = new anchor.web3.PublicKey("9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x");
+    const raydiumClmmProgramId = new anchor.web3.PublicKey("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
+    const ammConfigAddress = new anchor.web3.PublicKey("FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q");
 
     const raydiumProgramInfo = await provider.connection.getAccountInfo(raydiumClmmProgramId);
     console.log("Raydium CLMM Program:", raydiumClmmProgramId.toString());
@@ -108,7 +109,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const [configPda] = sdk.getConfigPda();
     const configInfo = await provider.connection.getAccountInfo(configPda);
 
-    if (!configInfo) {
       const xyberMintInfo = await provider.connection.getAccountInfo(xyberMintKeypair.publicKey);
       if (!xyberMintInfo) {
         await createMint(
@@ -145,7 +145,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
         adminKeypairs: [admin1Keypair, admin2Keypair],
       });
       console.log("✅ Engine config initialized");
-    }
+
   });
 
   it("Step 1: Initialize launch preset with validation", async () => {
@@ -257,15 +257,11 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer:", utils.getExplorerUrl(provider, rosterSig));
 
     console.log("=== Initialize Roster Shard ===");
+    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
+    const rosterShardInfo = await provider.connection.getAccountInfo(rosterShard);
+    assert.ok(rosterShardInfo, "Roster shard 1 should exist after initRoster");
+    console.log("Roster shard 1 already initialized via initRoster");
 
-    const { signature: shardSig } = await sdk.initRosterShard({
-      launch: launchPda,
-      shardId: 0,
-      signers: [admin1Keypair],
-    });
-
-    console.log("✅ Roster shard initialized:", shardSig);
-    console.log("Explorer:", utils.getExplorerUrl(provider, shardSig));
   });
 
   it(`Step 5: Make deposits (${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL total)`, async () => {
@@ -275,7 +271,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER1_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer1Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 1 (buyer1: ${BUYER1_AMOUNT} SOL)`);
 
@@ -283,7 +279,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER2_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer2Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 2 (buyer2: ${BUYER2_AMOUNT} SOL)`);
 
@@ -291,7 +287,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       launch: launchPda,
       amountLamports: new BN(BUYER3_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       userKeypair: buyer3Keypair,
-      shardId: 0,
+      shardId: 1,
     });
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
 
@@ -319,7 +315,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature } = await sdk.finalizeRosterShard({
       launch: launchPda,
-      shardId: 0,
+      shardId: 1,
       signers: [admin1Keypair],
     });
 
@@ -367,7 +363,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await utils.doAndCheckError(
       sdk.createClmmPool({
         launch: fakeLaunchState.publicKey,
-        quoteMint: quoteMintKeypair.publicKey,
         signers: [admin1Keypair],
       }),
       "Invalid authority"
@@ -381,7 +376,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const result = await sdk.createClmmPool({
       launch: launchPda,
-      quoteMint: quoteMintKeypair.publicKey,
       signers: [admin1Keypair],
     });
 
@@ -643,6 +637,25 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [buyer1Keypair, communityClaimSignerKeypair],
     });
     console.log("✅ Community fees claimed");
+  });
+
+  it("Step 11: Verify getRaydiumPoolByProjectId and fetch pool price", async () => {
+    console.log("=== Step 11: Verify getRaydiumPoolByProjectId ===");
+
+    const raydiumPoolState = await sdk.getRaydiumPoolByProjectId(projectId);
+    assert.ok(raydiumPoolState, "Raydium pool state should exist");
+    console.log("Raydium Pool State PDA:", raydiumPoolState.toString());
+
+    const raydiumPoolInfo = await provider.connection.getAccountInfo(raydiumPoolState);
+    assert.ok(raydiumPoolInfo, "Raydium pool account should exist on-chain");
+
+    const POOL_STATE_SQRT_PRICE_X64_OFFSET = 253;
+    const sqrtPriceX64Bytes = raydiumPoolInfo.data.slice(POOL_STATE_SQRT_PRICE_X64_OFFSET, POOL_STATE_SQRT_PRICE_X64_OFFSET + 16);
+    const sqrtPriceX64 = new BN(sqrtPriceX64Bytes, "le");
+
+    console.log("sqrtPriceX64 (from Raydium):", sqrtPriceX64.toString());
+
+    console.log("\n✅ getRaydiumPoolByProjectId works correctly");
   });
 
 });

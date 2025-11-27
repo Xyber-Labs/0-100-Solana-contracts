@@ -14,33 +14,45 @@ in `tests/raydium-clmm-anchor.test.ts`.
 
 ### 0. Download Required Programs
 
-Download Raydium CLMM and other programs from devnet (or mainnet):
+Download Raydium CLMM and Token Metadata Program:
 
 ```bash
-export NET=mainnet-beta
-./scripts/setup-local-validator.sh
+mkdir -p tmp
+
+# Download devnet Raydium CLMM program
+solana program dump DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH tmp/raydium_clmm_devnet.so --url devnet
+
+# Download devnet AMM Config account
+solana account FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q --url devnet --output json > tmp/amm_config_devnet.json
+
+# Download Token Metadata Program (Metaplex)
+solana program dump metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s tmp/token_metadata.so --url mainnet-beta
 ```
 
 ### 0.1. Start Local Validator
 
-Start the local validator with all downloaded programs:
+Start the local validator with all required programs:
 
 ```bash
-scripts/start-validator.sh
+solana-test-validator \
+  --bpf-program DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH tmp/raydium_clmm_devnet.so \
+  --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s tmp/token_metadata.so \
+  --account FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q tmp/amm_config_devnet.json \
+  --reset
 ```
 
-Starts `solana-test-validator` with Raydium CLMM, loads AMM Config, uploads IDL. Keep this terminal open.
+Keep this terminal open.
 
 ### Step 0: Verify Raydium CLMM and AmmConfig
 
 Verify that Raydium CLMM program and AmmConfig are loaded:
 
 ```bash
-# Raydium CLMM Program ID
-solana account CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK --url localhost
+# Raydium CLMM Program ID (devnet)
+solana account DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH --url localhost
 
-# AmmConfig Account
-solana account 9iFER3bpjf1PTTCQCfTRu17EJgvsxo9pVyA9QWwEuX4x --url localhost
+# AmmConfig Account (devnet, index=2)
+solana account FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q --url localhost
 ```
 
 Both should exist and be owned by the Raydium CLMM program.
@@ -49,8 +61,10 @@ Both should exist and be owned by the Raydium CLMM program.
 
 ### 1. Deploy the Program
 
+For localnet/devnet deployment (uses devnet Raydium addresses):
+
 ```bash
-anchor build
+anchor build -- --features devnet,anchor-test
 anchor deploy --provider.cluster localnet --program-name engine --program-keypair keys/deploy-keypair.json
 sleep 2
 anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(solana address -k keys/deploy-keypair.json)
@@ -157,11 +171,10 @@ Initialize roster and roster shard (required before deposits):
 # Initialize roster
 anchor run init-roster --provider.cluster localnet -- --project-id 1
 
-# Initialize roster shard 0
-anchor run init-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 0
+
 ```
 
-**Note:** The test preset has `rosterShardsTotal: 1`, so only shard 0 needs to be initialized.
+**Note:** The test preset has `rosterShardsTotal: 1`, so only shard 1 needs to be initialized. Shard IDs are 1-based.
 
 ### Step 3: Make Deposits
 
@@ -195,7 +208,7 @@ After the funding period ends (10 minutes for test preset), finalize the roster 
 # Wait for funding period to end (600 seconds from first deposit)
 # Then finalize:
 
-anchor run finalize-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 0
+anchor run finalize-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 1
 ```
 
 ### Step 5: Set VRF Seed
