@@ -2,8 +2,8 @@
 
 use anchor_lang::prelude::*;
 
-use constants::*;
 pub use constants::WSOL_MINT;
+use constants::*;
 use state::*;
 
 use crate::{
@@ -55,8 +55,8 @@ pub mod engine {
     }
 
     /// Seal roster shard by snapshotting user ticket ranges into UserContribution
-    pub fn seal_roster_shard(
-        ctx: Context<SealRosterShard>,
+    pub fn seal_roster_shard<'info>(
+        ctx: Context<'_, '_, '_, 'info, SealRosterShard<'info>>,
         shard_id: u16,
         from: u32,
         max: u16,
