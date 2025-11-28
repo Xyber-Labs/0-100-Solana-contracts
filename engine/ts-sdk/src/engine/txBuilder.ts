@@ -1,5 +1,6 @@
 import { BN, Program, web3 } from "@coral-xyz/anchor";
 import type { Engine as EngineIDL } from "../../idl/engine";
+import EngineIDLJson from "../../idl/engine.json";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -12,8 +13,8 @@ import { getConstant, getConstantRaw } from "../utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
-const INCOME_DISPATCHER_PROGRAM_ID = new web3.PublicKey("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
-const INCOME_DISPATCHER_SEED_ROOT = "income-dispatcher";
+const INCOME_DISPATCHER_PROGRAM_ID = new web3.PublicKey(getConstantRaw("INCOME_DISPATCHER_PROGRAM_ID", EngineIDLJson as any));
+const INCOME_DISPATCHER_SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", EngineIDLJson as any));
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -122,7 +123,7 @@ export class TxBuilder {
   }
 
   getIncomeDispatcherConfigPda(): [web3.PublicKey, number] {
-    return web3.PublicKey.findProgramAddressSync([Buffer.from(INCOME_DISPATCHER_SEED_ROOT), Buffer.from("config")], INCOME_DISPATCHER_PROGRAM_ID);
+    return web3.PublicKey.findProgramAddressSync([INCOME_DISPATCHER_SEED_ROOT, Buffer.from("config")], INCOME_DISPATCHER_PROGRAM_ID);
   }
 
   getConfigPda(): [web3.PublicKey, number] {
