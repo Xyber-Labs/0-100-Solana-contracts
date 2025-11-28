@@ -36,7 +36,7 @@ solana-test-validator --reset \
   --bpf-program $TOKEN_2022_ID ./tmp/spl_token_2022.so \
   --account $AMM_CONFIG_ID ./tmp/amm_config.json \
   --clone B6qVEqoYkBnTa5Rv8XdjEvATDtREo569SvgvSeViHuQc --url https://api.mainnet-beta.solana.com \
-  --rpc-port 8899 --limit-ledger-size &
+  --rpc-port 8899 &
 
 VALIDATOR_PID=$!
 

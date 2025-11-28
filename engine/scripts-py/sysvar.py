@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
 import base64
+import os
 import struct
 import sys
 from time import sleep
 import requests
 
-# RPC_URL = "http://10.186.0.84:8899/"
-RPC_URL = "http://127.0.0.1:8899/"
+RPC_URL = os.environ.get("RPC_URL", "http://127.0.0.1:8899/")
 SLOT_HASHES_PUBKEY = "SysvarS1otHashes111111111111111111111111111"
 COMMITMENT = "processed"  # can be: processed | confirmed | finalized
 LIMIT = 32  # how many entries to show from the beginning (newest first)

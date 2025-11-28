@@ -6,6 +6,43 @@ export interface EnvironmentConfig {
   description: string;
 }
 
+const DEFAULT_REMOTE_HOST = "localhost";
+const DEFAULT_RPC_PORT = "8899";
+const DEFAULT_WS_PORT = "8900";
+
+const getBrowserHostname = (): string | undefined => {
+  if (typeof window === "undefined" || !window.location.hostname) {
+    return undefined;
+  }
+  return window.location.hostname;
+};
+
+const getBrowserProtocol = (): string | undefined => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return window.location.protocol.replace(":", "");
+};
+
+const remoteHost =
+  getBrowserHostname() ||
+  import.meta.env.VITE_REMOTE_RPC_HOST ||
+  DEFAULT_REMOTE_HOST;
+const remoteRpcProtocol =
+  import.meta.env.VITE_REMOTE_RPC_PROTOCOL || getBrowserProtocol() || "http";
+const remoteWsProtocol =
+  import.meta.env.VITE_REMOTE_WS_PROTOCOL ||
+  (remoteRpcProtocol === "https" ? "wss" : "ws");
+const remoteRpcPort =
+  import.meta.env.VITE_REMOTE_RPC_PORT || DEFAULT_RPC_PORT;
+const remoteWsPort =
+  import.meta.env.VITE_REMOTE_WS_PORT || DEFAULT_WS_PORT;
+
+const buildUrl = (protocol: string, host: string, port?: string) => {
+  const suffix = port ? `:${port}` : "";
+  return `${protocol}://${host}${suffix}`;
+};
+
 export const environments: Record<string, EnvironmentConfig> = {
   local: {
     rpcUrl: "http://127.0.0.1:8899",
@@ -14,10 +51,10 @@ export const environments: Record<string, EnvironmentConfig> = {
     description: "Local development validator",
   },
   remote: {
-    rpcUrl: "http://10.186.0.84:8899",
-    wsUrl: "ws://10.186.0.84:8900",
+    rpcUrl: buildUrl(remoteRpcProtocol, remoteHost, remoteRpcPort),
+    wsUrl: buildUrl(remoteWsProtocol, remoteHost, remoteWsPort),
     name: "Remote",
-    description: "Remote development server (10.186.0.84)",
+    description: `Remote development server (${remoteHost})`,
   },
   devnet: {
     rpcUrl: "https://api.devnet.solana.com",

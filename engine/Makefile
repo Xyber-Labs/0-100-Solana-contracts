@@ -25,7 +25,7 @@ help:
 	@echo "  mint-spl      - Mint SPL token with metadata (NAME, SYMBOL, URI, DECIMALS, AMOUNT, RECIPIENT or ARGS)"
 	@echo ""
 	@echo "Remote development:"
-	@echo "  config-remote - Set config to remote server (10.186.0.84)"
+	@echo "  config-remote - Set config to remote server ($(REMOTE_SOLANA_URL))"
 	@echo "  airdrop-remote - Request 5 SOL from the remote faucet"
 	@echo "  deploy-remote - Deploy to remote server"
 	@echo "  test-remote   - Run tests on remote server"
@@ -36,7 +36,7 @@ help:
 ANCHOR_PROVIDER_URL := http://127.0.0.1:8899
 # ANCHOR_PROVIDER_URL := https://api.devnet.solana.com
 ANCHOR_WALLET := ~/.config/solana/id.json
-REMOTE_SOLANA_URL := http://10.186.0.84:8899
+REMOTE_SOLANA_URL ?= http://127.0.0.1:8899
 
 # Test commands
 .PHONY: test
@@ -86,7 +86,7 @@ deploy:
 .PHONY: deploy-local
 deploy-local: config-local
 	@echo "Deploying program to local validator..."
-	anchor deploy --program-name engine --provider.cluster localnet --program-keypair ./deploy-keypair.json
+	anchor deploy --program-name engine --provider.cluster localnet --program-keypair ./keys/deploy-keypair.json
 
 .PHONY: deploy-devnet
 deploy-devnet:
