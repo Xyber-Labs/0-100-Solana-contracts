@@ -572,10 +572,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     launchStateData = await sdk.fetchLaunch(launchPda);
     const escrowAuthority = sdk.getEscrowAuthorityPda(launchPda)[0];
 
-    const isBaseSmaller = baseMint.toString() < WSOL_MINT.toString();
+    const isQuoteSmaller = Buffer.compare(WSOL_MINT.toBuffer(), baseMint.toBuffer()) < 0;
 
-    const tokenVault0 = isBaseSmaller ? baseVault : quoteVault;
-    const tokenVault1 = isBaseSmaller ? quoteVault : baseVault;
+    const tokenVault0 = isQuoteSmaller ? quoteVault : baseVault;
+    const tokenVault1 = isQuoteSmaller ? baseVault : quoteVault;
     const remainingAccounts: any[] = [];
     const poolStateAccount = await provider.connection.getAccountInfo(raydiumPoolState);
     if (poolStateAccount) {
