@@ -79,6 +79,25 @@ mod tests {
     }
 
     #[test]
+    fn test_calculate_project_range_large_partition() {
+        let project_id = 20;
+        let num_partitions = 81_000;
+        let (start, end) = calculate_project_range(project_id, num_partitions);
+
+        let expected_start = U256::from_dec_str(
+            "27161107351963058185775910063766299372989255662310749589502396248769746440",
+        )
+        .unwrap();
+        let expected_end = U256::from_dec_str(
+            "28590639317855850721869379014490841445251848065590262725791996051336575200",
+        )
+        .unwrap();
+
+        assert_eq!(start, expected_start);
+        assert_eq!(end, expected_end);
+    }
+
+    #[test]
     fn test_is_blockhash_in_project_range() {
         let project_id = 20;
         let num_partitions = 81000;
