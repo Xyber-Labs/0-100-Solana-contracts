@@ -248,10 +248,7 @@ export class TxBuilder {
         const n = (params.projectId as BN).toArrayLike(Buffer, "le", 8);
         return n;
       }
-      const n = BigInt(params.projectId as number);
-      const buf = Buffer.alloc(8);
-      buf.writeBigUInt64LE(n);
-      return buf;
+      return new BN(params.projectId as number).toArrayLike(Buffer, "le", 8);
     })();
     const [launchState] = this.getPda(["launch", projectIdLe]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);

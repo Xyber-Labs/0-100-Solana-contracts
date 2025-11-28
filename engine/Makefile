@@ -93,6 +93,14 @@ deploy-devnet:
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
 
+deploy-devnet-xyber:
+	@echo "Deploying program to devnet..."
+	anchor deploy \
+		--program-name engine \
+		--provider.cluster devnet \
+		--provider.wallet ~/.config/solana/xyber.json \
+		--program-keypair ./deploy-keypair.json
+
 .PHONY: build-deploy
 build-deploy: build deploy
 
