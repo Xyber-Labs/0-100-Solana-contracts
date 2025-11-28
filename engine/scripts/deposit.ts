@@ -3,6 +3,12 @@ import { Command } from "commander";
 
 import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
+const parsePositiveInt = (value: string): number => {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n) || n < 1) throw new Error("must be a positive integer");
+  return n;
+};
+
 async function main() {
   const program = new Command();
 
@@ -11,13 +17,12 @@ async function main() {
     .requiredOption("--project-id <number>", "Project ID")
     .requiredOption("--amount <lamports>", "Deposit amount in lamports")
     .requiredOption("--user-keypair <path>", "Path to user keypair file")
-    .option("--shard-id <number>", "Shard ID (default: 1)", "1")
+    .option("--shard-id <number>", "Shard ID", parsePositiveInt, 1)
     .parse(process.argv);
 
   const opts = program.opts();
   const userKeypair = loadKeypair(opts.userKeypair);
-  const shardId = parseInt(opts.shardId);
-
+  const shardId = opts.shardId;
   await runWithSdk(async ({ provider, sdk }) => {
     const projectId = new BN(opts.projectId);
     const amount = new BN(opts.amount);
