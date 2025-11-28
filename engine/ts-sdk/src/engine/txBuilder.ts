@@ -1527,13 +1527,12 @@ export class TxBuilder {
     };
   }
 
-  async addClmmLiquidityTx(params: {
+  async addClmmLiquidityIx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     baseMint: web3.PublicKey;
-    provider: any;
   }): Promise<{
-    transaction: web3.Transaction;
+    instruction: web3.TransactionInstruction;
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
@@ -1550,7 +1549,6 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     tickArrayBitmap: web3.PublicKey;
   }> {
-
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
 
     const baseTokenAta = getAssociatedTokenAddressSync(
@@ -1602,7 +1600,7 @@ export class TxBuilder {
 
     const [poolState] = this.getPda(["pool", params.launch]);
 
-    const addLiquidityIx = await this.program.methods
+    const instruction = await this.program.methods
       .addClmmLiquidity()
       .accountsStrict({
         payer: params.payer,
@@ -1636,16 +1634,8 @@ export class TxBuilder {
       ])
       .instruction();
 
-    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    const transaction = new web3.Transaction()
-      .add(computeBudgetIx)
-      .add(addLiquidityIx);
-
     return {
-      transaction,
+      instruction,
       signers: [raydiumPositionNftMint],
       quoteVault,
       baseVault,
@@ -1662,6 +1652,42 @@ export class TxBuilder {
       tickArrayBitmap,
       escrowAuthority,
     };
+  }
+
+  async addClmmLiquidityTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    provider: any;
+  }): Promise<{
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    quoteVault: web3.PublicKey;
+    baseVault: web3.PublicKey;
+    poolState: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
+    quoteEscrowAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    tickArrayLower: web3.PublicKey;
+    tickArrayUpper: web3.PublicKey;
+    bitmapExtension: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
+  }> {
+    const { instruction, ...rest } = await this.addClmmLiquidityIx(params);
+
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+
+    const transaction = new web3.Transaction()
+      .add(computeBudgetIx)
+      .add(instruction);
+
+    return { transaction, ...rest };
   }
 
   async getLiquidityRange(params: {
