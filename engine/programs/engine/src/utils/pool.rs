@@ -66,10 +66,10 @@ mod tests {
         let num_partitions = 150;
         let (start, end) = calculate_project_range(project_id, num_partitions);
 
-        // 0-based + modulo: seg = project_id % num_partitions
+        // 1-based project_id → 0-based seg: // seg = (project_id - 1) % num_partitions
         // range = [seg * width, (seg + 1) * width)
         let width = U256::MAX / U256::from(num_partitions);
-        let seg = project_id % num_partitions;
+        let seg = (project_id - 1) % num_partitions;
         let expected_start = width * U256::from(seg);
         let expected_end = expected_start + width;
 
