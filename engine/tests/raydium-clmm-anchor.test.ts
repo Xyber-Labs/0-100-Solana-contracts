@@ -21,6 +21,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const admin1Keypair = loadKeypair("keys/admin1.json");
   const admin2Keypair = loadKeypair("keys/admin2.json");
   const admin3Keypair = loadKeypair("keys/admin3.json");
+  const deployerKeypair = loadKeypair("keys/deployer.json");
   const xyberMintKeypair = loadKeypair("keys/xyber-mint.json");
   const treasuryKeypair = loadKeypair("keys/treasure.json");
   const creatorKeypair = loadKeypair("keys/creator.json");
@@ -91,6 +92,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       provider.connection.requestAirdrop(admin1Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(creatorKeypair.publicKey, 1000 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(buyer1Keypair.publicKey, 500 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(buyer2Keypair.publicKey, 500 * anchor.web3.LAMPORTS_PER_SOL),
@@ -210,9 +212,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       const { signature } = await dispatcherSdk.initialize({
         platformWallet: admin1Keypair.publicKey,
         communityWallet: communityClaimSignerKeypair.publicKey,
-        signers: [admin1Keypair],
+        signers: [deployerKeypair],
       });
       console.log("✅ Income-dispatcher initialized:", signature);
+      console.log("Explorer:", utils.getExplorerUrl(provider, signature));
     } catch (e) {
       console.log("Income-dispatcher config already exists, skipping initialization.");
     }

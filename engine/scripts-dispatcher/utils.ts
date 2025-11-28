@@ -1,20 +1,19 @@
 import * as anchor from "@coral-xyz/anchor";
 import { IncomeDispatcherSDK } from "@xyber-labs/0-100-sdk";
 
-export function initializeDispatcherSdk(admin: anchor.web3.Keypair) {
+export function initializeDispatcherSdk() {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.incomeDispatcher;
-  const sdk = IncomeDispatcherSDK.create(provider, program, admin);
+  const program = anchor.workspace.IncomeDispatcher;
+  const sdk = IncomeDispatcherSDK.create(provider, program);
   return { provider, sdk };
 }
 
 export async function runWithDispatcherSdk(
-  admin: anchor.web3.Keypair,
   fn: (ctx: { provider: anchor.AnchorProvider; sdk: ReturnType<typeof IncomeDispatcherSDK.create> }) => Promise<void>
 ): Promise<void> {
   try {
-    const { provider, sdk } = initializeDispatcherSdk(admin);
+    const { provider, sdk } = initializeDispatcherSdk();
     await fn({ provider, sdk });
   } catch (error: any) {
     console.error("❌ Transaction failed:");

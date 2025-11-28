@@ -5,7 +5,7 @@ use super::income_calculator::IncomeCalculator;
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
-    pub admin: Pubkey,
+    pub admin: Option<Pubkey>,
     pub platform_wallet: Pubkey,
     pub community_wallet: Pubkey,
     pub income_calculator: IncomeCalculator,

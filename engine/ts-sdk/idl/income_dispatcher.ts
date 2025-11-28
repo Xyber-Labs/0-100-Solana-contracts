@@ -1311,138 +1311,6 @@ export type IncomeDispatcher = {
           "type": "pubkey"
         }
       ]
-    },
-    {
-      "name": "updateCommunityClaimSigner",
-      "discriminator": [
-        247,
-        143,
-        34,
-        26,
-        64,
-        197,
-        109,
-        136
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "signer": true
-        },
-        {
-          "name": "config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "newCommunityClaimSigner",
-          "type": "pubkey"
-        }
-      ]
-    },
-    {
-      "name": "updatePlatformWallet",
-      "discriminator": [
-        76,
-        183,
-        6,
-        58,
-        132,
-        56,
-        171,
-        156
-      ],
-      "accounts": [
-        {
-          "name": "admin",
-          "signer": true
-        },
-        {
-          "name": "config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "newPlatformWallet",
-          "type": "pubkey"
-        }
-      ]
     }
   ],
   "accounts": [
@@ -1601,7 +1469,9 @@ export type IncomeDispatcher = {
         "fields": [
           {
             "name": "admin",
-            "type": "pubkey"
+            "type": {
+              "option": "pubkey"
+            }
           },
           {
             "name": "platformWallet",

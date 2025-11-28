@@ -45,18 +45,4 @@ pub mod income_dispatcher {
     ) -> Result<()> {
         instructions::claim(ctx, project_id, role, nonce_value, limit_base_claim, limit_quote_claim)
     }
-
-    pub fn update_platform_wallet(
-        ctx: Context<UpdatePlatformWallet>,
-        new_platform_wallet: Pubkey,
-    ) -> Result<()> {
-        instructions::update_platform_wallet(ctx, new_platform_wallet)
-    }
-
-    pub fn update_community_claim_signer(
-        ctx: Context<UpdateCommunityClaimSigner>,
-        new_community_claim_signer: Pubkey,
-    ) -> Result<()> {
-        instructions::update_community_claim_signer(ctx, new_community_claim_signer)
-    }
 }

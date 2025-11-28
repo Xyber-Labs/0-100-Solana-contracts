@@ -1,8 +1,7 @@
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 
-import { loadKeypair } from "@xyber-labs/0-100-sdk";
-import { getExplorerUrl, runWithSdk } from "./utils";
+import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();
@@ -12,10 +11,12 @@ async function main() {
     .requiredOption("--project-id <number>", "Project ID")
     .requiredOption("--amount <lamports>", "Deposit amount in lamports")
     .requiredOption("--user-keypair <path>", "Path to user keypair file")
+    .option("--shard-id <number>", "Shard ID (default: 1)", "1")
     .parse(process.argv);
 
   const opts = program.opts();
   const userKeypair = loadKeypair(opts.userKeypair);
+  const shardId = parseInt(opts.shardId);
 
   await runWithSdk(async ({ provider, sdk }) => {
     const projectId = new BN(opts.projectId);
@@ -35,6 +36,7 @@ async function main() {
       launch: launchPda,
       amountLamports: amount,
       userKeypair,
+      shardId,
     });
 
     console.log("✅ Success!");

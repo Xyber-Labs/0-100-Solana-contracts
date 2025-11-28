@@ -7,12 +7,22 @@ use crate::{
     state::Config,
 };
 
+#[cfg(feature = "devnet")]
+const DEPLOYER: Pubkey = pubkey!("3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP");
+
+#[cfg(not(feature = "devnet"))]
+const DEPLOYER: Pubkey = pubkey!("7xLqtwhLTSmXwNi3ddwpoxsCcGQXtvwdMCd3YdtgHVnF");
+
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = (config.admin.is_none() && admin.key() == DEPLOYER) || config.admin == Some(admin.key())
+        @ ErrorCode::Unauthorized
+    )]
     pub admin: Signer<'info>,
     #[account(
-        init,
+        init_if_needed,
         payer = admin,
         space = 8 + Config::INIT_SPACE,
         seeds = [DISPATCHER_SEED_ROOT, b"config"],
@@ -28,7 +38,7 @@ pub fn initialize(
     community_wallet: Pubkey,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
-    config.admin = ctx.accounts.admin.key();
+    config.admin = Some(ctx.accounts.admin.key());
     config.platform_wallet = platform_wallet;
     config.community_wallet = community_wallet;
 

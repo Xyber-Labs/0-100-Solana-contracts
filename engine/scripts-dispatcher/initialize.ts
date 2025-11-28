@@ -1,27 +1,26 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Command } from "commander";
-import { loadKeypair } from "@xyber-labs/0-100-sdk";
-import { getExplorerUrl } from "../scripts/utils";
+import { getExplorerUrl, loadKeypair } from "../scripts/utils";
 import { runWithDispatcherSdk } from "./utils";
 
 async function main() {
   const program = new Command();
   program
     .requiredOption("--platform-wallet <pubkey>", "Platform wallet address for receiving fees")
-    .requiredOption("--community-claim-signer <pubkey>", "Community claim signer address")
-    .requiredOption("--admin-keypair <path>", "Path to admin keypair file")
+    .requiredOption("--community-wallet <pubkey>", "Community wallet address")
+    .requiredOption("--deployer-keypair <path>", "Path to deployer keypair file (must match DEPLOYER constant)")
     .parse(process.argv);
 
   const opts = program.opts();
   const platformWallet = new anchor.web3.PublicKey(opts.platformWallet);
-  const communityClaimSigner = new anchor.web3.PublicKey(opts.communityClaimSigner);
-  const adminKeypair = loadKeypair(opts.adminKeypair);
+  const communityWallet = new anchor.web3.PublicKey(opts.communityWallet);
+  const deployerKeypair = loadKeypair(opts.deployerKeypair);
 
-  await runWithDispatcherSdk(adminKeypair, async ({ provider, sdk }) => {
+  await runWithDispatcherSdk(async ({ provider, sdk }) => {
     console.log("Initializing Income Dispatcher config:");
     console.log("  Platform wallet:", platformWallet.toBase58());
-    console.log("  Community claim signer:", communityClaimSigner.toBase58());
-    console.log("  Admin:", adminKeypair.publicKey.toBase58());
+    console.log("  Community wallet:", communityWallet.toBase58());
+    console.log("  Deployer:", deployerKeypair.publicKey.toBase58());
 
     const [configPda] = sdk.getConfigPda();
     console.log("  Config PDA:", configPda.toBase58());
@@ -29,8 +28,8 @@ async function main() {
     console.log("Sending transaction...");
     const result = await sdk.initialize({
       platformWallet,
-      communityClaimSigner,
-      signers: [adminKeypair],
+      communityWallet,
+      signers: [deployerKeypair],
     });
 
     console.log("✅ Success!");
