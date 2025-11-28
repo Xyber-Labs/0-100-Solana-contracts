@@ -73,7 +73,7 @@ const IncomeDispatcherSDK = {
       recipient: anchor.web3.PublicKey;
       baseMint: anchor.web3.PublicKey;
       quoteMint: anchor.web3.PublicKey;
-      nonce: number;
+      nonce: BN;
       limitBaseClaim?: BN;
       limitQuoteClaim?: BN;
       remainingAccounts?: { pubkey: anchor.web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
@@ -112,7 +112,7 @@ const IncomeDispatcherSDK = {
       );
 
       const ix = await program.methods
-        .claim(new BN(args.projectId), args.role, new BN(args.nonce), args.limitBaseClaim ?? null, args.limitQuoteClaim ?? null)
+        .claim(args.projectId, args.role, args.nonce, args.limitBaseClaim ?? null, args.limitQuoteClaim ?? null)
         .accountsStrict({
           recipient: args.recipient,
           config,

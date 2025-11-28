@@ -572,7 +572,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     launchStateData = await sdk.fetchLaunch(launchPda);
     const escrowAuthority = sdk.getEscrowAuthorityPda(launchPda)[0];
 
-    const isBaseSmaller = baseMint.toString() > WSOL_MINT.toString();
+    const isBaseSmaller = baseMint.toString() < WSOL_MINT.toString();
 
     const tokenVault0 = isBaseSmaller ? baseVault : quoteVault;
     const tokenVault1 = isBaseSmaller ? quoteVault : baseVault;
@@ -682,7 +682,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       recipient: platformKeypair.publicKey,
       baseMint,
       quoteMint: WSOL_MINT,
-      nonce: 0,
+      nonce: new BN(0),
       signers: [platformKeypair],
     });
     console.log("✅ Platform fees claimed");
@@ -698,7 +698,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       recipient: creatorKeypair.publicKey,
       baseMint,
       quoteMint: WSOL_MINT,
-      nonce: 0,
+      nonce: new BN(0),
       signers: [creatorKeypair],
     });
     console.log("✅ Creator fees claimed");
@@ -714,7 +714,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       recipient: buyer1Keypair.publicKey,
       baseMint,
       quoteMint: WSOL_MINT,
-      nonce: 0,
+      nonce: new BN(0),
       remainingAccounts: [
         { pubkey: communityWallet.publicKey, isWritable: false, isSigner: true },
       ],
