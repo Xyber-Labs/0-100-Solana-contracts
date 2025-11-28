@@ -27,11 +27,7 @@ pub struct Claim<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    #[account(
-        mut,
-        seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
-        bump
-    )]
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()], bump)]
     pub income_config: Box<Account<'info, IncomeConfig>>,
 
     /// CHECK: Project authority PDA

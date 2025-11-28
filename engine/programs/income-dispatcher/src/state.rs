@@ -11,14 +11,6 @@ pub struct Config {
     pub income_calculator: IncomeCalculator,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
-pub struct RoleBalance {
-    pub earned_base: u64,
-    pub earned_quote: u64,
-    pub claimed_base: u64,
-    pub claimed_quote: u64,
-}
-
 #[account]
 #[derive(InitSpace)]
 pub struct IncomeConfig {
@@ -28,6 +20,14 @@ pub struct IncomeConfig {
     pub total_harvested_quote: u64,
     pub total_claimed_base: u64,
     pub total_claimed_quote: u64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
+pub struct RoleBalance {
+    pub earned_base: u64,
+    pub earned_quote: u64,
+    pub claimed_base: u64,
+    pub claimed_quote: u64,
 }
 
 #[account]
