@@ -24,11 +24,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const deployerKeypair = loadKeypair("keys/deployer.json");
   const xyberMintKeypair = loadKeypair("keys/xyber-mint.json");
   const treasuryKeypair = loadKeypair("keys/treasure.json");
+  const platformKeypair = loadKeypair("keys/platform.json");
   const creatorKeypair = loadKeypair("keys/creator.json");
   const buyer1Keypair = loadKeypair("keys/buyer1.json");
   const buyer2Keypair = loadKeypair("keys/buyer2.json");
   const buyer3Keypair = loadKeypair("keys/buyer3.json");
-  const communityClaimSignerKeypair = anchor.web3.Keypair.generate();
+  const communityWallet = loadKeypair("keys/community-signer.json");
 
   const sdk = EngineSDK.create(provider, program, admin1Keypair);
   const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
@@ -93,6 +94,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(platformKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(creatorKeypair.publicKey, 1000 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(buyer1Keypair.publicKey, 500 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(buyer2Keypair.publicKey, 500 * anchor.web3.LAMPORTS_PER_SOL),
@@ -210,8 +212,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     try {
       const { signature } = await dispatcherSdk.initialize({
-        platformWallet: admin1Keypair.publicKey,
-        communityWallet: communityClaimSignerKeypair.publicKey,
+        platformWallet: platformKeypair.publicKey,
+        communityWallet: communityWallet.publicKey,
         signers: [deployerKeypair],
       });
       console.log("✅ Income-dispatcher initialized:", signature);
@@ -221,8 +223,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     }
 
     const configAccount = await dispatcherSdk.fetchConfig();
-    assert.equal(configAccount.platformWallet.toString(), admin1Keypair.publicKey.toString());
-    assert.equal(configAccount.communityWallet.toString(), communityClaimSignerKeypair.publicKey.toString());
+    assert.equal(configAccount.platformWallet.toString(), platformKeypair.publicKey.toString());
+    assert.equal(configAccount.communityWallet.toString(), communityWallet.publicKey.toString());
   });
 
   it("Step 3: Initialize launch from preset", async () => {
@@ -677,11 +679,11 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       role: { platform: {} },
       projectId: launchStateData.projectId,
       launchState: launchPda,
-      recipient: admin1Keypair.publicKey,
+      recipient: platformKeypair.publicKey,
       baseMint,
       quoteMint: WSOL_MINT,
       nonce: 0,
-      signers: [admin1Keypair],
+      signers: [platformKeypair],
     });
     console.log("✅ Platform fees claimed");
   });
@@ -714,9 +716,9 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       quoteMint: WSOL_MINT,
       nonce: 0,
       remainingAccounts: [
-        { pubkey: communityClaimSignerKeypair.publicKey, isWritable: false, isSigner: true },
+        { pubkey: communityWallet.publicKey, isWritable: false, isSigner: true },
       ],
-      signers: [buyer1Keypair, communityClaimSignerKeypair],
+      signers: [buyer1Keypair, communityWallet],
     });
 
     const nonceAccount = await dispatcherSdk.fetchNonce(launchStateData.projectId, buyer1Keypair.publicKey);
