@@ -22,7 +22,7 @@ pub struct MintForTest<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.clmm_base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
+        constraint = launch_state.base_mint.is_none() @ crate::errors::ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Account<'info, LaunchState>,
 
@@ -104,6 +104,5 @@ pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
         &ctx.accounts.launch_state.key(),
     )?;
     ctx.accounts.launch_state.base_mint = Some(ctx.accounts.base_mint.key());
-    ctx.accounts.launch_state.clmm_base_mint = Some(ctx.accounts.base_mint.key());
     Ok(())
 }

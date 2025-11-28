@@ -2,7 +2,10 @@ use std::cmp::min;
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Key, prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use raydium_amm_v3::{libraries::fixed_point_64::Q64, states::TickArrayState};
+use raydium_amm_v3::{
+    libraries::{fixed_point_64::Q64, get_tick_at_sqrt_price},
+    states::TickArrayState,
+};
 
 use crate::{errors::ErrorCode, LaunchState};
 
@@ -126,17 +129,15 @@ const PRICE_LOWER_EXP: f64 = -5.975;
 const PRICE_UPPER_EXP: f64 = 6.0;
 
 pub fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64) -> LiquidityRange {
-    use raydium_amm_v3::{libraries, libraries::fixed_point_64};
-
     let price_lower = price_ratio * 10f64.powf(PRICE_LOWER_EXP);
     let price_upper = price_ratio * 10f64.powf(PRICE_UPPER_EXP);
 
-    let sqrt_price_lower_x64 = (price_lower.sqrt() * fixed_point_64::Q64 as f64) as u128;
-    let sqrt_price_upper_x64 = (price_upper.sqrt() * fixed_point_64::Q64 as f64) as u128;
+    let sqrt_price_lower_x64 = (price_lower.sqrt() * Q64 as f64) as u128;
+    let sqrt_price_upper_x64 = (price_upper.sqrt() * Q64 as f64) as u128;
 
-    let tick_lower_raw = libraries::get_tick_at_sqrt_price(sqrt_price_lower_x64)
+    let tick_lower_raw = get_tick_at_sqrt_price(sqrt_price_lower_x64)
         .expect("Expected to be allowed sqrt price range");
-    let tick_upper_raw = libraries::get_tick_at_sqrt_price(sqrt_price_upper_x64)
+    let tick_upper_raw = get_tick_at_sqrt_price(sqrt_price_upper_x64)
         .expect("Expected to be allowed sqrt price range");
 
     let spacing = tick_spacing as i32;

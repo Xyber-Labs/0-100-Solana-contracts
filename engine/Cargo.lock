@@ -878,7 +878,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "mpl-token-metadata",
- "raydium-amm-v3",
+ "raydium-amm-v3 0.1.0 (git+https://github.com/raydium-io/raydium-clmm)",
  "uint 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1037,7 +1037,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "engine",
- "raydium-amm-v3",
+ "raydium-amm-v3 0.1.0 (git+https://github.com/raydium-io/raydium-clmm?rev=d4ec101534724a20e1eb38a9b997f8b391c5100f)",
 ]
 
 [[package]]
@@ -1489,6 +1489,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
+]
+
+[[package]]
+name = "raydium-amm-v3"
+version = "0.1.0"
+source = "git+https://github.com/raydium-io/raydium-clmm?rev=d4ec101534724a20e1eb38a9b997f8b391c5100f#d4ec101534724a20e1eb38a9b997f8b391c5100f"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "arrayref",
+ "bytemuck",
+ "solana-security-txt",
+ "spl-token-2022 7.0.0",
+ "uint 0.9.5 (git+https://github.com/raydium-io/parity-common)",
 ]
 
 [[package]]

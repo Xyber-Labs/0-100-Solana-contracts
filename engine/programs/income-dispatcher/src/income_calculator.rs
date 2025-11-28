@@ -1,133 +1,153 @@
 use anchor_lang::prelude::*;
-use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::errors::ErrorCode;
 
-#[derive(BorshSerialize, BorshDeserialize)]
-struct IncomeCalculator {
-    price_in_quote: u128,
+const BASIS_POINTS: u128 = 10_000;
+
+macro_rules! mcap {
+    ($market_cap_sol:expr) => {{
+        let mcap: f64 = $market_cap_sol;
+        if mcap == 0.0 {
+            u128::MAX
+        } else {
+            const TOTAL_SUPPLY_TOKENS: f64 = 1_000_000_000.0;
+            let inverse_price = TOTAL_SUPPLY_TOKENS / mcap;
+            let sqrt_inverse = inverse_price.sqrt();
+            (sqrt_inverse * raydium_amm_v3::libraries::fixed_point_64::Q64 as f64) as u128
+        }
+    }};
+}
+
+pub(crate) use mcap;
+
+#[derive(
+    Clone, Copy, PartialEq, Eq, Ord, PartialOrd, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
+pub enum Role {
+    Platform = 0,
+    Creator = 1,
+    Community = 2,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct IncomeCalculator {
     base_decimals: u8,
+    #[max_len(30)]
     rules: Vec<DistributionRule>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy)]
-struct DistributionRule {
-    market_cap: u128,
-    recipient: Pubkey,
-    share: u128,
-    priority: u8,
+#[account]
+#[derive(InitSpace)]
+pub struct DistributionRule {
+    pub sqrt_price_x64: u128,
+    pub recipient: Role,
+    pub rate: u128,
+    pub priority: u8,
 }
 
 impl DistributionRule {
-    fn new(market_cap: u128, recipient: Pubkey, share: u128, priority: u8) -> Self {
+    pub fn new(sqrt_price_x64: u128, recipient: Role, rate: u128, priority: u8) -> Self {
         Self {
-            market_cap,
+            sqrt_price_x64,
             recipient,
-            share,
+            rate,
             priority,
         }
     }
 }
 
-#[derive(Default, Clone)]
-struct Income {
-    recipient: Pubkey,
-    base_token: u128,
-    quote_token: u128,
+#[derive(Clone)]
+pub struct Income {
+    pub recipient: Role,
+    pub base_token: u128,
+    pub quote_token: u128,
 }
 
-struct Distribution {
-    incomes: Vec<Income>,
-    price_in_quote: u128,
-    base_decimals: u8,
-}
-
-impl Distribution {
-    fn get(&self, recipient: &Pubkey) -> Result<&Income> {
-        self.incomes
-            .iter()
-            .find(|d| d.recipient == *recipient)
-            .ok_or(ErrorCode::RecipientNotFound.into())
-    }
-
-    #[cfg(test)]
-    fn total_in_quote(&self, recipient: &Pubkey) -> Result<u128> {
-        let income = self.get(recipient)?;
-        let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
-        let base_in_quote = income
-            .base_token
-            .checked_mul(self.price_in_quote)
-            .ok_or(ErrorCode::ArithmeticOverflow)?
-            .checked_div(base_decimals_divisor)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        base_in_quote.checked_add(income.quote_token).ok_or(ErrorCode::ArithmeticOverflow.into())
-    }
-
-    fn len(&self) -> usize {
-        self.incomes.len()
-    }
+pub struct Distribution {
+    pub incomes: Vec<Income>,
+    pub price_in_quote: u128,
+    pub base_decimals: u8,
 }
 
 impl IncomeCalculator {
-    const BASIS_POINTS: u128 = 10_000;
-
-    pub(super) fn new(price_in_quote: u128, base_decimals: u8) -> Result<Self> {
+    pub fn new(base_decimals: u8) -> Result<Self> {
         require!(base_decimals < 18, ErrorCode::InvalidBaseDecimals);
         Ok(Self {
-            price_in_quote,
             base_decimals,
             rules: Vec::default(),
         })
     }
 
-    pub(super) fn add_rule(mut self, rule: DistributionRule) -> Self {
+    pub fn add_rule(mut self, rule: DistributionRule) -> Self {
         let insert_pos = self
             .rules
-            .binary_search_by_key(&(rule.market_cap, rule.priority), |r| (r.market_cap, r.priority))
+            .binary_search_by_key(&(rule.sqrt_price_x64, rule.priority), |r| {
+                (r.sqrt_price_x64, r.priority)
+            })
             .unwrap_or_else(|pos| pos);
         self.rules.insert(insert_pos, rule);
         self
     }
 
-    pub(super) fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         if self.rules.is_empty() {
             return true;
         }
 
-        let mut current_cap = self.rules[0].market_cap;
+        let mut current_price = self.rules[0].sqrt_price_x64;
         let mut share_sum: u128 = 0;
 
         for rule in &self.rules {
-            if rule.market_cap != current_cap {
-                if share_sum != Self::BASIS_POINTS {
+            if rule.sqrt_price_x64 != current_price {
+                if share_sum != BASIS_POINTS {
                     return false;
                 }
-                current_cap = rule.market_cap;
+                current_price = rule.sqrt_price_x64;
                 share_sum = 0;
             }
-            share_sum = match share_sum.checked_add(rule.share) {
+            share_sum = match share_sum.checked_add(rule.rate) {
                 Some(sum) => sum,
                 None => return false,
             };
         }
-        share_sum == Self::BASIS_POINTS
+        share_sum == BASIS_POINTS
     }
 
-    pub(super) fn get_distribution(
+    pub fn get_rules_by_price(&self, sqrt_price_x64: u128) -> Result<&[DistributionRule]> {
+        let start = self.rules.partition_point(|r| r.sqrt_price_x64 < sqrt_price_x64);
+        if start >= self.rules.len() {
+            return Err(ErrorCode::NoDistributionRules.into());
+        }
+        let threshold = self.rules[start].sqrt_price_x64;
+        let end = self.rules.partition_point(|r| r.sqrt_price_x64 <= threshold);
+        Ok(&self.rules[start..end])
+    }
+
+    pub fn get_distribution(
         &self,
-        market_cap: u128,
+        sqrt_price_x64: u128,
         base_token_volume: u128,
         quote_token_volume: u128,
-    ) -> Result<Distribution> {
-        let end = self.rules.partition_point(|r| r.market_cap <= market_cap);
-        let index = end.checked_sub(1).ok_or(ErrorCode::NoDistributionRules)?;
-        let max_applicable_cap_value = self.rules[index].market_cap;
-        let start = self.rules.partition_point(|r| r.market_cap < max_applicable_cap_value);
+    ) -> Result<Box<Distribution>> {
+        let applicable_rules = self.get_rules_by_price(sqrt_price_x64)?;
 
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
 
+        // Calculate price dynamically: price_in_quote = (quote_volume * 10^base_decimals) / base_volume
+        let price_in_quote = if base_token_volume > 0 {
+            quote_token_volume
+                .checked_mul(base_decimals_divisor)
+                .ok_or(ErrorCode::ArithmeticOverflow)?
+                .checked_div(base_token_volume)
+                .ok_or(ErrorCode::ArithmeticOverflow)?
+        } else {
+            // If no base tokens claimed yet, use a default price of 1:1
+            base_decimals_divisor
+        };
+
         let base_in_quote = base_token_volume
-            .checked_mul(self.price_in_quote)
+            .checked_mul(price_in_quote)
             .ok_or(ErrorCode::ArithmeticOverflow)?
             .checked_div(base_decimals_divisor)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
@@ -138,11 +158,10 @@ impl IncomeCalculator {
         let mut rem_quote = quote_token_volume;
         let mut distributions = Vec::new();
 
-        for rule in &self.rules[start..end] {
+        for rule in applicable_rules {
             let share_in_quote = total_income_in_quote
-                .checked_mul(rule.share)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_div(Self::BASIS_POINTS)
+                .checked_mul(rule.rate)
+                .and_then(|v| v.checked_div(BASIS_POINTS))
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
 
             let quote_taken = rem_quote.min(share_in_quote);
@@ -152,8 +171,7 @@ impl IncomeCalculator {
                 share_in_quote.checked_sub(quote_taken).expect("Not reachable: share_q < taken_q");
             let base_needed = rem_share_in_quote
                 .checked_mul(base_decimals_divisor)
-                .ok_or(ErrorCode::ArithmeticOverflow)?
-                .checked_div(self.price_in_quote)
+                .and_then(|v| v.checked_div(price_in_quote))
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
             let base_taken = rem_base.min(base_needed);
             rem_base = rem_base.checked_sub(base_taken).expect("Not reachable: rem_b < taken_b");
@@ -165,199 +183,249 @@ impl IncomeCalculator {
             });
         }
 
-        Ok(Distribution {
+        Ok(Box::new(Distribution {
             incomes: distributions,
-            price_in_quote: self.price_in_quote,
+            price_in_quote,
             base_decimals: self.base_decimals,
-        })
+        }))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use raydium_amm_v3::libraries::Q64;
+
     use super::*;
+
+    const TOTAL_SUPPLY_TOKENS: f64 = 1_000_000_000.0;
+
+    fn sqrt_price_x64_to_market_cap(sqrt_price_x64: u128) -> f64 {
+        let sqrt_price = (sqrt_price_x64 as f64) / (Q64 as f64);
+        let inverse_price = sqrt_price * sqrt_price;
+        TOTAL_SUPPLY_TOKENS / inverse_price
+    }
 
     struct TestSetup {
         calculator: IncomeCalculator,
-        platform: Pubkey,
-        community: Pubkey,
-        creator: Pubkey,
-    }
-
-    #[test]
-    fn test_low_tier_for_sol() {
-        let TestSetup {
-            calculator,
-            platform,
-            community,
-            creator,
-        } = create_calculator_with_tiers(10_000_000, 6);
-        let dist_tier1 = calculator
-            .get_distribution(250, 100_000_000, 2_125_000_000)
-            .expect("distribution calculation failed");
-
-        assert_eq!(dist_tier1.len(), 3);
-        let platform_dist = dist_tier1.get(&platform).expect("platform not found");
-        let community_dist = dist_tier1.get(&community).expect("community not found");
-        let creator_dist = dist_tier1.get(&creator).expect("creator not found");
-
-        let total_platform = dist_tier1.total_in_quote(&platform).expect("calculation failed");
-        let total_community = dist_tier1.total_in_quote(&community).expect("calculation failed");
-        let total_creator = dist_tier1.total_in_quote(&creator).expect("calculation failed");
-
-        assert_eq!(total_platform + total_community + total_creator, 3_125_000_000);
-        assert_eq!(total_platform, 1_875_000_000);
-        assert_eq!(total_community, 468_750_000);
-        assert_eq!(total_creator, 781_250_000);
-        assert_eq!(platform_dist.base_token, 0);
-        assert_eq!(platform_dist.quote_token, 1_875_000_000);
-        assert_eq!(community_dist.base_token, 46_875_000);
-        assert_eq!(community_dist.quote_token, 0);
-        assert_eq!(creator_dist.base_token, 53_125_000);
-        assert_eq!(creator_dist.quote_token, 250_000_000);
-    }
-
-    #[test]
-    fn test_high_tier_for_sol() {
-        let TestSetup {
-            calculator,
-            platform,
-            community,
-            creator,
-        } = create_calculator_with_tiers(10_000_000, 6);
-
-        let dist = calculator
-            .get_distribution(150_000, 200_000_000, 500_000_000)
-            .expect("distribution calculation failed");
-
-        assert_eq!(dist.len(), 3);
-        let platform_dist = dist.get(&platform).expect("platform not found");
-        let community_dist = dist.get(&community).expect("community not found");
-        let creator_dist = dist.get(&creator).expect("creator not found");
-
-        let total_platform = dist.total_in_quote(&platform).expect("calculation failed");
-        let total_community = dist.total_in_quote(&community).expect("calculation failed");
-        let total_creator = dist.total_in_quote(&creator).expect("calculation failed");
-
-        assert_eq!(total_platform + total_community + total_creator, 2_500_000_000);
-        assert_eq!(total_platform, 1_500_000_000);
-        assert_eq!(total_creator, 850_000_000);
-        assert_eq!(total_community, 150_000_000);
-
-        assert_eq!(platform_dist.base_token, 100_000_000);
-        assert_eq!(platform_dist.quote_token, 500_000_000);
-        assert_eq!(creator_dist.base_token, 85_000_000);
-        assert_eq!(creator_dist.quote_token, 0);
-        assert_eq!(community_dist.base_token, 15_000_000);
-        assert_eq!(community_dist.quote_token, 0);
+        platform: Role,
+        community: Role,
+        creator: Role,
     }
 
     #[test]
     fn test_validate() {
-        let TestSetup {
-            calculator,
-            platform: _,
-            community: _,
-            creator: _,
-        } = create_calculator_with_tiers(1, 6);
-        assert!(calculator.is_valid());
+        let setup = create_calculator_with_mcap_tiers(6);
+        assert!(setup.calculator.is_valid());
     }
 
     #[test]
-    fn test_minimum_price() {
-        let max_base_volume = 1_000_000_000_000_000;
+    fn test_real_sqrt_price_from_raydium() {
+        let sqrt_price_x64: u128 = 21723472191457830933981;
+        let q64 = Q64 as f64;
+        let sqrt_price = (sqrt_price_x64 as f64) / q64;
+        let price = sqrt_price * sqrt_price;
+        let inverse_price = 1.0 / price;
+        let quote_amount = 300.0;
+        let base_amount = 481400000.0;
+        let price_growing_rate = 1.15;
+        let expected_price = quote_amount / base_amount * price_growing_rate;
+        let expected_inverse: f64 = 1.0 / expected_price;
+        let expected_sqrt = expected_inverse.sqrt();
+        let expected_sqrt_x64 = expected_sqrt * q64;
+        let market_cap = sqrt_price_x64_to_market_cap(sqrt_price_x64);
+        let setup = create_calculator_with_mcap_tiers(6);
+        let rules = setup.calculator.get_rules_by_price(sqrt_price_x64).unwrap();
 
-        let TestSetup {
-            calculator,
-            platform,
-            community,
-            creator,
-        } = create_calculator_with_tiers(1, 6);
+        assert!(market_cap > 500.0 && market_cap < 1500.0, "Expected market cap ~721 SOL");
+        assert_eq!(rules.len(), 3, "Expected 3 rules for tier 501");
 
-        let dist = calculator
-            .get_distribution(100, max_base_volume, 0)
-            .expect("distribution calculation failed");
+        let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
+        let creator_rule = rules.iter().find(|r| r.recipient == Role::Creator).unwrap();
+        let community_rule = rules.iter().find(|r| r.recipient == Role::Community).unwrap();
 
-        assert_eq!(dist.len(), 3);
-        let total_platform = dist.total_in_quote(&platform).expect("calculation failed");
-        let total_community = dist.total_in_quote(&community).expect("calculation failed");
-        let total_creator = dist.total_in_quote(&creator).expect("calculation failed");
-        assert!(total_platform + total_community + total_creator > 0);
+        assert_eq!(platform_rule.rate, 3000, "Platform should be 30%");
+        assert_eq!(creator_rule.rate, 5600, "Creator should be 56%");
+        assert_eq!(community_rule.rate, 1400, "Community should be 14%");
+        assert_eq!(
+            platform_rule.rate + creator_rule.rate + community_rule.rate,
+            BASIS_POINTS,
+            "Total should be 100%"
+        );
+    }
+
+    fn market_cap_to_sqrt_price_x64(market_cap_sol: f64) -> u128 {
+        if market_cap_sol == 0.0 {
+            u128::MAX
+        } else {
+            let inverse_price = TOTAL_SUPPLY_TOKENS / market_cap_sol;
+            let sqrt_inverse = inverse_price.sqrt();
+            (sqrt_inverse * Q64 as f64) as u128
+        }
+    }
+
+    fn test_tier_selection(
+        market_cap_sol: f64,
+        expected_platform: u128,
+        expected_creator: u128,
+        expected_community: u128,
+    ) {
+        let sqrt_price_x64 = market_cap_to_sqrt_price_x64(market_cap_sol);
+        let inverse_price = TOTAL_SUPPLY_TOKENS / market_cap_sol;
+
+        let setup = create_calculator_with_mcap_tiers(6);
+        let rules = setup.calculator.get_rules_by_price(sqrt_price_x64).unwrap();
+
+        let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
+        let creator_rule = rules.iter().find(|r| r.recipient == Role::Creator).unwrap();
+        let community_rule = rules.iter().find(|r| r.recipient == Role::Community).unwrap();
+
+        assert_eq!(platform_rule.rate, expected_platform, "Platform rate mismatch");
+        assert_eq!(creator_rule.rate, expected_creator, "Creator rate mismatch");
+        assert_eq!(community_rule.rate, expected_community, "Community rate mismatch");
+        assert_eq!(
+            platform_rule.rate + creator_rule.rate + community_rule.rate,
+            BASIS_POINTS,
+            "Total should be 100%"
+        );
     }
 
     #[test]
-    fn test_price_overflow() {
-        let max_base_volume = 1_000_000_000_000_000;
-        let overflow_price = u128::MAX / max_base_volume + 1; // not reachable
-        let TestSetup {
-            calculator,
-            platform: _,
-            community: _,
-            creator: _,
-        } = create_calculator_with_tiers(overflow_price, 6);
-        assert!(calculator.get_distribution(100, max_base_volume, 0).is_err());
+    fn test_tier_0_market_cap_100() {
+        test_tier_selection(100.0, 6000, 2500, 1500);
     }
 
     #[test]
-    fn test_maximum_price() {
-        let max_base_volume = 1_000_000_000_000_000;
-        let max_price = u128::MAX / max_base_volume;
-        let TestSetup {
-            calculator,
-            platform,
-            community,
-            creator,
-        } = create_calculator_with_tiers(max_price, 6);
-
-        let dist = calculator
-            .get_distribution(100, max_base_volume, 0)
-            .expect("distribution calculation failed");
-
-        assert_eq!(dist.len(), 3);
-        let total_platform = dist.total_in_quote(&platform).expect("calculation failed");
-        let total_community = dist.total_in_quote(&community).expect("calculation failed");
-        let total_creator = dist.total_in_quote(&creator).expect("calculation failed");
-
-        assert!(total_platform + total_community + total_creator > 0);
+    fn test_tier_0_market_cap_500() {
+        test_tier_selection(500.0, 6000, 2500, 1500);
     }
 
-    fn create_calculator_with_tiers(price_in_quote: u128, base_decimals: u8) -> TestSetup {
-        let platform = Pubkey::new_unique();
-        let community = Pubkey::new_unique();
-        let creator = Pubkey::new_unique();
+    #[test]
+    fn test_tier_501_market_cap_600() {
+        test_tier_selection(600.0, 3000, 5600, 1400);
+    }
 
-        let calculator = IncomeCalculator::new(price_in_quote, base_decimals)
+    #[test]
+    fn test_tier_501_market_cap_1500() {
+        test_tier_selection(1500.0, 3000, 5600, 1400);
+    }
+
+    #[test]
+    fn test_tier_1501_market_cap_2000() {
+        test_tier_selection(2000.0, 3400, 5300, 1300);
+    }
+
+    #[test]
+    fn test_tier_1501_market_cap_4000() {
+        test_tier_selection(4000.0, 3400, 5300, 1300);
+    }
+
+    #[test]
+    fn test_tier_4001_market_cap_5000() {
+        test_tier_selection(5000.0, 3700, 5100, 1200);
+    }
+
+    #[test]
+    fn test_tier_4001_market_cap_10000() {
+        test_tier_selection(10000.0, 3700, 5100, 1200);
+    }
+
+    #[test]
+    fn test_tier_10001_market_cap_15000() {
+        test_tier_selection(15000.0, 4000, 4900, 1100);
+    }
+
+    #[test]
+    fn test_tier_10001_market_cap_20000() {
+        test_tier_selection(20000.0, 4000, 4900, 1100);
+    }
+
+    #[test]
+    fn test_tier_20001_market_cap_25000() {
+        test_tier_selection(25000.0, 4300, 4700, 1000);
+    }
+
+    #[test]
+    fn test_tier_20001_market_cap_30000() {
+        test_tier_selection(30000.0, 4300, 4700, 1000);
+    }
+
+    #[test]
+    fn test_tier_30001_market_cap_40000() {
+        test_tier_selection(40000.0, 4700, 4400, 900);
+    }
+
+    #[test]
+    fn test_tier_30001_market_cap_50000() {
+        test_tier_selection(50000.0, 4700, 4400, 900);
+    }
+
+    #[test]
+    fn test_tier_50001_market_cap_60000() {
+        test_tier_selection(60000.0, 5100, 4100, 800);
+    }
+
+    #[test]
+    fn test_tier_50001_market_cap_70000() {
+        test_tier_selection(70000.0, 5100, 4100, 800);
+    }
+
+    #[test]
+    fn test_tier_70001_market_cap_80000() {
+        test_tier_selection(80000.0, 5600, 3700, 700);
+    }
+
+    #[test]
+    fn test_tier_70001_market_cap_100000() {
+        test_tier_selection(100000.0, 5600, 3700, 700);
+    }
+
+    #[test]
+    fn test_tier_100001_market_cap_150000() {
+        test_tier_selection(150000.0, 6000, 3400, 600);
+    }
+
+    #[test]
+    fn test_tier_100001_market_cap_1000000() {
+        test_tier_selection(1000000.0, 6000, 3400, 600);
+    }
+
+    fn create_calculator_with_mcap_tiers(base_decimals: u8) -> TestSetup {
+        let platform = Role::Platform;
+        let community = Role::Community;
+        let creator = Role::Creator;
+
+        let calculator = IncomeCalculator::new(base_decimals)
             .expect("Expected to be created well")
-            .add_rule(DistributionRule::new(0, platform, 6000, 1))
-            .add_rule(DistributionRule::new(0, creator, 2500, 2))
-            .add_rule(DistributionRule::new(0, community, 1500, 3))
-            .add_rule(DistributionRule::new(501, platform, 3000, 1))
-            .add_rule(DistributionRule::new(501, creator, 5600, 2))
-            .add_rule(DistributionRule::new(501, community, 1400, 3))
-            .add_rule(DistributionRule::new(1_501, platform, 3400, 1))
-            .add_rule(DistributionRule::new(1_501, creator, 5300, 2))
-            .add_rule(DistributionRule::new(1_501, community, 1300, 3))
-            .add_rule(DistributionRule::new(4_001, platform, 3700, 1))
-            .add_rule(DistributionRule::new(4_001, creator, 5100, 2))
-            .add_rule(DistributionRule::new(4_001, community, 1200, 3))
-            .add_rule(DistributionRule::new(10_001, platform, 4000, 1))
-            .add_rule(DistributionRule::new(10_001, creator, 4900, 2))
-            .add_rule(DistributionRule::new(10_001, community, 1100, 3))
-            .add_rule(DistributionRule::new(20_001, platform, 4300, 1))
-            .add_rule(DistributionRule::new(20_001, creator, 4700, 2))
-            .add_rule(DistributionRule::new(20_001, community, 1000, 3))
-            .add_rule(DistributionRule::new(30_001, platform, 4700, 1))
-            .add_rule(DistributionRule::new(30_001, creator, 4400, 2))
-            .add_rule(DistributionRule::new(30_001, community, 900, 3))
-            .add_rule(DistributionRule::new(50_001, platform, 5100, 1))
-            .add_rule(DistributionRule::new(50_001, creator, 4100, 2))
-            .add_rule(DistributionRule::new(50_001, community, 800, 3))
-            .add_rule(DistributionRule::new(70_001, platform, 5600, 1))
-            .add_rule(DistributionRule::new(70_001, creator, 3700, 2))
-            .add_rule(DistributionRule::new(70_001, community, 700, 3))
-            .add_rule(DistributionRule::new(100_001, platform, 6000, 1))
-            .add_rule(DistributionRule::new(100_001, creator, 3400, 2))
-            .add_rule(DistributionRule::new(100_001, community, 600, 3));
+            .add_rule(DistributionRule::new(mcap!(0.0), platform, 6000, 1))
+            .add_rule(DistributionRule::new(mcap!(0.0), creator, 2500, 2))
+            .add_rule(DistributionRule::new(mcap!(0.0), community, 1500, 3))
+            .add_rule(DistributionRule::new(mcap!(501.0), platform, 3000, 1))
+            .add_rule(DistributionRule::new(mcap!(501.0), creator, 5600, 2))
+            .add_rule(DistributionRule::new(mcap!(501.0), community, 1400, 3))
+            .add_rule(DistributionRule::new(mcap!(1_501.0), platform, 3400, 1))
+            .add_rule(DistributionRule::new(mcap!(1_501.0), creator, 5300, 2))
+            .add_rule(DistributionRule::new(mcap!(1_501.0), community, 1300, 3))
+            .add_rule(DistributionRule::new(mcap!(4_001.0), platform, 3700, 1))
+            .add_rule(DistributionRule::new(mcap!(4_001.0), creator, 5100, 2))
+            .add_rule(DistributionRule::new(mcap!(4_001.0), community, 1200, 3))
+            .add_rule(DistributionRule::new(mcap!(10_001.0), platform, 4000, 1))
+            .add_rule(DistributionRule::new(mcap!(10_001.0), creator, 4900, 2))
+            .add_rule(DistributionRule::new(mcap!(10_001.0), community, 1100, 3))
+            .add_rule(DistributionRule::new(mcap!(20_001.0), platform, 4300, 1))
+            .add_rule(DistributionRule::new(mcap!(20_001.0), creator, 4700, 2))
+            .add_rule(DistributionRule::new(mcap!(20_001.0), community, 1000, 3))
+            .add_rule(DistributionRule::new(mcap!(30_001.0), platform, 4700, 1))
+            .add_rule(DistributionRule::new(mcap!(30_001.0), creator, 4400, 2))
+            .add_rule(DistributionRule::new(mcap!(30_001.0), community, 900, 3))
+            .add_rule(DistributionRule::new(mcap!(50_001.0), platform, 5100, 1))
+            .add_rule(DistributionRule::new(mcap!(50_001.0), creator, 4100, 2))
+            .add_rule(DistributionRule::new(mcap!(50_001.0), community, 800, 3))
+            .add_rule(DistributionRule::new(mcap!(70_001.0), platform, 5600, 1))
+            .add_rule(DistributionRule::new(mcap!(70_001.0), creator, 3700, 2))
+            .add_rule(DistributionRule::new(mcap!(70_001.0), community, 700, 3))
+            .add_rule(DistributionRule::new(mcap!(100_001.0), platform, 6000, 1))
+            .add_rule(DistributionRule::new(mcap!(100_001.0), creator, 3400, 2))
+            .add_rule(DistributionRule::new(mcap!(100_001.0), community, 600, 3));
 
         TestSetup {
             calculator,

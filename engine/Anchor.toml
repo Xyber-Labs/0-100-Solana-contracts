@@ -10,11 +10,11 @@ engine = ["test", "anchor-test", "devnet"]
 
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
+income_dispatcher = "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
 
 [programs.devnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"
-income_dispatcher = "DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN"
+income_dispatcher = "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
 
 [registry]
 url = "https://api.apr.dev"
@@ -43,7 +43,7 @@ address = "FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q"
 filename = "tmp/amm_config_devnet.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/raydium-clmm-anchor.test.ts'"
+test = "sleep 3 && anchor idl init --provider.cluster localnet --filepath target/idl/engine.json DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 && anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z && yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/raydium-clmm-anchor.test.ts'"
 litesvm = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
 litesvm-basic = "yarn run test:litesvm:basic"
 litesvm-raydium = "yarn run test:litesvm:raydium"
@@ -63,3 +63,4 @@ create-clmm-pool = "ts-node scripts/create-clmm-pool.ts"
 add-clmm-liquidity = "ts-node scripts/add-clmm-liquidity.ts"
 build-test = "anchor build -- --features test"
 mint-spl = "ts-node scripts/mint-spl.ts"
+dispatcher-init = "ts-node scripts-dispatcher/initialize.ts"

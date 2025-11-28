@@ -59,15 +59,26 @@ Both should exist and be owned by the Raydium CLMM program.
 
 ## Deployment Steps
 
-### 1. Deploy the Program
+### 1. Deploy the Programs
 
 For localnet/devnet deployment (uses devnet Raydium addresses):
 
 ```bash
 anchor build -- --features devnet,anchor-test
+```
+
+```bash
+# Deploy Engine program
 anchor deploy --provider.cluster localnet --program-name engine --program-keypair keys/deploy-keypair.json
 sleep 2
 anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(solana address -k keys/deploy-keypair.json)
+```
+
+```bash
+# Deploy Income Dispatcher program
+anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/disptcher.json
+sleep 2
+anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/disptcher.json)
 ```
 
 ### 2. Setup: Airdrop SOL to Wallets
@@ -78,6 +89,9 @@ Before initializing the engine configuration, ensure all wallets have sufficient
 solana airdrop 10 $(solana address -k keys/admin1.json) --url localhost
 solana airdrop 10 $(solana address -k keys/admin2.json) --url localhost
 solana airdrop 10 $(solana address -k keys/admin3.json) --url localhost
+solana airdrop 10 $(solana address -k keys/deployer.json) --url localhost
+solana airdrop 10 $(solana address -k keys/platform.json) --url localhost
+solana airdrop 10 $(solana address -k keys/backend.json) --url localhost
 solana airdrop 1000 $(solana address -k keys/creator.json) --url localhost
 solana airdrop 500 $(solana address -k keys/buyer1.json) --url localhost
 solana airdrop 500 $(solana address -k keys/buyer2.json) --url localhost
@@ -86,6 +100,9 @@ solana airdrop 10 $(solana address -k keys/treasure.json) --url localhost
 ```
 
 **Note:** Adjust amounts based on your testing needs. These amounts match the test suite.
+
+**Important:** The `keys/deployer.json` keypair is required for initializing the Income Dispatcher program.
+The deployer public key must match the `DEPLOYER` constant in the contract.
 
 ### 3. Create XYBER Token Mint
 
@@ -171,34 +188,26 @@ Initialize roster and roster shard (required before deposits):
 # Initialize roster
 anchor run init-roster --provider.cluster localnet -- --project-id 1
 
-
 ```
 
 **Note:** The test preset has `rosterShardsTotal: 1`, so only shard 1 needs to be initialized. Shard IDs are 1-based.
 
 ### Step 3: Make Deposits
 
-Make deposits to the launch. You can vary amounts using environment variables:
+Make deposits to the launch:
 
 ```bash
-# Default: 150 SOL each (450 SOL total)
-# Or set custom amounts:
-# export BUYER1_AMOUNT=100
-# export BUYER2_AMOUNT=100
-# export BUYER3_AMOUNT=100
+# Deposit 1 (150 SOL)
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json --shard-id 1
 
-# Deposit 1
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json
+# Deposit 2 (150 SOL)
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json --shard-id 1
 
-# Deposit 2
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json
-
-# Deposit 3
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json
+# Deposit 3 (150 SOL)
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json --shard-id 1
 ```
 
-**Note:** Total deposited includes creator deposit + all buyer deposits. The test suite uses configurable amounts
-via `BUYER1_AMOUNT`, `BUYER2_AMOUNT`, `BUYER3_AMOUNT` environment variables.
+**Note:** `--shard-id 1` is the default and can be omitted. Adjust amounts as needed.
 
 ### Step 4: Wait for Funding Period and Finalize Shard
 
@@ -242,3 +251,21 @@ Add liquidity to the created CLMM pool:
 ```bash
 anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 ```
+
+### Step 9: Initialize Income Dispatcher
+
+Initialize the Income Dispatcher program. This must be done with the deployer keypair that matches the
+`DEPLOYER` constant hardcoded in the contract:
+
+- **devnet/localnet**: `3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP`
+- **mainnet**: `7xLqtwhLTSmXwNi3ddwpoxsCcGQXtvwdMCd3YdtgHVnF`
+
+```bash
+anchor run dispatcher-init --provider.cluster localnet -- \
+  --platform-wallet $(solana address -k keys/platform.json) \
+  --community-wallet $(solana address -k keys/backend.json) \
+  --deployer-keypair ./keys/deployer.json
+```
+
+**Note:** The Income Dispatcher can only be initialized once. After initialization, the deployer becomes
+the admin and can reinitialize to update wallets.

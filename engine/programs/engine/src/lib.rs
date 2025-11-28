@@ -11,20 +11,18 @@ use crate::{
     utils::{clmm::LiquidityRange, launch_core::InitLaunchParams},
 };
 
-mod constants;
+pub mod constants;
 pub mod errors;
 mod events;
-#[cfg(test)]
-mod income_calculator;
 mod instructions;
-mod state;
+pub mod state;
 pub mod utils;
 
 #[cfg(feature = "devnet")]
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
+declare_id!("xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p");
 
 #[program]
 pub mod engine {

@@ -358,7 +358,8 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "incomeDispatcherAuthority",
+          "name": "projectAuthority",
+          "signer": true,
           "pda": {
             "seeds": [
               {
@@ -386,6 +387,14 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
                   97,
                   117,
                   116,
@@ -396,43 +405,48 @@ export type Engine = {
                   116,
                   121
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state.project_id",
+                "account": "launchState"
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                184,
-                44,
-                214,
-                141,
-                86,
-                169,
-                207,
-                182,
-                104,
-                150,
-                184,
-                72,
-                242,
-                107,
-                1,
-                15,
-                35,
-                36,
-                192,
-                23,
-                88,
-                180,
-                64,
-                236,
-                196,
-                151,
-                147,
-                195,
                 14,
-                132,
-                184,
-                243
+                86,
+                241,
+                145,
+                40,
+                148,
+                215,
+                139,
+                118,
+                13,
+                61,
+                172,
+                126,
+                110,
+                141,
+                174,
+                80,
+                63,
+                192,
+                137,
+                114,
+                59,
+                236,
+                99,
+                216,
+                183,
+                139,
+                243,
+                49,
+                8,
+                216,
+                3
               ]
             }
           }
@@ -442,11 +456,7 @@ export type Engine = {
           "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "baseMint"
+          "name": "launchState"
         },
         {
           "name": "escrowAuthority",
@@ -499,11 +509,11 @@ export type Engine = {
           }
         },
         {
-          "name": "positionNftMint",
+          "name": "raydiumPositionNftMint",
           "writable": true
         },
         {
-          "name": "positionNftAccount",
+          "name": "raydiumPositionNftAccount",
           "writable": true
         },
         {
@@ -559,14 +569,6 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "quoteTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -3510,6 +3512,208 @@ export type Engine = {
       "args": []
     },
     {
+      "name": "mintForTest",
+      "discriminator": [
+        220,
+        129,
+        50,
+        237,
+        118,
+        129,
+        46,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseMint",
+          "writable": true
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "baseTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associatedTokenProgram"
+            }
+          }
+        },
+        {
+          "name": "metadataAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMetadataProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tokenMetadataProgram"
+            }
+          }
+        },
+        {
+          "name": "tokenMetadataConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "preparePoolCreation",
       "docs": [
         "Create AMM pool"
@@ -5698,12 +5902,6 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "clmmBaseMint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
             "name": "fundingPeriodStart",
             "type": "i64"
           },
@@ -5718,6 +5916,18 @@ export type Engine = {
           {
             "name": "teamVestingDurationSec",
             "type": "i64"
+          },
+          {
+            "name": "raydiumPoolState",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "raydiumPositionNftMint",
+            "type": {
+              "option": "pubkey"
+            }
           }
         ]
       }
@@ -5816,12 +6026,6 @@ export type Engine = {
           {
             "name": "claimsReady",
             "type": "bool"
-          },
-          {
-            "name": "raydiumPoolState",
-            "type": {
-              "option": "pubkey"
-            }
           }
         ]
       }
@@ -6487,9 +6691,19 @@ export type Engine = {
       "value": "2"
     },
     {
-      "name": "incomeDispatcherSeedRoot",
+      "name": "baseTokenDecimals",
+      "type": "u8",
+      "value": "9"
+    },
+    {
+      "name": "dispatcherSeedRoot",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "incomeDispatcherProgramId",
+      "type": "pubkey",
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "raydiumClmmProgramId",

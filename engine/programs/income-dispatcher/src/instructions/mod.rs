@@ -1,7 +1,7 @@
-pub use claim_clmm_fees_by_admin::*;
+pub use claim::*;
+pub use harvest_pool::*;
 pub use initialize::*;
-pub use update_platform_wallet::*;
 
-mod claim_clmm_fees_by_admin;
+mod claim;
+mod harvest_pool;
 mod initialize;
-mod update_platform_wallet;

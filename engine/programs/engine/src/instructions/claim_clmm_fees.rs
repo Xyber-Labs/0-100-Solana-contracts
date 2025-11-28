@@ -1,51 +1,43 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{token::Token, token_2022::Token2022, token_interface::Mint as InterfaceMint};
+use anchor_spl::{token::Token, token_2022::Token2022};
 use raydium_amm_v3::program::AmmV3;
 
 use crate::{
-    constants::{INCOME_DISPATCHER_PROGRAM_ID, INCOME_DISPATCHER_SEED_ROOT, SEED_ROOT},
-    errors::ErrorCode as EngineErrorCode,
+    constants::{DISPATCHER_SEED_ROOT, INCOME_DISPATCHER_PROGRAM_ID, SEED_ROOT},
     state::LaunchState,
 };
 
 #[derive(Accounts)]
 pub struct ClaimClmmFees<'info> {
-    /// CHECK: Income dispatcher authority PDA - must be signed by income-dispatcher program
     #[account(
-        seeds = [INCOME_DISPATCHER_SEED_ROOT, b"authority"],
-        bump,
-        seeds::program = INCOME_DISPATCHER_PROGRAM_ID
+        seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
+        seeds::program = INCOME_DISPATCHER_PROGRAM_ID,
+        bump
     )]
-    pub income_dispatcher_authority: UncheckedAccount<'info>,
+    pub project_authority: Signer<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
 
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
-
-    #[account(
-        constraint = launch_state.clmm_base_mint == Some(base_mint.key())
-    )]
-    pub base_mint: Box<InterfaceAccount<'info, InterfaceMint>>,
+    pub launch_state: Box<Account<'info, LaunchState>>,
 
     /// CHECK: Escrow authority PDA - owner of the position NFT
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
     /// CHECK: Position NFT mint (created during liquidity addition)
-    #[account(mut)]
-    pub position_nft_mint: UncheckedAccount<'info>,
+    #[account(mut, constraint = Some(raydium_position_nft_mint.key()) == launch_state.raydium_position_nft_mint)]
+    pub raydium_position_nft_mint: UncheckedAccount<'info>,
 
     /// CHECK: Position NFT account owned by escrow_authority
     #[account(mut)]
-    pub position_nft_account: UncheckedAccount<'info>,
+    pub raydium_position_nft_account: UncheckedAccount<'info>,
 
     /// CHECK: Personal position state
     #[account(mut)]
     pub personal_position: UncheckedAccount<'info>,
 
     /// CHECK: Pool state
-    #[account(mut)]
+    #[account(mut, constraint = Some(pool_state.key()) == launch_state.raydium_pool_state)]
     pub pool_state: UncheckedAccount<'info>,
 
     /// CHECK: Protocol position state
@@ -88,24 +80,10 @@ pub struct ClaimClmmFees<'info> {
 
     /// CHECK: Vault 1 mint
     pub vault_1_mint: UncheckedAccount<'info>,
-
-    pub base_token_program: Program<'info, Token>,
-    pub quote_token_program: Program<'info, Token>,
     // Remaining accounts passed to Raydium for tick array bitmap extension
 }
 
 pub fn claim_clmm_fees<'info>(ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'info>>) -> Result<()> {
-    // Validate income_dispatcher_authority PDA
-    let expected_authority = Pubkey::find_program_address(
-        &[INCOME_DISPATCHER_SEED_ROOT, b"authority"],
-        &INCOME_DISPATCHER_PROGRAM_ID,
-    )
-    .0;
-    require!(
-        ctx.accounts.income_dispatcher_authority.key() == expected_authority,
-        EngineErrorCode::InvalidAuthority
-    );
-
     let launch_state = &ctx.accounts.launch_state;
     let launch_key = launch_state.key();
 
@@ -120,7 +98,7 @@ pub fn claim_clmm_fees<'info>(ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'inf
     // CPI to Raydium decrease_liquidity_v2 with liquidity=0 to collect fees only
     let cpi_accounts = raydium_amm_v3::cpi::accounts::DecreaseLiquidityV2 {
         nft_owner: ctx.accounts.escrow_authority.to_account_info(),
-        nft_account: ctx.accounts.position_nft_account.to_account_info(),
+        nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
         personal_position: ctx.accounts.personal_position.to_account_info(),
         pool_state: ctx.accounts.pool_state.to_account_info(),
         protocol_position: ctx.accounts.protocol_position.to_account_info(),

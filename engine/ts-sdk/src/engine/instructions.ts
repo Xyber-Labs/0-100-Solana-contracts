@@ -8,7 +8,7 @@ import {
 } from "@solana/spl-token";
 
 // ---- IDL ----
-import type { Engine as EngineIDL } from "../idl/engine";
+import type { Engine as EngineIDL } from "../../idl/engine";
 import { TxBuilder } from "./txBuilder";
 import { createShardsApi, pickShardId, selectRosterShard } from "./shards";
 
@@ -16,7 +16,7 @@ import { createShardsApi, pickShardId, selectRosterShard } from "./shards";
 let idl: any;
 const loadIdl = async () => {
   if (!idl) {
-    const idlModule = await import("../idl/engine.json");
+    const idlModule = await import("../../idl/engine.json");
     idl = idlModule.default;
   }
   return idl;
@@ -867,20 +867,22 @@ const EngineSDK = {
     async function closeRosterShard(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
-      payerKeypair?: anchor.web3.Keypair;
+      payer: anchor.web3.PublicKey;
+      refundTo: anchor.web3.PublicKey;
+      signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
       const { instruction } = await txBuilder.closeRosterShardIx({
-        payer,
+        payer: args.payer,
         launch: args.launch,
         shardId: args.shardId,
+        refundTo: args.refundTo,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      tx.feePayer = payer;
-      const signers = args.payerKeypair ? [args.payerKeypair] : (adminKeypair ? [adminKeypair] : []);
+      tx.feePayer = args.payer;
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, args.signers);
       return { signature };
     }
 
@@ -907,14 +909,17 @@ const EngineSDK = {
     async function closeRosterShardTx(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
+      payer: anchor.web3.PublicKey;
+      refundTo: anchor.web3.PublicKey;
     }): Promise<{ transaction: anchor.web3.Transaction }> {
       const { instruction } = await txBuilder.closeRosterShardIx({
-        payer,
+        payer: args.payer,
         launch: args.launch,
         shardId: args.shardId,
+        refundTo: args.refundTo,
       });
       const transaction = new anchor.web3.Transaction().add(instruction);
-      transaction.feePayer = payer;
+      transaction.feePayer = args.payer;
       return { transaction };
     }
 
@@ -1212,9 +1217,6 @@ const EngineSDK = {
       return txBuilder.fetchLaunch(launch);
     }
 
-    async function fetchRoster(launch: anchor.web3.PublicKey) {
-      return txBuilder.fetchRoster(launch);
-    }
 
 
     async function fetchUserContribution(launch: anchor.web3.PublicKey, user: anchor.web3.PublicKey) {
@@ -1236,9 +1238,8 @@ const EngineSDK = {
 
     async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
       const [launch] = getLaunchPdaByProjectId(projectId);
-      const [poolStatePda] = getPoolPda(launch);
-      const poolState = await program.account.poolState.fetch(poolStatePda);
-      return poolState.raydiumPoolState ?? null;
+      const launchState = await program.account.launchState.fetch(launch);
+      return launchState.raydiumPoolState ?? null;
     }
 
     async function fetchTeamVesting(launch: anchor.web3.PublicKey) {
@@ -1444,7 +1445,6 @@ const EngineSDK = {
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
       fetchLaunch,
-      fetchRoster,
       fetchUserContribution,
       fetchCreatorGrant,
       fetchTeamVesting,
@@ -1477,4 +1477,3 @@ export default EngineSDK;
 export { EngineSDK };
 export type { EngineIDL };
 export type EngineClient = ReturnType<typeof EngineSDK.create>;
-export { loadKeypair } from "./utils";

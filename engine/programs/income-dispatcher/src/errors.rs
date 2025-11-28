@@ -12,8 +12,12 @@ pub enum ErrorCode {
     NoDistributionRules,
     #[msg("Recipient not found in distribution")]
     RecipientNotFound,
-    #[msg("Sum of shares in tier must equal 10000 basis points")]
-    InvalidShareSum,
-    #[msg("Income calculator not set")]
-    IncomeCalculatorNotSet,
+    #[msg("Invalid pool state account")]
+    InvalidPoolState,
+    #[msg("Invalid token mint")]
+    InvalidTokenMint,
+    #[msg("Invalid nonce")]
+    InvalidNonce,
+    #[msg("Invalid calculator")]
+    InvalidCalculator,
 }
