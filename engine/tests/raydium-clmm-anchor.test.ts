@@ -477,6 +477,15 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const clmmPoolInfo = poolData.computePoolInfo;
     const tickCache = poolData.tickData;
 
+    // Create ATA for trader to hold base tokens BEFORE buying
+    const traderBaseAta = await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      traders[0],
+      baseMint,
+      traders[0].publicKey
+    );
+    console.log("Trader base ATA created:", traderBaseAta.address.toBase58());
+
     const inputMint = WSOL_MINT;
     const amountIn = new BN(1 * anchor.web3.LAMPORTS_PER_SOL);
 
@@ -516,7 +525,44 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log = originalConsoleLog;
 
-    console.log(`✅ Buy completed: ${buyResult.txId}`);
+    console.log(`✅ Buy completed (traders[0]): ${buyResult.txId}`);
+
+    // traders[0] sells some base tokens back (base → WSOL) to generate base fees
+    console.log("\n--- traders[0] sells base tokens to generate base fees ---");
+
+    const poolDataForSell = await raydium.clmm.getPoolInfoFromRpc(poolState.toString());
+    const sellAmount = new BN(50_000_000);
+
+    const sellBaseIn = baseMint.toBase58() === poolDataForSell.poolInfo.mintA.address;
+
+    const { minAmountOut: minSellOut, remainingAccounts: sellRemainingAccounts } = await PoolUtils.computeAmountOutFormat({
+      poolInfo: poolDataForSell.computePoolInfo,
+      tickArrayCache: poolDataForSell.tickData[poolState.toString()],
+      amountIn: sellAmount,
+      tokenOut: poolDataForSell.poolInfo[sellBaseIn ? 'mintB' : 'mintA'],
+      slippage: 0.01,
+      epochInfo: await raydium.fetchEpochInfo(),
+    });
+
+    const { execute: executeSell } = await raydium.clmm.swap({
+      poolInfo: poolDataForSell.poolInfo,
+      poolKeys: poolDataForSell.poolKeys,
+      inputMint: baseMint.toBase58(),
+      amountIn: sellAmount,
+      amountOutMin: minSellOut.amount.raw,
+      observationId: poolDataForSell.computePoolInfo.observationId,
+      ownerInfo: {
+        useSOLBalance: true,
+      },
+      remainingAccounts: sellRemainingAccounts,
+      txVersion: TxVersion.V0,
+    });
+
+    console.log = () => {};
+    const sellResult = await executeSell({ sendAndConfirm: true });
+    console.log = originalConsoleLog;
+
+    console.log(`✅ Sell completed (traders[0]): ${sellResult.txId}`);
   });
 
   it("Step 14: Harvest CLMM fees through income-dispatcher", async () => {
@@ -584,6 +630,44 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
     console.log("✅ CLMM fees harvested:", harvestSig);
     console.log("Explorer:", utils.getExplorerUrl(provider, harvestSig));
+
+    // Verify harvested totals and role balances
+    const incomeConfig = await dispatcherSdk.fetchIncomeConfig(launchStateData.projectId);
+    const totalHarvestedBase = incomeConfig.totalHarvestedBase;
+    const totalHarvestedQuote = incomeConfig.totalHarvestedQuote;
+
+    console.log("\n--- Harvested Totals ---");
+    console.log("Total harvested base:", totalHarvestedBase.toString());
+    console.log("Total harvested quote:", totalHarvestedQuote.toString());
+
+    // Role balances: [Platform, Creator, Community]
+    // Distribution algorithm: prioritizes quote first, then base (by role priority)
+    const platformBalance = incomeConfig.balances[0];
+    const creatorBalance = incomeConfig.balances[1];
+    const communityBalance = incomeConfig.balances[2];
+
+    console.log("\n--- Actual Role Balances (from contract) ---");
+    console.log(`Platform (30%, prio 1):  base=${platformBalance.earnedBase.toString()}, quote=${platformBalance.earnedQuote.toString()}`);
+    console.log(`Creator (56%, prio 2):   base=${creatorBalance.earnedBase.toString()}, quote=${creatorBalance.earnedQuote.toString()}`);
+    console.log(`Community (14%, prio 3): base=${communityBalance.earnedBase.toString()}, quote=${communityBalance.earnedQuote.toString()}`);
+
+    // Verify sum of earned equals total harvested (with rounding tolerance of 1)
+    const sumEarnedBase = platformBalance.earnedBase.add(creatorBalance.earnedBase).add(communityBalance.earnedBase);
+    const sumEarnedQuote = platformBalance.earnedQuote.add(creatorBalance.earnedQuote).add(communityBalance.earnedQuote);
+
+    const baseDiff = totalHarvestedBase.sub(sumEarnedBase).abs();
+    const quoteDiff = totalHarvestedQuote.sub(sumEarnedQuote).abs();
+
+    assert.ok(
+      baseDiff.lten(1),
+      `Sum of earned base (${sumEarnedBase}) should equal total harvested base (${totalHarvestedBase}), diff=${baseDiff}`
+    );
+    assert.ok(
+      quoteDiff.lten(1),
+      `Sum of earned quote (${sumEarnedQuote}) should equal total harvested quote (${totalHarvestedQuote}), diff=${quoteDiff}`
+    );
+
+    console.log("✅ Sum of role balances matches total harvested (rounding diff: base=" + baseDiff + ", quote=" + quoteDiff + ")");
   });
 
   it("Step 15: Claim platform fees", async () => {
