@@ -59,6 +59,7 @@ pub fn creator_deposit(ctx: Context<CreatorDeposit>, amount: u64) -> Result<()> 
     )?;
 
     grant.locked_lamports = new_locked;
+    state.creator_grant_present = true;
     state.total_deposited = state
         .total_deposited
         .checked_add(amount)
