@@ -1,9 +1,5 @@
 use anchor_lang::prelude::*;
 
-// -------------------------------
-// Program Constants
-// -------------------------------
-
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
 
@@ -23,20 +19,23 @@ pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("DRayAUgENGQBKVaX8owNhgzkEDy
 #[constant]
 pub const RAYDIUM_CLMM_PROGRAM_ID: Pubkey = pubkey!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
-pub const WSOL_MINT: Pubkey =
-    anchor_lang::solana_program::pubkey!("So11111111111111111111111111111111111111112");
+pub const WSOL_MINT: Pubkey = pubkey!("So11111111111111111111111111111111111111112");
 
 #[constant]
-pub const INCOME_DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
+pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
+#[cfg(feature = "devnet")]
+#[constant]
 pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
-    anchor_lang::solana_program::pubkey!("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
+    pubkey!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
-// -------------------------------
-// Configuration Constants
-// -------------------------------
+#[cfg(not(feature = "devnet"))]
+#[constant]
+pub const INCOME_DISPATCHER_PROGRAM_ID: Pubkey =
+    pubkey!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
-pub const DEFAULT_N: u64 = 100; // Default value for N
+#[constant]
+pub const BASE_TOKEN_DECIMALS: u8 = 9;
 
 #[constant]
 pub const TEAM_BASIS_POINTS: u64 = 1_000;

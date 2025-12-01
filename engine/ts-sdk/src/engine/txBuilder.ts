@@ -1,5 +1,6 @@
 import { BN, Program, web3 } from "@coral-xyz/anchor";
-import type { Engine as EngineIDL } from "../idl/engine";
+import type { Engine as EngineIDL } from "../../idl/engine";
+import EngineIDLJson from "../../idl/engine.json";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
@@ -8,10 +9,12 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID
 } from "@solana/spl-token";
-import { getConstant, getConstantRaw } from "./utils";
+import { getConstant, getConstantRaw } from "../utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
+const INCOME_DISPATCHER_PROGRAM_ID = new web3.PublicKey(getConstantRaw("INCOME_DISPATCHER_PROGRAM_ID", EngineIDLJson as any));
+const INCOME_DISPATCHER_SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", EngineIDLJson as any));
 
 export class TxBuilder {
   private program: Program<EngineIDL>;
@@ -117,6 +120,10 @@ export class TxBuilder {
   private getIxMethod(primary: string, fallback: string) {
     const methods: any = (this.program as any).methods;
     return methods?.[primary] ?? methods?.[fallback];
+  }
+
+  getIncomeDispatcherConfigPda(): [web3.PublicKey, number] {
+    return web3.PublicKey.findProgramAddressSync([INCOME_DISPATCHER_SEED_ROOT, Buffer.from("config")], INCOME_DISPATCHER_PROGRAM_ID);
   }
 
   getConfigPda(): [web3.PublicKey, number] {
@@ -695,18 +702,16 @@ export class TxBuilder {
     launch: web3.PublicKey;
     payer: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
-    // Legacy wrapper: init first shard (id = 1)
     const [rosterShard] = this.getRosterShardPda(params.launch, 1);
-    const instruction = await (this.program.methods as any)
+    const instruction = await this.program.methods
       .initRosterShard(1)
-      .accounts({
+      .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
-    // Keep return shape for backward compatibility
     const [rosterPda] = this.getPda(["roster", params.launch]);
     return { instruction, rosterPda };
   }
@@ -792,7 +797,7 @@ export class TxBuilder {
     // escrow removed; use only escrow_authority PDA
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
-    const method = this.program.methods
+    const instruction = await this.program.methods
       .deposit(params.amount)
       .accounts({
         user: params.user,
@@ -804,14 +809,8 @@ export class TxBuilder {
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any);
-
-    const prevId = (typeof params.shardId === "number" ? params.shardId : 0) - 1;
-    if (prevId >= 1) {
-      const [prevShard] = this.getRosterShardPda(params.launch, prevId);
-      (method as any).remainingAccounts([{ pubkey: prevShard, isSigner: false, isWritable: false }]);
-    }
-    const instruction = await (method as any).instruction();
+      } as any)
+      .instruction();
 
     return { instruction, userContribution };
   }
@@ -1028,21 +1027,18 @@ export class TxBuilder {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     shardId: number;
+    refundTo: web3.PublicKey;
   }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
     const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    // Read created_by from roster_shard to auto-fill refund_to
-    const shardAcc: any = await (this.program.account as any).rosterShard.fetch(rosterShard);
-    const refundTo: web3.PublicKey =
-      shardAcc.createdBy ?? shardAcc.created_by ?? shardAcc.createdby ?? params.payer;
-    const method = (this.program.methods as any).closeRosterShard(params.shardId);
-    const instruction = await method
-      .accounts({
+    const instruction = await this.program.methods
+      .closeRosterShard(params.shardId)
+      .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
         rosterShard,
-        refundTo,
+        refundTo: params.refundTo,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
     return { instruction, rosterShard };
   }
@@ -1153,11 +1149,6 @@ export class TxBuilder {
   async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
   }
-
-  async fetchRoster(launch: web3.PublicKey) {
-    throw new Error("NotSupported: roster is deprecated; use roster_shard accounts instead");
-  }
-
 
   async finalizeRosterShardIx(params: {
     launch: web3.PublicKey;
@@ -1537,19 +1528,18 @@ export class TxBuilder {
     };
   }
 
-  async addClmmLiquidityTx(params: {
+  async addClmmLiquidityIx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     baseMint: web3.PublicKey;
-    provider: any;
   }): Promise<{
-    transaction: web3.Transaction;
+    instruction: web3.TransactionInstruction;
     signers: web3.Keypair[];
     quoteVault: web3.PublicKey;
     baseVault: web3.PublicKey;
     poolState: web3.PublicKey;
-    positionNftMint: web3.PublicKey;
-    positionNftAccount: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
     personalPosition: web3.PublicKey;
     protocolPosition: web3.PublicKey;
     quoteEscrowAta: web3.PublicKey;
@@ -1560,7 +1550,6 @@ export class TxBuilder {
     escrowAuthority: web3.PublicKey;
     tickArrayBitmap: web3.PublicKey;
   }> {
-
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
 
     const baseTokenAta = getAssociatedTokenAddressSync(
@@ -1584,15 +1573,15 @@ export class TxBuilder {
       true
     );
 
-    const positionNftMint = web3.Keypair.generate();
-    const positionNftAccount = getAssociatedTokenAddressSync(
-      positionNftMint.publicKey,
+    const raydiumPositionNftMint = web3.Keypair.generate();
+    const raydiumPositionNftAccount = getAssociatedTokenAddressSync(
+      raydiumPositionNftMint.publicKey,
       escrowAuthority,
       true,
       TOKEN_2022_PROGRAM_ID
     );
 
-    const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint.publicKey);
+    const [personalPosition] = this.getRaydiumPersonalPositionPda(raydiumPositionNftMint.publicKey);
 
     const range = await this.getLiquidityRange({
       launch: params.launch,
@@ -1612,7 +1601,7 @@ export class TxBuilder {
 
     const [poolState] = this.getPda(["pool", params.launch]);
 
-    const addLiquidityIx = await this.program.methods
+    const instruction = await this.program.methods
       .addClmmLiquidity()
       .accountsStrict({
         payer: params.payer,
@@ -1627,8 +1616,8 @@ export class TxBuilder {
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
-        raydiumPositionNftMint: positionNftMint.publicKey,
-        raydiumPositionNftAccount: positionNftAccount,
+        raydiumPositionNftMint: raydiumPositionNftMint.publicKey,
+        raydiumPositionNftAccount: raydiumPositionNftAccount,
         raydiumPersonalPosition: personalPosition,
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
@@ -1646,22 +1635,14 @@ export class TxBuilder {
       ])
       .instruction();
 
-    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 1_400_000,
-    });
-
-    const transaction = new web3.Transaction()
-      .add(computeBudgetIx)
-      .add(addLiquidityIx);
-
     return {
-      transaction,
-      signers: [positionNftMint],
+      instruction,
+      signers: [raydiumPositionNftMint],
       quoteVault,
       baseVault,
       poolState: raydiumPoolPda,
-      positionNftMint: positionNftMint.publicKey,
-      positionNftAccount,
+      raydiumPositionNftMint: raydiumPositionNftMint.publicKey,
+      raydiumPositionNftAccount,
       personalPosition,
       protocolPosition,
       quoteEscrowAta,
@@ -1672,6 +1653,42 @@ export class TxBuilder {
       tickArrayBitmap,
       escrowAuthority,
     };
+  }
+
+  async addClmmLiquidityTx(params: {
+    payer: web3.PublicKey;
+    launch: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    provider: any;
+  }): Promise<{
+    transaction: web3.Transaction;
+    signers: web3.Keypair[];
+    quoteVault: web3.PublicKey;
+    baseVault: web3.PublicKey;
+    poolState: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
+    quoteEscrowAta: web3.PublicKey;
+    ammConfig: web3.PublicKey;
+    tickArrayLower: web3.PublicKey;
+    tickArrayUpper: web3.PublicKey;
+    bitmapExtension: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    tickArrayBitmap: web3.PublicKey;
+  }> {
+    const { instruction, ...rest } = await this.addClmmLiquidityIx(params);
+
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+
+    const transaction = new web3.Transaction()
+      .add(computeBudgetIx)
+      .add(instruction);
+
+    return { transaction, ...rest };
   }
 
   async getLiquidityRange(params: {

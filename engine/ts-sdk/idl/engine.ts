@@ -358,7 +358,8 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "incomeDispatcherAuthority",
+          "name": "projectAuthority",
+          "signer": true,
           "pda": {
             "seeds": [
               {
@@ -386,6 +387,14 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
                   97,
                   117,
                   116,
@@ -396,43 +405,48 @@ export type Engine = {
                   116,
                   121
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state.project_id",
+                "account": "launchState"
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                184,
-                44,
-                214,
-                141,
-                86,
-                169,
-                207,
-                182,
-                104,
-                150,
-                184,
-                72,
-                242,
-                107,
-                1,
-                15,
-                35,
-                36,
-                192,
-                23,
-                88,
-                180,
-                64,
-                236,
-                196,
-                151,
-                147,
-                195,
                 14,
-                132,
-                184,
-                243
+                86,
+                241,
+                145,
+                40,
+                148,
+                215,
+                139,
+                118,
+                13,
+                61,
+                172,
+                126,
+                110,
+                141,
+                174,
+                80,
+                63,
+                192,
+                137,
+                114,
+                59,
+                236,
+                99,
+                216,
+                183,
+                139,
+                243,
+                49,
+                8,
+                216,
+                3
               ]
             }
           }
@@ -442,11 +456,7 @@ export type Engine = {
           "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
-          "name": "launchState",
-          "writable": true
-        },
-        {
-          "name": "baseMint"
+          "name": "launchState"
         },
         {
           "name": "escrowAuthority",
@@ -499,11 +509,11 @@ export type Engine = {
           }
         },
         {
-          "name": "positionNftMint",
+          "name": "raydiumPositionNftMint",
           "writable": true
         },
         {
-          "name": "positionNftAccount",
+          "name": "raydiumPositionNftAccount",
           "writable": true
         },
         {
@@ -559,14 +569,6 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
-        },
-        {
-          "name": "baseTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "quoteTokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -5900,12 +5902,6 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "clmmBaseMint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
             "name": "fundingPeriodStart",
             "type": "i64"
           },
@@ -5920,6 +5916,18 @@ export type Engine = {
           {
             "name": "teamVestingDurationSec",
             "type": "i64"
+          },
+          {
+            "name": "raydiumPoolState",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "raydiumPositionNftMint",
+            "type": {
+              "option": "pubkey"
+            }
           }
         ]
       }
@@ -6018,12 +6026,6 @@ export type Engine = {
           {
             "name": "claimsReady",
             "type": "bool"
-          },
-          {
-            "name": "raydiumPoolState",
-            "type": {
-              "option": "pubkey"
-            }
           }
         ]
       }
@@ -6689,9 +6691,19 @@ export type Engine = {
       "value": "2"
     },
     {
-      "name": "incomeDispatcherSeedRoot",
+      "name": "baseTokenDecimals",
+      "type": "u8",
+      "value": "9"
+    },
+    {
+      "name": "dispatcherSeedRoot",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "incomeDispatcherProgramId",
+      "type": "pubkey",
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "raydiumClmmProgramId",

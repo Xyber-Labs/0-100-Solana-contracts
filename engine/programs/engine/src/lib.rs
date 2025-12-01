@@ -2,8 +2,8 @@
 
 use anchor_lang::prelude::*;
 
-use constants::*;
 pub use constants::WSOL_MINT;
+use constants::*;
 use state::*;
 
 use crate::{
@@ -11,20 +11,18 @@ use crate::{
     utils::{clmm::LiquidityRange, launch_core::InitLaunchParams},
 };
 
-mod constants;
+pub mod constants;
 pub mod errors;
 mod events;
-#[cfg(test)]
-mod income_calculator;
 mod instructions;
-mod state;
+pub mod state;
 pub mod utils;
 
 #[cfg(feature = "devnet")]
 declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 
 #[cfg(not(feature = "devnet"))]
-declare_id!("xybxcJxiw7mp7SJvF9nRTB4ScGqShNXkxjuWdbuKRSn");
+declare_id!("xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p");
 
 #[program]
 pub mod engine {
@@ -55,8 +53,8 @@ pub mod engine {
     }
 
     /// Seal roster shard by snapshotting user ticket ranges into UserContribution
-    pub fn seal_roster_shard(
-        ctx: Context<SealRosterShard>,
+    pub fn seal_roster_shard<'info>(
+        ctx: Context<'_, '_, '_, 'info, SealRosterShard<'info>>,
         shard_id: u16,
         from: u32,
         max: u16,

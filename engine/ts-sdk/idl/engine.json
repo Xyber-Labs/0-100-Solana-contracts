@@ -352,7 +352,8 @@
       ],
       "accounts": [
         {
-          "name": "income_dispatcher_authority",
+          "name": "project_authority",
+          "signer": true,
           "pda": {
             "seeds": [
               {
@@ -380,6 +381,14 @@
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
                   97,
                   117,
                   116,
@@ -390,43 +399,48 @@
                   116,
                   121
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state.project_id",
+                "account": "LaunchState"
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                184,
-                44,
-                214,
-                141,
-                86,
-                169,
-                207,
-                182,
-                104,
-                150,
-                184,
-                72,
-                242,
-                107,
-                1,
-                15,
-                35,
-                36,
-                192,
-                23,
-                88,
-                180,
-                64,
-                236,
-                196,
-                151,
-                147,
-                195,
                 14,
-                132,
-                184,
-                243
+                86,
+                241,
+                145,
+                40,
+                148,
+                215,
+                139,
+                118,
+                13,
+                61,
+                172,
+                126,
+                110,
+                141,
+                174,
+                80,
+                63,
+                192,
+                137,
+                114,
+                59,
+                236,
+                99,
+                216,
+                183,
+                139,
+                243,
+                49,
+                8,
+                216,
+                3
               ]
             }
           }
@@ -436,11 +450,7 @@
           "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "base_mint"
+          "name": "launch_state"
         },
         {
           "name": "escrow_authority",
@@ -493,11 +503,11 @@
           }
         },
         {
-          "name": "position_nft_mint",
+          "name": "raydium_position_nft_mint",
           "writable": true
         },
         {
-          "name": "position_nft_account",
+          "name": "raydium_position_nft_account",
           "writable": true
         },
         {
@@ -553,14 +563,6 @@
         },
         {
           "name": "vault_1_mint"
-        },
-        {
-          "name": "base_token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "quote_token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -5894,12 +5896,6 @@
             "type": "u64"
           },
           {
-            "name": "clmm_base_mint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
             "name": "funding_period_start",
             "type": "i64"
           },
@@ -5914,6 +5910,18 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
+          },
+          {
+            "name": "raydium_pool_state",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "raydium_position_nft_mint",
+            "type": {
+              "option": "pubkey"
+            }
           }
         ]
       }
@@ -6012,12 +6020,6 @@
           {
             "name": "claims_ready",
             "type": "bool"
-          },
-          {
-            "name": "raydium_pool_state",
-            "type": {
-              "option": "pubkey"
-            }
           }
         ]
       }
@@ -6683,9 +6685,19 @@
       "value": "2"
     },
     {
-      "name": "INCOME_DISPATCHER_SEED_ROOT",
+      "name": "BASE_TOKEN_DECIMALS",
+      "type": "u8",
+      "value": "9"
+    },
+    {
+      "name": "DISPATCHER_SEED_ROOT",
       "type": "bytes",
       "value": "[105, 110, 99, 111, 109, 101, 45, 100, 105, 115, 112, 97, 116, 99, 104, 101, 114]"
+    },
+    {
+      "name": "INCOME_DISPATCHER_PROGRAM_ID",
+      "type": "pubkey",
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "RAYDIUM_CLMM_PROGRAM_ID",

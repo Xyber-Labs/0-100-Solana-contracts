@@ -8,7 +8,6 @@ use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
     constants::AMM_CONFIG_INDEX,
-    errors::ErrorCode,
     LaunchState,
     SEED_ROOT,
     state::PoolState, utils::clmm::{ClmmOrder, get_liquidity_range_impl},
@@ -19,11 +18,11 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
+    #[account(mut)]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(
-        constraint = launch_state.clmm_base_mint == Some(base_mint.key()),
+        constraint = launch_state.base_mint == Some(base_mint.key()),
         mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
@@ -108,14 +107,14 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    add_initial_liquidity_impl(&ctx)?;
     // TODO: base_mint to be used instead of this explicit approach
     ctx.accounts.pool_state.claims_ready = true;
+    add_initial_liquidity_impl(ctx)?;
     Ok(())
 }
 
 fn add_initial_liquidity_impl<'info>(
-    ctx: &Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
     let order = ClmmOrder::from_inputs(
         &ctx.accounts.launch_state,
@@ -203,5 +202,7 @@ fn add_initial_liquidity_impl<'info>(
         order.base_flag,
     )?;
 
+    ctx.accounts.launch_state.raydium_position_nft_mint =
+        Some(ctx.accounts.raydium_position_nft_mint.key());
     Ok(())
 }

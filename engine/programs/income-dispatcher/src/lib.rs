@@ -1,17 +1,20 @@
 use anchor_lang::prelude::*;
 
+use crate::instructions::*;
+
 pub mod errors;
-#[cfg(test)]
-mod income_calculator;
+pub mod income_calculator;
 pub mod instructions;
 pub mod state;
 
-use crate::instructions::*;
+#[cfg(feature = "devnet")]
+declare_id!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 
-declare_id!("DPwfwgErHSmKLjGkadA4EL1zcCKU1ZhdaMUyUzJtTqCN");
+#[cfg(not(feature = "devnet"))]
+declare_id!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
 #[constant]
-pub const SEED_ROOT: &[u8] = b"income-dispatcher";
+pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
 
 #[program]
 pub mod income_dispatcher {
@@ -20,21 +23,26 @@ pub mod income_dispatcher {
     pub fn initialize(
         ctx: Context<Initialize>,
         platform_wallet: Pubkey,
-        income_source: Pubkey,
+        community_wallet: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, platform_wallet, income_source)
+        instructions::initialize(ctx, platform_wallet, community_wallet)
     }
 
-    pub fn update_platform_wallet(
-        ctx: Context<UpdatePlatformWallet>,
-        new_platform_wallet: Pubkey,
+    pub fn harvest_pool<'info>(
+        ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
+        project_id: u64,
     ) -> Result<()> {
-        instructions::update_platform_wallet(ctx, new_platform_wallet)
+        instructions::harvest_pool(ctx, project_id)
     }
 
-    pub fn claim_clmm_fees_by_admin<'info>(
-        ctx: Context<'_, '_, '_, 'info, ClaimClmmFeesByAdmin<'info>>,
+    pub fn claim(
+        ctx: Context<Claim>,
+        project_id: u64,
+        role: income_calculator::Role,
+        nonce_value: u64,
+        limit_base_claim: Option<u64>,
+        limit_quote_claim: Option<u64>,
     ) -> Result<()> {
-        instructions::claim_clmm_fees_by_admin(ctx)
+        instructions::claim(ctx, project_id, role, nonce_value, limit_base_claim, limit_quote_claim)
     }
 }

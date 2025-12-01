@@ -3,8 +3,7 @@ import { Command } from "commander";
 import * as fs from "fs";
 import * as path from "path";
 
-import { loadKeypair } from "@xyber-labs/0-100-sdk";
-import { getExplorerUrl, runWithSdk } from "./utils";
+import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
 async function main() {
   const program = new Command();

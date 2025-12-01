@@ -54,14 +54,13 @@ pub struct LaunchState {
     pub creator_claim_lock_period_sec: i64,
     pub creator_initial_deposit: u64,
     pub creator_max_deposit: u64,
-
-    pub clmm_base_mint: Option<Pubkey>,
     // --- appended for upgrade safety ---
     pub funding_period_start: i64,
     pub pool_creation_grace_period_sec: i64,
     pub team_allocation_basis_points: u64,
     pub team_vesting_duration_sec: i64,
-    
+    pub raydium_pool_state: Option<Pubkey>,
+    pub raydium_position_nft_mint: Option<Pubkey>,
 }
 
 impl LaunchState {
@@ -100,9 +99,9 @@ pub struct UserContribution {
     pub idx_in_shard: u32,
 
     // --- appended for upgrade safety: finalized snapshot for claims ---
-    pub finalized_snapshot: bool,   // default: false
-    pub final_t_base: u32,          // shard_base + prefix[u]
-    pub final_ticket_count: u32,    // counts[u] at seal time
+    pub finalized_snapshot: bool, // default: false
+    pub final_t_base: u32,        // shard_base + prefix[u]
+    pub final_ticket_count: u32,  // counts[u] at seal time
 }
 
 #[account]
@@ -153,7 +152,6 @@ pub struct PoolState {
     pub created_blockhash: [u8; 32],
     pub created: bool,
     pub claims_ready: bool,
-    pub raydium_pool_state: Option<Pubkey>,
 }
 
 #[account]
@@ -260,10 +258,7 @@ impl LaunchPreset {
             self.min_raise_lamports <= self.hard_cap_lamports,
             crate::errors::ErrorCode::MalformedPreset
         );
-        require!(
-            self.creator_claim_lock_period_sec > 0,
-            crate::errors::ErrorCode::MalformedPreset
-        );
+        require!(self.creator_claim_lock_period_sec > 0, crate::errors::ErrorCode::MalformedPreset);
         require!(self.roster_shards_total > 0, crate::errors::ErrorCode::MalformedPreset);
         require!(
             self.funding_duration_seconds > 0 && self.funding_duration_seconds <= 60 * 60 * 24 * 7,
