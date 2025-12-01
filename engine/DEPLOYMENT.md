@@ -110,12 +110,6 @@ spl-token create-account $XYBER_MINT \
   --url localhost \
   --fee-payer keys/creator.json
 
-# Create token account for admin
-spl-token create-account $XYBER_MINT \
-  --owner $ADMIN \
-  --url localhost \
-  --fee-payer keys/admin1.json
-
 # Create token account for treasury
 export TREASURY=$(solana address -k keys/treasure.json)
 spl-token create-account $XYBER_MINT \
@@ -125,9 +119,6 @@ spl-token create-account $XYBER_MINT \
 
 # Mint tokens to creator
 spl-token mint --url localhost --recipient-owner $CREATOR --mint-authority keys/admin1.json $XYBER_MINT 1000000000
-
-# Mint tokens to admin
-spl-token mint --url localhost --recipient-owner $ADMIN --mint-authority keys/admin1.json $XYBER_MINT 1000000000
 ```
 
 ### 4. Initialize Engine Configuration
