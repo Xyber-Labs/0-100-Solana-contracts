@@ -174,15 +174,10 @@ fn finalize_selection(
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
-        let creator_share_ppm = (creator_grant.locked_lamports as u128)
-            .checked_mul(1_000_000)
+        let creator_reserved_u128 = (creator_grant.locked_lamports as u128)
+            .checked_mul(launch_state.k_capacity as u128)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
             .checked_div(launch_state.hard_cap_lamports as u128)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let creator_reserved_u128 = (launch_state.k_capacity as u128)
-            .checked_mul(creator_share_ppm)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?
-            .checked_div(1_000_000)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(creator_reserved_u128 <= u32::MAX as u128, EngineErrorCode::U64ConversionOverflow);
         let creator_reserved_u32 = creator_reserved_u128 as u32;
