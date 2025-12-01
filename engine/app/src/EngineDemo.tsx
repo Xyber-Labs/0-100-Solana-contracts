@@ -154,6 +154,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     creatorDailyLamportsLimit: 1 * 1e9, // 1 SOL daily limit
     creatorClaimLockPeriodSec: 2, // 2 seconds for testing
     creatorMaxDepositLamports: 8 * 1e9,
+    poolCreationGracePeriodSec: 360,
     // Raydium defaults (WSOL; ammConfig/clmmProgram optional)
     quoteMint: 'So11111111111111111111111111111111111111112',
     ammConfig: '',
@@ -1140,6 +1141,15 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   type="number"
                   value={launchConfig.unlockTimeSec}
                   onChange={(e) => setLaunchConfig(prev => ({ ...prev, unlockTimeSec: parseInt(e.target.value) }))}
+                  className="terminal-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">Skip blockhash check after sec</label>
+                <input
+                  type="number"
+                  value={launchConfig.poolCreationGracePeriodSec}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, poolCreationGracePeriodSec: parseInt(e.target.value) }))}
                   className="terminal-input w-full"
                 />
               </div>

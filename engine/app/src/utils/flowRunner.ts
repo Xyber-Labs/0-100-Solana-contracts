@@ -304,6 +304,7 @@ export async function runFullFlow(
       unlockTimeSec: config.unlockTimeSec,
       rosterShardCap: config.rosterShardCap,
       rosterShardsTotal,
+      poolCreationGracePeriodSec: config.poolCreationGracePeriodSec,
       creatorInitialDepositLamports: new BN(config.creatorInitialDepositLamports),
       creatorDailyLamportsLimit: new BN(config.creatorDailyLamportsLimit),
       creatorClaimLockPeriodSec: new BN(config.creatorClaimLockPeriodSec),
