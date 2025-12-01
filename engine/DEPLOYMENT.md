@@ -78,7 +78,7 @@ anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(
 # Deploy Income Dispatcher program
 anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/disptcher.json
 sleep 2
-anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/disptcher.json)
+anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/dispatcher.json)
 ```
 
 ### 2. Setup: Airdrop SOL to Wallets
