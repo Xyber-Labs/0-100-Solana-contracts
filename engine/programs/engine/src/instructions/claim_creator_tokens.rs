@@ -84,13 +84,11 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     // If there's nothing to claim, exit.
     require!(to_claim > 0, EngineErrorCode::NothingToClaim);
 
-    // tokens_per_ticket is stored in atomic units (mint decimals), mint amount = per * to_claim
-    let amount = (per as u128)
+    let amount_u128 = (per as u128)
         .checked_mul(to_claim as u128)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
-
-    // Debug logging
-    msg!("DEBUG: Creator claim - per={}, to_claim={}, amount={}", per, to_claim, amount);
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(amount_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
+    let amount = amount_u128 as u64;
 
     // Transfer tokens from escrow ATA to creator ATA
     let seeds: &[&[u8]] = &[
