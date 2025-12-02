@@ -257,10 +257,11 @@ export async function runFullFlow(
     // Ensure funding period is long enough for simulated deposits (dynamic estimate)
     const estFundingBatches = Math.ceil(simConfig.numUsers / 50); // FUNDING_BATCH_SIZE
     const estDepositBatches = Math.ceil(simConfig.numUsers / 50); // BATCH_SIZE
-    const estSec = estFundingBatches * 2 + estDepositBatches * 3 + 5; // ~2s per funding batch, ~3s per deposit batch + overhead
-    const estClamped = Math.max(15, Math.min(estSec, 90));
+    // More aggressive estimate to reduce extra wait time, but leave safety margin
+    const estSec = estFundingBatches * 1 + estDepositBatches * 2 + 5;
+    const estClamped = Math.max(15, Math.min(estSec, 45));
     const cfgSec = typeof config.fundingDurationSeconds === 'number' ? config.fundingDurationSeconds : 0;
-    const fundingDurationSeconds = cfgSec > 0 ? Math.max(15, cfgSec) : estClamped;
+    const fundingDurationSeconds = Math.max(15, cfgSec, estClamped);
 
     // Add main instruction
     // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp

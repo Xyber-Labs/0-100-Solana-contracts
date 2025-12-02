@@ -791,13 +791,13 @@ export class TxBuilder {
       params.user,
     ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
+    const shardId = params.shardId ?? 1;
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
-    // escrow removed; use only escrow_authority PDA
+      this.getRosterShardPda(params.launch, shardId)[0];
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
-    const instruction = await this.program.methods
+    let builder = this.program.methods
       .deposit(params.amount)
       .accounts({
         user: params.user,
@@ -805,12 +805,20 @@ export class TxBuilder {
         userContribution: userContribution,
         roster: roster,
         rosterShard,
-        // escrow removed
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
+      } as any);
+
+    if (shardId > 1) {
+      const prevId = shardId - 1;
+      const [prevRosterShard] = this.getRosterShardPda(params.launch, prevId);
+      builder = builder.remainingAccounts([
+        { pubkey: prevRosterShard, isSigner: false, isWritable: false },
+      ]);
+    }
+
+    const instruction = await builder.instruction();
 
     return { instruction, userContribution };
   }

@@ -140,8 +140,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   const defaultConfig: LaunchConfig = {
     hardCapLamports: 450 * 1e9, // 20,000 SOL for large tests
     minRaiseLamports: 100 * 1e9, // 1,000 SOL
-    perWalletCap: 5 * 1e9, // 5 SOL
-    tauLamports: 1 * 1e9, // 1 SOL
+    perWalletCap: 1.5 * 1e9, // 5 SOL
+    tauLamports: 50_000_000, // 1 SOL
     // Target allocations for 1B total: Sale 48.14%, Team 11.12%, LP 40.74%
     // Provide human units; SDK will scale to atomic; base_total_allocation = 1,000,000,000
     saleAllocation: '481400000',
@@ -159,6 +159,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     quoteMint: 'So11111111111111111111111111111111111111112',
     ammConfig: '',
     clmmProgram: '',
+    rosterShardsTotal: 3,
     teamVestingDurationSec: 1,
     // Team share inside 1B total supply
     teamAllocationBasisPoints: 1112,
@@ -166,8 +167,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
   // --- New state for simulation config ---
   const defaultSimConfig: SimulationConfig = {
-    numUsers: 100,
-    maxTicketsPerUser: 3,
+    numUsers: 500,
+    maxTicketsPerUser: 30,
     useTestMintForBase: false,
   };
 
