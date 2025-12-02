@@ -75,6 +75,10 @@ impl LaunchState {
         );
         bump
     }
+
+    pub fn is_pool_created(&self) -> bool {
+        self.base_mint.is_some() && self.raydium_pool_state.is_some()
+    }
 }
 
 #[account]

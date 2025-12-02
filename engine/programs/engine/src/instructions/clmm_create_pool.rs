@@ -22,7 +22,7 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
+        constraint = !launch_state.is_pool_created() @ ErrorCode::PoolAlreadyCreated,
         constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
         constraint = launch_state.total_deposited >= launch_state.min_raise_lamports @ ErrorCode::MinRaiseNotMet,
     )]
@@ -105,10 +105,6 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
             && state.roster_highest_used_shard as i32 >= 1
             && state.roster_finalized_up_to >= state.roster_highest_used_shard as i32,
         ErrorCode::ShardsNotFullyFinalized
-    );
-    require!(
-        !ctx.accounts.pool_state.created,
-        ErrorCode::PoolAlreadyCreated
     );
 
     mint_utils::mint_to_escrow_for_launch(
