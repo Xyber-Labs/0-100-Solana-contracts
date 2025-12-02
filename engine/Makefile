@@ -93,6 +93,14 @@ deploy-devnet:
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
 
+deploy-ekza:
+	@echo "Deploying program to ekza..."
+	anchor deploy \
+		--program-name engine \
+		--provider.cluster https://solana.ekza.xyz \
+		--program-keypair ./keys/deploy-keypair.json \
+		--provider.wallet /Users/wotori/.config/solana/xyber-localnet.json
+
 .PHONY: build-deploy
 build-deploy: build deploy
 

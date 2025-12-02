@@ -96,6 +96,7 @@ pub fn seal_roster_shard<'info>(
         let mut user = UserContribution::try_deserialize(&mut read_cursor)?;
 
         require!(user.shard_id == shard_id && user.idx_in_shard as usize == i, EngineErrorCode::Unauthorized);
+        require!(!user.finalized_snapshot, EngineErrorCode::AlreadyFinalized);
 
         let base = shard
             .shard_base

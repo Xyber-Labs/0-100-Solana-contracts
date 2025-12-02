@@ -199,13 +199,11 @@ fn finalize_selection(
     let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
-    // Store tokens_per_ticket directly in atomic units (mint decimals),
-    // computed as floor(sale_allocation / divisor)
-    let tokens_per_ticket = sale_allocation_u128
+    let tokens_per_ticket_u128 = sale_allocation_u128
         .checked_div(divisor as u128)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
-
-    launch_state.tokens_per_ticket = Some(tokens_per_ticket);
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(tokens_per_ticket_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
+    launch_state.tokens_per_ticket = Some(tokens_per_ticket_u128 as u64);
     launch_state.selection_finalized = true;
 
     Ok(())

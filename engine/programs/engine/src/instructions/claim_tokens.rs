@@ -118,10 +118,11 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         }
     }
     require!(y > 0, EngineErrorCode::NoTokensToClaim);
-    // tokens_per_ticket is stored in atomic units (mint decimals), mint amount = per * y
-    let amount = (per as u128)
+    let amount_u128 = (per as u128)
         .checked_mul(y as u128)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(amount_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
+    let amount = amount_u128 as u64;
 
     // Transfer from escrow ATA to user ATA, signed by escrow_authority PDA
     let seeds: &[&[u8]] = &[
