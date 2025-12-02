@@ -203,7 +203,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -323,7 +323,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint: wrongMint,
@@ -360,7 +360,7 @@ describe("engine litesvm", () => {
       rosterShardCap: 100,
       rosterShardsTotal: 10,
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
       poolCreationGracePeriodSec: 0,
@@ -429,7 +429,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -494,7 +494,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -581,7 +581,7 @@ describe("engine litesvm", () => {
       rosterShardCap: 100,
       rosterShardsTotal: 1,
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -654,7 +654,7 @@ describe("engine litesvm", () => {
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -681,7 +681,7 @@ describe("engine litesvm", () => {
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -708,7 +708,7 @@ describe("engine litesvm", () => {
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -780,7 +780,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -966,7 +966,7 @@ describe("engine litesvm", () => {
         rosterShardCap: 100,
       rosterShardsTotal: 1,
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -1151,7 +1151,7 @@ describe("engine litesvm", () => {
       rosterShardCap: 100,
       rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / 100)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: testTau.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       creatorMaxDepositLamports: MAX,
@@ -1897,16 +1897,15 @@ describe("Full flow", () => {
   it("Creator can claim after zero initial deposit", async () => {
     const projectId = await sdk.getNextProjectId();
     const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
-    const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
-    const testMinRaise = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const testPerWalletCap = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const testTau = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    const dailyLimit = testTau.clone();
+    const testHardCap = new anchor.BN(450000000000);
+    const testMinRaise = new anchor.BN(300000000000);
+    const testPerWalletCap = new anchor.BN(200000000000);
+    const testTau = new anchor.BN(5000000000);
+    const baseTotalAllocation = new anchor.BN("1000000000000000000");
+    const baseSaleBasisPoints = new anchor.BN(4814);
+    const dailyLimit = testTau;
     const postInitDeposit = testTau.clone();
-    const rosterShardCount = Math.min(
-      65535,
-      Math.ceil(testHardCap.toNumber() / testTau.toNumber() / ROSTER_SHARD_CAP)
-    );
+    const rosterShardCount = 1;
 
     const { initLaunchTx } = await sdk.initLaunchTx({
       creator: admin.publicKey,
@@ -1915,16 +1914,21 @@ describe("Full flow", () => {
       minRaiseLamports: testMinRaise,
       perWalletCap: testPerWalletCap,
       tauLamports: testTau,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 12,
+      baseTotalAllocation,
+      baseSaleBasisPoints,
+      fundingDurationSeconds: 300,
+      saleStartTimeSec: 0,
+      unlockTimeSec: 60,
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: rosterShardCount,
       creatorInitialDepositLamports: new anchor.BN(0),
       creatorDailyLamportsLimit: dailyLimit,
-      creatorClaimLockPeriodSec: new anchor.BN(2),
+      creatorClaimLockPeriodSec: new anchor.BN(10),
       provider,
-      creatorMaxDepositLamports: postInitDeposit.muln(2),
+      creatorMaxDepositLamports: new anchor.BN(8000000000),
+      poolCreationGracePeriodSec: 0,
+      teamAllocationBasisPoints: 1000,
+      teamVestingDurationSec: 60,
       xyberMint,
     });
     await safeSendAndConfirm(provider, client, initLaunchTx, [adminKeypair]);
@@ -1962,9 +1966,9 @@ describe("Full flow", () => {
       .transaction();
     await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
 
-    const user = await createAndFundAccount(client, 20);
+    const user = await createAndFundAccount(client, 210);
     const userContribution = sdk.getUserContributionPda(testLaunchState, user.publicKey)[0];
-    const userDeposit = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const userDeposit = testPerWalletCap.clone();
     await program.methods
       .deposit(userDeposit)
       .accounts({
@@ -1979,7 +1983,24 @@ describe("Full flow", () => {
       .signers([user])
       .rpc();
 
-    await advanceTime(client, { slots: BigInt(500), seconds: BigInt(15) });
+    const user2 = await createAndFundAccount(client, 110);
+    const userContribution2 = sdk.getUserContributionPda(testLaunchState, user2.publicKey)[0];
+    const userDeposit2 = testTau.muln(19);
+    await program.methods
+      .deposit(userDeposit2)
+      .accounts({
+        user: user2.publicKey,
+        launchState: testLaunchState,
+        userContribution: userContribution2,
+        rosterShard,
+        escrowAuthority,
+        launch: testLaunchState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .signers([user2])
+      .rpc();
+
+    await advanceTime(client, { slots: BigInt(500), seconds: BigInt(400) });
     await sdk.setSeed({ launch: testLaunchState });
     await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
 
