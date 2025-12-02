@@ -79,6 +79,10 @@ pub fn init_launch_core<'info>(
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
     require!(params.roster_shards_total > 0, EngineErrorCode::InvalidK);
+    require!(
+        params.creator_daily_lamports_limit >= params.tau_lamports,
+        EngineErrorCode::InvalidCreatorDailyLimit
+    );
     let fee = engine_config.creation_fee;
     if fee > 0 {
         require!(creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);

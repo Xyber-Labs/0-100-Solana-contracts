@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/engine.json`.
  */
 export type Engine = {
-  "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7",
+  "address": "xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p",
   "metadata": {
     "name": "engine",
     "version": "0.1.0",
@@ -228,7 +228,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
@@ -319,7 +319,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quoteTokenProgram",
@@ -417,43 +417,43 @@ export type Engine = {
               "value": [
                 14,
                 86,
-                241,
-                145,
-                40,
-                148,
-                215,
-                139,
-                118,
-                13,
-                61,
-                172,
-                126,
-                110,
-                141,
-                174,
-                80,
-                63,
-                192,
-                137,
-                114,
+                238,
+                250,
+                96,
                 59,
-                236,
-                99,
-                216,
-                183,
-                139,
-                243,
+                185,
+                36,
+                107,
+                71,
+                201,
+                136,
+                1,
+                190,
+                45,
+                72,
+                224,
                 49,
-                8,
-                216,
-                3
+                210,
+                122,
+                196,
+                162,
+                164,
+                169,
+                20,
+                224,
+                81,
+                151,
+                62,
+                95,
+                245,
+                51
               ]
             }
           }
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "launchState"
@@ -1844,7 +1844,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
@@ -1876,7 +1876,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quoteTokenProgram",
@@ -2525,45 +2525,45 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                184,
-                152,
-                151,
-                52,
-                252,
-                179,
-                140,
-                145,
-                104,
-                216,
-                83,
-                199,
-                83,
-                182,
-                184,
-                164,
-                54,
-                16,
-                205,
-                211,
-                37,
-                175,
-                187,
-                199,
+                165,
+                213,
+                202,
+                158,
+                4,
+                207,
+                93,
+                181,
+                144,
+                183,
+                20,
+                186,
                 47,
-                212,
-                21,
-                54,
-                219,
-                205,
-                194,
-                88
+                227,
+                44,
+                177,
+                89,
+                19,
+                63,
+                193,
+                193,
+                146,
+                183,
+                34,
+                87,
+                253,
+                7,
+                211,
+                156,
+                176,
+                64,
+                30
               ]
             }
           }
@@ -4916,121 +4916,126 @@ export type Engine = {
     },
     {
       "code": 6049,
+      "name": "invalidCreatorDailyLimit",
+      "msg": "Creator daily lamports limit must be >= tau"
+    },
+    {
+      "code": 6050,
       "name": "notSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "rosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "invalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "shardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "shardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "shardIdOutOfRange",
       "msg": "Roster shard id is out of allowed range"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "noTokensToClaim",
       "msg": "User has no tokens to claim"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "noDistributionRules",
       "msg": "No distribution rules found for market cap"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "recipientNotFound",
       "msg": "Recipient not found in distribution"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "invalidShareSum",
       "msg": "Sum of shares in tier must equal 10000 basis points"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "invalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "poolNotCreated",
       "msg": "Pool not created yet"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "teamVestingMissing",
       "msg": "Team vesting account is missing"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "teamVestingNotStarted",
       "msg": "Team vesting is not started yet"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "teamClaimsNotOpen",
       "msg": "Team claims are not open yet"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "teamClaimTooFrequent",
       "msg": "Claim is too frequent"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "invalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "priceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "invalidInitOrder",
       "msg": "Roster initialization order violated"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "shardNotSealed",
       "msg": "Roster shard not fully sealed"
     }
@@ -6688,7 +6693,7 @@ export type Engine = {
     {
       "name": "ammConfigIndex",
       "type": "u16",
-      "value": "2"
+      "value": "4"
     },
     {
       "name": "baseTokenDecimals",
@@ -6703,12 +6708,12 @@ export type Engine = {
     {
       "name": "incomeDispatcherProgramId",
       "type": "pubkey",
-      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
+      "value": "xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6"
     },
     {
       "name": "raydiumClmmProgramId",
       "type": "pubkey",
-      "value": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
     },
     {
       "name": "seedRoot",
