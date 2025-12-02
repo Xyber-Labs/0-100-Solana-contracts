@@ -189,28 +189,34 @@ export async function runFullFlow(
       throw new Error("Failed to create required XYBER ATAs for creator/treasury. Ensure XYBER mint exists and wallet has authority.");
     }
     if (creationFeeU64 > 0) {
-      let funded = false;
-      try {
-        const mintFeeTx = new Transaction().add(createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64)));
-        await provider.sendAndConfirm!(mintFeeTx, []);
-        funded = true;
-      } catch (_) { }
-      if (!funded) {
+      const creatorXyberBalance = await getTokenBalance(creatorXyberAta);
+      const requiredXyberUi = creationFeeU64 / Math.pow(10, 9);
+      if (creatorXyberBalance >= requiredXyberUi) {
+        addLog(`   -> Creator XYBER ATA already funded for creation fee (balance=${creatorXyberBalance}, required=${requiredXyberUi}). Skipping funding and config update.`);
+      } else {
+        let funded = false;
         try {
-          const transferTx = new Transaction().add(createTransferInstruction(treasuryXyberAta, creatorXyberAta, treasuryPubkey, BigInt(creationFeeU64)));
-          await provider.sendAndConfirm!(transferTx, []);
+          const mintFeeTx = new Transaction().add(createMintToInstruction(xyberMint, creatorXyberAta, admin.publicKey, BigInt(creationFeeU64)));
+          await provider.sendAndConfirm!(mintFeeTx, []);
           funded = true;
         } catch (_) { }
-      }
-      if (!funded) {
-        try {
-          if (threshold > 1 && adminSigners.length < threshold) {
-            throw new Error(`Not enough admin signers provided (${adminSigners.length}/${threshold}).`);
+        if (!funded) {
+          try {
+            const transferTx = new Transaction().add(createTransferInstruction(treasuryXyberAta, creatorXyberAta, treasuryPubkey, BigInt(creationFeeU64)));
+            await provider.sendAndConfirm!(transferTx, []);
+            funded = true;
+          } catch (_) { }
+        }
+        if (!funded) {
+          try {
+            if (threshold > 1 && adminSigners.length < threshold) {
+              throw new Error(`Not enough admin signers provided (${adminSigners.length}/${threshold}).`);
+            }
+            await (sdk as any).updateEngineConfig({ newCreationFee: new BN(0), signerAdmins: adminSigners });
+            addLog("   -> Creation fee set to 0 via config update.");
+          } catch (e: any) {
+            throw new Error(`Unable to fund creator XYBER ATA for creation fee and cannot update config: ${e?.message || e}`);
           }
-          await (sdk as any).updateEngineConfig({ newCreationFee: new BN(0), signerAdmins: adminSigners });
-          addLog("   -> Creation fee set to 0 via config update.");
-        } catch (e: any) {
-          throw new Error(`Unable to fund creator XYBER ATA for creation fee and cannot update config: ${e?.message || e}`);
         }
       }
     }
@@ -586,7 +592,12 @@ export async function runFullFlow(
         sealCost += shardSealCost;
         sealDetails.push({ shardId, costLamports: shardSealCost, batches });
         const before = await provider.connection.getBalance(admin.publicKey);
-        const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({ launch: testLaunchState, shardId });
+        const { transaction: closeTx } = await (sdk as any).closeRosterShardTx({
+          launch: testLaunchState,
+          shardId,
+          payer: admin.publicKey,
+          refundTo: admin.publicKey,
+        });
         let deltaForShard = 0;
         try {
           await provider.sendAndConfirm!(closeTx, []);
@@ -624,10 +635,18 @@ export async function runFullFlow(
       const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
       let clmmProgramStr = String((config as any).clmmProgram || "");
       if (!clmmProgramStr) {
+        try {
+          const raydiumFromSdk = (sdk as any).getRaydiumClmmProgramId?.();
+          if (raydiumFromSdk) {
+            clmmProgramStr = raydiumFromSdk.toBase58();
+          }
+        } catch (_) { }
+      }
+      if (!clmmProgramStr) {
         const ep = (provider as any)?.connection?.rpcEndpoint || "";
         clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
-        (config as any).clmmProgram = clmmProgramStr;
       }
+      (config as any).clmmProgram = clmmProgramStr;
       const quoteMintPk = new PublicKey(quoteMintStr);
       const clmmProgramPk = new PublicKey(clmmProgramStr);
       const createPool = await (sdk as any).createClmmPoolTx({
