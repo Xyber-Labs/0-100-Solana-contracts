@@ -260,7 +260,6 @@ impl LaunchPreset {
         );
         require!(self.creator_claim_lock_period_sec > 0, crate::errors::ErrorCode::MalformedPreset);
         require!(self.roster_shards_total > 0, crate::errors::ErrorCode::MalformedPreset);
-        // Sale start is expressed as a *delay* in seconds from init time; must be non-negative.
         require!(self.sale_start_time_sec >= 0, crate::errors::ErrorCode::MalformedPreset);
         require!(
             self.funding_duration_seconds > 0 && self.funding_duration_seconds <= 60 * 60 * 24 * 7,
