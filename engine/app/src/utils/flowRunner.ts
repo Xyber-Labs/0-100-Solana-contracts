@@ -19,13 +19,15 @@ import {
 // import type EngineSDK from "../../../ts-sdk/src/engine";
 import type { EngineClient } from "@xyber-labs/0-100-sdk";
 import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
+import { runRaydiumSwaps } from "./raydiumSwaps";
 
 
-// A simplified SDK type, as we don't have the full type in this context
 interface SimulationConfig {
   numUsers: number;
   maxTicketsPerUser: number;
   useTestMintForBase?: boolean;
+  raydiumSwapsCount?: number;
+  raydiumSolPerSwap?: number;
 }
 
 export async function runFullFlow(
@@ -1297,6 +1299,32 @@ export async function runFullFlow(
       }
     } catch (e: any) {
       addLog(`[Team Vesting] initTeamVesting skipped: ${String(e?.message || e)}`);
+    }
+
+    try {
+      const raydiumSwapsCount = (simConfig as any)?.raydiumSwapsCount ?? 10;
+      const raydiumSolPerSwap = (simConfig as any)?.raydiumSolPerSwap ?? 1;
+      addLog(`\n------------------------------------`);
+      addLog(`--- RAYDIUM SWAP PARAMETERS ---`);
+      addLog(`   Swaps count: ${raydiumSwapsCount}`);
+      addLog(`   SOL per swap: ${raydiumSolPerSwap}`);
+      addLog(`------------------------------------`);
+      if (mintedBaseMint && poolBaseLiquidityUi !== null && poolQuoteLiquidityUi !== null && raydiumSwapsCount > 0 && raydiumSolPerSwap > 0) {
+        addLog(`\n[11/10] Executing Raydium swaps...`);
+        await runRaydiumSwaps({
+          provider,
+          sdk,
+          launchPda: testLaunchState,
+          baseMint: mintedBaseMint,
+          swapsCount: raydiumSwapsCount,
+          solPerSwap: raydiumSolPerSwap,
+          addLog,
+        });
+      } else {
+        addLog(`\n[11/10] Raydium swaps skipped (pool/liquidity unavailable or zero parameters).`);
+      }
+    } catch (e: any) {
+      addLog(`\n[11/10] Raydium swaps step failed: ${String(e?.message || e)}`);
     }
 
     addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);

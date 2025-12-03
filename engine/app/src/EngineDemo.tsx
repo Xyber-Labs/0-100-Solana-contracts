@@ -9,11 +9,12 @@ import { runFullFlow } from './utils/flowRunner';
 
 // Launch configuration interface
 
-// --- New interface for simulation parameters ---
 interface SimulationConfig {
   numUsers: number;
   maxTicketsPerUser: number;
   useTestMintForBase?: boolean;
+  raydiumSwapsCount?: number;
+  raydiumSolPerSwap?: number;
 }
 
 // Error boundary component
@@ -169,6 +170,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     numUsers: 500,
     maxTicketsPerUser: 30,
     useTestMintForBase: false,
+    raydiumSwapsCount: 10,
+    raydiumSolPerSwap: 1,
   };
 
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -1211,7 +1214,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   placeholder="Raydium CLMM program id"
                 />
               </div>
-              {/* --- Simulation Parameters --- */}
               <div className="col-span-full mt-4">
                 <h3 className="text-sm font-bold terminal-glow mb-2">Simulation Parameters</h3>
               </div>
@@ -1243,6 +1245,38 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <span className="text-xs terminal-output">
                   Use test mint for base token (skip Raydium CLMM)
                 </span>
+              </div>
+              <div className="col-span-full mt-4 border-t border-gray-600 pt-3">
+                <h3 className="text-sm font-bold terminal-glow mb-2">Raydium Swap Parameters</h3>
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">Raydium Swaps Count</label>
+                <input
+                  type="number"
+                  value={simConfig.raydiumSwapsCount ?? 0}
+                  onChange={(e) =>
+                    setSimConfig(prev => ({
+                      ...prev,
+                      raydiumSwapsCount: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                  className="terminal-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">SOL per Swap</label>
+                <input
+                  type="number"
+                  value={simConfig.raydiumSolPerSwap ?? 0}
+                  onChange={(e) =>
+                    setSimConfig(prev => ({
+                      ...prev,
+                      raydiumSolPerSwap: parseFloat(e.target.value) || 0,
+                    }))
+                  }
+                  className="terminal-input w-full"
+                  step="0.1"
+                />
               </div>
             </div>
           )}
