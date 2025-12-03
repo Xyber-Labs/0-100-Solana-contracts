@@ -76,7 +76,7 @@ anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(
 
 ```bash
 # Deploy Income Dispatcher program
-anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/disptcher.json
+anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/dispatcher.json
 sleep 2
 anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/dispatcher.json)
 ```
@@ -91,11 +91,12 @@ solana airdrop 10 $(solana address -k keys/admin2.json) --url localhost
 solana airdrop 10 $(solana address -k keys/admin3.json) --url localhost
 solana airdrop 10 $(solana address -k keys/deployer.json) --url localhost
 solana airdrop 10 $(solana address -k keys/platform.json) --url localhost
-solana airdrop 10 $(solana address -k keys/backend.json) --url localhost
-solana airdrop 1000 $(solana address -k keys/creator.json) --url localhost
-solana airdrop 500 $(solana address -k keys/buyer1.json) --url localhost
-solana airdrop 500 $(solana address -k keys/buyer2.json) --url localhost
-solana airdrop 500 $(solana address -k keys/buyer3.json) --url localhost
+solana airdrop 9000 $(solana address -k keys/backend.json) --url localhost
+solana airdrop 10000 $(solana address -k keys/creator.json) --url localhost
+solana airdrop 10000 $(solana address -k keys/buyer1.json) --url localhost
+solana airdrop 10000 $(solana address -k keys/buyer2.json) --url localhost
+solana airdrop 10000 $(solana address -k keys/buyer3.json) --url localhost
+solana airdrop 10000 $(solana address -k keys/buyer4.json) --url localhost
 solana airdrop 10 $(solana address -k keys/treasure.json) --url localhost
 ```
 
