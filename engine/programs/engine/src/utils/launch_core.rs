@@ -131,12 +131,10 @@ pub fn init_launch_core<'info>(
     state.roster_shard_cap = params.roster_shard_cap;
 
     let now = Clock::get()?.unix_timestamp;
-    let start = if params.sale_start_time_sec == 0 {
-        now
-    } else {
-        require!(params.sale_start_time_sec >= now, EngineErrorCode::InvalidStartTime);
-        params.sale_start_time_sec
-    };
+    require!(params.sale_start_time_sec >= 0, EngineErrorCode::InvalidStartTime);
+    let start = now
+        .checked_add(params.sale_start_time_sec)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let end = start
         .checked_add(params.funding_duration_seconds)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
