@@ -6,6 +6,7 @@ import type { LaunchConfig } from './types/launch';
 import { depositUsersParallel, fundUsersParallel, getChainTimeSec, preparePoolCreationWithRetry, mintForTestSafe, type SimUser } from './utils/flowHelpers';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { runFullFlow } from './utils/flowRunner';
+import type { LaunchUserRow, LaunchSummary } from './utils/stats/launchStats';
 
 // Launch configuration interface
 
@@ -15,6 +16,8 @@ interface SimulationConfig {
   useTestMintForBase?: boolean;
   raydiumSwapsCount?: number;
   raydiumSolPerSwap?: number;
+  minTicketsPerUser?: number;
+  ticketsTargetMultiplier?: number;
 }
 
 // Error boundary component
@@ -95,6 +98,19 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
   // --- New state for the full flow runner ---
   const [isFlowRunning, setIsFlowRunning] = useState(false);
   const [faucetAmount, setFaucetAmount] = useState(1000);
+  const [statsRows, setStatsRows] = useState<LaunchUserRow[] | null>(null);
+  const [statsSummary, setStatsSummary] = useState<LaunchSummary | null>(null);
+  const [statsCsv, setStatsCsv] = useState<string | null>(null);
+
+  const downloadTextFile = (filename: string, content: string, mime = "text/csv;charset=utf-8") => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Helper to get seconds from dropdown value
   const getSecondsFromDropdown = (daysValue: number) => {
@@ -172,10 +188,20 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     useTestMintForBase: false,
     raydiumSwapsCount: 10,
     raydiumSolPerSwap: 1,
+    minTicketsPerUser: 1,
+    ticketsTargetMultiplier: 1,
   };
 
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
   const [simConfig, setSimConfig] = useState<SimulationConfig>(defaultSimConfig);
+
+  const formatLamportsToSol = (value: bigint): string => {
+    return (Number(value) / 1e9).toFixed(6);
+  };
+
+  const formatAtomicTokensToUi = (value: bigint): string => {
+    return (Number(value) / 1e9).toFixed(6);
+  };
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -402,9 +428,12 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         return;
       }
       addLog(`Funding window remaining ~${remaining}s`);
+      const minTickets = Math.max(1, (simConfig as any).minTicketsPerUser ?? 1);
+      const maxTickets = Math.max(minTickets, simConfig.maxTicketsPerUser);
       const users: SimUser[] = Array.from({ length: simConfig.numUsers }, (_, i) => {
         const keypair = Keypair.generate();
-        const tickets = Math.floor(Math.random() * simConfig.maxTicketsPerUser) + 1;
+        const range = maxTickets - minTickets + 1;
+        const tickets = minTickets + Math.floor(Math.random() * range);
         const depositAmount = new BN(launchConfig.tauLamports * tickets);
         const shardId = Math.floor(i / launchConfig.rosterShardCap);
         return { keypair, tickets, depositAmount, shardId };
@@ -938,6 +967,21 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         addLog,
         simConfig
       );
+      if (result.statsRows && result.statsRows.length > 0) {
+        setStatsRows(result.statsRows);
+      } else {
+        setStatsRows(null);
+      }
+      if (result.statsSummary) {
+        setStatsSummary(result.statsSummary);
+      } else {
+        setStatsSummary(null);
+      }
+      if (result.statsCsv) {
+        setStatsCsv(result.statsCsv);
+      } else {
+        setStatsCsv(null);
+      }
       if (result.success) {
         addLog(`--- ✅ FULL TEST FLOW SUCCEEDED ---`);
       } else {
@@ -1227,12 +1271,37 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 />
               </div>
               <div>
+                <label className="block text-xs terminal-output mb-1">Min Tickets Per User</label>
+                <input
+                  type="number"
+                  value={simConfig.minTicketsPerUser ?? 1}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value) || 1;
+                    setSimConfig(prev => ({ ...prev, minTicketsPerUser: v }));
+                  }}
+                  className="terminal-input w-full"
+                />
+              </div>
+              <div>
                 <label className="block text-xs terminal-output mb-1">Max Tickets Per User</label>
                 <input
                   type="number"
                   value={simConfig.maxTicketsPerUser}
                   onChange={(e) => setSimConfig(prev => ({ ...prev, maxTicketsPerUser: parseInt(e.target.value) || 0 }))}
                   className="terminal-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">Tickets Target Multiplier (k_pub)</label>
+                <input
+                  type="number"
+                  value={simConfig.ticketsTargetMultiplier ?? 1}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value) || 1;
+                    setSimConfig(prev => ({ ...prev, ticketsTargetMultiplier: v }));
+                  }}
+                  className="terminal-input w-full"
+                  step="0.1"
                 />
               </div>
               <div className="flex items-center space-x-2 mt-2">
@@ -1846,7 +1915,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           </div>
         </div>
 
-        {/* Flow Guide */}
         <div className="terminal-card">
           <div className="terminal-prompt mb-4">
             <span className="terminal-glow">guide@engine:~$</span>
@@ -1865,7 +1933,143 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
           </div>
         </div>
 
-        {/* Logs Panel */}
+        {statsRows && statsRows.length > 0 && statsSummary && (
+          <div className="terminal-card">
+            <div className="flex justify-between items-center mb-4">
+              <div className="terminal-prompt">
+                <span className="terminal-glow">stats@engine:~$</span>
+                <span className="terminal-command ml-2">launch-distribution</span>
+              </div>
+              {statsCsv && (
+                <button
+                  onClick={() => downloadTextFile(`launch_stats_${Date.now()}.csv`, statsCsv)}
+                  className="terminal-button text-xs"
+                >
+                  Download CSV
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs terminal-output mb-4">
+              <div>
+                <div>Total users</div>
+                <div className="terminal-success">{statsSummary.totalUsers}</div>
+              </div>
+              <div>
+                <div>Winners</div>
+                <div className="terminal-success">
+                  {statsSummary.winners} users / {statsSummary.winningTickets} tickets
+                </div>
+              </div>
+              <div>
+                <div>Losers</div>
+                <div className="terminal-error">
+                  {statsSummary.losers} users / {statsSummary.losingTickets} tickets
+                </div>
+              </div>
+              <div>
+                <div>Failed</div>
+                <div className="terminal-error">{statsSummary.failed}</div>
+              </div>
+              <div>
+                <div>Total deposited</div>
+                <div className="terminal-success">
+                  {formatLamportsToSol(statsSummary.totalDepositedLamports)} SOL
+                </div>
+              </div>
+              <div>
+                <div>Total refunded</div>
+                <div className="terminal-success">
+                  {formatLamportsToSol(statsSummary.totalRefundedLamports)} SOL
+                </div>
+              </div>
+              <div>
+                <div>Net admin SOL</div>
+                <div className="terminal-output">
+                  {formatLamportsToSol(
+                    statsSummary.totalRefundedLamports - statsSummary.totalDepositedLamports
+                  )}{" "}
+                  SOL
+                </div>
+              </div>
+              <div>
+                <div>Total claimed tokens</div>
+                <div className="terminal-success">
+                  {formatAtomicTokensToUi(statsSummary.totalClaimedTokensAtomic)}
+                </div>
+              </div>
+            </div>
+            <div className="terminal-scroll border border-gray-700 rounded max-h-64 overflow-auto">
+              <table className="min-w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-black bg-opacity-80">
+                  <tr>
+                    <th className="px-2 py-1 text-left">User</th>
+                    <th className="px-2 py-1 text-right">Shard</th>
+                    <th className="px-2 py-1 text-right">Tickets Total</th>
+                    <th className="px-2 py-1 text-right">Tickets Win</th>
+                    <th className="px-2 py-1 text-right">Tickets Lose</th>
+                    <th className="px-2 py-1 text-right">Deposit SOL</th>
+                    <th className="px-2 py-1 text-right">Refund SOL</th>
+                    <th className="px-2 py-1 text-right">Net SOL</th>
+                    <th className="px-2 py-1 text-right">Claimed</th>
+                    <th className="px-2 py-1 text-left">Status</th>
+                    <th className="px-2 py-1 text-left">Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsRows.map((row) => {
+                    const netLamports = row.refundLamports - row.depositLamports;
+                    return (
+                      <tr key={row.user} className="border-t border-gray-800">
+                        <td className="px-2 py-1 font-mono">
+                          {row.user.slice(0, 4)}...{row.user.slice(-4)}
+                        </td>
+                        <td className="px-2 py-1 text-right">{row.shardId}</td>
+                        <td className="px-2 py-1 text-right">{row.tickets}</td>
+                        <td className="px-2 py-1 text-right">
+                          {typeof row.winningTickets === "number" ? row.winningTickets : ""}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {typeof row.losingTickets === "number" ? row.losingTickets : ""}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {formatLamportsToSol(row.depositLamports)}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {formatLamportsToSol(row.refundLamports)}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {formatLamportsToSol(netLamports)}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {formatAtomicTokensToUi(row.claimTokensAtomic)}
+                        </td>
+                        <td className="px-2 py-1 text-left">
+                          <span
+                            className={
+                              row.status === "winner"
+                                ? "terminal-success"
+                                : row.status === "loser"
+                                ? "terminal-output"
+                                : row.status === "failed"
+                                ? "terminal-error"
+                                : "terminal-output"
+                            }
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1 text-left">
+                          {row.error ? row.error.slice(0, 80) : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <div className="terminal-card">
           <div className="flex justify-between items-center mb-4">
             <div className="terminal-prompt">

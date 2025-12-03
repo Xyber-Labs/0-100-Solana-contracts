@@ -15,11 +15,11 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-
-// import type EngineSDK from "../../../ts-sdk/src/engine";
 import type { EngineClient } from "@xyber-labs/0-100-sdk";
 import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
 import { runRaydiumSwaps } from "./raydiumSwaps";
+import { LaunchStatsCollector } from "./stats/launchStats";
+import type { LaunchSummary, LaunchUserRow } from "./stats/launchStats";
 
 
 interface SimulationConfig {
@@ -28,6 +28,8 @@ interface SimulationConfig {
   useTestMintForBase?: boolean;
   raydiumSwapsCount?: number;
   raydiumSolPerSwap?: number;
+  minTicketsPerUser?: number;
+  ticketsTargetMultiplier?: number;
 }
 
 export async function runFullFlow(
@@ -38,12 +40,19 @@ export async function runFullFlow(
   addLog: (log: string) => void,
   simConfig: SimulationConfig,
   adminSigners: Keypair[] = []
-): Promise<{ success: boolean; message: string }> {
+): Promise<{
+  success: boolean;
+  message: string;
+  statsRows?: LaunchUserRow[];
+  statsCsv?: string;
+  statsSummary?: LaunchSummary;
+}> {
   const admin = provider.wallet;
   const adminInitialBalance = await provider.connection.getBalance(admin.publicKey);
   let userFundingCost = 0;
   let poolBaseLiquidityUi: number | null = null;
   let poolQuoteLiquidityUi: number | null = null;
+  const stats = new LaunchStatsCollector();
 
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
@@ -403,9 +412,8 @@ export async function runFullFlow(
       reservedExpected * config.tauLamports
     );
 
-    // 3. Pre-initialize all necessary roster shards
-    // We'll generate enough users to reach at least k_pub tickets
     const MAX_TICKETS_PER_USER = Math.max(1, simConfig.maxTicketsPerUser);
+    const MIN_TICKETS_PER_USER = Math.max(1, (simConfig as any).minTicketsPerUser ?? 1);
     const usersNeeded = Math.ceil(kPubExpected / MAX_TICKETS_PER_USER);
     const requestedUsers = simConfig.numUsers && simConfig.numUsers > 0 ? simConfig.numUsers : usersNeeded;
     const maxUsersCapacity = rosterShardsTotal * config.rosterShardCap;
@@ -435,15 +443,18 @@ export async function runFullFlow(
     const balanceAfterShards = await provider.connection.getBalance(admin.publicKey);
     const shardCreationCost = balanceBeforeShards - balanceAfterShards;
 
-    // 3. Simulate deposits to reach at least k_pub tickets
     const usersWithDeposits = new Map<
       string,
-      { keypair: Keypair; tickets: number; shardId: number }
+      { keypair: Keypair; tickets: number; shardId: number; depositAmount: BN }
     >();
 
     addLog(`\n[3/10] Simulating deposits for ${TARGET_USERS} users...`);
 
-    const ticketsTarget = kPubExpected;
+    const ticketsMultiplierRaw = (simConfig as any).ticketsTargetMultiplier;
+    const ticketsMultiplier = typeof ticketsMultiplierRaw === "number" && ticketsMultiplierRaw > 0 ? ticketsMultiplierRaw : 1;
+    const ticketsTargetBase = Math.floor(kPubExpected * ticketsMultiplier);
+    const minTicketsTotal = TARGET_USERS * MIN_TICKETS_PER_USER;
+    const ticketsTarget = Math.max(ticketsTargetBase, minTicketsTotal);
     const maxTicketsCapacity = TARGET_USERS * MAX_TICKETS_PER_USER;
     addLog(`   -> ticketsTarget (k_pub expected): ${ticketsTarget}`);
     addLog(`   -> maxTicketsCapacity (users * maxTicketsPerUser): ${maxTicketsCapacity}`);
@@ -451,23 +462,18 @@ export async function runFullFlow(
       addLog(`   -> Warning: ticketsTarget exceeds maxTicketsCapacity; capped at capacity.`);
     }
     const cappedTicketsTarget = Math.min(ticketsTarget, maxTicketsCapacity);
-    const baseTicketsPerUser = 1;
-    const baseTotalTickets = TARGET_USERS * baseTicketsPerUser;
-    let remainingTickets = Math.max(0, cappedTicketsTarget - baseTotalTickets);
-    const ticketsPerUser: number[] = new Array(TARGET_USERS).fill(baseTicketsPerUser);
-    let userIndex = 0;
-    let remainingCapacity = TARGET_USERS * (MAX_TICKETS_PER_USER - baseTicketsPerUser);
-    while (remainingTickets > 0 && remainingCapacity > 0) {
-      const current = ticketsPerUser[userIndex];
-      const capacityForUser = MAX_TICKETS_PER_USER - current;
-      if (capacityForUser > 0) {
-        const add = Math.min(capacityForUser, remainingTickets);
-        ticketsPerUser[userIndex] = current + add;
-        remainingTickets -= add;
-        remainingCapacity -= add;
-      }
-      userIndex = (userIndex + 1) % TARGET_USERS;
-      if (userIndex === 0 && remainingCapacity === 0) break;
+    const ticketsPerUser: number[] = new Array(TARGET_USERS).fill(0);
+    let remainingTickets = cappedTicketsTarget;
+    for (let i = 0; i < TARGET_USERS; i++) {
+      const remainingUsers = TARGET_USERS - i;
+      const maxForUserRaw = remainingTickets - (remainingUsers - 1) * MIN_TICKETS_PER_USER;
+      const maxForUser = Math.max(MIN_TICKETS_PER_USER, Math.min(MAX_TICKETS_PER_USER, maxForUserRaw));
+      const minForUser = Math.min(MIN_TICKETS_PER_USER, maxForUser);
+      const range = Math.max(0, maxForUser - minForUser);
+      const extra = range > 0 ? Math.floor(Math.random() * (range + 1)) : 0;
+      const tickets = minForUser + extra;
+      ticketsPerUser[i] = tickets;
+      remainingTickets -= tickets;
     }
     const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
     for (let i = 0; i < TARGET_USERS; i++) {
@@ -544,7 +550,12 @@ export async function runFullFlow(
     for (const result of successfulResults) {
       const k = result.pubkey.toBase58();
       const user = users.find(u => u.keypair.publicKey.toBase58() === k)!;
-      usersWithDeposits.set(k, { keypair: user.keypair, tickets: user.tickets, shardId: result.shardId });
+      usersWithDeposits.set(k, {
+        keypair: user.keypair,
+        tickets: user.tickets,
+        shardId: result.shardId,
+        depositAmount: user.depositAmount,
+      });
     }
     if (failedCount > 0) {
       addLog(`   -> ${failedCount} deposits failed after retries and were skipped.`);
@@ -800,6 +811,15 @@ export async function runFullFlow(
       return { success: true, message: "Flow completed (no pool yet)" };
     }
 
+    for (const [user, info] of usersWithDeposits.entries()) {
+      stats.registerUser({
+        user,
+        shardId: info.shardId,
+        tickets: info.tickets,
+        depositLamports: BigInt(info.depositAmount.toString()),
+      });
+    }
+
     const allUsersData = Array.from(usersWithDeposits.values());
 
     function toBytesFromBase64(b64: string): Uint8Array {
@@ -885,6 +905,7 @@ export async function runFullFlow(
 
       const claimPromises = batch.map(async (userData) => {
         const userPk = userData.keypair.publicKey;
+        const userKey = userPk.toBase58();
         const userAta = sdk.getUserAta(baseMintForClaims, userPk);
         const initialBalance = await getTokenBalance(userAta);
         const tryClaimTokens = async () => {
@@ -906,7 +927,10 @@ export async function runFullFlow(
               if (msg.includes("NoTokensToClaim")) return false;
               const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("not confirmed in 30.00 seconds");
               attempt++;
-              if (!transient || attempt >= maxAttempts) throw e;
+              if (!transient || attempt >= maxAttempts) {
+                stats.recordFailure({ user: userKey, phase: "claim", error: e });
+                throw e;
+              }
               const jitter = Math.floor(Math.random() * 100);
               const delay = baseDelay * Math.min(8, 2 ** (attempt - 1)) + jitter;
               await new Promise(r => setTimeout(r, delay));
@@ -914,16 +938,18 @@ export async function runFullFlow(
           }
         };
         try {
+          let tokensClaimedUi = 0;
           const won = await tryClaimTokens();
           if (won) {
             const finalBalance = await getTokenBalance(userAta);
-            return {
-              status: "winner",
-              tokensClaimed: finalBalance - initialBalance,
-              tickets: userData.tickets,
-            };
+            const deltaUi = finalBalance - initialBalance;
+            const deltaAtomic = BigInt(Math.round(deltaUi * 1e9));
+            if (deltaAtomic > 0n) {
+              stats.recordWinner({ user: userKey, tokensAtomicDelta: deltaAtomic });
+              tokensClaimedUi = deltaUi;
+            }
           }
-          // loser: attempt refund with retries
+          const beforeLamports = await provider.connection.getBalance(userPk);
           let attemptR = 0;
           const maxAttemptsR = 3;
           const baseDelayR = 200;
@@ -934,12 +960,28 @@ export async function runFullFlow(
                 userKeypair: userData.keypair,
                 shardId: userData.shardId,
               });
+              const afterLamports = await provider.connection.getBalance(userPk);
+              const refundDelta = Math.max(0, afterLamports - beforeLamports);
+              if (refundDelta > 0) {
+                stats.recordLoser({
+                  user: userKey,
+                  refundLamportsDelta: BigInt(refundDelta),
+                });
+              }
+              if (tokensClaimedUi > 0) {
+                return {
+                  status: "winner",
+                  tokensClaimed: tokensClaimedUi,
+                  tickets: userData.tickets,
+                };
+              }
               return { status: "loser", tickets: userData.tickets };
             } catch (refundError: any) {
               const msg = String(refundError?.message || "");
               const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET") || msg.includes("not confirmed in 30.00 seconds");
               attemptR++;
               if (!transient || attemptR >= maxAttemptsR) {
+                stats.recordFailure({ user: userKey, phase: "refund", error: refundError });
                 return {
                   status: "failed",
                   type: "refund",
@@ -953,6 +995,7 @@ export async function runFullFlow(
             }
           }
         } catch (error: any) {
+          stats.recordFailure({ user: userKey, phase: "claim", error });
           return {
             status: "failed",
             type: "token",
@@ -986,13 +1029,6 @@ export async function runFullFlow(
           break;
         case "failed":
           failedClaims++;
-          if (result.publicKey && result.error) {
-            addLog(
-              `   -> ❌ ${result.type
-              } claim failed for ${result.publicKey.toBase58()}: ${result.error.message
-              }`
-            );
-          }
           break;
       }
     }
@@ -1371,15 +1407,38 @@ export async function runFullFlow(
       const netOperationalCost = Math.max(0, grossOperationalCost - rentRefundLamports);
       addLog(`   Gross operational cost (incl. shard rents): ${(grossOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
       addLog(`   Net operational cost after rent return:     ${(netOperationalCost / LAMPORTS_PER_SOL).toFixed(6)} SOL`);
-      addLog(`--- END RENT REFUND SUMMARY ---`);
+    addLog(`--- END RENT REFUND SUMMARY ---`);
     } catch (_) {}
 
+    try {
+      if (tokensPerTicketBN) {
+        stats.finalizeTickets(BigInt(tokensPerTicketBN.toString()));
+      }
+    } catch (_) {}
+    const statsSummary = stats.getSummary();
+    const statsRows = stats.getRows();
+    const statsCsv = stats.toCSV();
     addLog("\n✅ Full flow finished successfully!");
-    return { success: true, message: "Flow completed successfully" };
+    return {
+      success: true,
+      message: "Flow completed successfully",
+      statsRows,
+      statsCsv,
+      statsSummary,
+    };
   } catch (error: any) {
     addLog(`\n--- SCRIPT FAILED ---`);
     addLog(`Error: ${error.message}`);
     console.error("Full flow error details:", error);
-    return { success: false, message: error.message };
+    const statsSummary = stats.getSummary();
+    const statsRows = stats.getRows();
+    const statsCsv = stats.toCSV();
+    return {
+      success: false,
+      message: error.message,
+      statsRows,
+      statsCsv,
+      statsSummary,
+    };
   }
 }
