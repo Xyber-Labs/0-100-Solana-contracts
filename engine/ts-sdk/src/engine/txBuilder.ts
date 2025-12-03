@@ -245,19 +245,17 @@ export class TxBuilder {
   }> {
     const projectIdLe = (() => {
       if (BN.isBN(params.projectId as any)) {
-        const n = (params.projectId as BN).toArrayLike(Buffer, "le", 8);
-        return n;
+        return (params.projectId as BN).toArrayLike(Uint8Array as any, "le", 8) as Uint8Array;
       }
-      const n = BigInt(params.projectId as number);
-      const buf = Buffer.alloc(8);
-      buf.writeBigUInt64LE(n);
+      const buf = new Uint8Array(8);
+      const view = new DataView(buf.buffer);
+      view.setBigUint64(0, BigInt(params.projectId as number), true);
       return buf;
     })();
     const [launchState] = this.getPda(["launch", projectIdLe]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
     const [creatorGrant] = this.getPda(["creator", launchState]);
-    // No ATA creation at init stage
 
     const initParams: any = {
       hardCapLamports: params.hardCapLamports,
@@ -348,12 +346,11 @@ export class TxBuilder {
   }> {
     const projectIdLe = (() => {
       if (BN.isBN(params.projectId as any)) {
-        const n = (params.projectId as BN).toArrayLike(Buffer, "le", 8);
-        return n;
+        return (params.projectId as BN).toArrayLike(Uint8Array as any, "le", 8) as Uint8Array;
       }
-      const n = BigInt(params.projectId as number);
-      const buf = Buffer.alloc(8);
-      buf.writeBigUInt64LE(n);
+      const buf = new Uint8Array(8);
+      const view = new DataView(buf.buffer);
+      view.setBigUint64(0, BigInt(params.projectId as number), true);
       return buf;
     })();
     const [launchState] = this.getPda(["launch", projectIdLe]);

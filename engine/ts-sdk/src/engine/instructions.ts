@@ -120,8 +120,13 @@ const EngineSDK = {
 
     function getLaunchPdaByProjectId(projectId: number | BN): [anchor.web3.PublicKey, number] {
       const le = BN.isBN(projectId)
-        ? (projectId as BN).toArrayLike(Buffer, "le", 8)
-        : (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(BigInt(projectId)); return b; })();
+        ? (projectId as BN).toArrayLike(Uint8Array as any, "le", 8) as Uint8Array
+        : (() => {
+            const buf = new Uint8Array(8);
+            const view = new DataView(buf.buffer);
+            view.setBigUint64(0, BigInt(projectId), true);
+            return buf;
+          })();
       return txBuilder.getPda(["launch", le]);
     }
 
