@@ -1744,10 +1744,16 @@ export class TxBuilder {
         .transaction();
 
       const providerAny: any = this.program.provider as any;
-      const walletPayerPubkey = providerAny?.wallet?.payer?.publicKey;
-      if (!walletPayerPubkey) throw new Error("LiteSVM: missing wallet.payer for feePayer");
-      tx.feePayer = walletPayerPubkey;
       const conn: any = providerAny.connection;
+
+      // Determine a suitable fee payer for simulation:
+      // - Prefer wallet.payer (LiteSVM / Keypair wallet)
+      // - Fallback to wallet.publicKey (browser/adapters), no signing required with sigVerify=false
+      const walletPayerPubkey: web3.PublicKey | undefined =
+        providerAny?.wallet?.payer?.publicKey ?? providerAny?.wallet?.publicKey;
+      if (!walletPayerPubkey) throw new Error("Simulation: missing wallet publicKey for feePayer");
+      tx.feePayer = walletPayerPubkey;
+
       let blockhash: string | undefined;
       if (conn && typeof conn.getLatestBlockhash === "function") {
         const res = await conn.getLatestBlockhash();
@@ -1762,11 +1768,12 @@ export class TxBuilder {
       }
       if (blockhash) tx.recentBlockhash = blockhash as string;
 
-      // Ensure the tx is signed before simulation (LiteSVM requires signatures)
+      // Ensure the tx is signed before simulation when possible (LiteSVM requires signatures)
       try {
-        tx.partialSign(providerAny.wallet.payer);
-      } catch (_) {
-      }
+        if (providerAny.wallet?.payer) {
+          tx.partialSign(providerAny.wallet.payer);
+        }
+      } catch (_) {}
 
       let simulation: any;
       if (conn && typeof conn.simulateTransaction === "function") {

@@ -55,8 +55,9 @@ export async function runFullFlow(
   // daily limit will be recalculated below to allow full creator claim if needed
 
   addLog(`\n--- Using Simulation Parameters ---`);
-  addLog(`   -> Sale Allocation (human units): ${Number(config.saleAllocation).toLocaleString()}`);
-  addLog(`   -> LP Allocation (human units): ${Number((config as any).lpAllocation).toLocaleString()}`);
+  addLog(`   -> Base total supply (tokens): ${config.baseTotalAllocationTokens}`);
+  addLog(`   -> Sale Allocation (bps): ${String((config as any).saleBasisPoints ?? 0)}`);
+  addLog(`   -> LP Allocation (bps): ${String((config as any).lpBasisPoints ?? 0)}`);
   addLog(`   -> Team Allocation (bps of base_total): ${(config as any).teamAllocationBasisPoints}`);
   addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / LAMPORTS_PER_SOL} SOL`);
   addLog(`------------------------------------`);
@@ -263,32 +264,29 @@ export async function runFullFlow(
     const cfgSec = typeof config.fundingDurationSeconds === 'number' ? config.fundingDurationSeconds : 0;
     const fundingDurationSeconds = Math.max(15, cfgSec, estClamped);
 
-    // Add main instruction
-    // Derive baseTotalAllocation/baseSaleBasisPoints from sale/lp
-    // Convert to atomic units (9 decimals). If values look already atomic, pass-through.
-    const DECIMALS_SCALE = new BN(1_000_000_000); // 10^9
-    const toAtomic = (val: string | number): BN => {
-      const raw = new BN(String(val));
-      // Heuristic: if already very large (>= 1e13), assume atomic and do not rescale
-      // 1e13 tokens * 1e9 = 1e22 (would overflow u64), so practical UI inputs (<= 1e12) should be rescaled
-      const THRESHOLD = new BN("10000000000000"); // 1e13
-      return raw.gte(THRESHOLD) ? raw : raw.mul(DECIMALS_SCALE);
-    };
-    const saleAllocBN = toAtomic(config.saleAllocation);
-    const lpAllocBN = toAtomic((config as any).lpAllocation);
-    const teamBpsNum = Number((config as any).teamAllocationBasisPoints ?? 0);
-    const denom = 10000 - Math.max(0, Math.min(10000, teamBpsNum));
-    const baseNonTeamBN = saleAllocBN.add(lpAllocBN);
-    const baseTotalAllocationBN = denom > 0
-      ? baseNonTeamBN.mul(new BN(10000)).div(new BN(denom))
-      : baseNonTeamBN; // fallback if denom==0
-    const baseSaleBpsBN = baseTotalAllocationBN.isZero()
-      ? new BN(0)
-      : saleAllocBN.mul(new BN(10000)).div(baseTotalAllocationBN);
-
-    if (lpAllocBN.isZero()) {
-      throw new Error("Invalid config: lpAllocation is zero; LP must be > 0");
+    const DECIMALS_SCALE = new BN(1_000_000_000);
+    let baseTotalTokensNum = Number((config as any).baseTotalAllocationTokens ?? 0);
+    if (!baseTotalTokensNum || baseTotalTokensNum <= 0) {
+      baseTotalTokensNum = 1_000_000_000;
+      (config as any).baseTotalAllocationTokens = baseTotalTokensNum;
+      addLog(`   -> baseTotalAllocationTokens was missing/zero, defaulted to ${baseTotalTokensNum}`);
     }
+    const baseTotalTokens = new BN(String(baseTotalTokensNum));
+    const baseTotalAllocationBN = baseTotalTokens.mul(DECIMALS_SCALE);
+    const saleBpsNum = Number((config as any).saleBasisPoints ?? 0);
+    const lpBpsNum = Number((config as any).lpBasisPoints ?? 0);
+    const teamBpsNum = Number((config as any).teamAllocationBasisPoints ?? 0);
+    const totalBps = saleBpsNum + lpBpsNum + teamBpsNum;
+    if (baseTotalAllocationBN.isZero()) {
+      throw new Error("Invalid config: baseTotalAllocationTokens is zero");
+    }
+    if (totalBps !== 10000) {
+      throw new Error(`Invalid config: sale+lp+team bps must equal 10000 (got ${totalBps})`);
+    }
+    if (lpBpsNum <= 0) {
+      throw new Error("Invalid config: lpBasisPoints must be > 0");
+    }
+    const baseSaleBpsBN = new BN(saleBpsNum);
 
     const metaName = `Lumi Project #${projectId}`;
     const metaSymbol = "LUMI";
@@ -633,7 +631,6 @@ export async function runFullFlow(
       mintedBaseMint = await mintForTestSafe({ sdk, launchPda: testLaunchState, baseMintKeypair: testBaseMint, addLog });
       addLog(`      - Minted base mint (test): ${mintedBaseMint.toBase58()}`);
     } else {
-      const quoteMintStr = String(config.quoteMint || "So11111111111111111111111111111111111111112");
       let clmmProgramStr = String((config as any).clmmProgram || "");
       if (!clmmProgramStr) {
         try {
@@ -641,54 +638,38 @@ export async function runFullFlow(
           if (raydiumFromSdk) {
             clmmProgramStr = raydiumFromSdk.toBase58();
           }
-        } catch (_) { }
+        } catch (_) {}
       }
       if (!clmmProgramStr) {
         const ep = (provider as any)?.connection?.rpcEndpoint || "";
-        clmmProgramStr = ep.includes("devnet") ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH" : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+        clmmProgramStr = ep.includes("devnet")
+          ? "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          : "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
       }
       (config as any).clmmProgram = clmmProgramStr;
-      const quoteMintPk = new PublicKey(quoteMintStr);
       const clmmProgramPk = new PublicKey(clmmProgramStr);
+
       const createPool = await (sdk as any).createClmmPoolTx({
         payer: (provider as any).wallet.publicKey,
         launch: testLaunchState,
-        quoteMint: quoteMintPk,
-        baseMint: testBaseMint,
         clmmProgram: clmmProgramPk,
         provider,
       });
       const sig = await (provider as any).sendAndConfirm(createPool.transaction, createPool.signers);
       addLog(`      - CLMM pool created. Signature: ${sig}`);
-      mintedBaseMint = testBaseMint.publicKey;
+      mintedBaseMint = createPool.baseMint;
       try {
+        if (!mintedBaseMint) {
+          throw new Error("Base mint missing after CLMM pool creation");
+        }
         addLog(`      - Base mint: ${mintedBaseMint.toBase58()}`);
-        // Derive correct LP amount = base_total - sale - team (all in atomic units)
-        const launchOnChain: any = await (sdk as any).fetchLaunch(testLaunchState);
-        const baseTotalStr = launchOnChain.baseTotalAllocation?.toString?.() ?? String(launchOnChain.baseTotalAllocation ?? "0");
-        const teamBpsNum = Number(launchOnChain.teamAllocationBasisPoints ?? 0);
-        const saleBpsNum = Number(launchOnChain.baseSaleBasisPoints ?? 0);
-        const baseTotal = BigInt(baseTotalStr);
-        const saleAtomic = (baseTotal * BigInt(saleBpsNum)) / 10000n;
-        const teamAtomic = (baseTotal * BigInt(teamBpsNum)) / 10000n;
-        const lpAtomic = baseTotal - saleAtomic - teamAtomic;
-        const baseAmount = new BN(lpAtomic.toString());
 
-        // Estimate quote amount for provided base amount with a small safety bump
-        const quoteAmount = await (sdk as any).estimateQuoteForBase({ launch: testLaunchState, baseAmount, safetyBumpBps: 10200 });
-        const sqrtLower = await (sdk as any).getSqrtPriceLowerX64ForPool({ launch: testLaunchState, priceBumpMultiplier: 1.02, lowerRangePow10: -2 });
         const addLiq = await (sdk as any).addClmmLiquidityTx({
-          payer: (provider as any).wallet.publicKey,
-          launch: testLaunchState,
-          quoteMint: quoteMintPk,
-          baseMint: testBaseMint.publicKey,
-          baseTokenAta: createPool.baseTokenAta,
-          clmmProgram: clmmProgramPk,
-          provider,
-          baseAmount,
-          quoteAmount,
-          sqrtPriceLowerX64: sqrtLower,
-        });
+              payer: (provider as any).wallet.publicKey,
+              launch: testLaunchState,
+              baseMint: mintedBaseMint,
+              provider,
+            });
         const sigL = await (provider as any).sendAndConfirm(addLiq.transaction, addLiq.signers);
         addLog(`      - Initial liquidity added. Signature: ${sigL}`);
         try {
@@ -697,7 +678,7 @@ export async function runFullFlow(
           const baseUi = Number(baseVaultBal.value.uiAmount ?? baseVaultBal.value.uiAmountString ?? "0");
           const quoteUi = Number(quoteVaultBal.value.uiAmount ?? quoteVaultBal.value.uiAmountString ?? "0");
           addLog(`      - Pool liquidity: base=${baseUi} quote=${quoteUi}`);
-        } catch (_) { }
+        } catch (_) {}
       } catch (liqErr: any) {
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
@@ -985,7 +966,7 @@ export async function runFullFlow(
     const reservedTickets = creatorGrantForDebug.reservedTickets;
     const k_pub = k - reservedTickets;
     const expectedWinProbability = n > 0 ? (k_pub / n) * 100 : 0;
-    // Derive tokensPerTicket from on-chain state (preferred) or fallback to config
+    // Derive tokensPerTicket from on-chain state (preferred) or fallback
     let tokensPerTicketBN: BN;
     try {
       const perScaled: any = (launchStateForDebug as any).tokensPerTicket;
@@ -994,13 +975,7 @@ export async function runFullFlow(
       } else if (typeof perScaled === "number") {
         tokensPerTicketBN = new BN(Math.max(0, Math.floor(perScaled)));
       } else {
-        // Fallback: compute from sale allocation in config and divisor
-        const grandTotalTickets = (launchStateForDebug.publicTotalTickets as number)
-          + (launchStateForDebug.creatorReservedTickets as number);
-        const divisor = Math.min(grandTotalTickets, k);
-        const saleHuman = new BN(String(config.saleAllocation ?? "0"));
-        const saleAtomic = saleHuman.mul(new BN(1_000_000_000));
-        tokensPerTicketBN = divisor > 0 ? saleAtomic.div(new BN(divisor)) : new BN(0);
+        tokensPerTicketBN = new BN(0);
       }
     } catch {
       tokensPerTicketBN = new BN(0);

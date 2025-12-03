@@ -141,11 +141,10 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     hardCapLamports: 450 * 1e9, // 20,000 SOL for large tests
     minRaiseLamports: 100 * 1e9, // 1,000 SOL
     perWalletCap: 1.5 * 1e9, // 5 SOL
-    tauLamports: 50_000_000, // 1 SOL
-    // Target allocations for 1B total: Sale 48.14%, Team 11.12%, LP 40.74%
-    // Provide human units; SDK will scale to atomic; base_total_allocation = 1,000,000,000
-    saleAllocation: '481400000',
-    lpAllocation: 407400000,
+    tauLamports: 0.05 * 1e9,
+    baseTotalAllocationTokens: 1_000_000_000,
+    saleBasisPoints: 4814,
+    lpBasisPoints: 4186,
     fundingDurationDays: 0, // 10 seconds for quick testing
     fundingDurationSeconds: 15, // Default custom seconds
     unlockTimeSec: 1, // 1 sec for fast test
@@ -162,7 +161,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     rosterShardsTotal: 3,
     teamVestingDurationSec: 1,
     // Team share inside 1B total supply
-    teamAllocationBasisPoints: 1112,
+    teamAllocationBasisPoints: 1000,
   };
 
   // --- New state for simulation config ---
@@ -333,13 +332,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
       setIsLoading(true);
       addLog('Initializing launch with custom parameters...');
 
-      // Derive launch PDA by projectId (no base mint needed at init)
-
-      // Mint exactly 1,000,000,000 total supply; sale/team/LP are slices within this total
-      const baseTotalAllocationBN = new BN('1000000000');
-      const baseSaleBpsBN = baseTotalAllocationBN.isZero()
-        ? new BN(0)
-        : new BN(Math.floor(new BN(launchConfig.saleAllocation).toNumber() * 10000 / baseTotalAllocationBN.toNumber()));
+      const baseTotalAllocationBN = new BN(String(launchConfig.baseTotalAllocationTokens));
+      const baseSaleBpsBN = new BN(launchConfig.saleBasisPoints);
 
       let lastProjectId = 0;
       try {
@@ -359,7 +353,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         minRaiseLamports: new BN(launchConfig.minRaiseLamports),
         perWalletCap: new BN(launchConfig.perWalletCap),
         tauLamports: new BN(launchConfig.tauLamports),
-        baseTotalAllocation: baseTotalAllocationBN,
+        baseTotalAllocation: baseTotalAllocationBN.mul(new BN(1_000_000_000)),
         baseSaleBasisPoints: baseSaleBpsBN,
         fundingDurationSeconds: getFundingDurationInSeconds(),
         unlockTimeSec: launchConfig.unlockTimeSec,
@@ -931,7 +925,6 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
 
     setIsFlowRunning(true);
     addLog('--- RUNNING FULL TEST FLOW ---');
-    addLog(`[DEBUG] Passing saleAllocation to flowRunner: ${launchConfig.saleAllocation}`);
 
     try {
       const result = await runFullFlow(
@@ -1065,20 +1058,29 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs terminal-output mb-1">Sale Allocation (atomic)</label>
+                <label className="block text-xs terminal-output mb-1">Base Total Supply (tokens)</label>
                 <input
-                  type="text"
-                  value={launchConfig.saleAllocation}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleAllocation: e.target.value }))}
+                  type="number"
+                  value={launchConfig.baseTotalAllocationTokens}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, baseTotalAllocationTokens: parseInt(e.target.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
               <div>
-                <label className="block text-xs terminal-output mb-1">LP Allocation</label>
+                <label className="block text-xs terminal-output mb-1">Sale Allocation (bps)</label>
                 <input
                   type="number"
-                  value={launchConfig.lpAllocation}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpAllocation: parseInt(e.target.value) }))}
+                  value={launchConfig.saleBasisPoints}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleBasisPoints: parseInt(e.target.value) || 0 }))}
+                  className="terminal-input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs terminal-output mb-1">LP Allocation (bps)</label>
+                <input
+                  type="number"
+                  value={launchConfig.lpBasisPoints}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpBasisPoints: parseInt(e.target.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
