@@ -1374,6 +1374,19 @@
         212,
         219
       ]
+    },
+    {
+      "name": "IncomeHarvested",
+      "discriminator": [
+        198,
+        137,
+        128,
+        48,
+        110,
+        71,
+        54,
+        182
+      ]
     }
   ],
   "errors": [
@@ -1577,6 +1590,30 @@
           },
           {
             "name": "total_claimed_quote",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "IncomeHarvested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "role",
+            "type": {
+              "defined": {
+                "name": "Role"
+              }
+            }
+          },
+          {
+            "name": "base",
+            "type": "u64"
+          },
+          {
+            "name": "quote",
             "type": "u64"
           }
         ]

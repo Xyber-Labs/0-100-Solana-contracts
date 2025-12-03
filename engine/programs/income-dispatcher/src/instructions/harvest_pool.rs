@@ -17,6 +17,13 @@ use crate::{
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
 
+#[event]
+pub struct IncomeHarvested {
+    role: Role,
+    base: u64,
+    quote: u64,
+}
+
 #[derive(Accounts)]
 #[instruction(project_id: u64)]
 pub struct HarvestPool<'info> {
@@ -232,6 +239,12 @@ fn distribute_income(
     )?;
 
     for income in distribution.incomes {
+        emit!(IncomeHarvested {
+            role: income.recipient,
+            base: income.base_token as u64,
+            quote: income.quote_token as u64
+        });
+
         let role_idx = income.recipient as usize;
         let balances = &mut ctx.accounts.income_config.balances[role_idx];
         balances.earned_base = balances
