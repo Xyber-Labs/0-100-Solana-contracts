@@ -683,6 +683,7 @@ export async function runFullFlow(
         addLog(`      - Warning: addClmmLiquidity failed (claims may remain closed): ${liqErr?.message || liqErr}`);
       }
     }
+    const baseMintForClaims: PublicKey = mintedBaseMint ?? testBaseMint.publicKey;
     try {
       if (mintedBaseMint) {
         const supply = await provider.connection.getTokenSupply(mintedBaseMint);
@@ -792,7 +793,7 @@ export async function runFullFlow(
       try {
         const { transaction, userAta } = await (sdk as any).claimTokensTx({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: baseMintForClaims,
           userPubkey: demoUser.keypair.publicKey,
           shardId: demoUser.shardId,
           createAtaIfMissing: true,
@@ -833,7 +834,7 @@ export async function runFullFlow(
 
       const claimPromises = batch.map(async (userData) => {
         const userPk = userData.keypair.publicKey;
-        const userAta = sdk.getUserAta(testBaseMint.publicKey, userPk);
+        const userAta = sdk.getUserAta(baseMintForClaims, userPk);
         const initialBalance = await getTokenBalance(userAta);
         const tryClaimTokens = async () => {
           let attempt = 0;
@@ -843,7 +844,7 @@ export async function runFullFlow(
             try {
               await sdk.claimTokens({
                 launch: testLaunchState,
-                baseMint: testBaseMint.publicKey,
+                baseMint: baseMintForClaims,
                 userKeypair: userData.keypair,
                 createAtaIfMissing: true,
                 shardId: userData.shardId,
@@ -1019,14 +1020,14 @@ export async function runFullFlow(
       addLog(`   -> Creator Deposit: ${config.creatorInitialDepositLamports / 1e9} SOL`);
       addLog(`   -> Lock Period: ${config.creatorClaimLockPeriodSec} seconds per ticket cap`);
 
-      const creatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+      const creatorAta = sdk.getUserAta(baseMintForClaims, admin.publicKey);
 
       // Ensure creator ATA exists before any claim attempts
       try {
         const { ix } = sdk.buildCreateAtaIx({
           payer: admin.publicKey,
           owner: admin.publicKey,
-          mint: testBaseMint.publicKey,
+          mint: baseMintForClaims,
         });
         const tx = new Transaction().add(ix);
         await provider.sendAndConfirm!(tx, []);
@@ -1043,7 +1044,7 @@ export async function runFullFlow(
           const initialBalance = await getTokenBalance(creatorAta);
           await sdk.claimCreatorTokens({
             launch: testLaunchState,
-            baseMint: testBaseMint.publicKey,
+            baseMint: baseMintForClaims,
             creatorAta: creatorAta,
             createAtaIfMissing: true,
           });
@@ -1077,14 +1078,14 @@ export async function runFullFlow(
       addLog(`\n   --- Attempting to claim all remaining accrued tokens at once ---`);
 
       // Debug: Check creator grant state before final claim
-      const creatorGrantBeforeFinal = await sdk.fetchCreatorGrant(testLaunchState);
+        const creatorGrantBeforeFinal = await sdk.fetchCreatorGrant(testLaunchState);
       addLog(`   -> Creator grant before final claim: reserved=${creatorGrantBeforeFinal.reservedTickets}, claimed=${creatorGrantBeforeFinal.claimedTickets}`);
 
       try {
         const initialBalance = await getTokenBalance(creatorAta);
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: baseMintForClaims,
           creatorAta: creatorAta,
         });
         const finalBalance = await getTokenBalance(creatorAta);
@@ -1110,7 +1111,7 @@ export async function runFullFlow(
       try {
         await sdk.claimCreatorTokens({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: baseMintForClaims,
           creatorAta: creatorAta,
         });
         addLog(`   -> ❌ VERIFICATION FAILED: Final claim succeeded when it should have failed.`);
@@ -1184,11 +1185,11 @@ export async function runFullFlow(
         addLog(`[Team Vesting] Launch config: team_bps=${Number(launchForTeam.teamAllocationBasisPoints)}, base_total_allocation=${(Number(launchForTeam.baseTotalAllocation) / 1e9).toFixed(6)}`);
       }
       await new Promise(res => setTimeout(res, Math.max(1, vestSec) * 1000 + 600));
-      const teamCreatorAta = sdk.getUserAta(testBaseMint.publicKey, admin.publicKey);
+      const teamCreatorAta = sdk.getUserAta(baseMintForClaims, admin.publicKey);
       try {
         const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
         if (!ataInfo) {
-          const { ix } = sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: testBaseMint.publicKey });
+          const { ix } = sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: baseMintForClaims });
           await provider.sendAndConfirm!(new Transaction().add(ix), []);
         }
       } catch (_) { }
@@ -1196,7 +1197,7 @@ export async function runFullFlow(
         const before = await getTokenBalance(teamCreatorAta);
         const { transaction } = await sdk.claimTeamTokensTx({
           launch: testLaunchState,
-          baseMint: testBaseMint.publicKey,
+          baseMint: baseMintForClaims,
           creator: admin.publicKey,
           creatorAta: teamCreatorAta,
           createAtaIfMissing: true,
