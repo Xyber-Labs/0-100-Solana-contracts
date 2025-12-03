@@ -16,7 +16,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import type { EngineClient } from "@xyber-labs/0-100-sdk";
-import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
+import { waitForFundingPeriodEnd as waitForFundingPeriodEndHelper, fundUsersParallel, airdropUsersParallel, depositUsersParallel, preparePoolCreationWithRetry, mintForTestSafe } from "./flowHelpers";
 import { runRaydiumSwaps } from "./raydiumSwaps";
 import { LaunchStatsCollector } from "./stats/launchStats";
 import type { LaunchSummary, LaunchUserRow } from "./stats/launchStats";
@@ -30,6 +30,7 @@ interface SimulationConfig {
   raydiumSolPerSwap?: number;
   minTicketsPerUser?: number;
   ticketsTargetMultiplier?: number;
+  useAirdropForUsers?: boolean;
 }
 
 export async function runFullFlow(
@@ -53,6 +54,11 @@ export async function runFullFlow(
   let poolBaseLiquidityUi: number | null = null;
   let poolQuoteLiquidityUi: number | null = null;
   const stats = new LaunchStatsCollector();
+
+  (globalThis as any).__sealCost = 0;
+  (globalThis as any).__sealDetails = [];
+  (globalThis as any).__shardsRentRefundLamports = 0;
+  (globalThis as any).__closedShardsCount = 0;
 
   addLog(`--- Starting Full Flow ---`);
   addLog(`Admin wallet: ${admin.publicKey.toBase58()}`);
@@ -450,30 +456,32 @@ export async function runFullFlow(
 
     addLog(`\n[3/10] Simulating deposits for ${TARGET_USERS} users...`);
 
-    const ticketsMultiplierRaw = (simConfig as any).ticketsTargetMultiplier;
-    const ticketsMultiplier = typeof ticketsMultiplierRaw === "number" && ticketsMultiplierRaw > 0 ? ticketsMultiplierRaw : 1;
-    const ticketsTargetBase = Math.floor(kPubExpected * ticketsMultiplier);
-    const minTicketsTotal = TARGET_USERS * MIN_TICKETS_PER_USER;
-    const ticketsTarget = Math.max(ticketsTargetBase, minTicketsTotal);
     const maxTicketsCapacity = TARGET_USERS * MAX_TICKETS_PER_USER;
-    addLog(`   -> ticketsTarget (k_pub expected): ${ticketsTarget}`);
+    const ticketsSliderRaw = (simConfig as any).ticketsTargetMultiplier;
+    const ticketsSlider = typeof ticketsSliderRaw === "number" && ticketsSliderRaw > 0 ? ticketsSliderRaw : 1;
+    const ticketsSliderClamped = Math.max(1, Math.min(ticketsSlider, 100));
+    const fillRatio = (ticketsSliderClamped - 1) / 99;
+    addLog(`   -> ticketsFillPercent: ${ticketsSliderClamped}%`);
     addLog(`   -> maxTicketsCapacity (users * maxTicketsPerUser): ${maxTicketsCapacity}`);
-    if (ticketsTarget > maxTicketsCapacity) {
-      addLog(`   -> Warning: ticketsTarget exceeds maxTicketsCapacity; capped at capacity.`);
-    }
-    const cappedTicketsTarget = Math.min(ticketsTarget, maxTicketsCapacity);
+
     const ticketsPerUser: number[] = new Array(TARGET_USERS).fill(0);
-    let remainingTickets = cappedTicketsTarget;
-    for (let i = 0; i < TARGET_USERS; i++) {
-      const remainingUsers = TARGET_USERS - i;
-      const maxForUserRaw = remainingTickets - (remainingUsers - 1) * MIN_TICKETS_PER_USER;
-      const maxForUser = Math.max(MIN_TICKETS_PER_USER, Math.min(MAX_TICKETS_PER_USER, maxForUserRaw));
-      const minForUser = Math.min(MIN_TICKETS_PER_USER, maxForUser);
-      const range = Math.max(0, maxForUser - minForUser);
-      const extra = range > 0 ? Math.floor(Math.random() * (range + 1)) : 0;
-      const tickets = minForUser + extra;
-      ticketsPerUser[i] = tickets;
-      remainingTickets -= tickets;
+    if (ticketsSliderClamped === 100) {
+      for (let i = 0; i < TARGET_USERS; i++) {
+        ticketsPerUser[i] = MAX_TICKETS_PER_USER;
+      }
+    } else {
+      for (let i = 0; i < TARGET_USERS; i++) {
+        const span = MAX_TICKETS_PER_USER - MIN_TICKETS_PER_USER;
+        const effectiveSpan = Math.max(0, Math.round(span * fillRatio));
+        const high = MIN_TICKETS_PER_USER + effectiveSpan;
+        const low = MIN_TICKETS_PER_USER;
+        if (high <= low) {
+          ticketsPerUser[i] = low;
+        } else {
+          const extra = Math.floor(Math.random() * (high - low + 1));
+          ticketsPerUser[i] = low + extra;
+        }
+      }
     }
     const provisionalUsers: { keypair: Keypair; tickets: number; depositAmount: BN; shardId: number }[] = [];
     for (let i = 0; i < TARGET_USERS; i++) {
@@ -484,55 +492,81 @@ export async function runFullFlow(
       provisionalUsers.push({ keypair, tickets, depositAmount, shardId });
     }
     let users = provisionalUsers;
+    const useAirdropForUsers = !!(simConfig as any).useAirdropForUsers;
 
-    // Step 2: Check admin balance and filter users we can afford to fund
-    let currentAdminBalance: number;
-    try {
-      currentAdminBalance = await provider.connection.getBalance(admin.publicKey);
-    } catch (error) {
-      currentAdminBalance = 500000000; // Fallback: assume 0.5 SOL remaining
-    }
-
-    const feeBufferPerUser = 5000000; // ~0.005 SOL buffer for fees
-    const affordableUsers = [];
     let cumulativeCost = 0;
 
-    for (const user of users) {
-      const costForThisUser = user.depositAmount.toNumber() + feeBufferPerUser;
-      if (cumulativeCost + costForThisUser <= currentAdminBalance) {
-        cumulativeCost += costForThisUser;
-        affordableUsers.push(user);
-      } else {
-        break; // Stop when we can't afford the next user
-      }
-    }
-    userFundingCost += cumulativeCost;
+    let numUsersToSimulate = users.length;
 
-    if (users.length !== affordableUsers.length) {
-      addLog(
-        `   -> Admin balance can only fund ${affordableUsers.length} out of ${TARGET_USERS} users.`
-      );
-      if (affordableUsers.length === 0) {
-        throw new Error(
-          "Insufficient admin balance to fund any users for the simulation."
+    if (!useAirdropForUsers) {
+      let currentAdminBalance: number;
+      try {
+        currentAdminBalance = await provider.connection.getBalance(admin.publicKey);
+      } catch (error) {
+        currentAdminBalance = 500000000;
+      }
+
+      const feeBufferPerUser = 5000000;
+      const affordableUsers = [];
+
+      for (const user of users) {
+        const costForThisUser = user.depositAmount.toNumber() + feeBufferPerUser;
+        if (cumulativeCost + costForThisUser <= currentAdminBalance) {
+          cumulativeCost += costForThisUser;
+          affordableUsers.push(user);
+        } else {
+          break;
+        }
+      }
+      userFundingCost += cumulativeCost;
+
+      if (users.length !== affordableUsers.length) {
+        addLog(
+          `   -> Admin balance can only fund ${affordableUsers.length} out of ${TARGET_USERS} users.`
         );
+        if (affordableUsers.length === 0) {
+          throw new Error(
+            "Insufficient admin balance to fund any users for the simulation."
+          );
+        }
+        users = affordableUsers;
       }
-      users = affordableUsers;
-    }
 
-    const numUsersToSimulate = users.length;
-    addLog(
-      `   -> Total cost to fund ${numUsersToSimulate} users: ${(
-        cumulativeCost / LAMPORTS_PER_SOL
-      ).toFixed(4)} SOL`
-    );
+      numUsersToSimulate = users.length;
+      addLog(
+        `   -> Total cost to fund ${numUsersToSimulate} users: ${(
+          cumulativeCost / LAMPORTS_PER_SOL
+        ).toFixed(4)} SOL`
+      );
+    } else {
+      addLog("   -> Using airdrop funding for users (ignoring admin balance).");
+    }
 
     // concurrency runner moved to helpers
 
     const fundingConcurrency = Math.min(200, numUsersToSimulate);
-    addLog(`   -> Funding ${numUsersToSimulate} users with transfers from admin (parallel)...`);
+    addLog(
+      useAirdropForUsers
+        ? `   -> Funding ${numUsersToSimulate} users via airdrop (parallel)...`
+        : `   -> Funding ${numUsersToSimulate} users with transfers from admin (parallel)...`
+    );
     addLog(`      - Concurrency: ${fundingConcurrency}`);
-    await fundUsersParallel({ provider, admin: admin.publicKey, users, concurrency: fundingConcurrency, addLog });
+    if (useAirdropForUsers) {
+      await airdropUsersParallel({
+        provider,
+        users,
+        concurrency: fundingConcurrency,
+        addLog,
+      });
+    } else {
+      await fundUsersParallel({
+        provider,
+        admin: admin.publicKey,
+        users,
+        concurrency: fundingConcurrency,
+        addLog,
+      });
+    }
     addLog("   -> All users funded.");
 
     // Step 4: Deposit from all users, using pre-calculated shard IDs

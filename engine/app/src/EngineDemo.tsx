@@ -3,7 +3,7 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import EngineSDK from '../../ts-sdk/src/engine';
 import type { LaunchConfig } from './types/launch';
-import { depositUsersParallel, fundUsersParallel, getChainTimeSec, preparePoolCreationWithRetry, mintForTestSafe, type SimUser } from './utils/flowHelpers';
+import { depositUsersParallel, fundUsersParallel, airdropUsersParallel, getChainTimeSec, preparePoolCreationWithRetry, mintForTestSafe, type SimUser } from './utils/flowHelpers';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { runFullFlow } from './utils/flowRunner';
 import type { LaunchUserRow, LaunchSummary } from './utils/stats/launchStats';
@@ -18,6 +18,7 @@ interface SimulationConfig {
   raydiumSolPerSwap?: number;
   minTicketsPerUser?: number;
   ticketsTargetMultiplier?: number;
+   useAirdropForUsers?: boolean;
 }
 
 // Error boundary component
@@ -175,7 +176,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     quoteMint: 'So11111111111111111111111111111111111111112',
     ammConfig: '',
     clmmProgram: '',
-    rosterShardsTotal: 3,
+    rosterShardsTotal: 4,
     teamVestingDurationSec: 1,
     // Team share inside 1B total supply
     teamAllocationBasisPoints: 1000,
@@ -189,7 +190,8 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
     raydiumSwapsCount: 10,
     raydiumSolPerSwap: 1,
     minTicketsPerUser: 1,
-    ticketsTargetMultiplier: 1,
+    ticketsTargetMultiplier: 50,
+    useAirdropForUsers: true,
   };
 
   const [launchConfig, setLaunchConfig] = useState<LaunchConfig>(defaultConfig);
@@ -438,7 +440,12 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
         const shardId = Math.floor(i / launchConfig.rosterShardCap);
         return { keypair, tickets, depositAmount, shardId };
       });
-      await fundUsersParallel({ provider, admin, users, addLog });
+      if (simConfig.useAirdropForUsers) {
+        addLog('Using airdrop to fund simulated users...');
+        await airdropUsersParallel({ provider, users, addLog });
+      } else {
+        await fundUsersParallel({ provider, admin, users, addLog });
+      }
       await depositUsersParallel({ sdk, launchPda: launchState, users, addLog });
       addLog('SUCCESS: Users funded and deposited');
     } catch (e) {
@@ -1292,17 +1299,24 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs terminal-output mb-1">Tickets Target Multiplier (k_pub)</label>
-                <input
-                  type="number"
-                  value={simConfig.ticketsTargetMultiplier ?? 1}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value) || 1;
-                    setSimConfig(prev => ({ ...prev, ticketsTargetMultiplier: v }));
-                  }}
-                  className="terminal-input w-full"
-                  step="0.1"
-                />
+                <label className="block text-xs terminal-output mb-1">Tickets Fill (%) between Min/Max</label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    value={simConfig.ticketsTargetMultiplier ?? 50}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value) || 1;
+                      const clamped = Math.max(1, Math.min(v, 100));
+                      setSimConfig(prev => ({ ...prev, ticketsTargetMultiplier: clamped }));
+                    }}
+                    className="flex-1"
+                  />
+                  <span className="text-xs terminal-output w-10 text-right">
+                    {(simConfig.ticketsTargetMultiplier ?? 50).toString()}%
+                  </span>
+                </div>
               </div>
               <div className="flex items-center space-x-2 mt-2">
                 <input
@@ -1313,6 +1327,17 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 />
                 <span className="text-xs terminal-output">
                   Use test mint for base token (skip Raydium CLMM)
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 mt-2">
+                <input
+                  type="checkbox"
+                  checked={!!simConfig.useAirdropForUsers}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, useAirdropForUsers: e.target.checked }))}
+                  className="terminal-input"
+                />
+                <span className="text-xs terminal-output">
+                  Fund simulated users via airdrop (ignore admin balance)
                 </span>
               </div>
               <div className="col-span-full mt-4 border-t border-gray-600 pt-3">

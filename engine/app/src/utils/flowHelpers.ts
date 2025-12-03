@@ -120,6 +120,45 @@ export async function fundUsersParallel(params: {
   });
 }
 
+export async function airdropUsersParallel(params: {
+  provider: AnchorProvider;
+  users: SimUser[];
+  feeBufferLamports?: number;
+  concurrency?: number;
+  addLog?: AddLog;
+}): Promise<void> {
+  const { provider, users, feeBufferLamports = 5_000_000, concurrency = 200, addLog } = params;
+  const total = users.length;
+  const step = Math.max(1, Math.floor(total / 20));
+  let completed = 0;
+  addLog?.(`Funding ${total} users via airdrop in parallel...`);
+  await runWithConcurrency(users, Math.min(concurrency, total), async (user) => {
+    const fundingAmount = user.depositAmount.toNumber() + feeBufferLamports;
+    let attempt = 0;
+    const maxAttempts = 5;
+    const baseDelay = 200;
+    for (;;) {
+      try {
+        const sig = await provider.connection.requestAirdrop(user.keypair.publicKey, fundingAmount);
+        await provider.connection.confirmTransaction(sig, "confirmed");
+        break;
+      } catch (e: any) {
+        const msg = String(e?.message || "");
+        const transient = msg.includes("aborted") || msg.includes("Blockhash") || msg.includes("429") || msg.includes("Too many") || msg.includes("ETIMEDOUT") || msg.includes("ECONNRESET");
+        attempt++;
+        if (!transient || attempt >= maxAttempts) throw e;
+        const delay = baseDelay * Math.min(8, 2 ** (attempt - 1));
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+    const c = ++completed;
+    if (c % step === 0 || c === total) {
+      const percent = Math.round((c / total) * 100);
+      addLog?.(`Airdrop funding progress: ${c}/${total} (${percent}%)`);
+    }
+  });
+}
+
 export async function depositUsersParallel(params: {
   sdk: ReturnType<typeof EngineSDK.create>;
   launchPda: PublicKey;
