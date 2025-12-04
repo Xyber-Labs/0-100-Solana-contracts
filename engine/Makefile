@@ -245,6 +245,9 @@ build-test-devnet:
 test-raydium-clmm-anchor:
 	./scripts/test-raydium-local.sh
 
+test-raydium-clmm-anchor-2:
+	env BUYER1_AMOUNT=100 BUYER2_AMOUNT=100 BUYER3_AMOUNT=100 anchor test --detach -- --features anchor-test,devnet
+
 .PHONY: deploy-config-auto
 deploy-config-auto:
 	@echo "Running EngineConfig migration with payload..."
