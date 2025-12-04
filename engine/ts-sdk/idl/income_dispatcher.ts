@@ -1380,6 +1380,19 @@ export type IncomeDispatcher = {
         212,
         219
       ]
+    },
+    {
+      "name": "incomeHarvested",
+      "discriminator": [
+        198,
+        137,
+        128,
+        48,
+        110,
+        71,
+        54,
+        182
+      ]
     }
   ],
   "errors": [
@@ -1583,6 +1596,30 @@ export type IncomeDispatcher = {
           },
           {
             "name": "totalClaimedQuote",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "incomeHarvested",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "role",
+            "type": {
+              "defined": {
+                "name": "role"
+              }
+            }
+          },
+          {
+            "name": "base",
+            "type": "u64"
+          },
+          {
+            "name": "quote",
             "type": "u64"
           }
         ]

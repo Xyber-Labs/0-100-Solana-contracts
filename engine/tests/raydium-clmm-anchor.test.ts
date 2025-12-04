@@ -633,7 +633,24 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("✅ CLMM fees harvested:", harvestSig);
     console.log("Explorer:", utils.getExplorerUrl(provider, harvestSig));
 
-    // Verify harvested totals and role balances
+    type IncomeHarvestedEvent = anchor.IdlEvents<typeof incomeDispatcherProgram.idl>["incomeHarvested"];
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    const harvestEvents = await utils.EventsFetcher.fetch<IncomeHarvestedEvent>(
+      provider.connection,
+      harvestSig,
+      incomeDispatcherProgram,
+      "incomeHarvested"
+    );
+
+    console.log("\n--- Harvest Events from Transaction ---");
+    for (const evt of harvestEvents) {
+      console.log(`Harvest event: role=${Object.keys(evt.role)[0]}, base=${evt.base.toString()}, quote=${evt.quote.toString()}`);
+    }
+
+    assert.equal(harvestEvents.length, 3, "Expected 3 Harvest events (one per role)");
+
     const incomeConfig = await dispatcherSdk.fetchIncomeConfig(launchStateData.projectId);
     const totalHarvestedBase = incomeConfig.totalHarvestedBase;
     const totalHarvestedQuote = incomeConfig.totalHarvestedQuote;

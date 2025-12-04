@@ -133,3 +133,33 @@ export async function doAndCheckError(promise: Promise<any>, errMsg: string) {
     checkAnchorError(error, errMsg);
   }
 }
+
+export class EventsFetcher {
+  static parse(
+    logs: string[],
+    program: anchor.Program<any>
+  ): { name: string; data: any }[] {
+    const parser = new anchor.EventParser(program.programId, program.coder);
+    return [...parser.parseLogs(logs)].map(e => ({ name: e.name, data: e.data }));
+  }
+
+  static filter<T>(
+    events: { name: string; data: any }[],
+    eventName: string
+  ): T[] {
+    return events.filter(e => e.name === eventName).map(e => e.data as T);
+  }
+
+  static async fetch<T>(
+    connection: anchor.web3.Connection,
+    signature: string,
+    program: anchor.Program<any>,
+    eventName: string
+  ): Promise<T[]> {
+    const tx = await connection.getTransaction(signature, {
+      commitment: "confirmed",
+      maxSupportedTransactionVersion: 0,
+    });
+    return EventsFetcher.filter<T>(EventsFetcher.parse(tx?.meta?.logMessages ?? [], program), eventName);
+  }
+}
