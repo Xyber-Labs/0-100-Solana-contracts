@@ -788,13 +788,13 @@ export class TxBuilder {
       params.user,
     ]);
     const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
+    const shardId = params.shardId ?? 1;
     const rosterShard =
       params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
-    // escrow removed; use only escrow_authority PDA
+      this.getRosterShardPda(params.launch, shardId)[0];
     const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
 
-    const instruction = await this.program.methods
+    let builder = this.program.methods
       .deposit(params.amount)
       .accounts({
         user: params.user,
@@ -802,12 +802,20 @@ export class TxBuilder {
         userContribution: userContribution,
         roster: roster,
         rosterShard,
-        // escrow removed
         escrowAuthority: escrowAuthority,
         launch: params.launch,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
+      } as any);
+
+    if (shardId > 1) {
+      const prevId = shardId - 1;
+      const [prevRosterShard] = this.getRosterShardPda(params.launch, prevId);
+      builder = builder.remainingAccounts([
+        { pubkey: prevRosterShard, isSigner: false, isWritable: false },
+      ]);
+    }
+
+    const instruction = await builder.instruction();
 
     return { instruction, userContribution };
   }
@@ -1733,10 +1741,16 @@ export class TxBuilder {
         .transaction();
 
       const providerAny: any = this.program.provider as any;
-      const walletPayerPubkey = providerAny?.wallet?.payer?.publicKey;
-      if (!walletPayerPubkey) throw new Error("LiteSVM: missing wallet.payer for feePayer");
-      tx.feePayer = walletPayerPubkey;
       const conn: any = providerAny.connection;
+
+      // Determine a suitable fee payer for simulation:
+      // - Prefer wallet.payer (LiteSVM / Keypair wallet)
+      // - Fallback to wallet.publicKey (browser/adapters), no signing required with sigVerify=false
+      const walletPayerPubkey: web3.PublicKey | undefined =
+        providerAny?.wallet?.payer?.publicKey ?? providerAny?.wallet?.publicKey;
+      if (!walletPayerPubkey) throw new Error("Simulation: missing wallet publicKey for feePayer");
+      tx.feePayer = walletPayerPubkey;
+
       let blockhash: string | undefined;
       if (conn && typeof conn.getLatestBlockhash === "function") {
         const res = await conn.getLatestBlockhash();
@@ -1751,11 +1765,12 @@ export class TxBuilder {
       }
       if (blockhash) tx.recentBlockhash = blockhash as string;
 
-      // Ensure the tx is signed before simulation (LiteSVM requires signatures)
+      // Ensure the tx is signed before simulation when possible (LiteSVM requires signatures)
       try {
-        tx.partialSign(providerAny.wallet.payer);
-      } catch (_) {
-      }
+        if (providerAny.wallet?.payer) {
+          tx.partialSign(providerAny.wallet.payer);
+        }
+      } catch (_) {}
 
       let simulation: any;
       if (conn && typeof conn.simulateTransaction === "function") {

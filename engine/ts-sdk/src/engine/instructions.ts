@@ -805,7 +805,7 @@ const EngineSDK = {
     async function initRosterShard(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
-      signers: anchor.web3.Keypair[];
+      signers?: anchor.web3.Keypair[];
     }): Promise<{
       rosterShard: anchor.web3.PublicKey;
       signature: string
@@ -826,7 +826,7 @@ const EngineSDK = {
     async function finalizeRosterShard(args: {
       launch: anchor.web3.PublicKey;
       shardId: number;
-      signers: anchor.web3.Keypair[];
+      signers?: anchor.web3.Keypair[];
     }): Promise<{
       signature: string
     }> {

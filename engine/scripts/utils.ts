@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { EngineSDK } from "@xyber-labs/0-100-sdk";
+import EngineSDK from "../ts-sdk/src/engine";
 
 export function initializeSdk() {
   const provider = anchor.AnchorProvider.env();

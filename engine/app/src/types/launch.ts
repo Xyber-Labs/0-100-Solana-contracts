@@ -3,8 +3,9 @@ export interface LaunchConfig {
   minRaiseLamports: number;
   perWalletCap: number;
   tauLamports: number;
-  saleAllocation: string;
-  lpAllocation: number;
+  baseTotalAllocationTokens: number;
+  saleBasisPoints: number;
+  lpBasisPoints: number;
   fundingDurationSeconds: number;
   fundingDurationDays?: number;
   unlockTimeSec: number;

@@ -143,7 +143,13 @@ export function createShardsApi(params: {
           if (used >= cap) {
             continue;
           }
-          const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, rosterShard: rosterShardPda });
+          const dep = await txBuilder.depositIx({
+            launch: args.launch,
+            user,
+            amount: args.amountLamports,
+            rosterShard: rosterShardPda,
+            shardId: id,
+          });
           const tx = new anchor.web3.Transaction().add(dep.instruction);
           const signers = args.userKeypair ? [args.userKeypair] : [];
           if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
