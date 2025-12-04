@@ -3271,6 +3271,10 @@ export type Engine = {
           "type": "u64"
         },
         {
+          "name": "saleStartTimeTimestamp",
+          "type": "i64"
+        },
+        {
           "name": "meta",
           "type": {
             "defined": {
@@ -5257,7 +5261,11 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "saleStartTimeSec",
+            "name": "saleStartTimeTimestamp",
+            "docs": [
+              "Absolute unix timestamp (seconds) when the sale starts.",
+              "If 0, the current time will be used."
+            ],
             "type": "i64"
           },
           {
@@ -5354,10 +5362,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": "i64"
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": "i64"
           },
           {
@@ -5515,10 +5519,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": "i64"
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": "i64"
           },
           {
@@ -6331,12 +6331,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": {
               "option": "i64"
             }

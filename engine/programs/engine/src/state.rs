@@ -227,7 +227,6 @@ pub struct LaunchPreset {
     pub base_sale_basis_points: u64,
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
-    pub sale_start_time_sec: i64,
     pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
     pub roster_shards_total: u16,

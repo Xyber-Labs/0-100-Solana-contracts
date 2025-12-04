@@ -93,7 +93,6 @@ const EngineSDK = {
         baseSaleBasisPoints?: BN;
         teamAllocationBasisPoints?: number;
         fundingDurationSeconds?: number;
-        saleStartTimeSec?: number;
         unlockTimeSec?: number;
         rosterShardCap?: number;
         rosterShardsTotal?: number;
@@ -228,7 +227,8 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
-      saleStartTimeSec?: number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       rosterShardsTotal: number;
@@ -282,7 +282,7 @@ const EngineSDK = {
           baseTotalAllocation: args.baseTotalAllocation,
           baseSaleBasisPoints: args.baseSaleBasisPoints,
           fundingDurationSeconds: args.fundingDurationSeconds,
-          saleStartTimeSec: args.saleStartTimeSec ?? 0,
+          saleStartTimeTimestamp: args.saleStartTimeTimestamp ?? 0,
           unlockTimeSec: args.unlockTimeSec ?? 0,
           rosterShardCap: args.rosterShardCap,
           rosterShardsTotal: args.rosterShardsTotal,
@@ -331,7 +331,8 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
-      saleStartTimeSec?: number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       rosterShardsTotal: number;
@@ -1071,7 +1072,6 @@ const EngineSDK = {
         baseTotalAllocation: BN;
         baseSaleBasisPoints: BN;
         fundingDurationSeconds: number;
-        saleStartTimeSec?: number;
         unlockTimeSec?: number;
         rosterShardCap: number;
         rosterShardsTotal: number;
@@ -1101,6 +1101,8 @@ const EngineSDK = {
     async function initLaunchFromPreset(args: {
       presetId: number;
       projectId?: BN | number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       name: string;
       symbol: string;
       uri: string;
@@ -1114,6 +1116,7 @@ const EngineSDK = {
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
+        saleStartTimeTimestamp: args.saleStartTimeTimestamp ?? 0,
         name: args.name,
         symbol: args.symbol,
         uri: args.uri,

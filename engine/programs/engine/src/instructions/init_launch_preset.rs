@@ -15,7 +15,6 @@ pub struct InitLaunchPresetParams {
     pub base_sale_basis_points: u64,
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
-    pub sale_start_time_sec: i64,
     pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
     pub roster_shards_total: u16,
@@ -79,7 +78,6 @@ pub fn init_launch_preset(
     p.base_sale_basis_points = params.base_sale_basis_points;
     p.team_allocation_basis_points = params.team_allocation_basis_points;
     p.funding_duration_seconds = params.funding_duration_seconds;
-    p.sale_start_time_sec = params.sale_start_time_sec;
     p.unlock_time_sec = params.unlock_time_sec;
     p.roster_shard_cap = params.roster_shard_cap;
     p.roster_shards_total = params.roster_shards_total;

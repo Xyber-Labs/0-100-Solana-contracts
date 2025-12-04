@@ -3265,6 +3265,10 @@
           "type": "u64"
         },
         {
+          "name": "sale_start_time_timestamp",
+          "type": "i64"
+        },
+        {
           "name": "meta",
           "type": {
             "defined": {
@@ -5251,7 +5255,11 @@
             "type": "i64"
           },
           {
-            "name": "sale_start_time_sec",
+            "name": "sale_start_time_timestamp",
+            "docs": [
+              "Absolute unix timestamp (seconds) when the sale starts.",
+              "If 0, the current time will be used."
+            ],
             "type": "i64"
           },
           {
@@ -5348,10 +5356,6 @@
           },
           {
             "name": "funding_duration_seconds",
-            "type": "i64"
-          },
-          {
-            "name": "sale_start_time_sec",
             "type": "i64"
           },
           {
@@ -5509,10 +5513,6 @@
           },
           {
             "name": "funding_duration_seconds",
-            "type": "i64"
-          },
-          {
-            "name": "sale_start_time_sec",
             "type": "i64"
           },
           {
@@ -6325,12 +6325,6 @@
           },
           {
             "name": "funding_duration_seconds",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "sale_start_time_sec",
             "type": {
               "option": "i64"
             }
