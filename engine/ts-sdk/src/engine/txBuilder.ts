@@ -219,7 +219,8 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
-    saleStartTimeSec?: number;
+    /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+    saleStartTimeTimestamp?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
     rosterShardsTotal: number;
@@ -272,7 +273,7 @@ export class TxBuilder {
           : 1000
       ),
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-      saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
+      saleStartTimeTimestamp: new BN(params.saleStartTimeTimestamp ?? 0),
       unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
       rosterShardCap: params.rosterShardCap,
       rosterShardsTotal: params.rosterShardsTotal,
@@ -331,7 +332,8 @@ export class TxBuilder {
     creator: web3.PublicKey;
     presetId: number;
     projectId: BN | number;
-    saleStartTimeSec: number;
+    /** Absolute unix timestamp (seconds) when the sale starts. If 0, starts immediately. */
+    saleStartTimeTimestamp: number;
     name: string;
     symbol: string;
     uri: string;
@@ -383,7 +385,7 @@ export class TxBuilder {
       .initLaunchFromPreset(
         new BN(params.presetId),
         BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId),
-        new BN(params.saleStartTimeSec),
+        new BN(params.saleStartTimeTimestamp),
         metaArg
       )
       .accountsStrict({
@@ -559,7 +561,8 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
-    saleStartTimeSec?: number;
+    /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+    saleStartTimeTimestamp?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
     rosterShardsTotal: number;
@@ -600,7 +603,7 @@ export class TxBuilder {
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
       fundingDurationSeconds: params.fundingDurationSeconds,
-      saleStartTimeSec: params.saleStartTimeSec ?? 0,
+      saleStartTimeTimestamp: params.saleStartTimeTimestamp ?? 0,
       unlockTimeSec: params.unlockTimeSec ?? 0,
       rosterShardCap: params.rosterShardCap,
       rosterShardsTotal: params.rosterShardsTotal,
