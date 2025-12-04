@@ -74,6 +74,7 @@ pub fn init_launch_from_preset(
     ctx: Context<InitLaunchFromPreset>,
     preset_id: u8,
     project_id: u64,
+    sale_start_time_sec: i64,
     meta: TokenMetadataInput,
 ) -> Result<()> {
     require!(ctx.accounts.launch_preset.id == preset_id, crate::errors::ErrorCode::Unauthorized);
@@ -87,7 +88,7 @@ pub fn init_launch_from_preset(
         base_sale_basis_points: p.base_sale_basis_points,
         team_allocation_basis_points: p.team_allocation_basis_points,
         funding_duration_seconds: p.funding_duration_seconds,
-        sale_start_time_sec: p.sale_start_time_sec,
+        sale_start_time_sec,
         unlock_time_sec: p.unlock_time_sec,
         roster_shard_cap: p.roster_shard_cap,
         roster_shards_total: p.roster_shards_total,

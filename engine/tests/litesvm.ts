@@ -355,7 +355,6 @@ describe("engine litesvm", () => {
       baseTotalAllocation: new anchor.BN(1_000_000),
       baseSaleBasisPoints: new anchor.BN(8000),
       fundingDurationSeconds: 10,
-      saleStartTimeSec: 0,
       unlockTimeSec: 0,
       rosterShardCap: 100,
       rosterShardsTotal: 10,
@@ -394,6 +393,7 @@ describe("engine litesvm", () => {
     const { launchPda } = await (sdk as any).initLaunchFromPreset({
       presetId,
       projectId: nextId,
+      saleStartTimeSec: 0,
       name: "PresetToken",
       symbol: "PST",
       uri: "https://metadata.xyberlabs.dev/preset/default.json",

@@ -46,7 +46,6 @@ async function main() {
         baseSaleBasisPoints: new BN(String(p.baseSaleBasisPoints)),
         teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : 1000,
         fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : 0,
-        saleStartTimeSec: p.saleStartTimeSec !== undefined ? Number(p.saleStartTimeSec) : 0,
         unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : 0,
         rosterShardCap: Number(p.rosterShardCap),
         rosterShardsTotal: Number(p.rosterShardsTotal),

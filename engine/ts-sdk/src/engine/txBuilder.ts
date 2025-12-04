@@ -331,6 +331,7 @@ export class TxBuilder {
     creator: web3.PublicKey;
     presetId: number;
     projectId: BN | number;
+    saleStartTimeSec: number;
     name: string;
     symbol: string;
     uri: string;
@@ -382,6 +383,7 @@ export class TxBuilder {
       .initLaunchFromPreset(
         new BN(params.presetId),
         BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId),
+        new BN(params.saleStartTimeSec),
         metaArg
       )
       .accountsStrict({
@@ -421,7 +423,6 @@ export class TxBuilder {
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
     fundingDurationSeconds: number;
-    saleStartTimeSec?: number;
     unlockTimeSec?: number;
     rosterShardCap: number;
     rosterShardsTotal: number;
@@ -454,7 +455,6 @@ export class TxBuilder {
           : 1000
       ),
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-      saleStartTimeSec: new BN(params.saleStartTimeSec ?? 0),
       unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
       rosterShardCap: params.rosterShardCap,
       rosterShardsTotal: params.rosterShardsTotal,
@@ -494,7 +494,6 @@ export class TxBuilder {
       baseSaleBasisPoints?: BN;
       teamAllocationBasisPoints?: number;
       fundingDurationSeconds?: number;
-      saleStartTimeSec?: number;
       unlockTimeSec?: number;
       rosterShardCap?: number;
       rosterShardsTotal?: number;
@@ -527,7 +526,6 @@ export class TxBuilder {
         baseSaleBasisPoints: p.baseSaleBasisPoints ?? null,
         teamAllocationBasisPoints: typeof p.teamAllocationBasisPoints === "number" ? new BN(p.teamAllocationBasisPoints) : null,
         fundingDurationSeconds: typeof p.fundingDurationSeconds === "number" ? new BN(p.fundingDurationSeconds) : null,
-        saleStartTimeSec: typeof p.saleStartTimeSec === "number" ? new BN(p.saleStartTimeSec) : null,
         unlockTimeSec: typeof p.unlockTimeSec === "number" ? new BN(p.unlockTimeSec) : null,
         rosterShardCap: typeof p.rosterShardCap === "number" ? p.rosterShardCap : null,
         rosterShardsTotal: typeof p.rosterShardsTotal === "number" ? p.rosterShardsTotal : null,

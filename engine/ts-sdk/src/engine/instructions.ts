@@ -1066,7 +1066,6 @@ const EngineSDK = {
         baseTotalAllocation: BN;
         baseSaleBasisPoints: BN;
         fundingDurationSeconds: number;
-        saleStartTimeSec?: number;
         unlockTimeSec?: number;
         rosterShardCap: number;
         rosterShardsTotal: number;
@@ -1096,6 +1095,7 @@ const EngineSDK = {
     async function initLaunchFromPreset(args: {
       presetId: number;
       projectId?: BN | number;
+      saleStartTimeSec?: number;
       name: string;
       symbol: string;
       uri: string;
@@ -1109,6 +1109,7 @@ const EngineSDK = {
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
+        saleStartTimeSec: args.saleStartTimeSec ?? 0,
         name: args.name,
         symbol: args.symbol,
         uri: args.uri,

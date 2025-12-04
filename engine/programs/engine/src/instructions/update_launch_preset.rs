@@ -30,7 +30,6 @@ pub struct UpdateLaunchParams {
     pub base_sale_basis_points: Option<u64>,
     pub team_allocation_basis_points: Option<u64>,
     pub funding_duration_seconds: Option<i64>,
-    pub sale_start_time_sec: Option<i64>,
     pub unlock_time_sec: Option<i64>,
     pub roster_shard_cap: Option<u16>,
     pub roster_shards_total: Option<u16>,
@@ -71,7 +70,6 @@ pub fn update_launch_preset(
     if let Some(v) = patch.base_sale_basis_points { p.base_sale_basis_points = v; }
     if let Some(v) = patch.team_allocation_basis_points { p.team_allocation_basis_points = v; }
     if let Some(v) = patch.funding_duration_seconds { p.funding_duration_seconds = v; }
-    if let Some(v) = patch.sale_start_time_sec { p.sale_start_time_sec = v; }
     if let Some(v) = patch.unlock_time_sec { p.unlock_time_sec = v; }
     if let Some(v) = patch.roster_shard_cap { p.roster_shard_cap = v; }
     if let Some(v) = patch.roster_shards_total { p.roster_shards_total = v; }
