@@ -239,7 +239,7 @@ build-test:
 	make sync-idl
 
 build-test-devnet:
-	anchor build -- --features test,devnet
+	anchor build -- --features devnet
 	make sync-idl
 
 test-raydium-clmm-anchor:

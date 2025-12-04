@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/engine.json`.
  */
 export type Engine = {
-  "address": "xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p",
+  "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7",
   "metadata": {
     "name": "engine",
     "version": "0.1.0",
@@ -228,7 +228,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
@@ -319,7 +319,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "quoteTokenProgram",
@@ -417,43 +417,43 @@ export type Engine = {
               "value": [
                 14,
                 86,
-                238,
-                250,
-                96,
+                241,
+                145,
+                40,
+                148,
+                215,
+                139,
+                118,
+                13,
+                61,
+                172,
+                126,
+                110,
+                141,
+                174,
+                80,
+                63,
+                192,
+                137,
+                114,
                 59,
-                185,
-                36,
-                107,
-                71,
-                201,
-                136,
-                1,
-                190,
-                45,
-                72,
-                224,
+                236,
+                99,
+                216,
+                183,
+                139,
+                243,
                 49,
-                210,
-                122,
-                196,
-                162,
-                164,
-                169,
-                20,
-                224,
-                81,
-                151,
-                62,
-                95,
-                245,
-                51
+                8,
+                216,
+                3
               ]
             }
           }
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "launchState"
@@ -1844,7 +1844,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
@@ -1876,7 +1876,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
         },
         {
           "name": "quoteTokenProgram",
@@ -2525,45 +2525,45 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  4
+                  2
                 ]
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                165,
-                213,
-                202,
-                158,
-                4,
-                207,
-                93,
-                181,
-                144,
-                183,
-                20,
-                186,
-                47,
-                227,
-                44,
-                177,
-                89,
-                19,
-                63,
-                193,
-                193,
-                146,
-                183,
-                34,
-                87,
-                253,
-                7,
+                184,
+                152,
+                151,
+                52,
+                252,
+                179,
+                140,
+                145,
+                104,
+                216,
+                83,
+                199,
+                83,
+                182,
+                184,
+                164,
+                54,
+                16,
+                205,
                 211,
-                156,
-                176,
-                64,
-                30
+                37,
+                175,
+                187,
+                199,
+                47,
+                212,
+                21,
+                54,
+                219,
+                205,
+                194,
+                88
               ]
             }
           }
@@ -3511,6 +3511,208 @@ export type Engine = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mintForTest",
+      "discriminator": [
+        220,
+        129,
+        50,
+        237,
+        118,
+        129,
+        46,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseMint",
+          "writable": true
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "baseTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associatedTokenProgram"
+            }
+          }
+        },
+        {
+          "name": "metadataAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMetadataProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tokenMetadataProgram"
+            }
+          }
+        },
+        {
+          "name": "tokenMetadataConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -6485,7 +6687,7 @@ export type Engine = {
     {
       "name": "ammConfigIndex",
       "type": "u16",
-      "value": "4"
+      "value": "2"
     },
     {
       "name": "baseTokenDecimals",
@@ -6500,12 +6702,12 @@ export type Engine = {
     {
       "name": "incomeDispatcherProgramId",
       "type": "pubkey",
-      "value": "xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6"
+      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
     },
     {
       "name": "raydiumClmmProgramId",
       "type": "pubkey",
-      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+      "value": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
     },
     {
       "name": "seedRoot",
