@@ -235,7 +235,7 @@ run-validator-raydium:
 	NET=mainnet-beta ./scripts/start-validator.sh
 
 build-test:
-	anchor build -- --features test
+	anchor build -- --features test,devnet
 	make sync-idl
 
 build-test-devnet:
