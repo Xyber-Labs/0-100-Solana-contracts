@@ -127,11 +127,6 @@ pub struct CloseClmmPosition<'info> {
     // Remaining accounts passed to Raydium for tick array bitmap extension
 }
 
-/// Permissionless instruction that removes liquidity from the CLMM
-/// position owned by the program's escrow authority and sends all
-/// withdrawn tokens directly to the creator's token accounts.
-///
-/// Anyone can call this; only the creator's accounts can receive funds.
 pub fn close_clmm_position<'info>(
     ctx: Context<'_, '_, '_, 'info, CloseClmmPosition<'info>>,
     _liquidity: u128,
@@ -147,18 +142,13 @@ pub fn close_clmm_position<'info>(
     ];
     let signers = &[&escrow_authority_seeds[..]];
 
-    // Sanity checks tying NFT mint and personal_position together.
     require_keys_eq!(
         ctx.accounts.personal_position.nft_mint,
         ctx.accounts.raydium_position_nft_mint.key(),
         ErrorCode::InvalidMint
     );
-    // Use full on-chain liquidity of the position so this instruction
-    // always attempts to withdraw the entire position principal + fees.
     let liquidity = ctx.accounts.personal_position.liquidity;
 
-    // CPI to Raydium decrease_liquidity_v2 with this liquidity to
-    // withdraw the position and send funds to the creator.
     let cpi_accounts = raydium_amm_v3::cpi::accounts::DecreaseLiquidityV2 {
         nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         nft_account: ctx.accounts.raydium_position_nft_account.to_account_info(),
@@ -185,16 +175,8 @@ pub fn close_clmm_position<'info>(
     )
     .with_remaining_accounts(ctx.remaining_accounts.to_vec());
 
-    // amount_0_min and amount_1_min are set to 0; caller is expected
-    // to handle slippage off-chain if needed.
     raydium_amm_v3::cpi::decrease_liquidity_v2(cpi_context, liquidity, 0, 0)?;
 
-    // After all liquidity is withdrawn, close the Raydium CLMM position
-    // (burn NFT + close personal_position) so that the position is fully
-    // cleaned up on Raydium's side as well.
-    //
-    // We reuse the same PDA (`escrow_authority`) as the NFT owner and the
-    // same signer seeds as above.
     let close_cpi_accounts = raydium_amm_v3::cpi::accounts::ClosePosition {
         nft_owner: ctx.accounts.escrow_authority.to_account_info(),
         position_nft_mint: ctx.accounts.raydium_position_nft_mint.to_account_info(),
@@ -213,14 +195,6 @@ pub fn close_clmm_position<'info>(
 
     raydium_amm_v3::cpi::close_position(close_cpi_context)?;
 
-    // After closing the position, all rent lamports from the position NFT
-    // account and personal_position account have been transferred to
-    // `escrow_authority` (the NFT owner). To satisfy the requirement that
-    // *all* SOL related to this position ends up with the creator, we now
-    // drain the escrow PDA's lamports to the creator's system account.
-    //
-    // This may also sweep any other SOL that was left on this PDA, which is
-    // fine for the test/mainnet use case described.
     let escrow_info = ctx.accounts.escrow_authority.to_account_info();
     let creator_info = ctx.accounts.creator.to_account_info();
     let lamports = **escrow_info.lamports.borrow();
