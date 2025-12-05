@@ -478,6 +478,80 @@ describe("engine litesvm", () => {
     assert.equal(state.totalTickets, 2);
   });
 
+  it("Fills multiple roster shards via depositAutoShard", async () => {
+    const shardsTotal = 3;
+    const usersPerShard = 50;
+    const totalUsers = shardsTotal * usersPerShard;
+
+    const nextId = await sdk.getNextProjectId();
+    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
+      creator: admin.publicKey,
+      projectId: nextId,
+      hardCapLamports: HARD_CAP_LAMPORTS,
+      minRaiseLamports: MIN_RAISE_LAMPORTS,
+      perWalletCap: PER_WALLET_CAP,
+      tauLamports: TAU_LAMPORTS,
+      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
+      baseSaleBasisPoints: BASE_SALE_BPS_F,
+      fundingDurationSeconds: 10,
+      // For this test we want each shard to become "full" exactly when usersPerShard wallets have deposited.
+      rosterShardCap: usersPerShard,
+      rosterShardsTotal: shardsTotal,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
+      creatorClaimLockPeriodSec: new anchor.BN(2),
+      provider,
+      xyberMint,
+    });
+
+    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
+
+    // Pre-create shards sequentially (1..shardsTotal); backend will do this in production.
+    for (let shardId = 1; shardId <= shardsTotal; shardId++) {
+      await sdk.initRosterShard({ launch: testLaunchState, shardId, signers: [] });
+    }
+
+    const seenPerShard: Record<number, number> = {};
+    const depositAmount = TAU_LAMPORTS.clone();
+
+    for (let i = 0; i < totalUsers; i++) {
+      const user = await createAndFundAccount(client, 5);
+      const res = await (sdk as any).depositAutoShard({
+        launch: testLaunchState,
+        amountLamports: depositAmount,
+        userKeypair: user,
+      });
+      seenPerShard[res.shardId] = (seenPerShard[res.shardId] ?? 0) + 1;
+
+      const contrib = await sdk.fetchUserContribution(testLaunchState, user.publicKey);
+      assert.equal(contrib.shardId, res.shardId, "UserContribution.shardId must match depositAutoShard result");
+    }
+
+    const launchAfter: any = await sdk.fetchLaunch(testLaunchState);
+    assert.equal(launchAfter.rosterShardCap, usersPerShard, "rosterShardCap should equal usersPerShard for this test");
+    assert.equal(launchAfter.rosterShards, shardsTotal, "rosterShards should equal configured total");
+    assert.equal(
+      launchAfter.rosterHighestUsedShard,
+      shardsTotal,
+      "Highest used shard should equal total shards after full fill"
+    );
+
+    for (let shardId = 1; shardId <= shardsTotal; shardId++) {
+      assert.equal(
+        seenPerShard[shardId],
+        usersPerShard,
+        `Expected exactly ${usersPerShard} users in shard ${shardId}`
+      );
+      const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
+      const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
+      assert.equal(
+        shard.wallets.length,
+        usersPerShard,
+        `On-chain rosterShard.wallets length must equal ${usersPerShard} for shard ${shardId}`
+      );
+    }
+  });
+
   it("Allows withdrawals", async () => {
     const nextId = await sdk.getNextProjectId();
 

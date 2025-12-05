@@ -63,15 +63,25 @@ export function createShardsApi(params: {
   fetchLaunch: (launch: anchor.web3.PublicKey) => Promise<any>;
 }) {
   const { program, provider, txBuilder, payer, getRosterPda, getRosterShardPda, fetchLaunch } = params;
+  const conn = program.provider.connection;
+
+  async function getAccountInfoSafe(pubkey: anchor.web3.PublicKey): Promise<any | null> {
+    try {
+      return await conn.getAccountInfo(pubkey);
+    } catch {
+      return null;
+    }
+  }
 
   async function initMissingRosterShards(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ initialized: number[]; signature: string | null }> {
     const launchState: any = await fetchLaunch(args.launch);
     const total: number = Number(launchState.rosterShards);
-    const conn = program.provider.connection;
+    if (!Number.isFinite(total) || total <= 0) throw new Error("Invalid roster shards");
     const toInit: number[] = [];
-    for (let id = 0; id < total; id++) {
+    // On-chain shard IDs are 1-based (1..total)
+    for (let id = 1; id <= total; id++) {
       const [pda] = getRosterShardPda(args.launch, id);
-      const info = await conn.getAccountInfo(pda);
+      const info = await getAccountInfoSafe(pda);
       if (!info) toInit.push(id);
     }
     if (toInit.length === 0) return { initialized: [], signature: null };
@@ -88,9 +98,8 @@ export function createShardsApi(params: {
 
   async function initRosterAndAllShards(args: { launch: anchor.web3.PublicKey; payerKeypair?: anchor.web3.Keypair }): Promise<{ rosterPda: anchor.web3.PublicKey; initializedShardIds: number[]; signature: string[] }> {
     const [rosterPda] = getRosterPda(args.launch);
-    const conn = program.provider.connection;
     const sigs: string[] = [];
-    const rosterInfo = await conn.getAccountInfo(rosterPda);
+    const rosterInfo = await getAccountInfoSafe(rosterPda);
     if (!rosterInfo) {
       const { transaction } = await txBuilder.initRosterTx({ launch: args.launch, payer });
       const signers = args.payerKeypair ? [args.payerKeypair] : [];
@@ -113,59 +122,109 @@ export function createShardsApi(params: {
     const total: number = Number(launchState.rosterShards);
     const cap: number = Number(launchState.rosterShardCap);
     if (!Number.isFinite(total) || total <= 0) throw new Error("Invalid roster shards");
-    const order = selectRosterShard(args.launch, user, total).order;
-    const tryOrder = typeof args.preferredShardId === "number" ? [args.preferredShardId, ...order.filter((x) => x !== args.preferredShardId)] : order;
-    const conn = program.provider.connection;
-    for (const id of tryOrder) {
+
+    // If user already has a UserContribution with assigned shard_id, always reuse it.
+    // This hides the "must stay in the same shard" constraint from the frontend.
+    let existingShardId: number | null = null;
+    try {
+      const existing: any = (txBuilder as any).fetchUserContribution
+        ? await (txBuilder as any).fetchUserContribution(args.launch, user)
+        : null;
+      const sid: any = existing?.shardId;
+      // shardId is u16 on-chain; Anchor deserializes it to number.
+      if (typeof sid === "number" && sid > 0) {
+        existingShardId = sid;
+      }
+    } catch {
+      // No existing contribution or fetch failed – treat as first deposit.
+    }
+
+    if (existingShardId !== null) {
+      const id = existingShardId;
       const [rosterShardPda] = getRosterShardPda(args.launch, id);
-      const info = await conn.getAccountInfo(rosterShardPda);
+      const info = await getAccountInfoSafe(rosterShardPda);
       if (!info) {
-        try {
-          const initIx = (await txBuilder.initRosterShardIx({ launch: args.launch, payer, shardId: id })).instruction;
-          const dep = await txBuilder.depositIx({ launch: args.launch, user, amount: args.amountLamports, shardId: id });
-          const tx = new anchor.web3.Transaction().add(initIx, dep.instruction);
-          const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
-          console.log(`deposit shard=${id} created=true`);
-          return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
-        } catch (e: any) {
-          if (isRosterShardFullError(e)) {
-            console.log(`deposit shard=${id} full=true`);
-            continue;
-          }
-          throw e;
+        throw new Error(`User has shardId=${id} but roster shard account is missing`);
+      }
+      try {
+        const dep = await txBuilder.depositIx({
+          launch: args.launch,
+          user,
+          amount: args.amountLamports,
+          rosterShard: rosterShardPda,
+          shardId: id,
+        });
+        const tx = new anchor.web3.Transaction().add(dep.instruction);
+        const signers = args.userKeypair ? [args.userKeypair] : [];
+        if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+        const signature = await (provider as any).sendAndConfirm(tx, signers);
+        return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
+      } catch (e: any) {
+        // If the shard is somehow marked full for an existing user, surface a clear error.
+        if (isRosterShardFullError(e)) {
+          throw new Error(`Roster shard ${id} is full for existing user; on-chain state may be inconsistent`);
         }
-      } else {
-        try {
-          const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
-          const used: number = (shard?.wallets?.length ?? 0) as number;
-          if (used >= cap) {
-            continue;
-          }
-          const dep = await txBuilder.depositIx({
-            launch: args.launch,
-            user,
-            amount: args.amountLamports,
-            rosterShard: rosterShardPda,
-            shardId: id,
-          });
-          const tx = new anchor.web3.Transaction().add(dep.instruction);
-          const signers = args.userKeypair ? [args.userKeypair] : [];
-          if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-          const signature = await (provider as any).sendAndConfirm(tx, signers);
-          console.log(`deposit shard=${id} created=false`);
-          return { userPda: dep.userContribution, signature, shardId: id, rosterShard: rosterShardPda };
-        } catch (e: any) {
-          if (isRosterShardFullError(e)) {
-            console.log(`deposit shard=${id} full=true`);
-            continue;
-          }
-          throw e;
-        }
+        throw e;
       }
     }
-    throw new Error("All roster shards are full");
+
+    // First-time deposit (no shard assigned yet): respect on-chain sequential fill rule.
+    // Active shard is:
+    // - 1, if no shard has been used yet;
+    // - the current highest-used shard if it is not full;
+    // - otherwise the next shard (highest + 1), if within range AND already initialized.
+    const highestUsed: number = Number(launchState.rosterHighestUsedShard ?? 0);
+    let targetShardId: number;
+    if (!Number.isFinite(highestUsed) || highestUsed <= 0) {
+      targetShardId = 1;
+    } else {
+      const [currentShardPda] = getRosterShardPda(args.launch, highestUsed);
+      const currentInfo = await getAccountInfoSafe(currentShardPda);
+      if (!currentInfo) {
+        throw new Error(`Expected roster shard ${highestUsed} to exist for launch ${args.launch.toBase58()}`);
+      }
+      const currentShard: any = await (program.account as any).rosterShard.fetch(currentShardPda);
+      const used: number = (currentShard?.wallets?.length ?? 0) as number;
+      if (used < cap) {
+        targetShardId = highestUsed;
+      } else {
+        targetShardId = highestUsed + 1;
+      }
+    }
+
+    if (!Number.isFinite(targetShardId) || targetShardId <= 0 || targetShardId > total) {
+      throw new Error("All roster shards are full or target shard is out of range");
+    }
+
+    // If caller provided preferredShardId, enforce it matches the active shard to avoid surprises.
+    if (typeof args.preferredShardId === "number" && args.preferredShardId !== targetShardId) {
+      throw new Error(
+        `preferredShardId=${args.preferredShardId} does not match active shard=${targetShardId}; ` +
+        `deposits must follow sequential shard fill`
+      );
+    }
+
+    const [rosterShardPda] = getRosterShardPda(args.launch, targetShardId);
+    const info = await getAccountInfoSafe(rosterShardPda);
+    if (!info) {
+      throw new Error(
+        `Active roster shard ${targetShardId} is not initialized for launch ${args.launch.toBase58()}; ` +
+        `backend must create shards sequentially before deposits`
+      );
+    }
+
+    const dep = await txBuilder.depositIx({
+      launch: args.launch,
+      user,
+      amount: args.amountLamports,
+      rosterShard: rosterShardPda,
+      shardId: targetShardId,
+    });
+    const tx = new anchor.web3.Transaction().add(dep.instruction);
+    const signers = args.userKeypair ? [args.userKeypair] : [];
+    if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+    const signature = await (provider as any).sendAndConfirm(tx, signers);
+    return { userPda: dep.userContribution, signature, shardId: targetShardId, rosterShard: rosterShardPda };
   }
 
   return {
