@@ -724,6 +724,39 @@ const EngineSDK = {
       }
     }
 
+    async function closeClmmPosition(args: {
+      launch: anchor.web3.PublicKey;
+      liquidity: BN;
+      payerKeypair?: anchor.web3.Keypair;
+    }): Promise<{
+      signature: string;
+      creatorTokenAccount0: anchor.web3.PublicKey;
+      creatorTokenAccount1: anchor.web3.PublicKey;
+    }> {
+      const payerPubkey = args.payerKeypair?.publicKey ?? payer;
+
+      const { transaction, creatorTokenAccount0, creatorTokenAccount1 } =
+        await txBuilder.closeClmmPositionTx({
+          launch: args.launch,
+          liquidity: args.liquidity,
+        });
+
+      const signers = args.payerKeypair ? [args.payerKeypair] : [];
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+
+      // Ensure fee payer is set
+      if (!transaction.feePayer) {
+        transaction.feePayer = payerPubkey;
+      }
+
+      const signature = await provider.sendAndConfirm(transaction, signers);
+
+      return { signature, creatorTokenAccount0, creatorTokenAccount1 };
+    }
+
     async function mintForTest(args: {
       launch: anchor.web3.PublicKey;
       baseMint?: anchor.web3.Keypair;
@@ -1502,6 +1535,8 @@ const EngineSDK = {
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
       preparePoolCreationTx: txBuilder.preparePoolCreationTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
+      closeClmmPosition,
+      closeClmmPositionTx: txBuilder.closeClmmPositionTx.bind(txBuilder),
 
       fetchLaunch,
       fetchUserContribution,

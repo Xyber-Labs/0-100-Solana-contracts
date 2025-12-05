@@ -13,6 +13,7 @@ import { getConstant, getConstantRaw } from "../utils";
 
 const METADATA_PROGRAM_ID = new web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 const WSOL_MINT = new web3.PublicKey("So11111111111111111111111111111111111111112");
+const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const INCOME_DISPATCHER_PROGRAM_ID = new web3.PublicKey(getConstantRaw("INCOME_DISPATCHER_PROGRAM_ID", EngineIDLJson as any));
 const INCOME_DISPATCHER_SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", EngineIDLJson as any));
 
@@ -1695,6 +1696,146 @@ export class TxBuilder {
       .add(instruction);
 
     return { transaction, ...rest };
+  }
+
+  async closeClmmPositionIx(params: {
+    launch: web3.PublicKey;
+    liquidity: BN;
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    creatorTokenAccount0: web3.PublicKey;
+    creatorTokenAccount1: web3.PublicKey;
+  }> {
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+
+    const launchState: any = await this.program.account.launchState.fetch(params.launch);
+    const baseMint: web3.PublicKey | null = launchState.baseMint;
+    const creator: web3.PublicKey = launchState.creator;
+    const positionNftMint: web3.PublicKey | null = launchState.raydiumPositionNftMint;
+
+    if (!baseMint) {
+      throw new Error("Launch state does not have baseMint set. Pool must be created first.");
+    }
+    if (!positionNftMint) {
+      throw new Error("Launch state does not have raydiumPositionNftMint set. Liquidity must be added first.");
+    }
+
+    const [raydiumPoolPda] = this.getRaydiumPoolPda(WSOL_MINT, baseMint);
+    const [quoteVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, WSOL_MINT);
+    const [baseVault] = this.getRaydiumPoolVaultPda(raydiumPoolPda, baseMint);
+    const [bitmapExtension] = this.getRaydiumPoolTickArrayBitmapExtensionPda(raydiumPoolPda);
+
+    const range = await this.getLiquidityRange({
+      launch: params.launch,
+      baseMint,
+      quoteMint: WSOL_MINT,
+      raydiumQuoteVault: quoteVault,
+      raydiumBaseVault: baseVault,
+    });
+
+    const tickLowerIndex = range.tickArrayLower;
+    const tickUpperIndex = range.tickArrayUpper;
+    const tickArrayLowerStartIndex = range.tickArrayLowerStartIndex;
+    const tickArrayUpperStartIndex = range.tickArrayUpperStartIndex;
+
+    const [protocolPosition] = this.getRaydiumProtocolPositionPda(
+      raydiumPoolPda,
+      tickLowerIndex,
+      tickUpperIndex
+    );
+    const [tickArrayLower] = this.getRaydiumTickArrayPda(
+      raydiumPoolPda,
+      tickArrayLowerStartIndex
+    );
+    const [tickArrayUpper] = this.getRaydiumTickArrayPda(
+      raydiumPoolPda,
+      tickArrayUpperStartIndex
+    );
+
+    const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint);
+
+    const raydiumPositionNftAccount = getAssociatedTokenAddressSync(
+      positionNftMint,
+      escrowAuthority,
+      true,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    const creatorTokenAccount0 = getAssociatedTokenAddressSync(
+      WSOL_MINT,
+      creator,
+      true
+    );
+    const creatorTokenAccount1 = getAssociatedTokenAddressSync(
+      baseMint,
+      creator,
+      true
+    );
+
+    const method =
+      (this.program.methods as any).closeClmmPosition ??
+      (this.program.methods as any).close_clmm_position;
+    if (!method) {
+      throw new Error("closeClmmPosition method not found in program IDL");
+    }
+
+    const raydiumProgram = this.getRaydiumClmmProgramId();
+
+    const instruction = await method(params.liquidity)
+      .accountsStrict({
+        launchState: params.launch,
+        escrowAuthority,
+        raydiumPositionNftMint: positionNftMint,
+        raydiumPositionNftAccount,
+        personalPosition,
+        poolState: raydiumPoolPda,
+        protocolPosition,
+        tokenVault0: quoteVault,
+        tokenVault1: baseVault,
+        tickArrayLower,
+        tickArrayUpper,
+        creatorTokenAccount0,
+        creatorTokenAccount1,
+        // Explicitly pass creator and systemProgram to match the
+        // on-chain accounts struct and avoid Anchor default
+        // mismatches.
+        creator,
+        raydiumProgram,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+        memoProgram: MEMO_PROGRAM_ID,
+        vault0Mint: WSOL_MINT,
+        vault1Mint: baseMint,
+        systemProgram: web3.SystemProgram.programId,
+      } as any)
+      .remainingAccounts([
+        { pubkey: bitmapExtension, isSigner: false, isWritable: true },
+      ])
+      .instruction();
+
+    return { instruction, creatorTokenAccount0, creatorTokenAccount1 };
+  }
+
+  async closeClmmPositionTx(params: {
+    launch: web3.PublicKey;
+    liquidity: BN;
+  }): Promise<{
+    transaction: web3.Transaction;
+    creatorTokenAccount0: web3.PublicKey;
+    creatorTokenAccount1: web3.PublicKey;
+  }> {
+    const { instruction, creatorTokenAccount0, creatorTokenAccount1 } =
+      await this.closeClmmPositionIx(params);
+
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+
+    const transaction = new web3.Transaction()
+      .add(computeBudgetIx)
+      .add(instruction);
+
+    return { transaction, creatorTokenAccount0, creatorTokenAccount1 };
   }
 
   async getLiquidityRange(params: {

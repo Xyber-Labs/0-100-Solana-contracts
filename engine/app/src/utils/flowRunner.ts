@@ -1397,6 +1397,79 @@ export async function runFullFlow(
       addLog(`\n[11/10] Raydium swaps step failed: ${String(e?.message || e)}`);
     }
 
+    // 12. Test CLMM position close: funds should return to creator
+    try {
+      addLog(`\n[12/10] Testing CLMM position close (funds back to creator)...`);
+      if (!mintedBaseMint || poolBaseLiquidityUi === null || poolQuoteLiquidityUi === null) {
+        addLog(`   -> Skipped: pool or liquidity not available.`);
+      } else {
+        // Creator (admin) token accounts for WSOL and base mint
+        const WSOL_MINT_PK = new PublicKey("So11111111111111111111111111111111111111112");
+        const creatorBaseAta = sdk.getUserAta(mintedBaseMint, admin.publicKey);
+        const creatorWsolAta = sdk.getUserAta(WSOL_MINT_PK, admin.publicKey);
+
+        // Ensure ATAs exist (best-effort)
+        try {
+          const { ix: createBaseAtaIx } = sdk.buildCreateAtaIx({
+            payer: admin.publicKey,
+            owner: admin.publicKey,
+            mint: mintedBaseMint,
+          });
+          const txBase = new Transaction().add(createBaseAtaIx);
+          await provider.sendAndConfirm!(txBase, []);
+        } catch (_) { }
+        try {
+          const { ix: createWsolAtaIx } = sdk.buildCreateAtaIx({
+            payer: admin.publicKey,
+            owner: admin.publicKey,
+            mint: WSOL_MINT_PK,
+          });
+          const txWsol = new Transaction().add(createWsolAtaIx);
+          await provider.sendAndConfirm!(txWsol, []);
+        } catch (_) { }
+
+        const baseBefore = await getTokenBalance(creatorBaseAta);
+        const wsolBefore = await getTokenBalance(creatorWsolAta);
+
+        addLog(
+          `   -> Creator balances before close clmm position: base=${baseBefore.toFixed(
+            6
+          )} WSOL=${wsolBefore.toFixed(6)}`
+        );
+
+        // For this test we attempt to close the CLMM position completely.
+        // The on-chain instruction now ignores the client-provided liquidity
+        // parameter and instead uses the full on-chain liquidity from the
+        // Raydium personal_position account, so we can safely pass 0 here.
+        const maxU128 = new BN(0);
+        const { creatorTokenAccount0, creatorTokenAccount1 } = await (sdk as any).closeClmmPosition({
+          launch: testLaunchState,
+          liquidity: maxU128,
+          payerKeypair: undefined,
+        });
+
+        addLog(`   -> closeClmmPosition used creatorTokenAccount0=${creatorTokenAccount0.toBase58()}, creatorTokenAccount1=${creatorTokenAccount1.toBase58()}`);
+
+        const baseAfter = await getTokenBalance(creatorBaseAta);
+        const wsolAfter = await getTokenBalance(creatorWsolAta);
+
+        const baseDelta = baseAfter - baseBefore;
+        const wsolDelta = wsolAfter - wsolBefore;
+
+        addLog(`   -> Creator balances delta from CLMM close: base=${baseDelta.toFixed(6)} WSOL=${wsolDelta.toFixed(6)}`);
+
+        if (baseDelta > 0 || wsolDelta > 0) {
+          addLog(`   -> ✅ VERIFICATION PASSED: creator received funds from closeClmmPosition.`);
+          addLog(`   -> Creator balances after close clmm position: base=${baseAfter.toFixed(6)} WSOL=${wsolAfter.toFixed(6)}`);
+        } else {
+          throw new Error("Creator did not receive any funds from closeClmmPosition (both deltas are zero).");
+        }
+      }
+    } catch (e: any) {
+      addLog(`\n[12/10] CLMM close test failed: ${String(e?.message || e)}`);
+      throw e;
+    }
+
     addLog(`\n\n--- DISTRIBUTION SUMMARY ---`);
     addLog(`   Total SOL collected:      ${(totalSOLCollected / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
     addLog(`   Total claimed by users:   ${tokensClaimed.toFixed(6)}`);

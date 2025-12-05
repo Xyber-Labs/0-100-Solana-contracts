@@ -194,4 +194,12 @@ pub mod engine {
     ) -> Result<()> {
         instructions::claim_clmm_fees(ctx)
     }
+
+    #[cfg(feature = "test")]
+    pub fn close_clmm_position<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseClmmPosition<'info>>,
+        liquidity: u128,
+    ) -> Result<()> {
+        instructions::close_clmm_position(ctx, liquidity)
+    }
 }
