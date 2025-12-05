@@ -1403,12 +1403,11 @@ export async function runFullFlow(
       if (!mintedBaseMint || poolBaseLiquidityUi === null || poolQuoteLiquidityUi === null) {
         addLog(`   -> Skipped: pool or liquidity not available.`);
       } else {
-        // Creator (admin) token accounts for WSOL and base mint
+        // Creator (admin) token account for base mint
         const WSOL_MINT_PK = new PublicKey("So11111111111111111111111111111111111111112");
         const creatorBaseAta = sdk.getUserAta(mintedBaseMint, admin.publicKey);
-        const creatorWsolAta = sdk.getUserAta(WSOL_MINT_PK, admin.publicKey);
 
-        // Ensure ATAs exist (best-effort)
+        // Ensure base ATA exists (best-effort)
         try {
           const { ix: createBaseAtaIx } = sdk.buildCreateAtaIx({
             payer: admin.publicKey,
@@ -1417,24 +1416,16 @@ export async function runFullFlow(
           });
           const txBase = new Transaction().add(createBaseAtaIx);
           await provider.sendAndConfirm!(txBase, []);
-        } catch (_) { }
-        try {
-          const { ix: createWsolAtaIx } = sdk.buildCreateAtaIx({
-            payer: admin.publicKey,
-            owner: admin.publicKey,
-            mint: WSOL_MINT_PK,
-          });
-          const txWsol = new Transaction().add(createWsolAtaIx);
-          await provider.sendAndConfirm!(txWsol, []);
-        } catch (_) { }
+        } catch (_) {}
 
         const baseBefore = await getTokenBalance(creatorBaseAta);
-        const wsolBefore = await getTokenBalance(creatorWsolAta);
+        const solBeforeLamports = await provider.connection.getBalance(admin.publicKey);
+        const solBefore = solBeforeLamports / LAMPORTS_PER_SOL;
 
         addLog(
           `   -> Creator balances before close clmm position: base=${baseBefore.toFixed(
             6
-          )} WSOL=${wsolBefore.toFixed(6)}`
+          )} SOL≈${solBefore.toFixed(6)}`
         );
 
         // For this test we attempt to close the CLMM position completely.
@@ -1451,16 +1442,25 @@ export async function runFullFlow(
         addLog(`   -> closeClmmPosition used creatorTokenAccount0=${creatorTokenAccount0.toBase58()}, creatorTokenAccount1=${creatorTokenAccount1.toBase58()}`);
 
         const baseAfter = await getTokenBalance(creatorBaseAta);
-        const wsolAfter = await getTokenBalance(creatorWsolAta);
+        const solAfterLamports = await provider.connection.getBalance(admin.publicKey);
+        const solAfter = solAfterLamports / LAMPORTS_PER_SOL;
 
         const baseDelta = baseAfter - baseBefore;
-        const wsolDelta = wsolAfter - wsolBefore;
+        const solDelta = solAfter - solBefore;
 
-        addLog(`   -> Creator balances delta from CLMM close: base=${baseDelta.toFixed(6)} WSOL=${wsolDelta.toFixed(6)}`);
+        addLog(
+          `   -> Creator balances delta from CLMM close: base=${baseDelta.toFixed(
+            6
+          )} SOL≈${solDelta.toFixed(6)}`
+        );
 
-        if (baseDelta > 0 || wsolDelta > 0) {
+        if (baseDelta > 0 || solDelta > 0) {
           addLog(`   -> ✅ VERIFICATION PASSED: creator received funds from closeClmmPosition.`);
-          addLog(`   -> Creator balances after close clmm position: base=${baseAfter.toFixed(6)} WSOL=${wsolAfter.toFixed(6)}`);
+          addLog(
+            `   -> Creator balances after close clmm position: base=${baseAfter.toFixed(
+              6
+            )} SOL≈${solAfter.toFixed(6)}`
+          );
         } else {
           throw new Error("Creator did not receive any funds from closeClmmPosition (both deltas are zero).");
         }

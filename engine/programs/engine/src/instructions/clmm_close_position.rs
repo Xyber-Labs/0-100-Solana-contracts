@@ -1,8 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::{Token, TokenAccount},
-    token_2022::Token2022,
-};
+use anchor_spl::token::TokenAccount;
 use raydium_amm_v3::states::personal_position::PersonalPositionState;
 
 use crate::{
@@ -90,12 +87,10 @@ pub struct CloseClmmPosition<'info> {
     )]
     pub creator_token_account_1: Box<Account<'info, TokenAccount>>,
 
-    /// CHECK: Creator's account to receive SOL (rent, leftovers).
-    /// We only use it as a lamport recipient and constrain its address
-    /// via `launch_state.creator`, so it may be any system-owned account
-    /// or even a PDA.
+    /// Creator's system account. Must match `launch_state.creator` and
+    /// sign the transaction so we can unwrap WSOL inside this instruction.
     #[account(mut, address = launch_state.creator)]
-    pub creator: UncheckedAccount<'info>,
+    pub creator: Signer<'info>,
 
     /// CHECK: Raydium CLMM program. We don't enforce the program id here
     /// because this instruction is intended for controlled test/mainnet
@@ -141,6 +136,9 @@ pub fn close_clmm_position<'info>(
         &[ctx.bumps.escrow_authority],
     ];
     let signers = &[&escrow_authority_seeds[..]];
+
+    // Only the recorded creator can call this instruction.
+    require_keys_eq!(ctx.accounts.creator.key(), launch_state.creator, ErrorCode::InvalidOwner);
 
     require_keys_eq!(
         ctx.accounts.personal_position.nft_mint,
@@ -194,6 +192,16 @@ pub fn close_clmm_position<'info>(
     );
 
     raydium_amm_v3::cpi::close_position(close_cpi_context)?;
+
+    // Unwrap creator's WSOL ATA into native SOL.
+    anchor_spl::token::close_account(CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        anchor_spl::token::CloseAccount {
+            account: ctx.accounts.creator_token_account_0.to_account_info(),
+            destination: ctx.accounts.creator.to_account_info(),
+            authority: ctx.accounts.creator.to_account_info(),
+        },
+    ))?;
 
     let escrow_info = ctx.accounts.escrow_authority.to_account_info();
     let creator_info = ctx.accounts.creator.to_account_info();
