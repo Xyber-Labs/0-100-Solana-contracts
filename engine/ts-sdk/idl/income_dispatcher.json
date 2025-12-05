@@ -194,7 +194,7 @@
           }
         },
         {
-          "name": "project_authority",
+          "name": "harvest_authority",
           "pda": {
             "seeds": [
               {
@@ -222,12 +222,12 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
+                  104,
+                  97,
                   114,
-                  111,
-                  106,
+                  118,
                   101,
-                  99,
+                  115,
                   116,
                   95,
                   97,
@@ -240,10 +240,6 @@
                   116,
                   121
                 ]
-              },
-              {
-                "kind": "arg",
-                "path": "project_id"
               }
             ]
           }
@@ -310,7 +306,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "project_authority"
+                "path": "harvest_authority"
               },
               {
                 "kind": "const",
@@ -400,7 +396,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "project_authority"
+                "path": "harvest_authority"
               },
               {
                 "kind": "const",
@@ -906,7 +902,7 @@
           }
         },
         {
-          "name": "project_authority",
+          "name": "harvest_authority",
           "pda": {
             "seeds": [
               {
@@ -934,12 +930,12 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
+                  104,
+                  97,
                   114,
-                  111,
-                  106,
+                  118,
                   101,
-                  99,
+                  115,
                   116,
                   95,
                   97,
@@ -952,10 +948,6 @@
                   116,
                   121
                 ]
-              },
-              {
-                "kind": "arg",
-                "path": "project_id"
               }
             ]
           }
@@ -972,14 +964,14 @@
         {
           "name": "quote_vault",
           "docs": [
-            "Quote vault - init-if-needed associated token account owned by project_authority"
+            "Quote vault - init-if-needed associated token account owned by harvest_authority"
           ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "project_authority"
+                "path": "harvest_authority"
               },
               {
                 "kind": "const",
@@ -1065,14 +1057,14 @@
         {
           "name": "base_vault",
           "docs": [
-            "Base vault - init-if-needed associated token account owned by project_authority"
+            "Base vault - init-if-needed associated token account owned by harvest_authority"
           ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "project_authority"
+                "path": "harvest_authority"
               },
               {
                 "kind": "const",
@@ -1600,6 +1592,10 @@
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "project_id",
+            "type": "u64"
+          },
           {
             "name": "role",
             "type": {

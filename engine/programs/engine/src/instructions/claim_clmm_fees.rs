@@ -10,11 +10,11 @@ use crate::{
 #[derive(Accounts)]
 pub struct ClaimClmmFees<'info> {
     #[account(
-        seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &launch_state.project_id.to_be_bytes()],
+        seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"],
         seeds::program = INCOME_DISPATCHER_PROGRAM_ID,
         bump
     )]
-    pub project_authority: Signer<'info>,
+    pub harvest_authority: Signer<'info>,
 
     pub raydium_program: Program<'info, AmmV3>,
 

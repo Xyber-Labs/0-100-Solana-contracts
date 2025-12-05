@@ -19,8 +19,8 @@ const IncomeDispatcherSDK = {
       return txBuilder.getIncomeConfigPda(projectId);
     }
 
-    function getProjectAuthorityPda(projectId: BN): [anchor.web3.PublicKey, number] {
-      return txBuilder.getProjectAuthorityPda(projectId);
+    function getHarvestAuthorityPda(): [anchor.web3.PublicKey, number] {
+      return txBuilder.getHarvestAuthorityPda();
     }
 
     function getNoncePda(projectId: BN, recipient: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -81,7 +81,7 @@ const IncomeDispatcherSDK = {
     }): Promise<{ signature: string }> {
       const [config] = getConfigPda();
       const [incomeConfig] = getIncomeConfigPda(args.projectId);
-      const [projectAuthority] = getProjectAuthorityPda(args.projectId);
+      const [harvestAuthority] = getHarvestAuthorityPda();
       const [noncePda] = getNoncePda(args.projectId, args.recipient);
 
       const TOKEN_PROGRAM_ID = new anchor.web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -89,13 +89,13 @@ const IncomeDispatcherSDK = {
 
       const baseVault = getAssociatedTokenAddressSync(
         args.baseMint,
-        projectAuthority,
+        harvestAuthority,
         true
       );
 
       const quoteVault = getAssociatedTokenAddressSync(
         args.quoteMint,
-        projectAuthority,
+        harvestAuthority,
         true
       );
 
@@ -118,7 +118,7 @@ const IncomeDispatcherSDK = {
           config,
           launchState: args.launchState,
           incomeConfig,
-          projectAuthority,
+          harvestAuthority,
           nonce: noncePda,
           baseMint: args.baseMint,
           quoteMint: args.quoteMint,
@@ -192,7 +192,7 @@ const IncomeDispatcherSDK = {
 
       getConfigPda,
       getIncomeConfigPda,
-      getProjectAuthorityPda,
+      getHarvestAuthorityPda,
       getNoncePda,
 
       initialize,

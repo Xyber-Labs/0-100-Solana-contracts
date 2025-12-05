@@ -19,6 +19,7 @@ const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
 
 #[event]
 pub struct IncomeHarvested {
+    project_id: u64,
     role: Role,
     base: u64,
     quote: u64,
@@ -54,33 +55,31 @@ pub struct HarvestPool<'info> {
     pub income_config: Box<Account<'info, IncomeConfig>>,
 
     /// CHECK: Project authority PDA derived from project_id
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
-    pub project_authority: UncheckedAccount<'info>,
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
+    pub harvest_authority: UncheckedAccount<'info>,
 
-    #[account(
-        address = anchor_lang::solana_program::pubkey ! ("So11111111111111111111111111111111111111112")
-    )]
+    #[account(address = pubkey!("So11111111111111111111111111111111111111112"))]
     pub quote_mint: Account<'info, Mint>,
 
     /// Base mint from project pool
     #[account(constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint)]
     pub base_mint: Account<'info, Mint>,
 
-    /// Quote vault - init-if-needed associated token account owned by project_authority
+    /// Quote vault - init-if-needed associated token account owned by harvest_authority
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = quote_mint,
-        associated_token::authority = project_authority,
+        associated_token::authority = harvest_authority,
     )]
     pub quote_vault: Account<'info, TokenAccount>,
 
-    /// Base vault - init-if-needed associated token account owned by project_authority
+    /// Base vault - init-if-needed associated token account owned by harvest_authority
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = base_mint,
-        associated_token::authority = project_authority,
+        associated_token::authority = harvest_authority,
     )]
     pub base_vault: Account<'info, TokenAccount>,
 
@@ -132,7 +131,7 @@ pub struct HarvestPool<'info> {
 
 pub fn harvest_pool<'info>(
     mut ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
-    project_id: u64,
+    _project_id: u64,
 ) -> Result<()> {
     let income_config = &mut ctx.accounts.income_config;
     income_config.authorities[Role::Platform as usize] = ctx.accounts.config.platform_wallet;
@@ -142,7 +141,7 @@ pub fn harvest_pool<'info>(
     let quote_balance_before = ctx.accounts.quote_vault.amount;
     let base_balance_before = ctx.accounts.base_vault.amount;
 
-    claim_fees_from_engine(&ctx, project_id)?;
+    claim_fees_from_engine(&ctx)?;
 
     ctx.accounts.quote_vault.reload()?;
     ctx.accounts.base_vault.reload()?;
@@ -174,10 +173,9 @@ pub fn harvest_pool<'info>(
 
 fn claim_fees_from_engine<'info>(
     ctx: &Context<'_, '_, '_, 'info, HarvestPool<'info>>,
-    project_id: u64,
 ) -> Result<()> {
     let cpi_accounts = engine_cpi::accounts::ClaimClmmFees {
-        project_authority: ctx.accounts.project_authority.to_account_info(),
+        harvest_authority: ctx.accounts.harvest_authority.to_account_info(),
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),
@@ -199,13 +197,12 @@ fn claim_fees_from_engine<'info>(
         vault_1_mint: ctx.accounts.base_mint.to_account_info(),
     };
 
-    let project_authority_seeds = &[
+    let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
-        b"project_authority",
-        &project_id.to_be_bytes(),
-        &[ctx.bumps.project_authority],
+        b"harvest_authority",
+        &[ctx.bumps.harvest_authority],
     ];
-    let signers = &[&project_authority_seeds[..]];
+    let signers = &[&harvest_authority_seeds[..]];
 
     let cpi_context = CpiContext::new_with_signer(
         ctx.accounts.engine_program.to_account_info(),
@@ -240,6 +237,7 @@ fn distribute_income(
 
     for income in distribution.incomes {
         emit!(IncomeHarvested {
+            project_id: ctx.accounts.launch_state.project_id,
             role: income.recipient,
             base: income.base_token as u64,
             quote: income.quote_token as u64

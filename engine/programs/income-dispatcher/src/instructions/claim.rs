@@ -31,8 +31,8 @@ pub struct Claim<'info> {
     pub income_config: Box<Account<'info, IncomeConfig>>,
 
     /// CHECK: Project authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
-    pub project_authority: AccountInfo<'info>,
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
+    pub harvest_authority: AccountInfo<'info>,
 
     #[account(
         init_if_needed,
@@ -55,14 +55,14 @@ pub struct Claim<'info> {
     #[account(
         mut,
         associated_token::mint = base_mint,
-        associated_token::authority = project_authority,
+        associated_token::authority = harvest_authority,
     )]
     pub base_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = quote_mint,
-        associated_token::authority = project_authority,
+        associated_token::authority = harvest_authority,
     )]
     pub quote_vault: Box<Account<'info, TokenAccount>>,
 
@@ -104,13 +104,12 @@ pub fn claim(
     let role_idx = role as usize;
     let balance = &mut income_config.balances[role_idx];
 
-    let project_authority_seeds = &[
+    let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
-        b"project_authority",
-        &project_id.to_be_bytes(),
-        &[ctx.bumps.project_authority],
+        b"harvest_authority",
+        &[ctx.bumps.harvest_authority],
     ];
-    let signers = &[&project_authority_seeds[..]];
+    let signers = &[&harvest_authority_seeds[..]];
 
     let mut base_to_claim = balance
         .earned_base
@@ -128,7 +127,7 @@ pub fn claim(
                 TransferChecked {
                     from: ctx.accounts.base_vault.to_account_info(),
                     to: ctx.accounts.recipient_base_ata.to_account_info(),
-                    authority: ctx.accounts.project_authority.to_account_info(),
+                    authority: ctx.accounts.harvest_authority.to_account_info(),
                     mint: ctx.accounts.base_mint.to_account_info(),
                 },
                 signers,
@@ -154,7 +153,7 @@ pub fn claim(
                 TransferChecked {
                     from: ctx.accounts.quote_vault.to_account_info(),
                     to: ctx.accounts.recipient_quote_ata.to_account_info(),
-                    authority: ctx.accounts.project_authority.to_account_info(),
+                    authority: ctx.accounts.harvest_authority.to_account_info(),
                     mint: ctx.accounts.quote_mint.to_account_info(),
                 },
                 signers,

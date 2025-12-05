@@ -61,8 +61,8 @@ export class TxBuilder {
     return this.getPda(["income_config", projectId]);
   }
 
-  getProjectAuthorityPda(projectId: BN): [web3.PublicKey, number] {
-    return this.getPda(["project_authority", projectId]);
+  getHarvestAuthorityPda(): [web3.PublicKey, number] {
+    return this.getPda(["harvest_authority"]);
   }
 
   getNoncePda(projectId: BN, recipient: web3.PublicKey): [web3.PublicKey, number] {
@@ -90,10 +90,10 @@ export class TxBuilder {
   }): Promise<web3.TransactionInstruction> {
     const [config] = this.getConfigPda();
     const [incomeConfig] = this.getIncomeConfigPda(params.projectId);
-    const [projectAuthority] = this.getProjectAuthorityPda(params.projectId);
+    const [harvestAuthority] = this.getHarvestAuthorityPda();
 
-    const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, projectAuthority, true);
-    const baseVault = getAssociatedTokenAddressSync(params.baseMint, projectAuthority, true);
+    const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, harvestAuthority, true);
+    const baseVault = getAssociatedTokenAddressSync(params.baseMint, harvestAuthority, true);
 
     return this.program.methods
       .harvestPool(params.projectId)
@@ -102,7 +102,7 @@ export class TxBuilder {
         config,
         launchState: params.launchState,
         incomeConfig,
-        projectAuthority,
+        harvestAuthority,
         quoteMint: params.quoteMint,
         baseMint: params.baseMint,
         quoteVault,

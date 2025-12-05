@@ -200,7 +200,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "projectAuthority",
+          "name": "harvestAuthority",
           "pda": {
             "seeds": [
               {
@@ -228,12 +228,12 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  112,
+                  104,
+                  97,
                   114,
-                  111,
-                  106,
+                  118,
                   101,
-                  99,
+                  115,
                   116,
                   95,
                   97,
@@ -246,10 +246,6 @@ export type IncomeDispatcher = {
                   116,
                   121
                 ]
-              },
-              {
-                "kind": "arg",
-                "path": "projectId"
               }
             ]
           }
@@ -316,7 +312,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "projectAuthority"
+                "path": "harvestAuthority"
               },
               {
                 "kind": "const",
@@ -406,7 +402,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "projectAuthority"
+                "path": "harvestAuthority"
               },
               {
                 "kind": "const",
@@ -912,7 +908,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "projectAuthority",
+          "name": "harvestAuthority",
           "pda": {
             "seeds": [
               {
@@ -940,12 +936,12 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  112,
+                  104,
+                  97,
                   114,
-                  111,
-                  106,
+                  118,
                   101,
-                  99,
+                  115,
                   116,
                   95,
                   97,
@@ -958,10 +954,6 @@ export type IncomeDispatcher = {
                   116,
                   121
                 ]
-              },
-              {
-                "kind": "arg",
-                "path": "projectId"
               }
             ]
           }
@@ -978,14 +970,14 @@ export type IncomeDispatcher = {
         {
           "name": "quoteVault",
           "docs": [
-            "Quote vault - init-if-needed associated token account owned by project_authority"
+            "Quote vault - init-if-needed associated token account owned by harvest_authority"
           ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "projectAuthority"
+                "path": "harvestAuthority"
               },
               {
                 "kind": "const",
@@ -1071,14 +1063,14 @@ export type IncomeDispatcher = {
         {
           "name": "baseVault",
           "docs": [
-            "Base vault - init-if-needed associated token account owned by project_authority"
+            "Base vault - init-if-needed associated token account owned by harvest_authority"
           ],
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "account",
-                "path": "projectAuthority"
+                "path": "harvestAuthority"
               },
               {
                 "kind": "const",
@@ -1606,6 +1598,10 @@ export type IncomeDispatcher = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "projectId",
+            "type": "u64"
+          },
           {
             "name": "role",
             "type": {
