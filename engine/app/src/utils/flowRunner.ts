@@ -1403,9 +1403,12 @@ export async function runFullFlow(
       if (!mintedBaseMint || poolBaseLiquidityUi === null || poolQuoteLiquidityUi === null) {
         addLog(`   -> Skipped: pool or liquidity not available.`);
       } else {
-        // Creator (admin) token account for base mint
+        // Creator (admin) token accounts for base mint and WSOL.
+        // WSOL ATA is required by closeClmmPosition as `creator_token_account_0`,
+        // even though the instruction unwraps it into SOL internally.
         const WSOL_MINT_PK = new PublicKey("So11111111111111111111111111111111111111112");
         const creatorBaseAta = sdk.getUserAta(mintedBaseMint, admin.publicKey);
+        const creatorWsolAta = sdk.getUserAta(WSOL_MINT_PK, admin.publicKey);
 
         // Ensure base ATA exists (best-effort)
         try {
@@ -1416,6 +1419,17 @@ export async function runFullFlow(
           });
           const txBase = new Transaction().add(createBaseAtaIx);
           await provider.sendAndConfirm!(txBase, []);
+        } catch (_) {}
+
+        // Ensure WSOL ATA exists (best-effort)
+        try {
+          const { ix: createWsolAtaIx } = sdk.buildCreateAtaIx({
+            payer: admin.publicKey,
+            owner: admin.publicKey,
+            mint: WSOL_MINT_PK,
+          });
+          const txWsol = new Transaction().add(createWsolAtaIx);
+          await provider.sendAndConfirm!(txWsol, []);
         } catch (_) {}
 
         const baseBefore = await getTokenBalance(creatorBaseAta);
