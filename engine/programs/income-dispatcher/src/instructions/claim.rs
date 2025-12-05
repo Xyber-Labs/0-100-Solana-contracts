@@ -102,24 +102,15 @@ pub fn claim(
 
     let income_config = &mut ctx.accounts.income_config;
     let role_idx = role as usize;
-    let balance = &mut income_config.balances[role_idx];
 
     let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
         b"harvest_authority",
         &[ctx.bumps.harvest_authority],
     ];
-    let signers = &[&harvest_authority_seeds[..]];
+    let signature = &[&harvest_authority_seeds[..]];
 
-    let mut base_to_claim = balance
-        .earned_base
-        .checked_sub(balance.claimed_base)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    if let Some(limit) = limit_base_claim {
-        base_to_claim = base_to_claim.min(limit);
-    }
-
+    let base_to_claim = income_config.base_to_claim(role, limit_base_claim)?;
     if base_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -130,22 +121,14 @@ pub fn claim(
                     authority: ctx.accounts.harvest_authority.to_account_info(),
                     mint: ctx.accounts.base_mint.to_account_info(),
                 },
-                signers,
+                signature,
             ),
             base_to_claim,
             ctx.accounts.base_mint.decimals,
         )?;
     }
 
-    let mut quote_to_claim = balance
-        .earned_quote
-        .checked_sub(balance.claimed_quote)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    if let Some(limit) = limit_quote_claim {
-        quote_to_claim = quote_to_claim.min(limit);
-    }
-
+    let mut quote_to_claim = income_config.quote_to_claim(role, limit_quote_claim)?;
     if quote_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -156,13 +139,13 @@ pub fn claim(
                     authority: ctx.accounts.harvest_authority.to_account_info(),
                     mint: ctx.accounts.quote_mint.to_account_info(),
                 },
-                signers,
+                signature,
             ),
             quote_to_claim,
             ctx.accounts.quote_mint.decimals,
         )?;
     }
-
+    let balance = &mut income_config.balances[role as usize];
     balance.claimed_base =
         balance.claimed_base.checked_add(base_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
     balance.claimed_quote =
