@@ -102,6 +102,8 @@ pub enum ErrorCode {
     MalformedPreset,
     #[msg("Creator claim lock period must be > 0")]
     InvalidClaimLockPeriod,
+    #[msg("Creator daily lamports limit must be >= tau")]
+    InvalidCreatorDailyLimit,
 
     // New errors for sharded roster / new flow
     #[msg("Operation not supported in current version")]

@@ -12,7 +12,7 @@
   "baseSaleBasisPoints": "500",
   "teamAllocationBasisPoints": 1000,
   "fundingDurationSeconds": "86400",
-  "saleStartTimeSec": "0",
+  "saleStartTimeTimestamp": "0",
   "unlockTimeSec": "0",
   "rosterShardCap": 5000,
   "rosterShardsTotal": 16,

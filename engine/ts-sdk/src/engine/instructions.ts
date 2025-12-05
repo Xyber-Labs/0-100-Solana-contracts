@@ -93,7 +93,6 @@ const EngineSDK = {
         baseSaleBasisPoints?: BN;
         teamAllocationBasisPoints?: number;
         fundingDurationSeconds?: number;
-        saleStartTimeSec?: number;
         unlockTimeSec?: number;
         rosterShardCap?: number;
         rosterShardsTotal?: number;
@@ -228,7 +227,8 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
-      saleStartTimeSec?: number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       rosterShardsTotal: number;
@@ -282,7 +282,7 @@ const EngineSDK = {
           baseTotalAllocation: args.baseTotalAllocation,
           baseSaleBasisPoints: args.baseSaleBasisPoints,
           fundingDurationSeconds: args.fundingDurationSeconds,
-          saleStartTimeSec: args.saleStartTimeSec ?? 0,
+          saleStartTimeTimestamp: args.saleStartTimeTimestamp ?? 0,
           unlockTimeSec: args.unlockTimeSec ?? 0,
           rosterShardCap: args.rosterShardCap,
           rosterShardsTotal: args.rosterShardsTotal,
@@ -331,7 +331,8 @@ const EngineSDK = {
       baseTotalAllocation: BN;
       baseSaleBasisPoints: BN;
       fundingDurationSeconds: number;
-      saleStartTimeSec?: number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       unlockTimeSec?: number;
       rosterShardCap: number;
       rosterShardsTotal: number;
@@ -1071,7 +1072,6 @@ const EngineSDK = {
         baseTotalAllocation: BN;
         baseSaleBasisPoints: BN;
         fundingDurationSeconds: number;
-        saleStartTimeSec?: number;
         unlockTimeSec?: number;
         rosterShardCap: number;
         rosterShardsTotal: number;
@@ -1101,6 +1101,8 @@ const EngineSDK = {
     async function initLaunchFromPreset(args: {
       presetId: number;
       projectId?: BN | number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
       name: string;
       symbol: string;
       uri: string;
@@ -1114,6 +1116,7 @@ const EngineSDK = {
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
+        saleStartTimeTimestamp: args.saleStartTimeTimestamp ?? 0,
         name: args.name,
         symbol: args.symbol,
         uri: args.uri,
@@ -1124,6 +1127,56 @@ const EngineSDK = {
       const signers = args.creator ? [args.creator] : [];
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
       const signature = await provider.sendAndConfirm(tx, signers);
+      return { launchPda: launchState, signature };
+    }
+
+    async function initLaunchFromPresetWithCreatorDeposit(args: {
+      presetId: number;
+      projectId?: BN | number;
+      /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
+      saleStartTimeTimestamp?: number;
+      name: string;
+      symbol: string;
+      uri: string;
+      isMutable?: boolean;
+      sellerFeeBasisPoints?: number;
+      creator?: anchor.web3.Keypair;
+      /** How much creator deposits into special deposit right after launch init */
+      creatorDepositLamports: BN;
+    }): Promise<{ launchPda: anchor.web3.PublicKey; signature: string }> {
+      const creatorPubkey = args.creator?.publicKey ?? payer;
+      const projectId = args.projectId ?? (await getNextProjectId());
+
+      // 1) Build init-from-preset ix (creates launch + creator grant, etc.)
+      const {
+        instruction: initIx,
+        launchState,
+      } = await txBuilder.initLaunchFromPresetIx({
+        creator: creatorPubkey,
+        presetId: args.presetId,
+        projectId,
+        saleStartTimeTimestamp: args.saleStartTimeTimestamp ?? 0,
+        name: args.name,
+        symbol: args.symbol,
+        uri: args.uri,
+        isMutable: typeof args.isMutable === "boolean" ? args.isMutable : true,
+        sellerFeeBasisPoints:
+          typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0,
+      });
+
+      // 2) Build creator_deposit ix that uses freshly created launch/creatorGrant
+      const { instruction: depositIx } = await txBuilder.creatorDepositIx({
+        launch: launchState,
+        creator: creatorPubkey,
+        amount: args.creatorDepositLamports,
+      });
+
+      // 3) Single transaction with both ix for frontend convenience
+      const tx = new anchor.web3.Transaction().add(initIx, depositIx);
+      const signers = args.creator ? [args.creator] : [];
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+      const signature = await provider.sendAndConfirm(tx, signers);
+
       return { launchPda: launchState, signature };
     }
 
@@ -1432,6 +1485,7 @@ const EngineSDK = {
       getSqrtPriceLowerX64ForPool,
       estimateQuoteForBase,
       initLaunchFromPreset,
+      initLaunchFromPresetWithCreatorDeposit,
       initLaunchPreset,
       updateLaunchPreset,
 

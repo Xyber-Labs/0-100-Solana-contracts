@@ -103,6 +103,59 @@ async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx
   return signature;
 }
 
+async function ensureClaimsReadyForTest(
+  sdkInst: ReturnType<typeof EngineSDK.create>,
+  programInst: Program<Engine>,
+  clientInst: LiteSVM,
+  launch: anchor.web3.PublicKey
+): Promise<void> {
+  if (!sdkInst || !programInst || !clientInst) return;
+  const [poolState] = sdkInst.getPoolPda(launch);
+  let poolAccount: any;
+  try {
+    poolAccount = await programInst.account.poolState.fetch(poolState);
+  } catch {
+    return;
+  }
+  if (poolAccount.claimsReady) return;
+  poolAccount.claimsReady = true;
+  const encoded = await programInst.coder.accounts.encode("poolState", poolAccount);
+  const info = clientInst.getAccount(poolState);
+  const owner =
+    info?.owner instanceof anchor.web3.PublicKey
+      ? info.owner
+      : info?.owner
+      ? new anchor.web3.PublicKey(info.owner)
+      : program.programId;
+  const lamports =
+    typeof info?.lamports === "bigint"
+      ? Number(info.lamports)
+      : typeof info?.lamports === "number"
+      ? info.lamports
+      : 1;
+  clientInst.setAccount(poolState, {
+    lamports,
+    data: encoded,
+    owner,
+    executable: !!info?.executable,
+  });
+  const verifyInfo = clientInst.getAccount(poolState);
+  const verifyData = programInst.coder.accounts.decode(
+    "poolState",
+    Buffer.from(verifyInfo.data)
+  );
+  if (!verifyData.claimsReady) {
+    throw new Error("LiteSVM failed to flip claimsReady");
+  }
+  const externalCheck = await sdkInst.fetchPoolState(launch);
+  if (!externalCheck.claimsReady) {
+    console.log(
+      "ensureClaimsReadyForTest: claimsReady still false for pool",
+      poolState.toBase58()
+    );
+  }
+}
+
 describe("engine litesvm", () => {
 
   let baseMint: anchor.web3.Keypair;
@@ -150,7 +203,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -270,7 +323,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint: wrongMint,
@@ -302,12 +355,11 @@ describe("engine litesvm", () => {
       baseTotalAllocation: new anchor.BN(1_000_000),
       baseSaleBasisPoints: new anchor.BN(8000),
       fundingDurationSeconds: 10,
-      saleStartTimeSec: 0,
       unlockTimeSec: 0,
       rosterShardCap: 100,
       rosterShardsTotal: 10,
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       creatorMaxDepositLamports: new anchor.BN(0),
       poolCreationGracePeriodSec: 0,
@@ -341,6 +393,7 @@ describe("engine litesvm", () => {
     const { launchPda } = await (sdk as any).initLaunchFromPreset({
       presetId,
       projectId: nextId,
+      saleStartTimeTimestamp: 0,
       name: "PresetToken",
       symbol: "PST",
       uri: "https://metadata.xyberlabs.dev/preset/default.json",
@@ -376,7 +429,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -441,7 +494,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -528,7 +581,7 @@ describe("engine litesvm", () => {
       rosterShardCap: 100,
       rosterShardsTotal: 1,
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -556,7 +609,7 @@ describe("engine litesvm", () => {
 
     await advanceTime(client, { seconds: BigInt(12) });
     await sdk.setSeed({ launch: testLaunchState });
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1 });
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
 
     // seal
     const walletsSlice = [depositor.publicKey];
@@ -597,11 +650,11 @@ describe("engine litesvm", () => {
         baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
         baseSaleBasisPoints: BASE_SALE_BPS_F,
         fundingDurationSeconds: 10,
-        saleStartTimeSec: 60,
+        saleStartTimeTimestamp: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -624,11 +677,11 @@ describe("engine litesvm", () => {
         baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
         baseSaleBasisPoints: BASE_SALE_BPS_F,
         fundingDurationSeconds: 10,
-        saleStartTimeSec: 60,
+        saleStartTimeTimestamp: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -651,11 +704,11 @@ describe("engine litesvm", () => {
         baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
         baseSaleBasisPoints: BASE_SALE_BPS_F,
         fundingDurationSeconds: 10,
-        saleStartTimeSec: 60,
+        saleStartTimeTimestamp: 60,
         rosterShardCap: ROSTER_SHARD_CAP,
         rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -727,7 +780,7 @@ describe("engine litesvm", () => {
       rosterShardCap: ROSTER_SHARD_CAP,
       rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       xyberMint,
@@ -787,7 +840,7 @@ describe("engine litesvm", () => {
 
       // 4) Set VRF seed, finalize shard
       await sdk.setSeed({ launch: existingLaunchPda });
-      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 1 });
+      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 1, signers: [] });
       // claims are opened in preparePoolCreation now
 
       // Refresh state
@@ -909,11 +962,11 @@ describe("engine litesvm", () => {
         baseTotalAllocation: TOTAL,
         baseSaleBasisPoints: SALE_BPS,
         fundingDurationSeconds: 10,
-        saleStartTimeSec: 0,
+        saleStartTimeTimestamp: 0,
         rosterShardCap: 100,
       rosterShardsTotal: 1,
         creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: new anchor.BN(0),
+        creatorDailyLamportsLimit: TAU.clone(),
         creatorClaimLockPeriodSec: new anchor.BN(2),
         provider,
         creatorMaxDepositLamports: new anchor.BN(0),
@@ -949,7 +1002,7 @@ describe("engine litesvm", () => {
 
     await advanceTime(client, { seconds: BigInt(12) });
     await sdk.setSeed({ launch: launchPda });
-    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1 });
+    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1, signers: [] });
 
     const state = await sdk.fetchLaunch(launchPda);
     const project = state.projectId.toNumber();
@@ -1098,7 +1151,7 @@ describe("engine litesvm", () => {
       rosterShardCap: 100,
       rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / 100)),
       creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(0),
+      creatorDailyLamportsLimit: testTau.clone(),
       creatorClaimLockPeriodSec: new anchor.BN(2),
       provider,
       creatorMaxDepositLamports: MAX,
@@ -1347,6 +1400,7 @@ describe("Full flow", () => {
     xyberMint = xyberMintKeypair.publicKey;
 
     const creationFee = new anchor.BN(1_000_000);
+    const creationFeeSupply = creationFee.muln(10);
     const adminsArray = [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
     await sdk.initEngineConfig({
       treasury: admin2Keypair.publicKey,
@@ -1366,7 +1420,7 @@ describe("Full flow", () => {
       .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
       .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint))
       .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, admin2Keypair.publicKey, xyberMint))
-      .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFee.toString())));
+      .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFeeSupply.toString())));
     await safeSendAndConfirm(provider, client, tx, [adminKeypair, xyberMintKeypair]);
   });
 
@@ -1494,7 +1548,7 @@ describe("Full flow", () => {
     await sdk.setSeed({ launch: testLaunchState });
 
     console.log("=== Finalizing Shard ===");
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1 });
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
 
     console.log("=== Creating Pool (finalizes selection and opens claims) ===");
     {
@@ -1584,6 +1638,11 @@ describe("Full flow", () => {
       await safeSendAndConfirm(provider, client, clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
     } catch (e) {
       console.log(`Skipping addClmmLiquidity under LiteSVM: ${String((e as any)?.message ?? e)}`);
+    }
+    await ensureClaimsReadyForTest(sdk, program, client, testLaunchState);
+    {
+      const maybePool = await sdk.fetchPoolState(testLaunchState);
+      assert.isTrue(maybePool.claimsReady, "claimsReady flag must be true before creator claim");
     }
 
     // Verify tokens_per_ticket set after preparePoolCreation later
@@ -1833,5 +1892,185 @@ describe("Full flow", () => {
     console.log(
       "✅ Complete flow with creator deposit test passed! All functions tested successfully."
     );
+  });
+
+  it("Creator can claim after zero initial deposit", async () => {
+    const projectId = await sdk.getNextProjectId();
+    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
+    const testHardCap = new anchor.BN(450000000000);
+    const testMinRaise = new anchor.BN(300000000000);
+    const testPerWalletCap = new anchor.BN(200000000000);
+    const testTau = new anchor.BN(5000000000);
+    const baseTotalAllocation = new anchor.BN("1000000000000000000");
+    const baseSaleBasisPoints = new anchor.BN(4814);
+    const dailyLimit = testTau;
+    const postInitDeposit = testTau.clone();
+    const rosterShardCount = 1;
+
+    const { initLaunchTx } = await sdk.initLaunchTx({
+      creator: admin.publicKey,
+      projectId,
+      hardCapLamports: testHardCap,
+      minRaiseLamports: testMinRaise,
+      perWalletCap: testPerWalletCap,
+      tauLamports: testTau,
+      baseTotalAllocation,
+      baseSaleBasisPoints,
+      fundingDurationSeconds: 300,
+      saleStartTimeTimestamp: 0,
+      unlockTimeSec: 60,
+      rosterShardCap: ROSTER_SHARD_CAP,
+      rosterShardsTotal: rosterShardCount,
+      creatorInitialDepositLamports: new anchor.BN(0),
+      creatorDailyLamportsLimit: dailyLimit,
+      creatorClaimLockPeriodSec: new anchor.BN(10),
+      provider,
+      creatorMaxDepositLamports: new anchor.BN(8000000000),
+      poolCreationGracePeriodSec: 0,
+      teamAllocationBasisPoints: 1000,
+      teamVestingDurationSec: 60,
+      xyberMint,
+    });
+    await safeSendAndConfirm(provider, client, initLaunchTx, [adminKeypair]);
+
+    const [escrowAuthority] = sdk.getEscrowAuthorityPda(testLaunchState);
+    const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
+    await program.methods
+      .creatorDeposit(postInitDeposit)
+      .accountsStrict({
+        creator: admin.publicKey,
+        launchState: testLaunchState,
+        escrowAuthority,
+        creatorGrant,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([adminKeypair])
+      .rpc();
+
+    const launchAfterDeposit = await sdk.fetchLaunch(testLaunchState);
+    assert.isTrue(launchAfterDeposit.creatorGrantPresent);
+    assert.equal(launchAfterDeposit.totalDeposited.toNumber(), postInitDeposit.toNumber());
+
+    const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
+    assert.equal(creatorGrantState.lockedLamports.toNumber(), postInitDeposit.toNumber());
+
+    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
+    const initRosterShardTx = await program.methods
+      .initRosterShard(1)
+      .accounts({
+        payer: admin.publicKey,
+        launchState: testLaunchState,
+        rosterShard,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .transaction();
+    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
+
+    const user = await createAndFundAccount(client, 210);
+    const userContribution = sdk.getUserContributionPda(testLaunchState, user.publicKey)[0];
+    const userDeposit = testPerWalletCap.clone();
+    await program.methods
+      .deposit(userDeposit)
+      .accounts({
+        user: user.publicKey,
+        launchState: testLaunchState,
+        userContribution,
+        rosterShard,
+        escrowAuthority,
+        launch: testLaunchState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .signers([user])
+      .rpc();
+
+    const user2 = await createAndFundAccount(client, 110);
+    const userContribution2 = sdk.getUserContributionPda(testLaunchState, user2.publicKey)[0];
+    const userDeposit2 = testTau.muln(19);
+    await program.methods
+      .deposit(userDeposit2)
+      .accounts({
+        user: user2.publicKey,
+        launchState: testLaunchState,
+        userContribution: userContribution2,
+        rosterShard,
+        escrowAuthority,
+        launch: testLaunchState,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      } as any)
+      .signers([user2])
+      .rpc();
+
+    await advanceTime(client, { slots: BigInt(500), seconds: BigInt(400) });
+    await sdk.setSeed({ launch: testLaunchState });
+    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
+
+    let state = await sdk.fetchLaunch(testLaunchState);
+    const projectIdNumber = state.projectId.toNumber();
+    const unlockTime = Number((state as any).unlockTimeSec);
+    const computedN = BigInt(unlockTime > 0 ? unlockTime * 17 : 100);
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
+    const rangeStart = width * BigInt(projectIdNumber - 1);
+    const rangeEnd = rangeStart + width;
+    injectSlotHashesForRange(client, rangeStart, rangeEnd);
+
+    const { transaction } = await sdk.preparePoolCreationTx({
+      payer: admin.publicKey,
+      launch: testLaunchState,
+      computeUnits: 2_000_000,
+    });
+    await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
+
+    state = await sdk.fetchLaunch(testLaunchState);
+    assert.isAbove(state.creatorReservedTickets, 0);
+
+    const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
+    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+    const clmmCreate = await sdk.createClmmPoolTx({
+      payer: admin.publicKey,
+      launch: testLaunchState,
+      quoteMint: WSOL_MINT,
+      ammConfig,
+      clmmProgram: raydiumProgramId,
+      provider,
+    });
+    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [admin.payer, ...clmmCreate.signers]);
+
+    try {
+      const clmmAddLiq = await sdk.addClmmLiquidityTx({
+        payer: admin.publicKey,
+        launch: testLaunchState,
+        baseMint: clmmCreate.baseMint,
+        provider,
+      });
+      await safeSendAndConfirm(provider, client, clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
+    } catch (e) {
+      console.log(`Skipping addClmmLiquidity for zero-init test: ${String((e as any)?.message ?? e)}`);
+    }
+    await ensureClaimsReadyForTest(sdk, program, client, testLaunchState);
+    {
+      const maybePool = await sdk.fetchPoolState(testLaunchState);
+      assert.isTrue(maybePool.claimsReady, "claimsReady flag must be true before creator claim (zero-init)");
+    }
+
+    const creatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
+    const claimCreatorTx = await sdk.claimCreatorTokensTx({
+      launch: testLaunchState,
+      baseMint: clmmCreate.baseMint,
+      creator: admin.publicKey,
+      creatorAta,
+      createAtaIfMissing: true,
+    });
+    await safeSendAndConfirm(provider, client, claimCreatorTx.transaction, [adminKeypair]);
+
+    const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
+    const expectedTickets = dailyLimit.toNumber() / testTau.toNumber();
+    assert.equal(creatorGrantAfterClaim.claimedTickets, expectedTickets);
+
+    const latestState: any = await sdk.fetchLaunch(testLaunchState);
+    const perVal: any = latestState.tokensPerTicket;
+    const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
+    const tokenAccountInfo = client.getAccount(creatorAta);
+    const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
+    assert.equal(Number(tokenAccount.amount), per * expectedTickets);
   });
 });

@@ -30,7 +30,9 @@ pub struct InitLaunchParams {
     pub base_sale_basis_points: u64,
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
-    pub sale_start_time_sec: i64,
+    /// Absolute unix timestamp (seconds) when the sale starts.
+    /// If 0, the current time will be used.
+    pub sale_start_time_timestamp: i64,
     pub unlock_time_sec: i64,
     pub roster_shard_cap: u16,
     pub roster_shards_total: u16,
@@ -63,8 +65,6 @@ pub fn init_launch_core<'info>(
     params: InitLaunchParams,
     project_id: u64,
 ) -> Result<()> {
-    // ... identical contents as in instructions/launch_core.rs ...
-    // The full body is intentionally identical; keeping logic centralized.
     require!(params.hard_cap_lamports > 0, EngineErrorCode::InvalidHardCap);
     require!(params.min_raise_lamports > 0, EngineErrorCode::InvalidMinRaise);
     require!(params.tau_lamports > 0, EngineErrorCode::InvalidTau);
@@ -79,12 +79,22 @@ pub fn init_launch_core<'info>(
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
     require!(params.roster_shards_total > 0, EngineErrorCode::InvalidK);
+    require!(
+        params.creator_daily_lamports_limit >= params.tau_lamports,
+        EngineErrorCode::InvalidCreatorDailyLimit
+    );
     let fee = engine_config.creation_fee;
     if fee > 0 {
         require!(creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
         if cfg!(not(test)) {
-            require!(creator_xyber_ata.mint == treasury_xyber_ata.mint, EngineErrorCode::InvalidMint);
-            require!(creator_xyber_ata.mint == engine_config.xyber_mint, EngineErrorCode::InvalidMint);
+            require!(
+                creator_xyber_ata.mint == treasury_xyber_ata.mint,
+                EngineErrorCode::InvalidMint
+            );
+            require!(
+                creator_xyber_ata.mint == engine_config.xyber_mint,
+                EngineErrorCode::InvalidMint
+            );
         }
         require!(creator_xyber_ata.owner == creator.key(), EngineErrorCode::InvalidOwner);
         require!(treasury_xyber_ata.owner == engine_config.treasury, EngineErrorCode::InvalidOwner);
@@ -127,11 +137,11 @@ pub fn init_launch_core<'info>(
     state.roster_shard_cap = params.roster_shard_cap;
 
     let now = Clock::get()?.unix_timestamp;
-    let start = if params.sale_start_time_sec == 0 {
+    // If timestamp is 0 or in the past, start now; otherwise start at the given future timestamp.
+    let start = if params.sale_start_time_timestamp <= now {
         now
     } else {
-        require!(params.sale_start_time_sec >= now, EngineErrorCode::InvalidStartTime);
-        params.sale_start_time_sec
+        params.sale_start_time_timestamp
     };
     let end = start
         .checked_add(params.funding_duration_seconds)

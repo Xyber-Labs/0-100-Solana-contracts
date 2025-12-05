@@ -174,15 +174,10 @@ fn finalize_selection(
     if launch_state.creator_grant_present {
         require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
-        let creator_share_ppm = (creator_grant.locked_lamports as u128)
-            .checked_mul(1_000_000)
+        let creator_reserved_u128 = (creator_grant.locked_lamports as u128)
+            .checked_mul(launch_state.k_capacity as u128)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
             .checked_div(launch_state.hard_cap_lamports as u128)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let creator_reserved_u128 = (launch_state.k_capacity as u128)
-            .checked_mul(creator_share_ppm)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?
-            .checked_div(1_000_000)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         require!(creator_reserved_u128 <= u32::MAX as u128, EngineErrorCode::U64ConversionOverflow);
         let creator_reserved_u32 = creator_reserved_u128 as u32;
@@ -204,13 +199,11 @@ fn finalize_selection(
     let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
-    // Store tokens_per_ticket directly in atomic units (mint decimals),
-    // computed as floor(sale_allocation / divisor)
-    let tokens_per_ticket = sale_allocation_u128
+    let tokens_per_ticket_u128 = sale_allocation_u128
         .checked_div(divisor as u128)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)? as u64;
-
-    launch_state.tokens_per_ticket = Some(tokens_per_ticket);
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    require!(tokens_per_ticket_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
+    launch_state.tokens_per_ticket = Some(tokens_per_ticket_u128 as u64);
     launch_state.selection_finalized = true;
 
     Ok(())

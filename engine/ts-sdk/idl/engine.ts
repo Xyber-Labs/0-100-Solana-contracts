@@ -3271,6 +3271,10 @@ export type Engine = {
           "type": "u64"
         },
         {
+          "name": "saleStartTimeTimestamp",
+          "type": "i64"
+        },
+        {
           "name": "meta",
           "type": {
             "defined": {
@@ -3507,6 +3511,208 @@ export type Engine = {
         {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mintForTest",
+      "discriminator": [
+        220,
+        129,
+        50,
+        237,
+        118,
+        129,
+        46,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "escrowAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseMint",
+          "writable": true
+        },
+        {
+          "name": "baseEscrowAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "escrowAuthority"
+              },
+              {
+                "kind": "account",
+                "path": "baseTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "associatedTokenProgram"
+            }
+          }
+        },
+        {
+          "name": "metadataAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tokenMetadataProgram"
+              },
+              {
+                "kind": "account",
+                "path": "baseMint"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "tokenMetadataProgram"
+            }
+          }
+        },
+        {
+          "name": "tokenMetadataConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  111,
+                  107,
+                  101,
+                  110,
+                  95,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "baseTokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": []
@@ -4714,121 +4920,126 @@ export type Engine = {
     },
     {
       "code": 6049,
+      "name": "invalidCreatorDailyLimit",
+      "msg": "Creator daily lamports limit must be >= tau"
+    },
+    {
+      "code": 6050,
       "name": "notSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "rosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "invalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "shardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "shardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "shardIdOutOfRange",
       "msg": "Roster shard id is out of allowed range"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "noTokensToClaim",
       "msg": "User has no tokens to claim"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "noDistributionRules",
       "msg": "No distribution rules found for market cap"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "recipientNotFound",
       "msg": "Recipient not found in distribution"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "invalidShareSum",
       "msg": "Sum of shares in tier must equal 10000 basis points"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "invalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "poolNotCreated",
       "msg": "Pool not created yet"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "teamVestingMissing",
       "msg": "Team vesting account is missing"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "teamVestingNotStarted",
       "msg": "Team vesting is not started yet"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "teamClaimsNotOpen",
       "msg": "Team claims are not open yet"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "teamClaimTooFrequent",
       "msg": "Claim is too frequent"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "invalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "priceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "invalidInitOrder",
       "msg": "Roster initialization order violated"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "shardNotSealed",
       "msg": "Roster shard not fully sealed"
     }
@@ -5252,7 +5463,11 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "saleStartTimeSec",
+            "name": "saleStartTimeTimestamp",
+            "docs": [
+              "Absolute unix timestamp (seconds) when the sale starts.",
+              "If 0, the current time will be used."
+            ],
             "type": "i64"
           },
           {
@@ -5349,10 +5564,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": "i64"
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": "i64"
           },
           {
@@ -5510,10 +5721,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": "i64"
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": "i64"
           },
           {
@@ -6326,12 +6533,6 @@ export type Engine = {
           },
           {
             "name": "fundingDurationSeconds",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "saleStartTimeSec",
             "type": {
               "option": "i64"
             }

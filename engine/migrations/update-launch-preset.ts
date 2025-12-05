@@ -43,7 +43,6 @@ function parseArgs() {
     baseSaleBasisPoints: p.baseSaleBasisPoints !== undefined ? String(p.baseSaleBasisPoints) : undefined,
     teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : undefined,
     fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : undefined,
-    saleStartTimeSec: p.saleStartTimeSec !== undefined ? Number(p.saleStartTimeSec) : undefined,
     unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : undefined,
     rosterShardCap: p.rosterShardCap !== undefined ? Number(p.rosterShardCap) : undefined,
     rosterShardsTotal: p.rosterShardsTotal !== undefined ? Number(p.rosterShardsTotal) : undefined,
@@ -80,7 +79,6 @@ module.exports = async function (provider: anchor.AnchorProvider) {
     baseSaleBasisPoints: args.baseSaleBasisPoints !== undefined ? new anchor.BN(args.baseSaleBasisPoints) : undefined,
     teamAllocationBasisPoints: args.teamAllocationBasisPoints,
     fundingDurationSeconds: args.fundingDurationSeconds,
-    saleStartTimeSec: args.saleStartTimeSec,
     unlockTimeSec: args.unlockTimeSec,
     rosterShardCap: args.rosterShardCap,
     rosterShardsTotal: args.rosterShardsTotal,
@@ -110,7 +108,6 @@ module.exports = async function (provider: anchor.AnchorProvider) {
     console.log(`  baseSaleBasisPoints: ${preset.baseSaleBasisPoints?.toString?.() ?? preset.baseSaleBasisPoints}`);
     console.log(`  teamAllocationBasisPoints: ${preset.teamAllocationBasisPoints?.toString?.() ?? preset.teamAllocationBasisPoints}`);
     console.log(`  fundingDurationSeconds: ${preset.fundingDurationSeconds?.toString?.() ?? preset.fundingDurationSeconds}`);
-    console.log(`  saleStartTimeSec: ${preset.saleStartTimeSec?.toString?.() ?? preset.saleStartTimeSec}`);
     console.log(`  unlockTimeSec: ${preset.unlockTimeSec?.toString?.() ?? preset.unlockTimeSec}`);
     console.log(`  rosterShardCap: ${preset.rosterShardCap}`);
     console.log(`  rosterShardsTotal: ${preset.rosterShardsTotal}`);

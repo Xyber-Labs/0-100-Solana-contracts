@@ -93,6 +93,14 @@ deploy-devnet:
 	@echo "Deploying program to local validator..."
 	anchor deploy --program-name engine --provider.cluster devnet --program-keypair ./deploy-keypair.json
 
+deploy-ekza:
+	@echo "Deploying program to ekza..."
+	anchor deploy \
+		--program-name engine \
+		--provider.cluster https://solana.ekza.xyz \
+		--program-keypair ./keys/deploy-keypair.json \
+		--provider.wallet /Users/wotori/.config/solana/xyber-localnet.json
+
 .PHONY: build-deploy
 build-deploy: build deploy
 
@@ -236,6 +244,9 @@ build-test-devnet:
 
 test-raydium-clmm-anchor:
 	./scripts/test-raydium-local.sh
+
+test-raydium-clmm-anchor-2:
+	env BUYER1_AMOUNT=100 BUYER2_AMOUNT=100 BUYER3_AMOUNT=100 anchor test --detach -- --features anchor-test,devnet
 
 .PHONY: deploy-config-auto
 deploy-config-auto:
