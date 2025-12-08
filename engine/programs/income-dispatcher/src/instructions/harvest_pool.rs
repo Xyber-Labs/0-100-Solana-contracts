@@ -134,7 +134,7 @@ pub fn harvest_pool<'info>(
     _project_id: u64,
 ) -> Result<()> {
     let income_config = &mut ctx.accounts.income_config;
-    income_config.authorities[Role::Platform as usize] = ctx.accounts.config.platform_wallet;
+    income_config.authorities[Role::Treasure as usize] = ctx.accounts.config.platform_wallet;
     income_config.authorities[Role::Creator as usize] = ctx.accounts.launch_state.creator;
     income_config.authorities[Role::Community as usize] = ctx.accounts.config.community_wallet;
 

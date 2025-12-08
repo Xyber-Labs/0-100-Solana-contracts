@@ -20,4 +20,6 @@ pub enum ErrorCode {
     InvalidNonce,
     #[msg("Invalid calculator")]
     InvalidCalculator,
+    #[msg("Not allowed")]
+    NotAllowed,
 }

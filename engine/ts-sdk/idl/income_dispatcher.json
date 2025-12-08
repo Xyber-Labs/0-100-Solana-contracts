@@ -1426,6 +1426,11 @@
       "code": 6008,
       "name": "InvalidCalculator",
       "msg": "Invalid calculator"
+    },
+    {
+      "code": 6009,
+      "name": "NotAllowed",
+      "msg": "Not allowed"
     }
   ],
   "types": [
@@ -1555,7 +1560,7 @@
                     "name": "RoleBalance"
                   }
                 },
-                3
+                4
               ]
             }
           },
@@ -1564,7 +1569,7 @@
             "type": {
               "array": [
                 "pubkey",
-                3
+                4
               ]
             }
           },
@@ -1808,13 +1813,16 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "Platform"
+            "name": "Treasure"
           },
           {
             "name": "Creator"
           },
           {
             "name": "Community"
+          },
+          {
+            "name": "BuyBack"
           }
         ]
       }

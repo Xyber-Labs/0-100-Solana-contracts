@@ -101,7 +101,6 @@ pub fn claim(
     verify_role_authority(&ctx, role)?;
 
     let income_config = &mut ctx.accounts.income_config;
-    let role_idx = role as usize;
 
     let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
@@ -128,7 +127,7 @@ pub fn claim(
         )?;
     }
 
-    let mut quote_to_claim = income_config.quote_to_claim(role, limit_quote_claim)?;
+    let quote_to_claim = income_config.quote_to_claim(role, limit_quote_claim)?;
     if quote_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -174,7 +173,7 @@ pub fn claim(
 
 fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
     match role {
-        Role::Platform => {
+        Role::Treasure => {
             require!(
                 ctx.accounts.recipient.key() == ctx.accounts.config.platform_wallet,
                 ErrorCode::Unauthorized
@@ -195,6 +194,7 @@ fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
                 ErrorCode::Unauthorized
             );
         }
+        Role::BuyBack => return err!(ErrorCode::NotAllowed),
     }
     Ok(())
 }

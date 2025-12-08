@@ -1432,6 +1432,11 @@ export type IncomeDispatcher = {
       "code": 6008,
       "name": "invalidCalculator",
       "msg": "Invalid calculator"
+    },
+    {
+      "code": 6009,
+      "name": "notAllowed",
+      "msg": "Not allowed"
     }
   ],
   "types": [
@@ -1561,7 +1566,7 @@ export type IncomeDispatcher = {
                     "name": "roleBalance"
                   }
                 },
-                3
+                4
               ]
             }
           },
@@ -1570,7 +1575,7 @@ export type IncomeDispatcher = {
             "type": {
               "array": [
                 "pubkey",
-                3
+                4
               ]
             }
           },
@@ -1814,13 +1819,16 @@ export type IncomeDispatcher = {
         "kind": "enum",
         "variants": [
           {
-            "name": "platform"
+            "name": "treasure"
           },
           {
             "name": "creator"
           },
           {
             "name": "community"
+          },
+          {
+            "name": "buyBack"
           }
         ]
       }

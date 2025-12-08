@@ -67,7 +67,7 @@ const IncomeDispatcherSDK = {
     }
 
     async function claim(args: {
-      role: { platform: {} } | { creator: {} } | { community: {} };
+      role: { treasure: {} } | { creator: {} } | { community: {} } | { buyBack: {} };
       projectId: BN;
       launchState: anchor.web3.PublicKey;
       recipient: anchor.web3.PublicKey;

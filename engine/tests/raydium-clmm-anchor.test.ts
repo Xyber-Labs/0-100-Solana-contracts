@@ -649,7 +649,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       console.log(`Harvest event: role=${Object.keys(evt.role)[0]}, base=${evt.base.toString()}, quote=${evt.quote.toString()}`);
     }
 
-    assert.equal(harvestEvents.length, 3, "Expected 3 Harvest events (one per role)");
+    assert.equal(harvestEvents.length, 4, "Expected 4 Harvest events (one per role)");
 
     const incomeConfig = await dispatcherSdk.fetchIncomeConfig(launchStateData.projectId);
     const totalHarvestedBase = incomeConfig.totalHarvestedBase;
@@ -659,20 +659,22 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Total harvested base:", totalHarvestedBase.toString());
     console.log("Total harvested quote:", totalHarvestedQuote.toString());
 
-    // Role balances: [Platform, Creator, Community]
-    // Distribution algorithm: prioritizes quote first, then base (by role priority)
-    const platformBalance = incomeConfig.balances[0];
+    // Role balances: [Platform, Creator, Community, BuyBack]
+    // Distribution for mcap 501+: Platform 6%, BuyBack 24%, Creator 56%, Community 14%
+    const treasureBalance = incomeConfig.balances[0];
     const creatorBalance = incomeConfig.balances[1];
     const communityBalance = incomeConfig.balances[2];
+    const buyBackBalance = incomeConfig.balances[3];
 
     console.log("\n--- Actual Role Balances (from contract) ---");
-    console.log(`Platform (30%, prio 1):  base=${platformBalance.earnedBase.toString()}, quote=${platformBalance.earnedQuote.toString()}`);
-    console.log(`Creator (56%, prio 2):   base=${creatorBalance.earnedBase.toString()}, quote=${creatorBalance.earnedQuote.toString()}`);
-    console.log(`Community (14%, prio 3): base=${communityBalance.earnedBase.toString()}, quote=${communityBalance.earnedQuote.toString()}`);
+    console.log(`Treasure (6%):   base=${treasureBalance.earnedBase.toString()}, quote=${treasureBalance.earnedQuote.toString()}`);
+    console.log(`Creator (56%):   base=${creatorBalance.earnedBase.toString()}, quote=${creatorBalance.earnedQuote.toString()}`);
+    console.log(`Community (14%): base=${communityBalance.earnedBase.toString()}, quote=${communityBalance.earnedQuote.toString()}`);
+    console.log(`BuyBack (24%):   base=${buyBackBalance.earnedBase.toString()}, quote=${buyBackBalance.earnedQuote.toString()}`);
 
     // Verify sum of earned equals total harvested (with rounding tolerance of 1)
-    const sumEarnedBase = platformBalance.earnedBase.add(creatorBalance.earnedBase).add(communityBalance.earnedBase);
-    const sumEarnedQuote = platformBalance.earnedQuote.add(creatorBalance.earnedQuote).add(communityBalance.earnedQuote);
+    const sumEarnedBase = treasureBalance.earnedBase.add(creatorBalance.earnedBase).add(communityBalance.earnedBase).add(buyBackBalance.earnedBase);
+    const sumEarnedQuote = treasureBalance.earnedQuote.add(creatorBalance.earnedQuote).add(communityBalance.earnedQuote).add(buyBackBalance.earnedQuote);
 
     const baseDiff = totalHarvestedBase.sub(sumEarnedBase).abs();
     const quoteDiff = totalHarvestedQuote.sub(sumEarnedQuote).abs();
@@ -690,10 +692,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   });
 
   it("Step 15: Claim platform fees", async () => {
-    console.log("=== Step 15: Claim Platform Fees ===");
+    console.log("=== Step 15: Claim Treasure Fees ===");
 
     await dispatcherSdk.claim({
-      role: { platform: {} },
+      role: { treasure: {} },
       projectId: launchStateData.projectId,
       launchState: launchPda,
       recipient: platformKeypair.publicKey,
@@ -702,7 +704,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       nonce: new BN(0),
       signers: [platformKeypair],
     });
-    console.log("✅ Platform fees claimed");
+    console.log("✅ Treasure fees claimed");
   });
 
   it("Step 16: Claim creator fees", async () => {
@@ -743,7 +745,26 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("✅ Community fees claimed, nonce verified: 1");
   });
 
-  it("Step 11: Verify getRaydiumPoolByProjectId and fetch pool price", async () => {
+  it("Step 18: Verify BuyBack claim is not allowed", async () => {
+    console.log("=== Step 18: Verify BuyBack Claim Not Allowed ===");
+
+    await utils.doAndCheckError(
+      dispatcherSdk.claim({
+        role: { buyBack: {} },
+        projectId: launchStateData.projectId,
+        launchState: launchPda,
+        recipient: admin1Keypair.publicKey,
+        baseMint,
+        quoteMint: WSOL_MINT,
+        nonce: new BN(0),
+        signers: [admin1Keypair],
+      }),
+      "Not allowed"
+    );
+    console.log("✅ BuyBack claim rejected as expected");
+  });
+
+  it("Step 19: Verify getRaydiumPoolByProjectId and fetch pool price", async () => {
     console.log("=== Step 11: Verify getRaydiumPoolByProjectId ===");
 
     const raydiumPoolState = await sdk.getRaydiumPoolByProjectId(projectId);
