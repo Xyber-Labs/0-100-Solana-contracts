@@ -16,16 +16,18 @@ pub struct Config {
 
 #[account]
 #[derive(InitSpace)]
-pub struct IncomeConfig {
+pub struct PlatformIncome {
     pub balances: [RoleBalance; Role::COUNT],
-    pub authorities: [Pubkey; Role::COUNT],
-    pub total_harvested_base: u64,
-    pub total_harvested_quote: u64,
-    pub total_claimed_base: u64,
-    pub total_claimed_quote: u64,
 }
 
-impl IncomeConfig {
+#[account]
+#[derive(InitSpace)]
+pub struct ProjectIncome {
+    pub balances: [RoleBalance; Role::COUNT],
+    pub authorities: [Pubkey; Role::COUNT],
+}
+
+impl ProjectIncome {
     pub(crate) fn quote_to_claim(&self, role: Role, limit: Option<u64>) -> Result<u64> {
         let balance = self.balances[role as usize];
         let mut quote_to_claim = balance

@@ -8,7 +8,7 @@ use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role,
-    state::{Config, IncomeConfig, Nonce},
+    state::{Config, Nonce, PlatformIncome, ProjectIncome},
 };
 
 #[derive(Accounts)]
@@ -27,8 +27,11 @@ pub struct Claim<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()], bump)]
-    pub income_config: Box<Account<'info, IncomeConfig>>,
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"project_income", &project_id.to_be_bytes()], bump)]
+    pub project_income: Box<Account<'info, ProjectIncome>>,
+
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"platform_income"], bump)]
+    pub platform_income: Box<Account<'info, PlatformIncome>>,
 
     /// CHECK: Project authority PDA
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
@@ -100,7 +103,7 @@ pub fn claim(
 
     verify_role_authority(&ctx, role)?;
 
-    let income_config = &mut ctx.accounts.income_config;
+    let project_income = &mut ctx.accounts.project_income;
 
     let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
@@ -109,7 +112,7 @@ pub fn claim(
     ];
     let signature = &[&harvest_authority_seeds[..]];
 
-    let base_to_claim = income_config.base_to_claim(role, limit_base_claim)?;
+    let base_to_claim = project_income.base_to_claim(role, limit_base_claim)?;
     if base_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -127,7 +130,7 @@ pub fn claim(
         )?;
     }
 
-    let quote_to_claim = income_config.quote_to_claim(role, limit_quote_claim)?;
+    let quote_to_claim = project_income.quote_to_claim(role, limit_quote_claim)?;
     if quote_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -144,19 +147,24 @@ pub fn claim(
             ctx.accounts.quote_mint.decimals,
         )?;
     }
-    let balance = &mut income_config.balances[role as usize];
-    balance.claimed_base =
-        balance.claimed_base.checked_add(base_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
-    balance.claimed_quote =
-        balance.claimed_quote.checked_add(quote_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    income_config.total_claimed_base = income_config
-        .total_claimed_base
+    let project_balance = &mut project_income.balances[role as usize];
+    project_balance.claimed_base = project_balance
+        .claimed_base
         .checked_add(base_to_claim)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
+    project_balance.claimed_quote = project_balance
+        .claimed_quote
+        .checked_add(quote_to_claim)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    income_config.total_claimed_quote = income_config
-        .total_claimed_quote
+    let platform_income = &mut ctx.accounts.platform_income;
+    let platform_balance = &mut platform_income.balances[role as usize];
+    platform_balance.claimed_base = platform_balance
+        .claimed_base
+        .checked_add(base_to_claim)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    platform_balance.claimed_quote = platform_balance
+        .claimed_quote
         .checked_add(quote_to_claim)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 

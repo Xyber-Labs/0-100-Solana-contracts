@@ -142,7 +142,7 @@
           }
         },
         {
-          "name": "income_config",
+          "name": "project_income",
           "writable": true,
           "pda": {
             "seeds": [
@@ -171,24 +171,75 @@
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "project_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_income",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
                   105,
                   110,
                   99,
                   111,
                   109,
                   101,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
+                  45,
+                  100,
                   105,
-                  103
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
                 ]
               },
               {
-                "kind": "arg",
-                "path": "project_id"
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
               }
             ]
           }
@@ -847,10 +898,7 @@
           }
         },
         {
-          "name": "income_config",
-          "docs": [
-            "Project pool account for tracking total claims"
-          ],
+          "name": "platform_income",
           "writable": true,
           "pda": {
             "seeds": [
@@ -879,19 +927,70 @@
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "project_income",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
                   105,
                   110,
                   99,
                   111,
                   109,
                   101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
                   95,
+                  105,
+                  110,
                   99,
                   111,
-                  110,
-                  102,
-                  105,
-                  103
+                  109,
+                  101
                 ]
               },
               {
@@ -1314,19 +1413,6 @@
       ]
     },
     {
-      "name": "IncomeConfig",
-      "discriminator": [
-        197,
-        223,
-        42,
-        177,
-        195,
-        242,
-        215,
-        25
-      ]
-    },
-    {
       "name": "LaunchState",
       "discriminator": [
         190,
@@ -1350,6 +1436,32 @@
         165,
         50,
         43
+      ]
+    },
+    {
+      "name": "PlatformIncome",
+      "discriminator": [
+        143,
+        24,
+        146,
+        152,
+        215,
+        71,
+        42,
+        94
+      ]
+    },
+    {
+      "name": "ProjectIncome",
+      "discriminator": [
+        65,
+        246,
+        167,
+        151,
+        231,
+        216,
+        5,
+        123
       ]
     }
   ],
@@ -1542,52 +1654,6 @@
                 }
               }
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "IncomeConfig",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "balances",
-            "type": {
-              "array": [
-                {
-                  "defined": {
-                    "name": "RoleBalance"
-                  }
-                },
-                4
-              ]
-            }
-          },
-          {
-            "name": "authorities",
-            "type": {
-              "array": [
-                "pubkey",
-                4
-              ]
-            }
-          },
-          {
-            "name": "total_harvested_base",
-            "type": "u64"
-          },
-          {
-            "name": "total_harvested_quote",
-            "type": "u64"
-          },
-          {
-            "name": "total_claimed_base",
-            "type": "u64"
-          },
-          {
-            "name": "total_claimed_quote",
-            "type": "u64"
           }
         ]
       }
@@ -1803,6 +1869,57 @@
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PlatformIncome",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "balances",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "RoleBalance"
+                  }
+                },
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProjectIncome",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "balances",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "RoleBalance"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "authorities",
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
           }
         ]
       }

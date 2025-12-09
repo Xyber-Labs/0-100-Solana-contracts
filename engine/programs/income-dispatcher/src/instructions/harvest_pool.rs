@@ -12,7 +12,7 @@ use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role,
-    state::{Config, IncomeConfig},
+    state::{Config, PlatformIncome, ProjectIncome},
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -44,15 +44,21 @@ pub struct HarvestPool<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    /// Project pool account for tracking total claims
+    #[account(
+        mut,
+        seeds = [DISPATCHER_SEED_ROOT, b"platform_income"],
+        bump,
+    )]
+    pub platform_income: Box<Account<'info, PlatformIncome>>,
+
     #[account(
         init_if_needed,
         payer = payer,
-        space = 8 + IncomeConfig::INIT_SPACE,
-        seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()],
+        space = 8 + ProjectIncome::INIT_SPACE,
+        seeds = [DISPATCHER_SEED_ROOT, b"project_income", &project_id.to_be_bytes()],
         bump,
     )]
-    pub income_config: Box<Account<'info, IncomeConfig>>,
+    pub project_income: Box<Account<'info, ProjectIncome>>,
 
     /// CHECK: Project authority PDA derived from project_id
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
@@ -133,10 +139,10 @@ pub fn harvest_pool<'info>(
     mut ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     _project_id: u64,
 ) -> Result<()> {
-    let income_config = &mut ctx.accounts.income_config;
-    income_config.authorities[Role::Treasure as usize] = ctx.accounts.config.platform_wallet;
-    income_config.authorities[Role::Creator as usize] = ctx.accounts.launch_state.creator;
-    income_config.authorities[Role::Community as usize] = ctx.accounts.config.community_wallet;
+    let project_income = &mut ctx.accounts.project_income;
+    project_income.authorities[Role::Treasure as usize] = ctx.accounts.config.platform_wallet;
+    project_income.authorities[Role::Creator as usize] = ctx.accounts.launch_state.creator;
+    project_income.authorities[Role::Community as usize] = ctx.accounts.config.community_wallet;
 
     let quote_balance_before = ctx.accounts.quote_vault.amount;
     let base_balance_before = ctx.accounts.base_vault.amount;
@@ -155,18 +161,6 @@ pub fn harvest_pool<'info>(
         base_amount.checked_sub(base_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
 
     distribute_income(&mut ctx, base_claimed, quote_claimed)?;
-
-    let income_config = &mut ctx.accounts.income_config;
-
-    income_config.total_harvested_base = income_config
-        .total_harvested_base
-        .checked_add(base_claimed)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    income_config.total_harvested_quote = income_config
-        .total_harvested_quote
-        .checked_add(quote_claimed)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
     Ok(())
 }
@@ -244,14 +238,27 @@ fn distribute_income(
         });
 
         let role_idx = income.recipient as usize;
-        let balances = &mut ctx.accounts.income_config.balances[role_idx];
-        balances.earned_base = balances
+        let base_amount = income.base_token as u64;
+        let quote_amount = income.quote_token as u64;
+
+        let project_balances = &mut ctx.accounts.project_income.balances[role_idx];
+        project_balances.earned_base = project_balances
             .earned_base
-            .checked_add(income.base_token as u64)
+            .checked_add(base_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
-        balances.earned_quote = balances
+        project_balances.earned_quote = project_balances
             .earned_quote
-            .checked_add(income.quote_token as u64)
+            .checked_add(quote_amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+        let platform_balances = &mut ctx.accounts.platform_income.balances[role_idx];
+        platform_balances.earned_base = platform_balances
+            .earned_base
+            .checked_add(base_amount)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        platform_balances.earned_quote = platform_balances
+            .earned_quote
+            .checked_add(quote_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
     }
 

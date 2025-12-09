@@ -4,7 +4,7 @@ use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::{DistributionRule, IncomeCalculator, mcap, Role},
-    state::Config,
+    state::{Config, PlatformIncome},
 };
 
 #[cfg(feature = "devnet")]
@@ -29,6 +29,14 @@ pub struct Initialize<'info> {
         bump
     )]
     pub config: Account<'info, Config>,
+    #[account(
+        init_if_needed,
+        payer = admin,
+        space = 8 + PlatformIncome::INIT_SPACE,
+        seeds = [DISPATCHER_SEED_ROOT, b"platform_income"],
+        bump
+    )]
+    pub platform_income: Account<'info, PlatformIncome>,
     pub system_program: Program<'info, System>,
 }
 

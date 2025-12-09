@@ -148,7 +148,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "incomeConfig",
+          "name": "projectIncome",
           "writable": true,
           "pda": {
             "seeds": [
@@ -177,24 +177,75 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "projectId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "platformIncome",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
                   105,
                   110,
                   99,
                   111,
                   109,
                   101,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
+                  45,
+                  100,
                   105,
-                  103
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
                 ]
               },
               {
-                "kind": "arg",
-                "path": "projectId"
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
               }
             ]
           }
@@ -853,10 +904,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "incomeConfig",
-          "docs": [
-            "Project pool account for tracking total claims"
-          ],
+          "name": "platformIncome",
           "writable": true,
           "pda": {
             "seeds": [
@@ -885,19 +933,70 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "projectIncome",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
                   105,
                   110,
                   99,
                   111,
                   109,
                   101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
                   95,
+                  105,
+                  110,
                   99,
                   111,
-                  110,
-                  102,
-                  105,
-                  103
+                  109,
+                  101
                 ]
               },
               {
@@ -1320,19 +1419,6 @@ export type IncomeDispatcher = {
       ]
     },
     {
-      "name": "incomeConfig",
-      "discriminator": [
-        197,
-        223,
-        42,
-        177,
-        195,
-        242,
-        215,
-        25
-      ]
-    },
-    {
       "name": "launchState",
       "discriminator": [
         190,
@@ -1356,6 +1442,32 @@ export type IncomeDispatcher = {
         165,
         50,
         43
+      ]
+    },
+    {
+      "name": "platformIncome",
+      "discriminator": [
+        143,
+        24,
+        146,
+        152,
+        215,
+        71,
+        42,
+        94
+      ]
+    },
+    {
+      "name": "projectIncome",
+      "discriminator": [
+        65,
+        246,
+        167,
+        151,
+        231,
+        216,
+        5,
+        123
       ]
     }
   ],
@@ -1548,52 +1660,6 @@ export type IncomeDispatcher = {
                 }
               }
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "incomeConfig",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "balances",
-            "type": {
-              "array": [
-                {
-                  "defined": {
-                    "name": "roleBalance"
-                  }
-                },
-                4
-              ]
-            }
-          },
-          {
-            "name": "authorities",
-            "type": {
-              "array": [
-                "pubkey",
-                4
-              ]
-            }
-          },
-          {
-            "name": "totalHarvestedBase",
-            "type": "u64"
-          },
-          {
-            "name": "totalHarvestedQuote",
-            "type": "u64"
-          },
-          {
-            "name": "totalClaimedBase",
-            "type": "u64"
-          },
-          {
-            "name": "totalClaimedQuote",
-            "type": "u64"
           }
         ]
       }
@@ -1809,6 +1875,57 @@ export type IncomeDispatcher = {
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "platformIncome",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "balances",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "roleBalance"
+                  }
+                },
+                4
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "projectIncome",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "balances",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "roleBalance"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "authorities",
+            "type": {
+              "array": [
+                "pubkey",
+                4
+              ]
+            }
           }
         ]
       }

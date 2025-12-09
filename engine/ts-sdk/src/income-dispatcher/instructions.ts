@@ -15,8 +15,12 @@ const IncomeDispatcherSDK = {
       return txBuilder.getConfigPda();
     }
 
-    function getIncomeConfigPda(projectId: BN): [anchor.web3.PublicKey, number] {
-      return txBuilder.getIncomeConfigPda(projectId);
+    function getProjectIncomePda(projectId: BN): [anchor.web3.PublicKey, number] {
+      return txBuilder.getProjectIncomePda(projectId);
+    }
+
+    function getPlatformIncomePda(): [anchor.web3.PublicKey, number] {
+      return txBuilder.getPlatformIncomePda();
     }
 
     function getHarvestAuthorityPda(): [anchor.web3.PublicKey, number] {
@@ -33,6 +37,7 @@ const IncomeDispatcherSDK = {
       signers: anchor.web3.Keypair[];
     }): Promise<{ config: anchor.web3.PublicKey; signature: string }> {
       const [config] = getConfigPda();
+      const [platformIncome] = getPlatformIncomePda();
       const admin = args.signers[0].publicKey;
 
       const ix = await program.methods
@@ -40,6 +45,7 @@ const IncomeDispatcherSDK = {
         .accountsStrict({
           admin,
           config,
+          platformIncome,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
         .instruction();
@@ -56,9 +62,14 @@ const IncomeDispatcherSDK = {
       return program.account.config.fetch(config);
     }
 
-    async function fetchIncomeConfig(projectId: BN) {
-      const [incomeConfig] = getIncomeConfigPda(projectId);
-      return program.account.incomeConfig.fetch(incomeConfig);
+    async function fetchProjectIncome(projectId: BN) {
+      const [projectIncome] = getProjectIncomePda(projectId);
+      return program.account.projectIncome.fetch(projectIncome);
+    }
+
+    async function fetchPlatformIncome() {
+      const [platformIncome] = getPlatformIncomePda();
+      return program.account.platformIncome.fetch(platformIncome);
     }
 
     async function fetchNonce(projectId: BN, recipient: anchor.web3.PublicKey) {
@@ -80,7 +91,8 @@ const IncomeDispatcherSDK = {
       signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
       const [config] = getConfigPda();
-      const [incomeConfig] = getIncomeConfigPda(args.projectId);
+      const [projectIncome] = getProjectIncomePda(args.projectId);
+      const [platformIncome] = getPlatformIncomePda();
       const [harvestAuthority] = getHarvestAuthorityPda();
       const [noncePda] = getNoncePda(args.projectId, args.recipient);
 
@@ -117,7 +129,8 @@ const IncomeDispatcherSDK = {
           recipient: args.recipient,
           config,
           launchState: args.launchState,
-          incomeConfig,
+          projectIncome,
+          platformIncome,
           harvestAuthority,
           nonce: noncePda,
           baseMint: args.baseMint,
@@ -191,7 +204,8 @@ const IncomeDispatcherSDK = {
       txBuilder,
 
       getConfigPda,
-      getIncomeConfigPda,
+      getProjectIncomePda,
+      getPlatformIncomePda,
       getHarvestAuthorityPda,
       getNoncePda,
 
@@ -200,7 +214,8 @@ const IncomeDispatcherSDK = {
       harvestPool,
 
       fetchConfig,
-      fetchIncomeConfig,
+      fetchProjectIncome,
+      fetchPlatformIncome,
       fetchNonce,
     };
   },
