@@ -8,7 +8,7 @@ use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role,
-    state::{Config, Nonce, PlatformIncome, ProjectIncome},
+    state::{Totals, Config, Nonce},
 };
 
 #[derive(Accounts)]
@@ -27,11 +27,11 @@ pub struct Claim<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"project_income", &project_id.to_be_bytes()], bump)]
-    pub project_income: Box<Account<'info, ProjectIncome>>,
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"project_totals", &project_id.to_be_bytes()], bump)]
+    pub project_totals: Box<Account<'info, Totals>>,
 
-    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"platform_income"], bump)]
-    pub platform_income: Box<Account<'info, PlatformIncome>>,
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"platform_totals"], bump)]
+    pub platform_totals: Box<Account<'info, Totals>>,
 
     /// CHECK: Project authority PDA
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
@@ -103,7 +103,21 @@ pub fn claim(
 
     verify_role_authority(&ctx, role)?;
 
-    let project_income = &mut ctx.accounts.project_income;
+    let (base_to_claim, quote_to_claim) = match role {
+        Role::Treasure => {
+            let balances = &ctx.accounts.platform_totals;
+            let base = balances.base_to_spend(role, limit_base_claim)?;
+            let quote = balances.quote_to_spend(role, limit_quote_claim)?;
+            (base, quote)
+        }
+        Role::Creator | Role::Community => {
+            let balances = &ctx.accounts.project_totals;
+            let base = balances.base_to_spend(role, limit_base_claim)?;
+            let quote = balances.quote_to_spend(role, limit_quote_claim)?;
+            (base, quote)
+        }
+        Role::BuyBack => return err!(ErrorCode::NotAllowed),
+    };
 
     let harvest_authority_seeds = &[
         DISPATCHER_SEED_ROOT,
@@ -111,8 +125,6 @@ pub fn claim(
         &[ctx.bumps.harvest_authority],
     ];
     let signature = &[&harvest_authority_seeds[..]];
-
-    let base_to_claim = project_income.base_to_claim(role, limit_base_claim)?;
     if base_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -130,7 +142,6 @@ pub fn claim(
         )?;
     }
 
-    let quote_to_claim = project_income.quote_to_claim(role, limit_quote_claim)?;
     if quote_to_claim > 0 {
         transfer_checked(
             CpiContext::new_with_signer(
@@ -147,24 +158,30 @@ pub fn claim(
             ctx.accounts.quote_mint.decimals,
         )?;
     }
-    let project_balance = &mut project_income.balances[role as usize];
-    project_balance.claimed_base = project_balance
-        .claimed_base
-        .checked_add(base_to_claim)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    project_balance.claimed_quote = project_balance
-        .claimed_quote
-        .checked_add(quote_to_claim)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    let platform_income = &mut ctx.accounts.platform_income;
-    let platform_balance = &mut platform_income.balances[role as usize];
-    platform_balance.claimed_base = platform_balance
-        .claimed_base
+    match role {
+        Role::Treasure => {}
+        Role::Creator | Role::Community => {
+            let balance = ctx.accounts.project_totals.get_mut(role);
+            balance.spent_base = balance
+                .spent_base
+                .checked_add(base_to_claim)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            balance.spent_quote = balance
+                .spent_quote
+                .checked_add(quote_to_claim)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+        }
+        Role::BuyBack => unreachable!(),
+    }
+
+    let balance = ctx.accounts.platform_totals.get_mut(role);
+    balance.spent_base = balance
+        .spent_base
         .checked_add(base_to_claim)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
-    platform_balance.claimed_quote = platform_balance
-        .claimed_quote
+    balance.spent_quote = balance
+        .spent_quote
         .checked_add(quote_to_claim)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 

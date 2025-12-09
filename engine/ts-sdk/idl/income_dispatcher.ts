@@ -14,6 +14,471 @@ export type IncomeDispatcher = {
   },
   "instructions": [
     {
+      "name": "buyback",
+      "discriminator": [
+        106,
+        117,
+        64,
+        30,
+        56,
+        69,
+        7,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "dispatcherConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                188,
+                160,
+                100,
+                171,
+                156,
+                222,
+                174,
+                131,
+                31,
+                180,
+                232,
+                196,
+                110,
+                252,
+                92,
+                131,
+                163,
+                100,
+                173,
+                117,
+                28,
+                139,
+                93,
+                95,
+                208,
+                106,
+                128,
+                219,
+                253,
+                5,
+                33,
+                94
+              ]
+            }
+          }
+        },
+        {
+          "name": "platformTotals",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  116,
+                  111,
+                  116,
+                  97,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "harvestAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  97,
+                  114,
+                  118,
+                  101,
+                  115,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "quoteMint",
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "xyberMint",
+          "writable": true
+        },
+        {
+          "name": "quoteVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "harvestAuthority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quoteMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "xyberVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "harvestAuthority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "xyberMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "raydiumPoolState",
+          "writable": true
+        },
+        {
+          "name": "raydiumAmmConfig"
+        },
+        {
+          "name": "raydiumQuoteVault",
+          "writable": true
+        },
+        {
+          "name": "raydiumXyberVault",
+          "writable": true
+        },
+        {
+          "name": "raydiumObservationState",
+          "writable": true
+        },
+        {
+          "name": "raydiumProgram",
+          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "tokenProgram2022",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "memoProgram",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "claim",
       "discriminator": [
         62,
@@ -148,7 +613,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "projectIncome",
+          "name": "projectTotals",
           "writable": true,
           "pda": {
             "seeds": [
@@ -185,12 +650,12 @@ export type IncomeDispatcher = {
                   99,
                   116,
                   95,
-                  105,
-                  110,
-                  99,
+                  116,
                   111,
-                  109,
-                  101
+                  116,
+                  97,
+                  108,
+                  115
                 ]
               },
               {
@@ -201,7 +666,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "platformIncome",
+          "name": "platformTotals",
           "writable": true,
           "pda": {
             "seeds": [
@@ -239,12 +704,12 @@ export type IncomeDispatcher = {
                   114,
                   109,
                   95,
-                  105,
-                  110,
-                  99,
+                  116,
                   111,
-                  109,
-                  101
+                  116,
+                  97,
+                  108,
+                  115
                 ]
               }
             ]
@@ -904,7 +1369,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "platformIncome",
+          "name": "platformTotals",
           "writable": true,
           "pda": {
             "seeds": [
@@ -942,19 +1407,19 @@ export type IncomeDispatcher = {
                   114,
                   109,
                   95,
-                  105,
-                  110,
-                  99,
+                  116,
                   111,
-                  109,
-                  101
+                  116,
+                  97,
+                  108,
+                  115
                 ]
               }
             ]
           }
         },
         {
-          "name": "projectIncome",
+          "name": "projectTotals",
           "writable": true,
           "pda": {
             "seeds": [
@@ -991,12 +1456,12 @@ export type IncomeDispatcher = {
                   99,
                   116,
                   95,
-                  105,
-                  110,
-                  99,
+                  116,
                   111,
-                  109,
-                  101
+                  116,
+                  97,
+                  108,
+                  115
                 ]
               },
               {
@@ -1388,6 +1853,56 @@ export type IncomeDispatcher = {
           }
         },
         {
+          "name": "platformTotals",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  116,
+                  111,
+                  116,
+                  97,
+                  108,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -1419,6 +1934,19 @@ export type IncomeDispatcher = {
       ]
     },
     {
+      "name": "engineConfig",
+      "discriminator": [
+        10,
+        197,
+        172,
+        236,
+        51,
+        169,
+        22,
+        207
+      ]
+    },
+    {
       "name": "launchState",
       "discriminator": [
         190,
@@ -1445,33 +1973,33 @@ export type IncomeDispatcher = {
       ]
     },
     {
-      "name": "platformIncome",
+      "name": "totals",
       "discriminator": [
-        143,
-        24,
-        146,
-        152,
-        215,
-        71,
-        42,
-        94
-      ]
-    },
-    {
-      "name": "projectIncome",
-      "discriminator": [
-        65,
-        246,
-        167,
-        151,
-        231,
-        216,
-        5,
-        123
+        200,
+        56,
+        239,
+        35,
+        57,
+        206,
+        72,
+        74
       ]
     }
   ],
   "events": [
+    {
+      "name": "buyBackExecuted",
+      "discriminator": [
+        129,
+        16,
+        182,
+        100,
+        158,
+        249,
+        140,
+        65
+      ]
+    },
     {
       "name": "claimEvent",
       "discriminator": [
@@ -1552,6 +2080,22 @@ export type IncomeDispatcher = {
     }
   ],
   "types": [
+    {
+      "name": "buyBackExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "quoteSpent",
+            "type": "u64"
+          },
+          {
+            "name": "xyberReceived",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "claimEvent",
       "type": {
@@ -1637,6 +2181,39 @@ export type IncomeDispatcher = {
           },
           {
             "name": "priority",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "engineConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "creationFee",
+            "type": "u64"
+          },
+          {
+            "name": "xyberMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "admins",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "threshold",
             "type": "u8"
           }
         ]
@@ -1880,57 +2457,6 @@ export type IncomeDispatcher = {
       }
     },
     {
-      "name": "platformIncome",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "balances",
-            "type": {
-              "array": [
-                {
-                  "defined": {
-                    "name": "roleBalance"
-                  }
-                },
-                4
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "projectIncome",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "balances",
-            "type": {
-              "array": [
-                {
-                  "defined": {
-                    "name": "roleBalance"
-                  }
-                },
-                4
-              ]
-            }
-          },
-          {
-            "name": "authorities",
-            "type": {
-              "array": [
-                "pubkey",
-                4
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "role",
       "type": {
         "kind": "enum",
@@ -1956,20 +2482,41 @@ export type IncomeDispatcher = {
         "kind": "struct",
         "fields": [
           {
-            "name": "earnedBase",
+            "name": "harvestedBase",
             "type": "u64"
           },
           {
-            "name": "earnedQuote",
+            "name": "harvestedQuote",
             "type": "u64"
           },
           {
-            "name": "claimedBase",
+            "name": "spentBase",
             "type": "u64"
           },
           {
-            "name": "claimedQuote",
+            "name": "spentQuote",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "totals",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "data",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "roleBalance"
+                  }
+                },
+                4
+              ]
+            }
           }
         ]
       }

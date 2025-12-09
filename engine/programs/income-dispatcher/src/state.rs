@@ -15,55 +15,55 @@ pub struct Config {
 }
 
 #[account]
-#[derive(InitSpace)]
-pub struct PlatformIncome {
-    pub balances: [RoleBalance; Role::COUNT],
+#[derive(InitSpace, Default)]
+pub struct Totals {
+    data: [RoleBalance; Role::COUNT],
 }
 
-#[account]
-#[derive(InitSpace)]
-pub struct ProjectIncome {
-    pub balances: [RoleBalance; Role::COUNT],
-    pub authorities: [Pubkey; Role::COUNT],
-}
+impl Totals {
+    pub fn get(&self, role: Role) -> &RoleBalance {
+        &self.data[role as usize]
+    }
 
-impl ProjectIncome {
-    pub(crate) fn quote_to_claim(&self, role: Role, limit: Option<u64>) -> Result<u64> {
-        let balance = self.balances[role as usize];
-        let mut quote_to_claim = balance
-            .earned_quote
-            .checked_sub(balance.claimed_quote)
+    pub fn get_mut(&mut self, role: Role) -> &mut RoleBalance {
+        &mut self.data[role as usize]
+    }
+
+    pub fn quote_to_spend(&self, role: Role, limit: Option<u64>) -> Result<u64> {
+        let balance = self.get(role);
+        let mut amount = balance
+            .harvested_quote
+            .checked_sub(balance.spent_quote)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
         if let Some(limit) = limit {
-            quote_to_claim = quote_to_claim.min(limit);
+            amount = amount.min(limit);
         }
 
-        Ok(quote_to_claim)
+        Ok(amount)
     }
 
-    pub(crate) fn base_to_claim(&self, role: Role, limit: Option<u64>) -> Result<u64> {
-        let balance = self.balances[role as usize];
-
-        let mut base_to_claim = balance
-            .earned_base
-            .checked_sub(balance.claimed_base)
+    pub fn base_to_spend(&self, role: Role, limit: Option<u64>) -> Result<u64> {
+        let balance = self.get(role);
+        let mut amount = balance
+            .harvested_base
+            .checked_sub(balance.spent_base)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
         if let Some(limit) = limit {
-            base_to_claim = base_to_claim.min(limit);
+            amount = amount.min(limit);
         }
 
-        Ok(base_to_claim)
+        Ok(amount)
     }
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, Default)]
 pub struct RoleBalance {
-    pub earned_base: u64,
-    pub earned_quote: u64,
-    pub claimed_base: u64,
-    pub claimed_quote: u64,
+    pub harvested_base: u64,
+    pub harvested_quote: u64,
+    pub spent_base: u64,
+    pub spent_quote: u64,
 }
 
 #[account]

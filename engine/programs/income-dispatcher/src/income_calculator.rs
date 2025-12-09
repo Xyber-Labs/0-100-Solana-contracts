@@ -147,7 +147,7 @@ impl IncomeCalculator {
                 .checked_div(base_token_volume)
                 .ok_or(ErrorCode::ArithmeticOverflow)?
         } else {
-            // If no base tokens claimed yet, use a default price of 1:1
+            // If no base tokens harvested yet, use a default price of 1:1
             base_decimals_divisor
         };
 

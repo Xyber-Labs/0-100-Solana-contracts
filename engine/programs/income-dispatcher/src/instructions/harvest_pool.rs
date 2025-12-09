@@ -12,7 +12,7 @@ use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
     income_calculator::Role,
-    state::{Config, PlatformIncome, ProjectIncome},
+    state::{Totals, Config},
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -46,19 +46,19 @@ pub struct HarvestPool<'info> {
 
     #[account(
         mut,
-        seeds = [DISPATCHER_SEED_ROOT, b"platform_income"],
+        seeds = [DISPATCHER_SEED_ROOT, b"platform_totals"],
         bump,
     )]
-    pub platform_income: Box<Account<'info, PlatformIncome>>,
+    pub platform_totals: Box<Account<'info, Totals>>,
 
     #[account(
         init_if_needed,
         payer = payer,
-        space = 8 + ProjectIncome::INIT_SPACE,
-        seeds = [DISPATCHER_SEED_ROOT, b"project_income", &project_id.to_be_bytes()],
+        space = 8 + Totals::INIT_SPACE,
+        seeds = [DISPATCHER_SEED_ROOT, b"project_totals", &project_id.to_be_bytes()],
         bump,
     )]
-    pub project_income: Box<Account<'info, ProjectIncome>>,
+    pub project_totals: Box<Account<'info, Totals>>,
 
     /// CHECK: Project authority PDA derived from project_id
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
@@ -139,28 +139,22 @@ pub fn harvest_pool<'info>(
     mut ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     _project_id: u64,
 ) -> Result<()> {
-    let project_income = &mut ctx.accounts.project_income;
-    project_income.authorities[Role::Treasure as usize] = ctx.accounts.config.platform_wallet;
-    project_income.authorities[Role::Creator as usize] = ctx.accounts.launch_state.creator;
-    project_income.authorities[Role::Community as usize] = ctx.accounts.config.community_wallet;
-
     let quote_balance_before = ctx.accounts.quote_vault.amount;
     let base_balance_before = ctx.accounts.base_vault.amount;
 
     claim_fees_from_engine(&ctx)?;
 
     ctx.accounts.quote_vault.reload()?;
-    ctx.accounts.base_vault.reload()?;
-
     let quote_amount = ctx.accounts.quote_vault.amount;
-    let quote_claimed =
+    let quote_harvested =
         quote_amount.checked_sub(quote_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
 
+    ctx.accounts.base_vault.reload()?;
     let base_amount = ctx.accounts.base_vault.amount;
-    let base_claimed =
+    let base_harvested =
         base_amount.checked_sub(base_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    distribute_income(&mut ctx, base_claimed, quote_claimed)?;
+    distribute_income(&mut ctx, base_harvested, quote_harvested)?;
 
     Ok(())
 }
@@ -210,8 +204,8 @@ fn claim_fees_from_engine<'info>(
 
 fn distribute_income(
     ctx: &mut Context<'_, '_, '_, '_, HarvestPool<'_>>,
-    base_claimed: u64,
-    quote_claimed: u64,
+    base_harvested: u64,
+    quote_harvested: u64,
 ) -> Result<()> {
     let pool_data = ctx.accounts.raydium_pool_state.data.borrow();
     if pool_data.len() < POOL_STATE_SQRT_PRICE_X64_OFFSET + 16 {
@@ -225,8 +219,8 @@ fn distribute_income(
 
     let distribution = ctx.accounts.config.income_calculator.get_distribution(
         sqrt_price_x64,
-        base_claimed as u128,
-        quote_claimed as u128,
+        base_harvested as u128,
+        quote_harvested as u128,
     )?;
 
     for income in distribution.incomes {
@@ -237,27 +231,26 @@ fn distribute_income(
             quote: income.quote_token as u64
         });
 
-        let role_idx = income.recipient as usize;
         let base_amount = income.base_token as u64;
         let quote_amount = income.quote_token as u64;
 
-        let project_balances = &mut ctx.accounts.project_income.balances[role_idx];
-        project_balances.earned_base = project_balances
-            .earned_base
+        let project_balance = ctx.accounts.project_totals.get_mut(income.recipient);
+        project_balance.harvested_base = project_balance
+            .harvested_base
             .checked_add(base_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
-        project_balances.earned_quote = project_balances
-            .earned_quote
+        project_balance.harvested_quote = project_balance
+            .harvested_quote
             .checked_add(quote_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        let platform_balances = &mut ctx.accounts.platform_income.balances[role_idx];
-        platform_balances.earned_base = platform_balances
-            .earned_base
+        let platform_balance = ctx.accounts.platform_totals.get_mut(income.recipient);
+        platform_balance.harvested_base = platform_balance
+            .harvested_base
             .checked_add(base_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
-        platform_balances.earned_quote = platform_balances
-            .earned_quote
+        platform_balance.harvested_quote = platform_balance
+            .harvested_quote
             .checked_add(quote_amount)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
     }

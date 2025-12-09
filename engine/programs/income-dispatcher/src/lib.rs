@@ -45,4 +45,10 @@ pub mod income_dispatcher {
     ) -> Result<()> {
         instructions::claim(ctx, project_id, role, nonce_value, limit_base_claim, limit_quote_claim)
     }
+
+    pub fn buyback<'info>(
+        ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>,
+    ) -> Result<()> {
+        instructions::buyback(ctx)
+    }
 }

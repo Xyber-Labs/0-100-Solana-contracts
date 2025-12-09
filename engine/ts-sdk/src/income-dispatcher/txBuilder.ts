@@ -57,12 +57,12 @@ export class TxBuilder {
     return this.getPda(["config"]);
   }
 
-  getProjectIncomePda(projectId: BN): [web3.PublicKey, number] {
-    return this.getPda(["project_income", projectId]);
+  getProjectTotalsPda(projectId: BN): [web3.PublicKey, number] {
+    return this.getPda(["project_totals", projectId]);
   }
 
-  getPlatformIncomePda(): [web3.PublicKey, number] {
-    return this.getPda(["platform_income"]);
+  getPlatformTotalsPda(): [web3.PublicKey, number] {
+    return this.getPda(["platform_totals"]);
   }
 
   getHarvestAuthorityPda(): [web3.PublicKey, number] {
@@ -93,8 +93,8 @@ export class TxBuilder {
     remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
   }): Promise<web3.TransactionInstruction> {
     const [config] = this.getConfigPda();
-    const [platformIncome] = this.getPlatformIncomePda();
-    const [projectIncome] = this.getProjectIncomePda(params.projectId);
+    const [platformTotals] = this.getPlatformTotalsPda();
+    const [projectTotals] = this.getProjectTotalsPda(params.projectId);
     const [harvestAuthority] = this.getHarvestAuthorityPda();
 
     const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, harvestAuthority, true);
@@ -106,8 +106,8 @@ export class TxBuilder {
         payer: params.payer,
         config,
         launchState: params.launchState,
-        platformIncome,
-        projectIncome,
+        platformTotals,
+        projectTotals,
         harvestAuthority,
         quoteMint: params.quoteMint,
         baseMint: params.baseMint,

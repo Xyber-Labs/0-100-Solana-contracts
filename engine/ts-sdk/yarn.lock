@@ -214,6 +214,13 @@
   dependencies:
     "@types/node" "*"
 
+"@types/decimal.js@^7.4.3":
+  version "7.4.3"
+  resolved "https://registry.yarnpkg.com/@types/decimal.js/-/decimal.js-7.4.3.tgz#3efed8739abbb0dc9f4e3498542efba0b6ddfbea"
+  integrity sha512-7MpxcJPHqQ637FCZwJLtJMaDZkcD/iyUxj0m8A+m06slFeqRiK9QtgEyuocWNRbEtCrOZOEbZPTSSR88hMZVsg==
+  dependencies:
+    decimal.js "*"
+
 "@types/node@*":
   version "24.5.2"
   resolved "https://registry.npmjs.org/@types/node/-/node-24.5.2.tgz"
@@ -355,6 +362,11 @@ cross-fetch@^3.1.5:
   integrity sha512-Q+xVJLoGOeIMXZmbUK4HYk+69cQH6LudR0Vu/pRm2YlU/hDV9CiS0gKUMaWY5f2NeUH9C1nV3bsTlCo0FsTV1Q==
   dependencies:
     node-fetch "^2.7.0"
+
+decimal.js@*, decimal.js@^10.6.0:
+  version "10.6.0"
+  resolved "https://registry.yarnpkg.com/decimal.js/-/decimal.js-10.6.0.tgz#e649a43e3ab953a72192ff5983865e509f37ed9a"
+  integrity sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==
 
 delay@^5.0.0:
   version "5.0.0"

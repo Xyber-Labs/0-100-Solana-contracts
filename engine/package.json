@@ -20,7 +20,9 @@
     "@solana/spl-token": "^0.4.14",
     "@xyber-labs/0-100-sdk": "file:./ts-sdk",
     "bs58": "^6.0.0",
-    "commander": "^14.0.1"
+    "commander": "^14.0.1",
+    "decimal.js": "^10.6.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
