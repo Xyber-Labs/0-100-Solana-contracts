@@ -358,7 +358,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "harvestAuthority",
+          "name": "authority",
           "signer": true,
           "pda": {
             "seeds": [
@@ -387,14 +387,6 @@ export type Engine = {
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,

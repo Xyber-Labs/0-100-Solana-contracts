@@ -154,7 +154,7 @@
           "writable": true
         },
         {
-          "name": "harvest_authority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -182,14 +182,6 @@
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -211,7 +203,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -301,7 +293,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -569,7 +561,7 @@
           "writable": true
         },
         {
-          "name": "harvest_authority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -597,14 +589,6 @@
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -677,7 +661,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -951,7 +935,7 @@
           "writable": true
         },
         {
-          "name": "harvest_authority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -979,14 +963,6 @@
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -1011,7 +987,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -1373,7 +1349,7 @@
           "writable": true
         },
         {
-          "name": "harvest_authority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -1401,14 +1377,6 @@
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -1430,7 +1398,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -1520,7 +1488,7 @@
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvest_authority"
+                "path": "authority"
               },
               {
                 "kind": "const",

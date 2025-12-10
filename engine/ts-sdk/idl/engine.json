@@ -352,7 +352,7 @@
       ],
       "accounts": [
         {
-          "name": "harvest_authority",
+          "name": "authority",
           "signer": true,
           "pda": {
             "seeds": [
@@ -381,14 +381,6 @@
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,

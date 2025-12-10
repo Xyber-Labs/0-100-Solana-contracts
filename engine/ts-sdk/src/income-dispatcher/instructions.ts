@@ -41,8 +41,8 @@ const IncomeDispatcherSDK = {
       return txBuilder.getProjectTotalsPda(projectId, role, mint);
     }
 
-    function getHarvestAuthorityPda(): [anchor.web3.PublicKey, number] {
-      return txBuilder.getHarvestAuthorityPda();
+    function getAuthorityPda(): [anchor.web3.PublicKey, number] {
+      return txBuilder.getAuthorityPda();
     }
 
     function getNoncePda(projectId: BN, recipient: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
@@ -126,11 +126,11 @@ const IncomeDispatcherSDK = {
       signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
       const [config] = getConfigPda();
-      const [harvestAuthority] = getHarvestAuthorityPda();
+      const [authority] = getAuthorityPda();
       const recipient = args.signers[0].publicKey;
       const [totals] = getTotalsPda(Role.Treasure, args.mint);
 
-      const sourceVault = getAssociatedTokenAddressSync(args.mint, harvestAuthority, true);
+      const sourceVault = getAssociatedTokenAddressSync(args.mint, authority, true);
       const recipientAta = getAssociatedTokenAddressSync(args.mint, recipient, false);
 
       const ix = await program.methods
@@ -139,7 +139,7 @@ const IncomeDispatcherSDK = {
           recipient,
           config,
           totals,
-          harvestAuthority,
+          authority,
           mint: args.mint,
           sourceVault,
           recipientAta,
@@ -338,12 +338,12 @@ const IncomeDispatcherSDK = {
       signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
       const [config] = getConfigPda();
-      const [harvestAuthority] = getHarvestAuthorityPda();
+      const [authority] = getAuthorityPda();
       const [buybackQuoteTotals] = getTotalsPda(Role.BuyBack, WSOL_MINT);
       const [treasureXyberTotals] = getTotalsPda(Role.Treasure, args.xyberMint);
 
-      const quoteVault = getAssociatedTokenAddressSync(WSOL_MINT, harvestAuthority, true);
-      const xyberVault = getAssociatedTokenAddressSync(args.xyberMint, harvestAuthority, true);
+      const quoteVault = getAssociatedTokenAddressSync(WSOL_MINT, authority, true);
+      const xyberVault = getAssociatedTokenAddressSync(args.xyberMint, authority, true);
 
       const engineConfigPda = anchor.web3.PublicKey.findProgramAddressSync(
         [Buffer.from("root-0-100-1"), Buffer.from("config")],
@@ -360,7 +360,7 @@ const IncomeDispatcherSDK = {
           xyberMint: args.xyberMint,
           buybackQuoteTotals,
           treasureXyberTotals,
-          harvestAuthority,
+          authority,
           quoteVault,
           xyberVault,
           raydiumPoolState: args.raydiumPoolState,
@@ -393,7 +393,7 @@ const IncomeDispatcherSDK = {
       getConfigPda,
       getTotalsPda,
       getProjectTotalsPda,
-      getHarvestAuthorityPda,
+      getAuthorityPda,
       getNoncePda,
 
       initialize,

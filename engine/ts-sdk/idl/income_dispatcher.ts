@@ -160,7 +160,7 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "harvestAuthority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -188,14 +188,6 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -217,7 +209,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -307,7 +299,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -575,7 +567,7 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "harvestAuthority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -603,14 +595,6 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -683,7 +667,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -957,7 +941,7 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "harvestAuthority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -985,14 +969,6 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -1017,7 +993,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -1379,7 +1355,7 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "harvestAuthority",
+          "name": "authority",
           "pda": {
             "seeds": [
               {
@@ -1407,14 +1383,6 @@ export type IncomeDispatcher = {
               {
                 "kind": "const",
                 "value": [
-                  104,
-                  97,
-                  114,
-                  118,
-                  101,
-                  115,
-                  116,
-                  95,
                   97,
                   117,
                   116,
@@ -1436,7 +1404,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",
@@ -1526,7 +1494,7 @@ export type IncomeDispatcher = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "harvestAuthority"
+                "path": "authority"
               },
               {
                 "kind": "const",

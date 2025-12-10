@@ -35,8 +35,8 @@ pub struct Claim<'info> {
     pub totals: Box<Account<'info, Totals>>,
 
     /// CHECK: Harvest authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
-    pub harvest_authority: AccountInfo<'info>,
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
+    pub authority: AccountInfo<'info>,
 
     #[account(
         init_if_needed,
@@ -57,7 +57,7 @@ pub struct Claim<'info> {
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = harvest_authority,
+        associated_token::authority = authority,
     )]
     pub source_vault: Box<Account<'info, TokenAccount>>,
 
@@ -95,12 +95,12 @@ pub fn claim(
         return Ok(());
     }
 
-    let harvest_authority_seeds = &[
+    let authority_seeds = &[
         DISPATCHER_SEED_ROOT,
-        b"harvest_authority",
-        &[ctx.bumps.harvest_authority],
+        b"authority",
+        &[ctx.bumps.authority],
     ];
-    let signer_seeds = &[&harvest_authority_seeds[..]];
+    let signer_seeds = &[&authority_seeds[..]];
 
     transfer_checked(
         CpiContext::new_with_signer(
@@ -108,7 +108,7 @@ pub fn claim(
             TransferChecked {
                 from: ctx.accounts.source_vault.to_account_info(),
                 to: ctx.accounts.recipient_ata.to_account_info(),
-                authority: ctx.accounts.harvest_authority.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
             },
             signer_seeds,

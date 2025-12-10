@@ -1150,17 +1150,17 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const availableXyber = new BN(treasureXyberTotals.harvested).sub(new BN(treasureXyberTotals.spent));
     console.log("Available XYBER for claim:", availableXyber.toString());
 
-    // Verify the XYBER is in the harvest authority vault
+    // Verify the XYBER is in the authority vault
     const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
-    const [harvestAuthority] = dispatcherSdk.getHarvestAuthorityPda();
-    const harvestAuthorityXyberAta = getAssociatedTokenAddressSync(
+    const [authority] = dispatcherSdk.getAuthorityPda();
+    const authorityXyberAta = getAssociatedTokenAddressSync(
       xyberMintKeypair.publicKey,
-      harvestAuthority,
+      authority,
       true
     );
 
-    const vaultBalance = await provider.connection.getTokenAccountBalance(harvestAuthorityXyberAta);
-    console.log("Harvest authority XYBER vault balance:", vaultBalance.value.amount);
+    const vaultBalance = await provider.connection.getTokenAccountBalance(authorityXyberAta);
+    console.log("Authority XYBER vault balance:", vaultBalance.value.amount);
 
     // Verify balances match
     assert.equal(

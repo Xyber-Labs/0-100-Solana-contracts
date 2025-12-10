@@ -80,14 +80,14 @@ pub struct HarvestPool<'info> {
     pub project_community_quote: UncheckedAccount<'info>,
 
     /// CHECK: Harvest authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
-    pub harvest_authority: UncheckedAccount<'info>,
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
+    pub authority: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = quote_mint,
-        associated_token::authority = harvest_authority,
+        associated_token::authority = authority,
     )]
     pub quote_vault: Box<Account<'info, TokenAccount>>,
 
@@ -95,7 +95,7 @@ pub struct HarvestPool<'info> {
         init_if_needed,
         payer = payer,
         associated_token::mint = base_mint,
-        associated_token::authority = harvest_authority,
+        associated_token::authority = authority,
     )]
     pub base_vault: Box<Account<'info, TokenAccount>>,
 
@@ -175,7 +175,7 @@ fn claim_fees_from_engine<'info>(
     ctx: &Context<'_, '_, '_, 'info, HarvestPool<'info>>,
 ) -> Result<()> {
     let cpi_accounts = engine_cpi::accounts::ClaimClmmFees {
-        harvest_authority: ctx.accounts.harvest_authority.to_account_info(),
+        authority: ctx.accounts.authority.to_account_info(),
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),
@@ -197,12 +197,12 @@ fn claim_fees_from_engine<'info>(
         vault_1_mint: ctx.accounts.base_mint.to_account_info(),
     };
 
-    let harvest_authority_seeds = &[
+    let authority_seeds = &[
         DISPATCHER_SEED_ROOT,
-        b"harvest_authority",
-        &[ctx.bumps.harvest_authority],
+        b"authority",
+        &[ctx.bumps.authority],
     ];
-    let signers = &[&harvest_authority_seeds[..]];
+    let signers = &[&authority_seeds[..]];
 
     let cpi_context = CpiContext::new_with_signer(
         ctx.accounts.engine_program.to_account_info(),

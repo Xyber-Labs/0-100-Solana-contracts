@@ -54,17 +54,17 @@ pub struct BuyBack<'info> {
     pub treasure_xyber_totals: Box<Account<'info, Totals>>,
 
     /// CHECK: Harvest authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
-    pub harvest_authority: AccountInfo<'info>,
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
+    pub authority: AccountInfo<'info>,
 
-    #[account(mut, associated_token::mint = quote_mint, associated_token::authority = harvest_authority)]
+    #[account(mut, associated_token::mint = quote_mint, associated_token::authority = authority)]
     pub quote_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = xyber_mint,
-        associated_token::authority = harvest_authority,
+        associated_token::authority = authority,
     )]
     pub xyber_vault: Box<Account<'info, TokenAccount>>,
 
@@ -121,15 +121,15 @@ fn execute_swap<'info>(
     ctx: &Context<'_, '_, '_, 'info, BuyBack<'info>>,
     amount_in: u64,
 ) -> Result<()> {
-    let harvest_authority_seeds = &[
+    let authority_seeds = &[
         DISPATCHER_SEED_ROOT,
-        b"harvest_authority",
-        &[ctx.bumps.harvest_authority],
+        b"authority",
+        &[ctx.bumps.authority],
     ];
-    let signer_seeds = &[&harvest_authority_seeds[..]];
+    let signer_seeds = &[&authority_seeds[..]];
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::SwapSingleV2 {
-        payer: ctx.accounts.harvest_authority.to_account_info(),
+        payer: ctx.accounts.authority.to_account_info(),
         amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
         pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
         input_token_account: ctx.accounts.quote_vault.to_account_info(),

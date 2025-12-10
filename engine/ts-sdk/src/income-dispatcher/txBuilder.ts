@@ -75,8 +75,8 @@ export class TxBuilder {
     return this.getPda(["totals", projectId, role, mint]);
   }
 
-  getHarvestAuthorityPda(): [web3.PublicKey, number] {
-    return this.getPda(["harvest_authority"]);
+  getAuthorityPda(): [web3.PublicKey, number] {
+    return this.getPda(["authority"]);
   }
 
   getNoncePda(projectId: BN, recipient: web3.PublicKey): [web3.PublicKey, number] {
@@ -107,13 +107,13 @@ export class TxBuilder {
     remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
   }): Promise<web3.TransactionInstruction> {
     const [config] = this.getConfigPda();
-    const [harvestAuthority] = this.getHarvestAuthorityPda();
+    const [authority] = this.getAuthorityPda();
     const [noncePda] = this.getNoncePda(params.projectId, params.recipient);
 
     const roleValue = "creator" in params.role ? Role.Creator : Role.Community;
     const [totals] = this.getProjectTotalsPda(params.projectId, roleValue, params.mint);
 
-    const sourceVault = getAssociatedTokenAddressSync(params.mint, harvestAuthority, true);
+    const sourceVault = getAssociatedTokenAddressSync(params.mint, authority, true);
     const recipientAta = getAssociatedTokenAddressSync(params.mint, params.recipient, false);
 
     return this.program.methods
@@ -123,7 +123,7 @@ export class TxBuilder {
         config,
         launchState: params.launchState,
         totals,
-        harvestAuthority,
+        authority,
         nonce: noncePda,
         mint: params.mint,
         sourceVault,
@@ -203,7 +203,7 @@ export class TxBuilder {
     remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
   }): Promise<web3.TransactionInstruction> {
     const [config] = this.getConfigPda();
-    const [harvestAuthority] = this.getHarvestAuthorityPda();
+    const [authority] = this.getAuthorityPda();
 
     const [platformTreasureBase] = this.getTotalsPda(Role.Treasure, params.baseMint);
     const [platformTreasureQuote] = this.getTotalsPda(Role.Treasure, params.quoteMint);
@@ -214,8 +214,8 @@ export class TxBuilder {
     const [projectCommunityBase] = this.getProjectTotalsPda(params.projectId, Role.Community, params.baseMint);
     const [projectCommunityQuote] = this.getProjectTotalsPda(params.projectId, Role.Community, params.quoteMint);
 
-    const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, harvestAuthority, true);
-    const baseVault = getAssociatedTokenAddressSync(params.baseMint, harvestAuthority, true);
+    const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, authority, true);
+    const baseVault = getAssociatedTokenAddressSync(params.baseMint, authority, true);
 
     return this.program.methods
       .harvestPool(params.projectId)
@@ -233,7 +233,7 @@ export class TxBuilder {
         projectCreatorQuote,
         projectCommunityBase,
         projectCommunityQuote,
-        harvestAuthority,
+        authority,
         quoteVault,
         baseVault,
         escrowAuthority: params.escrowAuthority,
