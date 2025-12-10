@@ -88,7 +88,7 @@ pub fn claim(
     ctx.accounts.nonce.nonce =
         ctx.accounts.nonce.nonce.checked_add(1).ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    let available = ctx.accounts.totals.available();
+    let available = ctx.accounts.totals.available()?;
     let amount_to_claim = amount.unwrap_or(available).min(available);
 
     if amount_to_claim == 0 {

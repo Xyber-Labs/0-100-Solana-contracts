@@ -133,6 +133,16 @@ export async function doAndCheckError(promise: Promise<any>, errMsg: string) {
   }
 }
 
+export async function withNoLogging<T>(fn: () => Promise<T>): Promise<T> {
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    return await fn();
+  } finally {
+    console.log = originalLog;
+  }
+}
+
 export class EventsFetcher {
   static parse(
     logs: string[],

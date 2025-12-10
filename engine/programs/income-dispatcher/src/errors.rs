@@ -24,4 +24,6 @@ pub enum ErrorCode {
     NotAllowed,
     #[msg("Nothing to claim")]
     NothingToClaim,
+    #[msg("Serialization error")]
+    SerializationError,
 }

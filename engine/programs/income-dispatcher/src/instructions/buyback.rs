@@ -91,7 +91,7 @@ pub struct BuyBack<'info> {
 }
 
 pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
-    let quote_amount = ctx.accounts.buyback_quote_totals.available();
+    let quote_amount = ctx.accounts.buyback_quote_totals.available()?;
     require!(quote_amount > 0, ErrorCode::NothingToClaim);
 
     let xyber_balance_before = ctx.accounts.xyber_vault.amount;
@@ -99,12 +99,15 @@ pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result
     execute_swap(&ctx, quote_amount)?;
 
     ctx.accounts.xyber_vault.reload()?;
-    let xyber_received = ctx.accounts.xyber_vault.amount
+    let xyber_received = ctx
+        .accounts
+        .xyber_vault
+        .amount
         .checked_sub(xyber_balance_before)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 
     ctx.accounts.buyback_quote_totals.add_spent(quote_amount)?;
-    ctx.accounts.treasure_xyber_totals.add_harvested(xyber_received)?;
+    ctx.accounts.treasure_xyber_totals.add_harvested_impl(xyber_received)?;
 
     emit!(BuyBackExecuted {
         quote_spent: quote_amount,
@@ -150,11 +153,5 @@ fn execute_swap<'info>(
     )
     .with_remaining_accounts(remaining_accounts);
 
-    raydium_amm_v3::cpi::swap_v2(
-        cpi_ctx,
-        amount_in,
-        0,
-        0,
-        true,
-    )
+    raydium_amm_v3::cpi::swap_v2(cpi_ctx, amount_in, 0, 0, true)
 }

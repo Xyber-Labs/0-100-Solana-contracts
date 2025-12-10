@@ -83,6 +83,19 @@ export class TxBuilder {
     return this.getPda(["nonce", projectId, recipient]);
   }
 
+  getHarvestAltAddresses(projectId: BN, baseMint: web3.PublicKey, quoteMint: web3.PublicKey): web3.PublicKey[] {
+    return [
+      this.getTotalsPda(Role.Treasure, baseMint)[0],
+      this.getTotalsPda(Role.Treasure, quoteMint)[0],
+      this.getTotalsPda(Role.BuyBack, baseMint)[0],
+      this.getTotalsPda(Role.BuyBack, quoteMint)[0],
+      this.getProjectTotalsPda(projectId, Role.Creator, baseMint)[0],
+      this.getProjectTotalsPda(projectId, Role.Creator, quoteMint)[0],
+      this.getProjectTotalsPda(projectId, Role.Community, baseMint)[0],
+      this.getProjectTotalsPda(projectId, Role.Community, quoteMint)[0],
+    ];
+  }
+
   async claimSingleIx(params: {
     role: { creator: {} } | { community: {} };
     projectId: BN;

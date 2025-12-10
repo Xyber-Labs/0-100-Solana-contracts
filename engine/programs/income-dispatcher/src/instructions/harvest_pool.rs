@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, Discriminator, Space};
+use anchor_lang::{Discriminator, prelude::*, Space};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
@@ -11,8 +11,8 @@ use engine::cpi as engine_cpi;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role::{self, Treasure, Creator, Community, BuyBack},
-    state::{Totals, Config},
+    income_calculator::Role::{self, BuyBack, Community, Creator, Treasure},
+    state::{Config, Totals},
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -149,6 +149,8 @@ pub fn harvest_pool<'info>(
     ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     _project_id: u64,
 ) -> Result<()> {
+    init_totals_accounts(&ctx)?;
+
     let quote_balance_before = ctx.accounts.quote_vault.amount;
     let base_balance_before = ctx.accounts.base_vault.amount;
 
@@ -212,6 +214,31 @@ fn claim_fees_from_engine<'info>(
     engine_cpi::claim_clmm_fees(cpi_context)
 }
 
+fn init_totals_accounts(ctx: &Context<HarvestPool>) -> Result<()> {
+    let payer = &ctx.accounts.payer.to_account_info();
+    let system = &ctx.accounts.system_program.to_account_info();
+    let base_mint_key = ctx.accounts.base_mint.key();
+    let quote_mint_key = ctx.accounts.quote_mint.key();
+    let project_id_bytes = ctx.accounts.launch_state.project_id.to_be_bytes();
+
+    #[rustfmt::skip]
+    let totals: [(&AccountInfo, &[&[u8]]); 8] = [
+        (&ctx.accounts.platform_treasure_base,   &[DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], base_mint_key.as_ref(), &[ctx.bumps.platform_treasure_base]]),
+        (&ctx.accounts.platform_treasure_quote,  &[DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], quote_mint_key.as_ref(), &[ctx.bumps.platform_treasure_quote]]),
+        (&ctx.accounts.platform_buyback_base,    &[DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8], base_mint_key.as_ref(), &[ctx.bumps.platform_buyback_base]]),
+        (&ctx.accounts.platform_buyback_quote,   &[DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8], quote_mint_key.as_ref(), &[ctx.bumps.platform_buyback_quote]]),
+        (&ctx.accounts.project_creator_base,     &[DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8], base_mint_key.as_ref(), &[ctx.bumps.project_creator_base]]),
+        (&ctx.accounts.project_creator_quote,    &[DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8], quote_mint_key.as_ref(), &[ctx.bumps.project_creator_quote]]),
+        (&ctx.accounts.project_community_base,   &[DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8], base_mint_key.as_ref(), &[ctx.bumps.project_community_base]]),
+        (&ctx.accounts.project_community_quote,  &[DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8], quote_mint_key.as_ref(), &[ctx.bumps.project_community_quote]]),
+    ];
+
+    for (account, seeds) in totals {
+        init_if_needed::<Totals>(account, payer, system, seeds)?;
+    }
+    Ok(())
+}
+
 fn distribute_income<'info>(
     ctx: &Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     base_harvested: u64,
@@ -237,87 +264,37 @@ fn distribute_income<'info>(
         let base_amount = income.base_token as u64;
         let quote_amount = income.quote_token as u64;
 
+        match income.recipient {
+            Treasure => {
+                Totals::add_harvested(&ctx.accounts.platform_treasure_base, base_amount)?;
+                Totals::add_harvested(&ctx.accounts.platform_treasure_quote, quote_amount)?;
+            }
+            BuyBack => {
+                Totals::add_harvested(&ctx.accounts.platform_buyback_base, base_amount)?;
+                Totals::add_harvested(&ctx.accounts.platform_buyback_quote, quote_amount)?;
+            }
+            Creator => {
+                Totals::add_harvested(&ctx.accounts.project_creator_base, base_amount)?;
+                Totals::add_harvested(&ctx.accounts.project_creator_quote, quote_amount)?;
+            }
+            Community => {
+                Totals::add_harvested(&ctx.accounts.project_community_base, base_amount)?;
+                Totals::add_harvested(&ctx.accounts.project_community_quote, quote_amount)?;
+            }
+        }
+
         emit!(IncomeHarvested {
             project_id: ctx.accounts.launch_state.project_id,
             role: income.recipient,
             base: base_amount,
             quote: quote_amount
         });
-
-        let payer = &ctx.accounts.payer.to_account_info();
-        let system = &ctx.accounts.system_program.to_account_info();
-        let base_mint_key = ctx.accounts.base_mint.key();
-        let quote_mint_key = ctx.accounts.quote_mint.key();
-        let project_id_bytes = ctx.accounts.launch_state.project_id.to_be_bytes();
-
-        match income.recipient {
-            Treasure => {
-                let seeds_base: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8],
-                    base_mint_key.as_ref(), &[ctx.bumps.platform_treasure_base]
-                ];
-                init_totals_if_needed(&ctx.accounts.platform_treasure_base, payer, system, seeds_base)?;
-                add_harvested(&ctx.accounts.platform_treasure_base, base_amount)?;
-
-                let seeds_quote: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8],
-                    quote_mint_key.as_ref(), &[ctx.bumps.platform_treasure_quote]
-                ];
-                init_totals_if_needed(&ctx.accounts.platform_treasure_quote, payer, system, seeds_quote)?;
-                add_harvested(&ctx.accounts.platform_treasure_quote, quote_amount)?;
-            }
-            BuyBack => {
-                let seeds_base: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8],
-                    base_mint_key.as_ref(), &[ctx.bumps.platform_buyback_base]
-                ];
-                init_totals_if_needed(&ctx.accounts.platform_buyback_base, payer, system, seeds_base)?;
-                add_harvested(&ctx.accounts.platform_buyback_base, base_amount)?;
-
-                let seeds_quote: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8],
-                    quote_mint_key.as_ref(), &[ctx.bumps.platform_buyback_quote]
-                ];
-                init_totals_if_needed(&ctx.accounts.platform_buyback_quote, payer, system, seeds_quote)?;
-                add_harvested(&ctx.accounts.platform_buyback_quote, quote_amount)?;
-            }
-            Creator => {
-                let seeds_base: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8],
-                    base_mint_key.as_ref(), &[ctx.bumps.project_creator_base]
-                ];
-                init_totals_if_needed(&ctx.accounts.project_creator_base, payer, system, seeds_base)?;
-                add_harvested(&ctx.accounts.project_creator_base, base_amount)?;
-
-                let seeds_quote: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8],
-                    quote_mint_key.as_ref(), &[ctx.bumps.project_creator_quote]
-                ];
-                init_totals_if_needed(&ctx.accounts.project_creator_quote, payer, system, seeds_quote)?;
-                add_harvested(&ctx.accounts.project_creator_quote, quote_amount)?;
-            }
-            Community => {
-                let seeds_base: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8],
-                    base_mint_key.as_ref(), &[ctx.bumps.project_community_base]
-                ];
-                init_totals_if_needed(&ctx.accounts.project_community_base, payer, system, seeds_base)?;
-                add_harvested(&ctx.accounts.project_community_base, base_amount)?;
-
-                let seeds_quote: &[&[u8]] = &[
-                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8],
-                    quote_mint_key.as_ref(), &[ctx.bumps.project_community_quote]
-                ];
-                init_totals_if_needed(&ctx.accounts.project_community_quote, payer, system, seeds_quote)?;
-                add_harvested(&ctx.accounts.project_community_quote, quote_amount)?;
-            }
-        }
     }
 
     Ok(())
 }
 
-fn init_totals_if_needed<'a>(
+fn init_if_needed<'a, T: Space + Discriminator + Default + AnchorSerialize>(
     account: &AccountInfo<'a>,
     payer: &AccountInfo<'a>,
     system_program: &AccountInfo<'a>,
@@ -327,7 +304,7 @@ fn init_totals_if_needed<'a>(
         return Ok(());
     }
 
-    let space = 8 + Totals::INIT_SPACE;
+    let space = 8 + T::INIT_SPACE;
     let rent = Rent::get()?;
     let lamports = rent.minimum_balance(space);
 
@@ -346,16 +323,10 @@ fn init_totals_if_needed<'a>(
     )?;
 
     let mut data = account.try_borrow_mut_data()?;
-    data[..8].copy_from_slice(&Totals::DISCRIMINATOR);
-    data[8..24].fill(0);
+    data[..8].copy_from_slice(&T::DISCRIMINATOR);
+    let default_value = T::default();
+    let serialized = default_value.try_to_vec()?;
+    data[8..8 + serialized.len()].copy_from_slice(&serialized);
 
-    Ok(())
-}
-
-fn add_harvested(account: &AccountInfo, amount: u64) -> Result<()> {
-    let mut data = account.try_borrow_mut_data()?;
-    let harvested = u64::from_le_bytes(data[8..16].try_into().unwrap());
-    let new_harvested = harvested.checked_add(amount).ok_or(ErrorCode::ArithmeticOverflow)?;
-    data[8..16].copy_from_slice(&new_harvested.to_le_bytes());
     Ok(())
 }

@@ -34,6 +34,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   const sdk = EngineSDK.create(provider, program, admin1Keypair);
   const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
+  const { Role } = dispatcherSdk;
 
   const logTx = (sig: string) => console.log("   tx:", utils.getExplorerUrl(provider, sig));
 
@@ -537,13 +538,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       txVersion: TxVersion.V0,
     });
 
-    const originalConsoleLog = console.log;
-    console.log = () => {};
-
-    const buyResult = await executeBuy({ sendAndConfirm: true });
-
-    console.log = originalConsoleLog;
-
+    const buyResult = await utils.withNoLogging(() => executeBuy({ sendAndConfirm: true }));
     console.log(`✅ Buy completed (traders[0])`);
     logTx(buyResult.txId);
 
@@ -578,10 +573,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       txVersion: TxVersion.V0,
     });
 
-    console.log = () => {};
-    const sellResult = await executeSell({ sendAndConfirm: true });
-    console.log = originalConsoleLog;
-
+    const sellResult = await utils.withNoLogging(() => executeSell({ sendAndConfirm: true }));
     console.log(`✅ Sell completed (traders[0])`);
     logTx(sellResult.txId);
   });
@@ -630,60 +622,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       }
     }
 
-    // Debug: Log harvestPool input mints
-    console.log("\n--- Debug: harvestPool input mints ---");
-    console.log("baseMint:", baseMint.toString());
-    console.log("quoteMint (WSOL_MINT):", WSOL_MINT.toString());
-    console.log("projectId:", launchStateData.projectId.toString());
-
-    // Create Address Lookup Table for transaction compression
-    const { Role } = dispatcherSdk;
-    const [platformTreasureBase] = dispatcherSdk.getTotalsPda(Role.Treasure, baseMint);
-    const [platformTreasureQuote] = dispatcherSdk.getTotalsPda(Role.Treasure, WSOL_MINT);
-    const [platformBuybackBase] = dispatcherSdk.getTotalsPda(Role.BuyBack, baseMint);
-    const [platformBuybackQuote] = dispatcherSdk.getTotalsPda(Role.BuyBack, WSOL_MINT);
-    const [projectCreatorBase] = dispatcherSdk.getProjectTotalsPda(launchStateData.projectId, Role.Creator, baseMint);
-    const [projectCreatorQuote] = dispatcherSdk.getProjectTotalsPda(launchStateData.projectId, Role.Creator, WSOL_MINT);
-    const [projectCommunityBase] = dispatcherSdk.getProjectTotalsPda(launchStateData.projectId, Role.Community, baseMint);
-    const [projectCommunityQuote] = dispatcherSdk.getProjectTotalsPda(launchStateData.projectId, Role.Community, WSOL_MINT);
-
-    const altAddresses = [
-      platformTreasureBase,
-      platformTreasureQuote,
-      platformBuybackBase,
-      platformBuybackQuote,
-      projectCreatorBase,
-      projectCreatorQuote,
-      projectCommunityBase,
-      projectCommunityQuote,
-    ];
-
-    const slot = await provider.connection.getSlot("finalized");
-    const [createAltIx, altAddress] = anchor.web3.AddressLookupTableProgram.createLookupTable({
-      authority: admin1Keypair.publicKey,
+    const bundle = await dispatcherSdk.harvestPoolBundle({
       payer: admin1Keypair.publicKey,
-      recentSlot: slot - 1,
-    });
-
-    const extendAltIx = anchor.web3.AddressLookupTableProgram.extendLookupTable({
-      payer: admin1Keypair.publicKey,
-      authority: admin1Keypair.publicKey,
-      lookupTable: altAddress,
-      addresses: altAddresses,
-    });
-
-    const altTx = new anchor.web3.Transaction().add(createAltIx).add(extendAltIx);
-    const altSig = await provider.sendAndConfirm!(altTx, [admin1Keypair]);
-    console.log("✅ Address Lookup Table created:", altAddress.toString());
-    logTx(altSig);
-
-    // Wait for ALT to be active
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const altAccount = await provider.connection.getAddressLookupTable(altAddress);
-    if (!altAccount.value) throw new Error("ALT not found");
-
-    const { signature: harvestSig } = await dispatcherSdk.harvestPool({
       launchState: launchPda,
       projectId: launchStateData.projectId,
       baseMint,
@@ -700,10 +640,17 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       tickArrayLower,
       tickArrayUpper,
       remainingAccounts,
-      addressLookupTableAccounts: [altAccount.value],
-      signers: [admin1Keypair],
     });
-    console.log("✅ CLMM fees harvested");
+
+    if (bundle.altCreationTx) {
+      console.log("Creating ALT:", bundle.altAddress.toString());
+    }
+
+    const { signature: harvestSig, altAddress } = await dispatcherSdk.executeHarvestPoolBundle(
+      bundle,
+      [admin1Keypair]
+    );
+    console.log("✅ CLMM fees harvested (ALT:", altAddress.toString(), ")");
     logTx(harvestSig);
 
     type IncomeHarvestedEvent = anchor.IdlEvents<typeof incomeDispatcherProgram.idl>["incomeHarvested"];
@@ -936,7 +883,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       txVersion: TxVersion.V0,
     });
 
-    const { txId } = await execute({ sendAndConfirm: true });
+    const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
     console.log("✅ XYBER/SOL pool created");
     logTx(txId);
 
@@ -1010,7 +957,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       txVersion: TxVersion.V0,
     });
 
-    const { txId } = await execute({ sendAndConfirm: true });
+    const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
     console.log("✅ Position opened");
     logTx(txId);
 
@@ -1042,7 +989,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
         poolInfo,
         txVersion: TxVersion.V0,
       });
-      const { txId: initTxId } = await executeInit({ sendAndConfirm: true });
+      const { txId: initTxId } = await utils.withNoLogging(() => executeInit({ sendAndConfirm: true }));
       console.log("✅ Bitmap extension initialized:", initTxId);
     } else {
       console.log("Bitmap extension already exists");
@@ -1056,8 +1003,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   it("Step 22: Execute BuyBack", async () => {
     console.log("=== Step 22: Execute BuyBack ===");
-
-    const { Role } = dispatcherSdk;
 
     // Check available quote for buyback
     const buybackQuoteTotals = await dispatcherSdk.fetchTotals(Role.BuyBack, WSOL_MINT);
@@ -1197,8 +1142,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 23: Verify XYBER in vault after BuyBack", async () => {
     console.log("=== Step 23: Verify XYBER in Vault ===");
 
-    const { Role } = dispatcherSdk;
-
     // Get treasure XYBER totals to see balance
     const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
     console.log("Treasure harvested XYBER:", treasureXyberTotals.harvested.toString());
@@ -1231,8 +1174,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   it("Step 24: Claim XYBER from BuyBack (platform treasure)", async () => {
     console.log("=== Step 24: Claim XYBER from BuyBack ===");
-
-    const { Role } = dispatcherSdk;
 
     // Get available XYBER before claim
     const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);

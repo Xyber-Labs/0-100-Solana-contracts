@@ -10,12 +10,24 @@ const TOKEN_2022_PROGRAM_ID = new anchor.web3.PublicKey("TokenzQdBNbLqP5VEhdkAS6
 const MEMO_PROGRAM_ID = new anchor.web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const ASSOCIATED_TOKEN_PROGRAM_ID = new anchor.web3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
+export interface HarvestPoolBundle {
+  altCreationTx?: anchor.web3.Transaction;
+  altAddress: anchor.web3.PublicKey;
+  harvestTx: anchor.web3.VersionedTransaction;
+  cacheKey: string;
+}
+
 const IncomeDispatcherSDK = {
   create(
     provider: anchor.Provider,
     program: Program<IncomeDispatcherIDL>
   ) {
     const txBuilder = new TxBuilder(program);
+    const altCache = new Map<string, anchor.web3.PublicKey>();
+
+    function getAltCacheKey(projectId: BN, baseMint: anchor.web3.PublicKey, quoteMint: anchor.web3.PublicKey): string {
+      return `${projectId.toString()}-${baseMint.toString()}-${quoteMint.toString()}`;
+    }
 
     function getConfigPda(): [anchor.web3.PublicKey, number] {
       return txBuilder.getConfigPda();
@@ -196,6 +208,123 @@ const IncomeDispatcherSDK = {
       return { signature };
     }
 
+    async function harvestPoolBundle(args: {
+      payer: anchor.web3.PublicKey;
+      launchState: anchor.web3.PublicKey;
+      projectId: BN;
+      baseMint: anchor.web3.PublicKey;
+      quoteMint: anchor.web3.PublicKey;
+      engineProgram: anchor.web3.PublicKey;
+      escrowAuthority: anchor.web3.PublicKey;
+      raydiumPositionNftMint: anchor.web3.PublicKey;
+      raydiumPositionNftAccount: anchor.web3.PublicKey;
+      personalPosition: anchor.web3.PublicKey;
+      raydiumPoolState: anchor.web3.PublicKey;
+      protocolPosition: anchor.web3.PublicKey;
+      tokenVault0: anchor.web3.PublicKey;
+      tokenVault1: anchor.web3.PublicKey;
+      tickArrayLower: anchor.web3.PublicKey;
+      tickArrayUpper: anchor.web3.PublicKey;
+      remainingAccounts?: { pubkey: anchor.web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
+      altAddress?: anchor.web3.PublicKey;
+    }): Promise<HarvestPoolBundle> {
+      if (!provider.connection) throw new Error("Provider does not have connection");
+
+      const cacheKey = getAltCacheKey(args.projectId, args.baseMint, args.quoteMint);
+      let altAddress = args.altAddress || altCache.get(cacheKey);
+      let altCreationTx: anchor.web3.Transaction | undefined;
+      let altAccount: anchor.web3.AddressLookupTableAccount | undefined;
+
+      if (altAddress) {
+        const altResult = await provider.connection.getAddressLookupTable(altAddress);
+        if (altResult.value) {
+          altAccount = altResult.value;
+        } else {
+          altAddress = undefined;
+        }
+      }
+
+      if (!altAddress) {
+        const altAddresses = txBuilder.getHarvestAltAddresses(args.projectId, args.baseMint, args.quoteMint);
+
+        const slot = await provider.connection.getSlot("finalized");
+        const [createAltIx, newAltAddress] = anchor.web3.AddressLookupTableProgram.createLookupTable({
+          authority: args.payer,
+          payer: args.payer,
+          recentSlot: slot - 1,
+        });
+
+        const extendAltIx = anchor.web3.AddressLookupTableProgram.extendLookupTable({
+          payer: args.payer,
+          authority: args.payer,
+          lookupTable: newAltAddress,
+          addresses: altAddresses,
+        });
+
+        altCreationTx = new anchor.web3.Transaction().add(createAltIx).add(extendAltIx);
+        altAddress = newAltAddress;
+      }
+
+      const { blockhash } = await provider.connection.getLatestBlockhash();
+
+      const harvestTx = await txBuilder.harvestPoolV0Tx({
+        payer: args.payer,
+        launchState: args.launchState,
+        projectId: args.projectId,
+        baseMint: args.baseMint,
+        quoteMint: args.quoteMint,
+        engineProgram: args.engineProgram,
+        escrowAuthority: args.escrowAuthority,
+        raydiumPositionNftMint: args.raydiumPositionNftMint,
+        raydiumPositionNftAccount: args.raydiumPositionNftAccount,
+        personalPosition: args.personalPosition,
+        raydiumPoolState: args.raydiumPoolState,
+        protocolPosition: args.protocolPosition,
+        tokenVault0: args.tokenVault0,
+        tokenVault1: args.tokenVault1,
+        tickArrayLower: args.tickArrayLower,
+        tickArrayUpper: args.tickArrayUpper,
+        remainingAccounts: args.remainingAccounts,
+        recentBlockhash: blockhash,
+        addressLookupTableAccounts: altAccount ? [altAccount] : [],
+      });
+
+      return { altCreationTx, altAddress, harvestTx, cacheKey };
+    }
+
+    async function executeHarvestPoolBundle(
+      bundle: HarvestPoolBundle,
+      signers: anchor.web3.Keypair[]
+    ): Promise<{ signature: string; altAddress: anchor.web3.PublicKey }> {
+      if (!provider.connection) throw new Error("Provider does not have connection");
+      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
+
+      if (bundle.altCreationTx) {
+        await provider.sendAndConfirm(bundle.altCreationTx, signers);
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const altResult = await provider.connection.getAddressLookupTable(bundle.altAddress);
+        if (!altResult.value) throw new Error("ALT not found after creation");
+
+        const { blockhash } = await provider.connection.getLatestBlockhash();
+        const messageV0 = new anchor.web3.TransactionMessage({
+          payerKey: signers[0].publicKey,
+          recentBlockhash: blockhash,
+          instructions: anchor.web3.TransactionMessage.decompile(bundle.harvestTx.message).instructions,
+        }).compileToV0Message([altResult.value]);
+
+        bundle.harvestTx = new anchor.web3.VersionedTransaction(messageV0);
+      }
+
+      bundle.harvestTx.sign(signers);
+      const signature = await provider.connection.sendTransaction(bundle.harvestTx);
+      await provider.connection.confirmTransaction(signature);
+
+      altCache.set(bundle.cacheKey, bundle.altAddress);
+
+      return { signature, altAddress: bundle.altAddress };
+    }
+
     async function buyback(args: {
       xyberMint: anchor.web3.PublicKey;
       raydiumPoolState: anchor.web3.PublicKey;
@@ -271,6 +400,8 @@ const IncomeDispatcherSDK = {
       claim,
       claimPlatform,
       harvestPool,
+      harvestPoolBundle,
+      executeHarvestPoolBundle,
       buyback,
 
       fetchConfig,

@@ -55,7 +55,7 @@ pub struct ClaimPlatform<'info> {
 }
 
 pub fn claim_platform(ctx: Context<ClaimPlatform>) -> Result<()> {
-    let amount_to_claim = ctx.accounts.totals.available();
+    let amount_to_claim = ctx.accounts.totals.available()?;
 
     if amount_to_claim == 0 {
         return Ok(());
