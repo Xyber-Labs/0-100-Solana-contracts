@@ -31,18 +31,31 @@ pub struct BuyBack<'info> {
     #[account(seeds = [engine::constants::SEED_ROOT, b"config"], bump, seeds::program = engine::ID)]
     pub engine_config: Box<Account<'info, engine::state::EngineConfig>>,
 
-    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"platform_totals"], bump)]
-    pub platform_totals: Box<Account<'info, Totals>>,
-
-    /// CHECK: Harvest authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
-    pub harvest_authority: AccountInfo<'info>,
-
     #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
     pub quote_mint: Box<Account<'info, Mint>>,
 
     #[account(mut, address = engine_config.xyber_mint @ ErrorCode::InvalidTokenMint)]
     pub xyber_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        mut,
+        seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Role::BuyBack as u8], quote_mint.key().as_ref()],
+        bump,
+    )]
+    pub buyback_quote_totals: Box<Account<'info, Totals>>,
+
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + Totals::INIT_SPACE,
+        seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Role::Treasure as u8], xyber_mint.key().as_ref()],
+        bump,
+    )]
+    pub treasure_xyber_totals: Box<Account<'info, Totals>>,
+
+    /// CHECK: Harvest authority PDA
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
+    pub harvest_authority: AccountInfo<'info>,
 
     #[account(mut, associated_token::mint = quote_mint, associated_token::authority = harvest_authority)]
     pub quote_vault: Box<Account<'info, TokenAccount>>,
@@ -78,8 +91,8 @@ pub struct BuyBack<'info> {
 }
 
 pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
-    let quote_amount = ctx.accounts.platform_totals.quote_to_spend(Role::BuyBack, None)?;
-    require!(quote_amount > 0, ErrorCode::NotAllowed);
+    let quote_amount = ctx.accounts.buyback_quote_totals.available();
+    require!(quote_amount > 0, ErrorCode::NothingToClaim);
 
     let xyber_balance_before = ctx.accounts.xyber_vault.amount;
 
@@ -90,19 +103,8 @@ pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result
         .checked_sub(xyber_balance_before)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    let platform_totals = &mut ctx.accounts.platform_totals;
-
-    let buyback_balance = platform_totals.get_mut(Role::BuyBack);
-    buyback_balance.spent_quote = buyback_balance
-        .spent_quote
-        .checked_add(quote_amount)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    let treasure_balance = platform_totals.get_mut(Role::Treasure);
-    treasure_balance.harvested_base = treasure_balance
-        .harvested_base
-        .checked_add(xyber_received)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.buyback_quote_totals.add_spent(quote_amount)?;
+    ctx.accounts.treasure_xyber_totals.add_harvested(xyber_received)?;
 
     emit!(BuyBackExecuted {
         quote_spent: quote_amount,

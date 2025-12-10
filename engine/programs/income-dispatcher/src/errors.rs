@@ -22,4 +22,6 @@ pub enum ErrorCode {
     InvalidCalculator,
     #[msg("Not allowed")]
     NotAllowed,
+    #[msg("Nothing to claim")]
+    NothingToClaim,
 }

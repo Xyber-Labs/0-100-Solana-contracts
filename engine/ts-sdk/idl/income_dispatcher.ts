@@ -144,54 +144,20 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "platformTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  116,
-                  102,
-                  111,
-                  114,
-                  109,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              }
-            ]
-          }
+          "name": "quoteMint",
+          "address": "So11111111111111111111111111111111111111112"
+        },
+        {
+          "name": "xyberMint",
+          "writable": true
+        },
+        {
+          "name": "buybackQuoteTotals",
+          "writable": true
+        },
+        {
+          "name": "treasureXyberTotals",
+          "writable": true
         },
         {
           "name": "harvestAuthority",
@@ -243,14 +209,6 @@ export type IncomeDispatcher = {
               }
             ]
           }
-        },
-        {
-          "name": "quoteMint",
-          "address": "So11111111111111111111111111111111111111112"
-        },
-        {
-          "name": "xyberMint",
-          "writable": true
         },
         {
           "name": "quoteVault",
@@ -613,107 +571,8 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "projectTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  106,
-                  101,
-                  99,
-                  116,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "projectId"
-              }
-            ]
-          }
-        },
-        {
-          "name": "platformTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  116,
-                  102,
-                  111,
-                  114,
-                  109,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              }
-            ]
-          }
+          "name": "totals",
+          "writable": true
         },
         {
           "name": "harvestAuthority",
@@ -815,14 +674,10 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "baseMint"
+          "name": "mint"
         },
         {
-          "name": "quoteMint",
-          "address": "So11111111111111111111111111111111111111112"
-        },
-        {
-          "name": "baseVault",
+          "name": "sourceVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -869,7 +724,7 @@ export type IncomeDispatcher = {
               },
               {
                 "kind": "account",
-                "path": "baseMint"
+                "path": "mint"
               }
             ],
             "program": {
@@ -912,97 +767,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "quoteVault",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "harvestAuthority"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "quoteMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "recipientBaseAta",
+          "name": "recipientAta",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1049,97 +814,7 @@ export type IncomeDispatcher = {
               },
               {
                 "kind": "account",
-                "path": "baseMint"
-              }
-            ],
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            }
-          }
-        },
-        {
-          "name": "recipientQuoteAta",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "account",
-                "path": "recipient"
-              },
-              {
-                "kind": "const",
-                "value": [
-                  6,
-                  221,
-                  246,
-                  225,
-                  215,
-                  101,
-                  161,
-                  147,
-                  217,
-                  203,
-                  225,
-                  70,
-                  206,
-                  235,
-                  121,
-                  172,
-                  28,
-                  180,
-                  133,
-                  237,
-                  95,
-                  91,
-                  55,
-                  145,
-                  58,
-                  140,
-                  245,
-                  133,
-                  126,
-                  255,
-                  0,
-                  169
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "quoteMint"
+                "path": "mint"
               }
             ],
             "program": {
@@ -1212,18 +887,323 @@ export type IncomeDispatcher = {
           "type": "u64"
         },
         {
-          "name": "limitBaseClaim",
-          "type": {
-            "option": "u64"
-          }
-        },
-        {
-          "name": "limitQuoteClaim",
+          "name": "amount",
           "type": {
             "option": "u64"
           }
         }
       ]
+    },
+    {
+      "name": "claimPlatform",
+      "discriminator": [
+        87,
+        87,
+        70,
+        211,
+        100,
+        203,
+        95,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "recipient",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "totals",
+          "writable": true
+        },
+        {
+          "name": "harvestAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  99,
+                  111,
+                  109,
+                  101,
+                  45,
+                  100,
+                  105,
+                  115,
+                  112,
+                  97,
+                  116,
+                  99,
+                  104,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  97,
+                  114,
+                  118,
+                  101,
+                  115,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "sourceVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "harvestAuthority"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "recipientAta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "recipient"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
     },
     {
       "name": "harvestPool",
@@ -1240,17 +1220,11 @@ export type IncomeDispatcher = {
       "accounts": [
         {
           "name": "payer",
-          "docs": [
-            "Anyone can call this instruction"
-          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "config",
-          "docs": [
-            "Config account"
-          ],
           "pda": {
             "seeds": [
               {
@@ -1291,9 +1265,6 @@ export type IncomeDispatcher = {
         },
         {
           "name": "launchState",
-          "docs": [
-            "Launch state account"
-          ],
           "pda": {
             "seeds": [
               {
@@ -1369,107 +1340,43 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "platformTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  116,
-                  102,
-                  111,
-                  114,
-                  109,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              }
-            ]
-          }
+          "name": "quoteMint",
+          "address": "So11111111111111111111111111111111111111112"
         },
         {
-          "name": "projectTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  106,
-                  101,
-                  99,
-                  116,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "projectId"
-              }
-            ]
-          }
+          "name": "baseMint"
+        },
+        {
+          "name": "platformTreasureBase",
+          "writable": true
+        },
+        {
+          "name": "platformTreasureQuote",
+          "writable": true
+        },
+        {
+          "name": "platformBuybackBase",
+          "writable": true
+        },
+        {
+          "name": "platformBuybackQuote",
+          "writable": true
+        },
+        {
+          "name": "projectCreatorBase",
+          "writable": true
+        },
+        {
+          "name": "projectCreatorQuote",
+          "writable": true
+        },
+        {
+          "name": "projectCommunityBase",
+          "writable": true
+        },
+        {
+          "name": "projectCommunityQuote",
+          "writable": true
         },
         {
           "name": "harvestAuthority",
@@ -1523,19 +1430,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "quoteMint"
-        },
-        {
-          "name": "baseMint",
-          "docs": [
-            "Base mint from project pool"
-          ]
-        },
-        {
           "name": "quoteVault",
-          "docs": [
-            "Quote vault - init-if-needed associated token account owned by harvest_authority"
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1626,9 +1521,6 @@ export type IncomeDispatcher = {
         },
         {
           "name": "baseVault",
-          "docs": [
-            "Base vault - init-if-needed associated token account owned by harvest_authority"
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1853,56 +1745,6 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "platformTotals",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  99,
-                  111,
-                  109,
-                  101,
-                  45,
-                  100,
-                  105,
-                  115,
-                  112,
-                  97,
-                  116,
-                  99,
-                  104,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  108,
-                  97,
-                  116,
-                  102,
-                  111,
-                  114,
-                  109,
-                  95,
-                  116,
-                  111,
-                  116,
-                  97,
-                  108,
-                  115
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -2077,6 +1919,11 @@ export type IncomeDispatcher = {
       "code": 6009,
       "name": "notAllowed",
       "msg": "Not allowed"
+    },
+    {
+      "code": 6010,
+      "name": "nothingToClaim",
+      "msg": "Nothing to claim"
     }
   ],
   "types": [
@@ -2114,15 +1961,15 @@ export type IncomeDispatcher = {
             }
           },
           {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
             "name": "recipient",
             "type": "pubkey"
           },
           {
-            "name": "baseAmount",
-            "type": "u64"
-          },
-          {
-            "name": "quoteAmount",
+            "name": "amount",
             "type": "u64"
           }
         ]
@@ -2477,46 +2324,17 @@ export type IncomeDispatcher = {
       }
     },
     {
-      "name": "roleBalance",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "harvestedBase",
-            "type": "u64"
-          },
-          {
-            "name": "harvestedQuote",
-            "type": "u64"
-          },
-          {
-            "name": "spentBase",
-            "type": "u64"
-          },
-          {
-            "name": "spentQuote",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "totals",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "data",
-            "type": {
-              "array": [
-                {
-                  "defined": {
-                    "name": "roleBalance"
-                  }
-                },
-                4
-              ]
-            }
+            "name": "harvested",
+            "type": "u64"
+          },
+          {
+            "name": "spent",
+            "type": "u64"
           }
         ]
       }

@@ -15,6 +15,15 @@ const SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", IncomeDispatch
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDL as any));
 
+export const Role = {
+  Treasure: 0,
+  Creator: 1,
+  Community: 2,
+  BuyBack: 3,
+} as const;
+
+export type RoleType = typeof Role[keyof typeof Role];
+
 export class TxBuilder {
   private program: Program<IncomeDispatcherIDL>;
   private seedRoot: Buffer;
@@ -28,6 +37,7 @@ export class TxBuilder {
     const toSeedBuffer = (seed: string | BN | Buffer | web3.PublicKey | Uint8Array | number | bigint): Buffer => {
       if (typeof seed === "string") return Buffer.from(seed);
       if (typeof seed === "number") {
+        if (seed <= 255) return Buffer.from([seed]);
         const bn = new BN(seed);
         return Buffer.from(bn.toArray("be", 8));
       }
@@ -57,12 +67,12 @@ export class TxBuilder {
     return this.getPda(["config"]);
   }
 
-  getProjectTotalsPda(projectId: BN): [web3.PublicKey, number] {
-    return this.getPda(["project_totals", projectId]);
+  getTotalsPda(role: RoleType, mint: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["totals", role, mint]);
   }
 
-  getPlatformTotalsPda(): [web3.PublicKey, number] {
-    return this.getPda(["platform_totals"]);
+  getProjectTotalsPda(projectId: BN, role: RoleType, mint: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["totals", projectId, role, mint]);
   }
 
   getHarvestAuthorityPda(): [web3.PublicKey, number] {
@@ -71,6 +81,93 @@ export class TxBuilder {
 
   getNoncePda(projectId: BN, recipient: web3.PublicKey): [web3.PublicKey, number] {
     return this.getPda(["nonce", projectId, recipient]);
+  }
+
+  async claimSingleIx(params: {
+    role: { creator: {} } | { community: {} };
+    projectId: BN;
+    launchState: web3.PublicKey;
+    recipient: web3.PublicKey;
+    mint: web3.PublicKey;
+    nonce: BN;
+    amount?: BN;
+    remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
+  }): Promise<web3.TransactionInstruction> {
+    const [config] = this.getConfigPda();
+    const [harvestAuthority] = this.getHarvestAuthorityPda();
+    const [noncePda] = this.getNoncePda(params.projectId, params.recipient);
+
+    const roleValue = "creator" in params.role ? Role.Creator : Role.Community;
+    const [totals] = this.getProjectTotalsPda(params.projectId, roleValue, params.mint);
+
+    const sourceVault = getAssociatedTokenAddressSync(params.mint, harvestAuthority, true);
+    const recipientAta = getAssociatedTokenAddressSync(params.mint, params.recipient, false);
+
+    return this.program.methods
+      .claim(params.projectId, params.role, params.nonce, params.amount ?? null)
+      .accountsStrict({
+        recipient: params.recipient,
+        config,
+        launchState: params.launchState,
+        totals,
+        harvestAuthority,
+        nonce: noncePda,
+        mint: params.mint,
+        sourceVault,
+        recipientAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .remainingAccounts(params.remainingAccounts || [])
+      .instruction();
+  }
+
+  async claimIx(params: {
+    role: { creator: {} } | { community: {} };
+    projectId: BN;
+    launchState: web3.PublicKey;
+    recipient: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    nonce: BN;
+    remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
+  }): Promise<web3.TransactionInstruction[]> {
+    const baseIx = await this.claimSingleIx({
+      role: params.role,
+      projectId: params.projectId,
+      launchState: params.launchState,
+      recipient: params.recipient,
+      mint: params.baseMint,
+      nonce: params.nonce,
+      remainingAccounts: params.remainingAccounts,
+    });
+
+    const quoteIx = await this.claimSingleIx({
+      role: params.role,
+      projectId: params.projectId,
+      launchState: params.launchState,
+      recipient: params.recipient,
+      mint: params.quoteMint,
+      nonce: params.nonce.add(new BN(1)),
+      remainingAccounts: params.remainingAccounts,
+    });
+
+    return [baseIx, quoteIx];
+  }
+
+  async claimTx(params: {
+    role: { creator: {} } | { community: {} };
+    projectId: BN;
+    launchState: web3.PublicKey;
+    recipient: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    nonce: BN;
+    remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
+  }): Promise<web3.Transaction> {
+    const instructions = await this.claimIx(params);
+    return new web3.Transaction().add(...instructions);
   }
 
   async harvestPoolIx(params: {
@@ -93,9 +190,16 @@ export class TxBuilder {
     remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
   }): Promise<web3.TransactionInstruction> {
     const [config] = this.getConfigPda();
-    const [platformTotals] = this.getPlatformTotalsPda();
-    const [projectTotals] = this.getProjectTotalsPda(params.projectId);
     const [harvestAuthority] = this.getHarvestAuthorityPda();
+
+    const [platformTreasureBase] = this.getTotalsPda(Role.Treasure, params.baseMint);
+    const [platformTreasureQuote] = this.getTotalsPda(Role.Treasure, params.quoteMint);
+    const [platformBuybackBase] = this.getTotalsPda(Role.BuyBack, params.baseMint);
+    const [platformBuybackQuote] = this.getTotalsPda(Role.BuyBack, params.quoteMint);
+    const [projectCreatorBase] = this.getProjectTotalsPda(params.projectId, Role.Creator, params.baseMint);
+    const [projectCreatorQuote] = this.getProjectTotalsPda(params.projectId, Role.Creator, params.quoteMint);
+    const [projectCommunityBase] = this.getProjectTotalsPda(params.projectId, Role.Community, params.baseMint);
+    const [projectCommunityQuote] = this.getProjectTotalsPda(params.projectId, Role.Community, params.quoteMint);
 
     const quoteVault = getAssociatedTokenAddressSync(params.quoteMint, harvestAuthority, true);
     const baseVault = getAssociatedTokenAddressSync(params.baseMint, harvestAuthority, true);
@@ -106,15 +210,19 @@ export class TxBuilder {
         payer: params.payer,
         config,
         launchState: params.launchState,
-        platformTotals,
-        projectTotals,
-        harvestAuthority,
         quoteMint: params.quoteMint,
         baseMint: params.baseMint,
+        platformTreasureBase,
+        platformTreasureQuote,
+        platformBuybackBase,
+        platformBuybackQuote,
+        projectCreatorBase,
+        projectCreatorQuote,
+        projectCommunityBase,
+        projectCommunityQuote,
+        harvestAuthority,
         quoteVault,
         baseVault,
-        engineProgram: params.engineProgram,
-        raydiumProgram: RAYDIUM_CLMM_PROGRAM_ID,
         escrowAuthority: params.escrowAuthority,
         raydiumPositionNftMint: params.raydiumPositionNftMint,
         raydiumPositionNftAccount: params.raydiumPositionNftAccount,
@@ -125,6 +233,8 @@ export class TxBuilder {
         tokenVault1: params.tokenVault1,
         tickArrayLower: params.tickArrayLower,
         tickArrayUpper: params.tickArrayUpper,
+        engineProgram: params.engineProgram,
+        raydiumProgram: RAYDIUM_CLMM_PROGRAM_ID,
         tokenProgram: TOKEN_PROGRAM_ID,
         tokenProgram2022: TOKEN_2022_PROGRAM_ID,
         memoProgram: MEMO_PROGRAM_ID,
@@ -156,6 +266,41 @@ export class TxBuilder {
   }): Promise<web3.Transaction> {
     const ix = await this.harvestPoolIx(params);
     const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 });
-    return new web3.Transaction().add(computeBudgetIx).add(ix);
+    const heapFrameIx = ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 });
+    return new web3.Transaction().add(computeBudgetIx).add(heapFrameIx).add(ix);
+  }
+
+  async harvestPoolV0Tx(params: {
+    payer: web3.PublicKey;
+    launchState: web3.PublicKey;
+    projectId: BN;
+    baseMint: web3.PublicKey;
+    quoteMint: web3.PublicKey;
+    engineProgram: web3.PublicKey;
+    escrowAuthority: web3.PublicKey;
+    raydiumPositionNftMint: web3.PublicKey;
+    raydiumPositionNftAccount: web3.PublicKey;
+    personalPosition: web3.PublicKey;
+    raydiumPoolState: web3.PublicKey;
+    protocolPosition: web3.PublicKey;
+    tokenVault0: web3.PublicKey;
+    tokenVault1: web3.PublicKey;
+    tickArrayLower: web3.PublicKey;
+    tickArrayUpper: web3.PublicKey;
+    remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
+    recentBlockhash: string;
+    addressLookupTableAccounts: web3.AddressLookupTableAccount[];
+  }): Promise<web3.VersionedTransaction> {
+    const ix = await this.harvestPoolIx(params);
+    const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 });
+    const heapFrameIx = ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 });
+
+    const message = new web3.TransactionMessage({
+      payerKey: params.payer,
+      recentBlockhash: params.recentBlockhash,
+      instructions: [computeBudgetIx, heapFrameIx, ix],
+    }).compileToV0Message(params.addressLookupTableAccounts);
+
+    return new web3.VersionedTransaction(message);
   }
 }

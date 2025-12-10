@@ -1,4 +1,4 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, Discriminator, Space};
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
@@ -11,7 +11,7 @@ use engine::cpi as engine_cpi;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role,
+    income_calculator::Role::{self, Treasure, Creator, Community, BuyBack},
     state::{Totals, Config},
 };
 
@@ -28,15 +28,12 @@ pub struct IncomeHarvested {
 #[derive(Accounts)]
 #[instruction(project_id: u64)]
 pub struct HarvestPool<'info> {
-    /// Anyone can call this instruction
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// Config account
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]
     pub config: Box<Account<'info, Config>>,
 
-    /// Launch state account
     #[account(
         seeds = [engine::constants::SEED_ROOT, b"launch", &project_id.to_le_bytes()],
         bump,
@@ -44,50 +41,63 @@ pub struct HarvestPool<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    #[account(
-        mut,
-        seeds = [DISPATCHER_SEED_ROOT, b"platform_totals"],
-        bump,
-    )]
-    pub platform_totals: Box<Account<'info, Totals>>,
+    #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
+    pub quote_mint: Box<Account<'info, Mint>>,
 
-    #[account(
-        init_if_needed,
-        payer = payer,
-        space = 8 + Totals::INIT_SPACE,
-        seeds = [DISPATCHER_SEED_ROOT, b"project_totals", &project_id.to_be_bytes()],
-        bump,
-    )]
-    pub project_totals: Box<Account<'info, Totals>>,
+    #[account(constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint)]
+    pub base_mint: Box<Account<'info, Mint>>,
 
-    /// CHECK: Project authority PDA derived from project_id
+    /// CHECK: Platform treasure base totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], base_mint.key().as_ref()], bump)]
+    pub platform_treasure_base: UncheckedAccount<'info>,
+
+    /// CHECK: Platform treasure quote totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], quote_mint.key().as_ref()], bump)]
+    pub platform_treasure_quote: UncheckedAccount<'info>,
+
+    /// CHECK: Platform buyback base totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8], base_mint.key().as_ref()], bump)]
+    pub platform_buyback_base: UncheckedAccount<'info>,
+
+    /// CHECK: Platform buyback quote totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8], quote_mint.key().as_ref()], bump)]
+    pub platform_buyback_quote: UncheckedAccount<'info>,
+
+    /// CHECK: Project creator base totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &project_id.to_be_bytes(), &[Creator as u8], base_mint.key().as_ref()], bump)]
+    pub project_creator_base: UncheckedAccount<'info>,
+
+    /// CHECK: Project creator quote totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &project_id.to_be_bytes(), &[Creator as u8], quote_mint.key().as_ref()], bump)]
+    pub project_creator_quote: UncheckedAccount<'info>,
+
+    /// CHECK: Project community base totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &project_id.to_be_bytes(), &[Community as u8], base_mint.key().as_ref()], bump)]
+    pub project_community_base: UncheckedAccount<'info>,
+
+    /// CHECK: Project community quote totals - validated and initialized in handler
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &project_id.to_be_bytes(), &[Community as u8], quote_mint.key().as_ref()], bump)]
+    pub project_community_quote: UncheckedAccount<'info>,
+
+    /// CHECK: Harvest authority PDA
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"harvest_authority"], bump)]
     pub harvest_authority: UncheckedAccount<'info>,
 
-    #[account(address = pubkey!("So11111111111111111111111111111111111111112"))]
-    pub quote_mint: Account<'info, Mint>,
-
-    /// Base mint from project pool
-    #[account(constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint)]
-    pub base_mint: Account<'info, Mint>,
-
-    /// Quote vault - init-if-needed associated token account owned by harvest_authority
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = quote_mint,
         associated_token::authority = harvest_authority,
     )]
-    pub quote_vault: Account<'info, TokenAccount>,
+    pub quote_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Base vault - init-if-needed associated token account owned by harvest_authority
     #[account(
         init_if_needed,
         payer = payer,
         associated_token::mint = base_mint,
         associated_token::authority = harvest_authority,
     )]
-    pub base_vault: Account<'info, TokenAccount>,
+    pub base_vault: Box<Account<'info, TokenAccount>>,
 
     /// CHECK: Escrow authority PDA - validated by engine CPI
     #[account(mut)]
@@ -136,7 +146,7 @@ pub struct HarvestPool<'info> {
 }
 
 pub fn harvest_pool<'info>(
-    mut ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
+    ctx: Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     _project_id: u64,
 ) -> Result<()> {
     let quote_balance_before = ctx.accounts.quote_vault.amount;
@@ -154,7 +164,7 @@ pub fn harvest_pool<'info>(
     let base_harvested =
         base_amount.checked_sub(base_balance_before).ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    distribute_income(&mut ctx, base_harvested, quote_harvested)?;
+    distribute_income(&ctx, base_harvested, quote_harvested)?;
 
     Ok(())
 }
@@ -202,8 +212,8 @@ fn claim_fees_from_engine<'info>(
     engine_cpi::claim_clmm_fees(cpi_context)
 }
 
-fn distribute_income(
-    ctx: &mut Context<'_, '_, '_, '_, HarvestPool<'_>>,
+fn distribute_income<'info>(
+    ctx: &Context<'_, '_, '_, 'info, HarvestPool<'info>>,
     base_harvested: u64,
     quote_harvested: u64,
 ) -> Result<()> {
@@ -224,36 +234,128 @@ fn distribute_income(
     )?;
 
     for income in distribution.incomes {
-        emit!(IncomeHarvested {
-            project_id: ctx.accounts.launch_state.project_id,
-            role: income.recipient,
-            base: income.base_token as u64,
-            quote: income.quote_token as u64
-        });
-
         let base_amount = income.base_token as u64;
         let quote_amount = income.quote_token as u64;
 
-        let project_balance = ctx.accounts.project_totals.get_mut(income.recipient);
-        project_balance.harvested_base = project_balance
-            .harvested_base
-            .checked_add(base_amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        project_balance.harvested_quote = project_balance
-            .harvested_quote
-            .checked_add(quote_amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        emit!(IncomeHarvested {
+            project_id: ctx.accounts.launch_state.project_id,
+            role: income.recipient,
+            base: base_amount,
+            quote: quote_amount
+        });
 
-        let platform_balance = ctx.accounts.platform_totals.get_mut(income.recipient);
-        platform_balance.harvested_base = platform_balance
-            .harvested_base
-            .checked_add(base_amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        platform_balance.harvested_quote = platform_balance
-            .harvested_quote
-            .checked_add(quote_amount)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        let payer = &ctx.accounts.payer.to_account_info();
+        let system = &ctx.accounts.system_program.to_account_info();
+        let base_mint_key = ctx.accounts.base_mint.key();
+        let quote_mint_key = ctx.accounts.quote_mint.key();
+        let project_id_bytes = ctx.accounts.launch_state.project_id.to_be_bytes();
+
+        match income.recipient {
+            Treasure => {
+                let seeds_base: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8],
+                    base_mint_key.as_ref(), &[ctx.bumps.platform_treasure_base]
+                ];
+                init_totals_if_needed(&ctx.accounts.platform_treasure_base, payer, system, seeds_base)?;
+                add_harvested(&ctx.accounts.platform_treasure_base, base_amount)?;
+
+                let seeds_quote: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8],
+                    quote_mint_key.as_ref(), &[ctx.bumps.platform_treasure_quote]
+                ];
+                init_totals_if_needed(&ctx.accounts.platform_treasure_quote, payer, system, seeds_quote)?;
+                add_harvested(&ctx.accounts.platform_treasure_quote, quote_amount)?;
+            }
+            BuyBack => {
+                let seeds_base: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8],
+                    base_mint_key.as_ref(), &[ctx.bumps.platform_buyback_base]
+                ];
+                init_totals_if_needed(&ctx.accounts.platform_buyback_base, payer, system, seeds_base)?;
+                add_harvested(&ctx.accounts.platform_buyback_base, base_amount)?;
+
+                let seeds_quote: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &[BuyBack as u8],
+                    quote_mint_key.as_ref(), &[ctx.bumps.platform_buyback_quote]
+                ];
+                init_totals_if_needed(&ctx.accounts.platform_buyback_quote, payer, system, seeds_quote)?;
+                add_harvested(&ctx.accounts.platform_buyback_quote, quote_amount)?;
+            }
+            Creator => {
+                let seeds_base: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8],
+                    base_mint_key.as_ref(), &[ctx.bumps.project_creator_base]
+                ];
+                init_totals_if_needed(&ctx.accounts.project_creator_base, payer, system, seeds_base)?;
+                add_harvested(&ctx.accounts.project_creator_base, base_amount)?;
+
+                let seeds_quote: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Creator as u8],
+                    quote_mint_key.as_ref(), &[ctx.bumps.project_creator_quote]
+                ];
+                init_totals_if_needed(&ctx.accounts.project_creator_quote, payer, system, seeds_quote)?;
+                add_harvested(&ctx.accounts.project_creator_quote, quote_amount)?;
+            }
+            Community => {
+                let seeds_base: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8],
+                    base_mint_key.as_ref(), &[ctx.bumps.project_community_base]
+                ];
+                init_totals_if_needed(&ctx.accounts.project_community_base, payer, system, seeds_base)?;
+                add_harvested(&ctx.accounts.project_community_base, base_amount)?;
+
+                let seeds_quote: &[&[u8]] = &[
+                    DISPATCHER_SEED_ROOT, b"totals", &project_id_bytes, &[Community as u8],
+                    quote_mint_key.as_ref(), &[ctx.bumps.project_community_quote]
+                ];
+                init_totals_if_needed(&ctx.accounts.project_community_quote, payer, system, seeds_quote)?;
+                add_harvested(&ctx.accounts.project_community_quote, quote_amount)?;
+            }
+        }
     }
 
+    Ok(())
+}
+
+fn init_totals_if_needed<'a>(
+    account: &AccountInfo<'a>,
+    payer: &AccountInfo<'a>,
+    system_program: &AccountInfo<'a>,
+    signer_seeds: &[&[u8]],
+) -> Result<()> {
+    if !account.data_is_empty() {
+        return Ok(());
+    }
+
+    let space = 8 + Totals::INIT_SPACE;
+    let rent = Rent::get()?;
+    let lamports = rent.minimum_balance(space);
+
+    anchor_lang::system_program::create_account(
+        CpiContext::new_with_signer(
+            system_program.clone(),
+            anchor_lang::system_program::CreateAccount {
+                from: payer.clone(),
+                to: account.clone(),
+            },
+            &[signer_seeds],
+        ),
+        lamports,
+        space as u64,
+        &crate::ID,
+    )?;
+
+    let mut data = account.try_borrow_mut_data()?;
+    data[..8].copy_from_slice(&Totals::DISCRIMINATOR);
+    data[8..24].fill(0);
+
+    Ok(())
+}
+
+fn add_harvested(account: &AccountInfo, amount: u64) -> Result<()> {
+    let mut data = account.try_borrow_mut_data()?;
+    let harvested = u64::from_le_bytes(data[8..16].try_into().unwrap());
+    let new_harvested = harvested.checked_add(amount).ok_or(ErrorCode::ArithmeticOverflow)?;
+    data[8..16].copy_from_slice(&new_harvested.to_le_bytes());
     Ok(())
 }
