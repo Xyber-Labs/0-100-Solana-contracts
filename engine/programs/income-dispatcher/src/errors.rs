@@ -22,8 +22,6 @@ pub enum ErrorCode {
     InvalidCalculator,
     #[msg("Not allowed")]
     NotAllowed,
-    #[msg("Nothing to claim")]
-    NothingToClaim,
     #[msg("Serialization error")]
     SerializationError,
 }
