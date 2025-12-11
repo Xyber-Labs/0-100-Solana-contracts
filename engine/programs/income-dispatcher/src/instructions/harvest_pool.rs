@@ -175,7 +175,7 @@ fn claim_fees_from_engine<'info>(
     ctx: &Context<'_, '_, '_, 'info, HarvestPool<'info>>,
 ) -> Result<()> {
     let cpi_accounts = engine_cpi::accounts::ClaimClmmFees {
-        authority: ctx.accounts.authority.to_account_info(),
+        dispatcher_authority: ctx.accounts.authority.to_account_info(),
         raydium_program: ctx.accounts.raydium_program.to_account_info(),
         launch_state: ctx.accounts.launch_state.to_account_info(),
         escrow_authority: ctx.accounts.escrow_authority.to_account_info(),

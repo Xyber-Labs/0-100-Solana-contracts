@@ -358,7 +358,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "dispatcherAuthority",
           "signer": true,
           "pda": {
             "seeds": [

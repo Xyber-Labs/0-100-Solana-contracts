@@ -32,17 +32,13 @@ pub struct BuyBack<'info> {
     pub engine_config: Box<Account<'info, engine::state::EngineConfig>>,
 
     #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
-    pub quote_mint: Box<Account<'info, Mint>>,
+    pub wsol_mint: Box<Account<'info, Mint>>,
 
     #[account(mut, address = engine_config.xyber_mint @ ErrorCode::InvalidTokenMint)]
     pub xyber_mint: Box<Account<'info, Mint>>,
 
-    #[account(
-        mut,
-        seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Role::BuyBack as u8], quote_mint.key().as_ref()],
-        bump,
-    )]
-    pub buyback_quote_totals: Box<Account<'info, Totals>>,
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Role::BuyBack as u8], wsol_mint.key().as_ref()], bump)]
+    pub buyback_wsol_totals: Box<Account<'info, Totals>>,
 
     #[account(
         init_if_needed,
@@ -57,8 +53,8 @@ pub struct BuyBack<'info> {
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
     pub authority: AccountInfo<'info>,
 
-    #[account(mut, associated_token::mint = quote_mint, associated_token::authority = authority)]
-    pub quote_vault: Box<Account<'info, TokenAccount>>,
+    #[account(mut, associated_token::mint = wsol_mint, associated_token::authority = authority)]
+    pub wsol_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -91,12 +87,12 @@ pub struct BuyBack<'info> {
 }
 
 pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
-    let quote_amount = ctx.accounts.buyback_quote_totals.available()?;
-    require!(quote_amount > 0, ErrorCode::NothingToClaim);
+    let wsol_amount = ctx.accounts.buyback_wsol_totals.available()?;
+    require!(wsol_amount > 0, ErrorCode::NotAllowed);
 
     let xyber_balance_before = ctx.accounts.xyber_vault.amount;
 
-    execute_swap(&ctx, quote_amount)?;
+    execute_swap(&ctx, wsol_amount)?;
 
     ctx.accounts.xyber_vault.reload()?;
     let xyber_received = ctx
@@ -106,11 +102,11 @@ pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result
         .checked_sub(xyber_balance_before)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    ctx.accounts.buyback_quote_totals.add_spent(quote_amount)?;
+    ctx.accounts.buyback_wsol_totals.add_spent(wsol_amount)?;
     ctx.accounts.treasure_xyber_totals.add_harvested_impl(xyber_received)?;
 
     emit!(BuyBackExecuted {
-        quote_spent: quote_amount,
+        quote_spent: wsol_amount,
         xyber_received,
     });
 
@@ -121,18 +117,14 @@ fn execute_swap<'info>(
     ctx: &Context<'_, '_, '_, 'info, BuyBack<'info>>,
     amount_in: u64,
 ) -> Result<()> {
-    let authority_seeds = &[
-        DISPATCHER_SEED_ROOT,
-        b"authority",
-        &[ctx.bumps.authority],
-    ];
+    let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];
 
     let cpi_accounts = raydium_amm_v3::cpi::accounts::SwapSingleV2 {
         payer: ctx.accounts.authority.to_account_info(),
         amm_config: ctx.accounts.raydium_amm_config.to_account_info(),
         pool_state: ctx.accounts.raydium_pool_state.to_account_info(),
-        input_token_account: ctx.accounts.quote_vault.to_account_info(),
+        input_token_account: ctx.accounts.wsol_vault.to_account_info(),
         output_token_account: ctx.accounts.xyber_vault.to_account_info(),
         input_vault: ctx.accounts.raydium_quote_vault.to_account_info(),
         output_vault: ctx.accounts.raydium_xyber_vault.to_account_info(),
@@ -140,7 +132,7 @@ fn execute_swap<'info>(
         token_program: ctx.accounts.token_program.to_account_info(),
         token_program_2022: ctx.accounts.token_program_2022.to_account_info(),
         memo_program: ctx.accounts.memo_program.to_account_info(),
-        input_vault_mint: ctx.accounts.quote_mint.to_account_info(),
+        input_vault_mint: ctx.accounts.wsol_mint.to_account_info(),
         output_vault_mint: ctx.accounts.xyber_mint.to_account_info(),
     };
 

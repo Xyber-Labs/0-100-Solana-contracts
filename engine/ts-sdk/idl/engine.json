@@ -352,7 +352,7 @@
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "dispatcher_authority",
           "signer": true,
           "pda": {
             "seeds": [

@@ -339,10 +339,10 @@ const IncomeDispatcherSDK = {
     }): Promise<{ signature: string }> {
       const [config] = getConfigPda();
       const [authority] = getAuthorityPda();
-      const [buybackQuoteTotals] = getTotalsPda(Role.BuyBack, WSOL_MINT);
+      const [buybackWsolTotals] = getTotalsPda(Role.BuyBack, WSOL_MINT);
       const [treasureXyberTotals] = getTotalsPda(Role.Treasure, args.xyberMint);
 
-      const quoteVault = getAssociatedTokenAddressSync(WSOL_MINT, authority, true);
+      const wsolVault = getAssociatedTokenAddressSync(WSOL_MINT, authority, true);
       const xyberVault = getAssociatedTokenAddressSync(args.xyberMint, authority, true);
 
       const engineConfigPda = anchor.web3.PublicKey.findProgramAddressSync(
@@ -356,12 +356,12 @@ const IncomeDispatcherSDK = {
           payer: args.signers[0].publicKey,
           dispatcherConfig: config,
           engineConfig: engineConfigPda,
-          quoteMint: WSOL_MINT,
+          wsolMint: WSOL_MINT,
           xyberMint: args.xyberMint,
-          buybackQuoteTotals,
+          buybackWsolTotals,
           treasureXyberTotals,
           authority,
-          quoteVault,
+          wsolVault,
           xyberVault,
           raydiumPoolState: args.raydiumPoolState,
           raydiumAmmConfig: args.raydiumAmmConfig,

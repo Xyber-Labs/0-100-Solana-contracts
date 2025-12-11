@@ -144,7 +144,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "quoteMint",
+          "name": "wsolMint",
           "address": "So11111111111111111111111111111111111111112"
         },
         {
@@ -152,7 +152,7 @@ export type IncomeDispatcher = {
           "writable": true
         },
         {
-          "name": "buybackQuoteTotals",
+          "name": "buybackWsolTotals",
           "writable": true
         },
         {
@@ -203,7 +203,7 @@ export type IncomeDispatcher = {
           }
         },
         {
-          "name": "quoteVault",
+          "name": "wsolVault",
           "writable": true,
           "pda": {
             "seeds": [
@@ -250,7 +250,7 @@ export type IncomeDispatcher = {
               },
               {
                 "kind": "account",
-                "path": "quoteMint"
+                "path": "wsolMint"
               }
             ],
             "program": {
@@ -1890,11 +1890,6 @@ export type IncomeDispatcher = {
     },
     {
       "code": 6010,
-      "name": "nothingToClaim",
-      "msg": "Nothing to claim"
-    },
-    {
-      "code": 6011,
       "name": "serializationError",
       "msg": "Serialization error"
     }
