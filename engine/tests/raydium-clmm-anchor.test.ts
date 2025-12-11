@@ -2,7 +2,12 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { assert } from "chai";
 import * as fs from "fs";
-import { createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+import {
+  createMint,
+  getAccount,
+  getAssociatedTokenAddressSync,
+  getOrCreateAssociatedTokenAccount
+} from "@solana/spl-token";
 import { Decimal } from "decimal.js";
 
 import { EngineSDK } from "../ts-sdk/src/engine";
@@ -716,16 +721,45 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 15: Claim platform fees (base)", async () => {
     console.log("=== Step 15: Claim Treasure Fees (base) ===");
 
+    const platformAta = getAssociatedTokenAddressSync(baseMint, platformKeypair.publicKey, false);
+
+    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
+    const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
+    console.log("Totals before - harvested:", totalsBefore.harvested.toString(), "spent:", totalsBefore.spent.toString());
+    console.log("Available to claim:", availableBefore.toString());
+
     const { signature } = await dispatcherSdk.claimPlatform({
       mint: baseMint,
       signers: [platformKeypair],
     });
     console.log("✅ Treasure base fees claimed");
     logTx(signature);
+
+    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
+    const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
+    console.log("Totals after - harvested:", totalsAfter.harvested.toString(), "spent:", totalsAfter.spent.toString());
+    console.log("Available after:", availableAfter.toString());
+
+    const platformAccount = await getAccount(provider.connection, platformAta);
+    const platformBalanceAfter = new BN(platformAccount.amount.toString());
+    console.log("Platform balance after:", platformBalanceAfter.toString());
+
+    const spentDiff = new BN(totalsAfter.spent).sub(new BN(totalsBefore.spent));
+
+    assert.ok(spentDiff.eq(availableBefore), `Spent should increase by available amount. Expected ${availableBefore.toString()}, got ${spentDiff.toString()}`);
+    assert.ok(platformBalanceAfter.eq(availableBefore), `Platform balance should equal claimed amount. Expected ${availableBefore.toString()}, got ${platformBalanceAfter.toString()}`);
+    assert.ok(availableAfter.eqn(0), "Available should be 0 after claim");
   });
 
-  it("Step 15b: Claim platform fees (quote)", async () => {
-    console.log("=== Step 15b: Claim Treasure Fees (quote) ===");
+  it("Step 15b: Claim platform fees (quote/WSOL)", async () => {
+    console.log("=== Step 15b: Claim Treasure Fees (quote/WSOL) ===");
+
+    const platformAta = getAssociatedTokenAddressSync(WSOL_MINT, platformKeypair.publicKey, false);
+
+    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, WSOL_MINT);
+    const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
+    console.log("Totals before - harvested:", totalsBefore.harvested.toString(), "spent:", totalsBefore.spent.toString());
+    console.log("Available to claim:", availableBefore.toString());
 
     const { signature } = await dispatcherSdk.claimPlatform({
       mint: WSOL_MINT,
@@ -733,6 +767,61 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
     console.log("✅ Treasure quote fees claimed");
     logTx(signature);
+
+    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, WSOL_MINT);
+    const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
+    console.log("Totals after - harvested:", totalsAfter.harvested.toString(), "spent:", totalsAfter.spent.toString());
+    console.log("Available after:", availableAfter.toString());
+
+    const platformAccount = await getAccount(provider.connection, platformAta);
+    const platformBalanceAfter = new BN(platformAccount.amount.toString());
+    console.log("Platform WSOL balance after:", platformBalanceAfter.toString());
+
+    const spentDiff = new BN(totalsAfter.spent).sub(new BN(totalsBefore.spent));
+
+    assert.ok(spentDiff.eq(availableBefore), `Spent should increase by available amount. Expected ${availableBefore.toString()}, got ${spentDiff.toString()}`);
+    assert.ok(platformBalanceAfter.eq(availableBefore), `Platform WSOL balance should equal claimed amount. Expected ${availableBefore.toString()}, got ${platformBalanceAfter.toString()}`);
+    assert.ok(availableAfter.eqn(0), "Available should be 0 after claim");
+  });
+
+  it("Step 15c: Verify repeat claim returns 0 (idempotency)", async () => {
+    console.log("=== Step 15c: Verify Repeat Claim Returns 0 ===");
+
+    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
+    const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
+    assert.ok(availableBefore.eqn(0), "Available should be 0 before repeat claim");
+
+    const platformAta = getAssociatedTokenAddressSync(baseMint, platformKeypair.publicKey, false);
+    const platformAccountBefore = await getAccount(provider.connection, platformAta);
+    const balanceBefore = new BN(platformAccountBefore.amount.toString());
+
+    const { signature } = await dispatcherSdk.claimPlatform({
+      mint: baseMint,
+      signers: [platformKeypair],
+    });
+    console.log("Repeat claim executed (should be no-op)");
+    logTx(signature);
+
+    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
+    const platformAccountAfter = await getAccount(provider.connection, platformAta);
+    const balanceAfter = new BN(platformAccountAfter.amount.toString());
+
+    assert.ok(new BN(totalsAfter.spent).eq(new BN(totalsBefore.spent)), "Spent should not change on repeat claim");
+    assert.ok(balanceAfter.eq(balanceBefore), "Balance should not change on repeat claim");
+    console.log("✅ Repeat claim correctly returned 0");
+  });
+
+  it("Step 15d: Unauthorized wallet cannot claim platform fees", async () => {
+    console.log("=== Step 15d: Unauthorized Wallet Cannot Claim ===");
+
+    await utils.doAndCheckError(
+      dispatcherSdk.claimPlatform({
+        mint: baseMint,
+        signers: [buyer1Keypair],
+      }),
+      "Unauthorized"
+    );
+    console.log("✅ Unauthorized wallet correctly rejected");
   });
 
   it("Step 16: Claim creator fees (base + quote)", async () => {
