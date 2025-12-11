@@ -1,3 +1,5 @@
+use core::cmp::{Eq, Ord, PartialOrd};
+
 use anchor_lang::prelude::*;
 
 use super::{errors::ErrorCode, income_calculator::IncomeCalculator};

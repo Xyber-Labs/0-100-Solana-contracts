@@ -11,8 +11,11 @@ use engine::cpi as engine_cpi;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role::{self, BuyBack, Community, Creator, Treasure},
-    state::{Config, Totals},
+    state::{
+        Config,
+        Role::{self, BuyBack, Community, Creator, Treasure},
+        Totals,
+    },
 };
 
 const POOL_STATE_SQRT_PRICE_X64_OFFSET: usize = 253;
@@ -197,11 +200,7 @@ fn claim_fees_from_engine<'info>(
         vault_1_mint: ctx.accounts.base_mint.to_account_info(),
     };
 
-    let authority_seeds = &[
-        DISPATCHER_SEED_ROOT,
-        b"authority",
-        &[ctx.bumps.authority],
-    ];
+    let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signers = &[&authority_seeds[..]];
 
     let cpi_context = CpiContext::new_with_signer(

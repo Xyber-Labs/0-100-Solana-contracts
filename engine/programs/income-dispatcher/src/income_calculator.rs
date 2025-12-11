@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::ErrorCode;
+use crate::{errors::ErrorCode, state::Role};
 
 const BASIS_POINTS: u128 = 10_000;
 
@@ -19,20 +19,6 @@ macro_rules! mcap {
 }
 
 pub(crate) use mcap;
-
-#[derive(
-    Clone, Copy, PartialEq, Eq, Ord, PartialOrd, AnchorSerialize, AnchorDeserialize, InitSpace,
-)]
-pub enum Role {
-    Treasure = 0,
-    Creator = 1,
-    Community = 2,
-    BuyBack = 3,
-}
-
-impl Role {
-    pub const COUNT: usize = 4;
-}
 
 #[account]
 #[derive(InitSpace)]
@@ -212,7 +198,7 @@ mod tests {
 
     struct TestSetup {
         calculator: IncomeCalculator,
-        treasure: Role,
+        platform: Role,
         community: Role,
         creator: Role,
     }
@@ -434,7 +420,7 @@ mod tests {
 
         TestSetup {
             calculator,
-            treasure,
+            platform: treasure,
             community,
             creator,
         }

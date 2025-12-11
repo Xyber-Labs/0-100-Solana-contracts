@@ -7,8 +7,7 @@ use anchor_spl::{
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role::Treasure,
-    state::{Totals, Config},
+    state::{Config, Role::Treasure, Totals},
 };
 
 use super::claim::ClaimEvent;
@@ -61,11 +60,7 @@ pub fn claim_platform(ctx: Context<ClaimPlatform>) -> Result<()> {
         return Ok(());
     }
 
-    let authority_seeds = &[
-        DISPATCHER_SEED_ROOT,
-        b"authority",
-        &[ctx.bumps.authority],
-    ];
+    let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];
 
     transfer_checked(

@@ -10,8 +10,7 @@ use raydium_amm_v3::program::AmmV3;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role,
-    state::{Config, Totals},
+    state::{Config, Role, Totals},
 };
 
 #[event]

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::instructions::*;
+use instructions::*;
+use state::Role;
 
 pub mod errors;
 pub mod income_calculator;
@@ -38,7 +39,7 @@ pub mod income_dispatcher {
     pub fn claim(
         ctx: Context<Claim>,
         project_id: u64,
-        role: income_calculator::Role,
+        role: Role,
         nonce_value: u64,
         amount: Option<u64>,
     ) -> Result<()> {
@@ -49,9 +50,7 @@ pub mod income_dispatcher {
         instructions::claim_platform(ctx)
     }
 
-    pub fn buyback<'info>(
-        ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>,
-    ) -> Result<()> {
+    pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
         instructions::buyback(ctx)
     }
 }

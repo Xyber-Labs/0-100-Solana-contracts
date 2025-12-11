@@ -7,8 +7,11 @@ use anchor_spl::{
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role::{self, Community, Creator},
-    state::{Config, Nonce, Totals},
+    state::{
+        Config, Nonce,
+        Role::{self, Community, Creator},
+        Totals,
+    },
 };
 
 #[derive(Accounts)]
@@ -95,11 +98,7 @@ pub fn claim(
         return Ok(());
     }
 
-    let authority_seeds = &[
-        DISPATCHER_SEED_ROOT,
-        b"authority",
-        &[ctx.bumps.authority],
-    ];
+    let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];
 
     transfer_checked(

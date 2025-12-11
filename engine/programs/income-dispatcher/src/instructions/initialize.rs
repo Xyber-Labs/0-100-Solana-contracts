@@ -3,8 +3,8 @@ use anchor_lang::prelude::*;
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::{DistributionRule, IncomeCalculator, mcap, Role},
-    state::Config,
+    income_calculator::{DistributionRule, IncomeCalculator, mcap},
+    state::{Config, Role},
 };
 
 #[cfg(feature = "devnet")]
