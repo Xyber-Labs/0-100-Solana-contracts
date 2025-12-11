@@ -1271,6 +1271,11 @@ const EngineSDK = {
     //         FETCH helpers
     // =============================
 
+    async function fetchEngineConfig() {
+      const [configPda] = txBuilder.getConfigPda();
+      return (program.account as any).engineConfig.fetch(configPda);
+    }
+
     async function fetchLaunch(launch: anchor.web3.PublicKey) {
       return txBuilder.fetchLaunch(launch);
     }
@@ -1503,6 +1508,7 @@ const EngineSDK = {
       preparePoolCreationTx: txBuilder.preparePoolCreationTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
 
+      fetchEngineConfig,
       fetchLaunch,
       fetchUserContribution,
       fetchCreatorGrant,
@@ -1521,6 +1527,7 @@ const EngineSDK = {
       getRaydiumAmmConfigPda: txBuilder.getRaydiumAmmConfigPda.bind(txBuilder),
       getRaydiumPoolPda: txBuilder.getRaydiumPoolPda.bind(txBuilder),
       getRaydiumPoolVaultPda: txBuilder.getRaydiumPoolVaultPda.bind(txBuilder),
+      getRaydiumObservationStatePda: txBuilder.getRaydiumObservationStatePda.bind(txBuilder),
       getAssociatedTokenAddress: txBuilder.getAssociatedTokenAddress.bind(txBuilder),
 
       initEngineConfig,

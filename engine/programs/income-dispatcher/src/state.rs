@@ -2,7 +2,9 @@ use anchor_lang::prelude::*;
 
 use super::{errors::ErrorCode, income_calculator::IncomeCalculator};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(
+    Clone, Copy, PartialEq, Eq, PartialOrd, Ord, AnchorSerialize, AnchorDeserialize, InitSpace,
+)]
 #[repr(u8)]
 pub enum Role {
     Treasure = 0,

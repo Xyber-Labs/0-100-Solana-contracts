@@ -8,21 +8,15 @@ import {
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
 import IncomeDispatcherIDLJson from "../../idl/income_dispatcher.json";
 import EngineIDL from "../../idl/engine.json";
-import { getConstant, getConstantRaw } from "../utils";
+import { getConstant, getConstantRaw, getEnumVariants } from "../utils";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 
 const SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", IncomeDispatcherIDLJson as any));
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDL as any));
 
-export const Role = {
-  Treasure: 0,
-  Creator: 1,
-  Community: 2,
-  BuyBack: 3,
-} as const;
-
-export type RoleType = typeof Role[keyof typeof Role];
+export const Role = getEnumVariants("Role", IncomeDispatcherIDLJson as any);
+export type RoleType = number;
 
 export class TxBuilder {
   private program: Program<IncomeDispatcherIDL>;
