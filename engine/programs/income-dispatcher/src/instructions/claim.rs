@@ -80,8 +80,6 @@ pub fn claim(
     _nonce_value: u64,
     amount: Option<u64>,
 ) -> Result<()> {
-    require!(role == Role::Creator || role == Role::Community, ErrorCode::NotAllowed);
-
     verify_role_authority(&ctx, role)?;
 
     ctx.accounts.nonce.nonce =
