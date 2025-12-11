@@ -142,8 +142,7 @@
           "address": "So11111111111111111111111111111111111111112"
         },
         {
-          "name": "xyber_mint",
-          "writable": true
+          "name": "xyber_mint"
         },
         {
           "name": "buyback_wsol_totals",
@@ -2267,6 +2266,9 @@
     },
     {
       "name": "Role",
+      "repr": {
+        "kind": "rust"
+      },
       "type": {
         "kind": "enum",
         "variants": [
@@ -2274,13 +2276,13 @@
             "name": "Treasure"
           },
           {
+            "name": "BuyBack"
+          },
+          {
             "name": "Creator"
           },
           {
             "name": "Community"
-          },
-          {
-            "name": "BuyBack"
           }
         ]
       }

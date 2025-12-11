@@ -1,8 +1,15 @@
-use core::cmp::{Eq, Ord, PartialOrd};
-
 use anchor_lang::prelude::*;
 
 use super::{errors::ErrorCode, income_calculator::IncomeCalculator};
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[repr(u8)]
+pub enum Role {
+    Treasure = 0,
+    BuyBack = 1,
+    Creator = 2,
+    Community = 3,
+}
 
 #[account]
 #[derive(InitSpace)]

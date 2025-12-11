@@ -81,7 +81,7 @@ pub fn claim_platform(ctx: Context<ClaimPlatform>) -> Result<()> {
     ctx.accounts.totals.add_spent(amount_to_claim)?;
 
     emit!(ClaimEvent {
-        project_id: 0,
+        project_id: u64::MAX,
         role: Treasure,
         mint: ctx.accounts.mint.key(),
         recipient: ctx.accounts.recipient.key(),

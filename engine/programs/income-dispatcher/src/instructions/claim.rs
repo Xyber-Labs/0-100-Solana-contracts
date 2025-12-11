@@ -7,11 +7,7 @@ use anchor_spl::{
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    state::{
-        Config, Nonce,
-        Role::{self, Community, Creator},
-        Totals,
-    },
+    state::{Config, Nonce, Role, Totals},
 };
 
 #[derive(Accounts)]
@@ -84,7 +80,7 @@ pub fn claim(
     _nonce_value: u64,
     amount: Option<u64>,
 ) -> Result<()> {
-    require!(role == Creator || role == Community, ErrorCode::NotAllowed);
+    require!(role == Role::Creator || role == Role::Community, ErrorCode::NotAllowed);
 
     verify_role_authority(&ctx, role)?;
 
@@ -131,13 +127,13 @@ pub fn claim(
 
 fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
     match role {
-        Creator => {
+        Role::Creator => {
             require!(
                 ctx.accounts.recipient.key() == ctx.accounts.launch_state.creator,
                 ErrorCode::Unauthorized
             );
         }
-        Community => {
+        Role::Community => {
             require!(!ctx.remaining_accounts.is_empty(), ErrorCode::Unauthorized);
             let community_signer = &ctx.remaining_accounts[0];
             require!(community_signer.is_signer, ErrorCode::Unauthorized);

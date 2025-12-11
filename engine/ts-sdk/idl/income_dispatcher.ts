@@ -148,8 +148,7 @@ export type IncomeDispatcher = {
           "address": "So11111111111111111111111111111111111111112"
         },
         {
-          "name": "xyberMint",
-          "writable": true
+          "name": "xyberMint"
         },
         {
           "name": "buybackWsolTotals",
@@ -2273,6 +2272,9 @@ export type IncomeDispatcher = {
     },
     {
       "name": "role",
+      "repr": {
+        "kind": "rust"
+      },
       "type": {
         "kind": "enum",
         "variants": [
@@ -2280,13 +2282,13 @@ export type IncomeDispatcher = {
             "name": "treasure"
           },
           {
+            "name": "buyBack"
+          },
+          {
             "name": "creator"
           },
           {
             "name": "community"
-          },
-          {
-            "name": "buyBack"
           }
         ]
       }
