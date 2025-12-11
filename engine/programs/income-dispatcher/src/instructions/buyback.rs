@@ -34,7 +34,7 @@ pub struct BuyBack<'info> {
     #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
     pub wsol_mint: Box<Account<'info, Mint>>,
 
-    #[account(mut, address = engine_config.xyber_mint @ ErrorCode::InvalidTokenMint)]
+    #[account(address = engine_config.xyber_mint @ ErrorCode::InvalidTokenMint)]
     pub xyber_mint: Box<Account<'info, Mint>>,
 
     #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Role::BuyBack as u8], wsol_mint.key().as_ref()], bump)]
