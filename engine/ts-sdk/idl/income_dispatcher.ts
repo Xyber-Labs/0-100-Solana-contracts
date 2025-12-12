@@ -1891,6 +1891,11 @@ export type IncomeDispatcher = {
       "code": 6010,
       "name": "serializationError",
       "msg": "Serialization error"
+    },
+    {
+      "code": 6011,
+      "name": "nothingToClaim",
+      "msg": "Nothing to claim"
     }
   ],
   "types": [

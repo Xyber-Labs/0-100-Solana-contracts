@@ -90,7 +90,7 @@ export class TxBuilder {
     ];
   }
 
-  async claimSingleIx(params: {
+  async claimIx(params: {
     role: { creator: {} } | { community: {} };
     projectId: BN;
     launchState: web3.PublicKey;
@@ -130,51 +130,18 @@ export class TxBuilder {
       .instruction();
   }
 
-  async claimIx(params: {
-    role: { creator: {} } | { community: {} };
-    projectId: BN;
-    launchState: web3.PublicKey;
-    recipient: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    quoteMint: web3.PublicKey;
-    nonce: BN;
-    remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
-  }): Promise<web3.TransactionInstruction[]> {
-    const baseIx = await this.claimSingleIx({
-      role: params.role,
-      projectId: params.projectId,
-      launchState: params.launchState,
-      recipient: params.recipient,
-      mint: params.baseMint,
-      nonce: params.nonce,
-      remainingAccounts: params.remainingAccounts,
-    });
-
-    const quoteIx = await this.claimSingleIx({
-      role: params.role,
-      projectId: params.projectId,
-      launchState: params.launchState,
-      recipient: params.recipient,
-      mint: params.quoteMint,
-      nonce: params.nonce.add(new BN(1)),
-      remainingAccounts: params.remainingAccounts,
-    });
-
-    return [baseIx, quoteIx];
-  }
-
   async claimTx(params: {
     role: { creator: {} } | { community: {} };
     projectId: BN;
     launchState: web3.PublicKey;
     recipient: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    quoteMint: web3.PublicKey;
+    mint: web3.PublicKey;
     nonce: BN;
+    amount?: BN;
     remainingAccounts?: { pubkey: web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
   }): Promise<web3.Transaction> {
-    const instructions = await this.claimIx(params);
-    return new web3.Transaction().add(...instructions);
+    const ix = await this.claimIx(params);
+    return new web3.Transaction().add(ix);
   }
 
   async harvestPoolIx(params: {

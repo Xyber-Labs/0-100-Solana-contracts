@@ -20,14 +20,10 @@ pub struct ClaimPlatform<'info> {
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]
     pub config: Box<Account<'info, Config>>,
 
-    #[account(
-        mut,
-        seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], mint.key().as_ref()],
-        bump,
-    )]
+    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"totals", &[Treasure as u8], mint.key().as_ref()], bump)]
     pub totals: Box<Account<'info, Totals>>,
 
-    /// CHECK: Harvest authority PDA
+    /// CHECK: authority PDA
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
     pub authority: AccountInfo<'info>,
 
@@ -56,9 +52,7 @@ pub struct ClaimPlatform<'info> {
 pub fn claim_platform(ctx: Context<ClaimPlatform>) -> Result<()> {
     let amount_to_claim = ctx.accounts.totals.available()?;
 
-    if amount_to_claim == 0 {
-        return Ok(());
-    }
+    require!(amount_to_claim > 0, ErrorCode::NothingToClaim);
 
     let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];

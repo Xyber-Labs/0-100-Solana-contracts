@@ -718,37 +718,18 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("✅ Harvest completed successfully");
   });
 
-  it("Step 15: Claim platform fees (base)", async () => {
-    console.log("=== Step 15: Claim Treasure Fees (base) ===");
+  it("Step 15: Claim platform fees (base) - expect NothingToClaim", async () => {
+    console.log("=== Step 15: Claim Treasure Fees (base) - expect NothingToClaim ===");
+    console.log("Platform only receives SOL from deposits, not base tokens");
 
-    const platformAta = getAssociatedTokenAddressSync(baseMint, platformKeypair.publicKey, false);
-
-    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
-    const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
-    console.log("Totals before - harvested:", totalsBefore.harvested.toString(), "spent:", totalsBefore.spent.toString());
-    console.log("Available to claim:", availableBefore.toString());
-
-    const { signature } = await dispatcherSdk.claimPlatform({
-      mint: baseMint,
-      signers: [platformKeypair],
-    });
-    console.log("✅ Treasure base fees claimed");
-    logTx(signature);
-
-    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
-    const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
-    console.log("Totals after - harvested:", totalsAfter.harvested.toString(), "spent:", totalsAfter.spent.toString());
-    console.log("Available after:", availableAfter.toString());
-
-    const platformAccount = await getAccount(provider.connection, platformAta);
-    const platformBalanceAfter = new BN(platformAccount.amount.toString());
-    console.log("Platform balance after:", platformBalanceAfter.toString());
-
-    const spentDiff = new BN(totalsAfter.spent).sub(new BN(totalsBefore.spent));
-
-    assert.ok(spentDiff.eq(availableBefore), `Spent should increase by available amount. Expected ${availableBefore.toString()}, got ${spentDiff.toString()}`);
-    assert.ok(platformBalanceAfter.eq(availableBefore), `Platform balance should equal claimed amount. Expected ${availableBefore.toString()}, got ${platformBalanceAfter.toString()}`);
-    assert.ok(availableAfter.eqn(0), "Available should be 0 after claim");
+    await utils.doAndCheckError(
+      dispatcherSdk.claimPlatform({
+        mint: baseMint,
+        signers: [platformKeypair],
+      }),
+      "NothingToClaim"
+    );
+    console.log("✅ NothingToClaim error as expected");
   });
 
   it("Step 15b: Claim platform fees (quote/WSOL)", async () => {
@@ -784,31 +765,21 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     assert.ok(availableAfter.eqn(0), "Available should be 0 after claim");
   });
 
-  it("Step 15c: Verify repeat claim returns 0 (idempotency)", async () => {
-    console.log("=== Step 15c: Verify Repeat Claim Returns 0 ===");
+  it("Step 15c: Verify repeat claim throws NothingToClaim", async () => {
+    console.log("=== Step 15c: Verify Repeat Claim Throws NothingToClaim ===");
 
-    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
+    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, WSOL_MINT);
     const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
-    assert.ok(availableBefore.eqn(0), "Available should be 0 before repeat claim");
+    assert.ok(availableBefore.eqn(0), "Available should be 0 after first claim");
 
-    const platformAta = getAssociatedTokenAddressSync(baseMint, platformKeypair.publicKey, false);
-    const platformAccountBefore = await getAccount(provider.connection, platformAta);
-    const balanceBefore = new BN(platformAccountBefore.amount.toString());
-
-    const { signature } = await dispatcherSdk.claimPlatform({
-      mint: baseMint,
-      signers: [platformKeypair],
-    });
-    console.log("Repeat claim executed (should be no-op)");
-    logTx(signature);
-
-    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, baseMint);
-    const platformAccountAfter = await getAccount(provider.connection, platformAta);
-    const balanceAfter = new BN(platformAccountAfter.amount.toString());
-
-    assert.ok(new BN(totalsAfter.spent).eq(new BN(totalsBefore.spent)), "Spent should not change on repeat claim");
-    assert.ok(balanceAfter.eq(balanceBefore), "Balance should not change on repeat claim");
-    console.log("✅ Repeat claim correctly returned 0");
+    await utils.doAndCheckError(
+      dispatcherSdk.claimPlatform({
+        mint: WSOL_MINT,
+        signers: [platformKeypair],
+      }),
+      "NothingToClaim"
+    );
+    console.log("✅ Repeat claim correctly throws NothingToClaim");
   });
 
   it("Step 15d: Unauthorized wallet cannot claim platform fees", async () => {
@@ -824,33 +795,47 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("✅ Unauthorized wallet correctly rejected");
   });
 
-  it("Step 16: Claim creator fees (base + quote)", async () => {
-    console.log("=== Step 16: Claim Creator Fees (base + quote) ===");
+  it("Step 16: Claim creator fees (base)", async () => {
+    console.log("=== Step 16: Claim Creator Fees (base) ===");
 
     const { signature } = await dispatcherSdk.claim({
       role: { creator: {} },
       projectId: launchStateData.projectId,
       launchState: launchPda,
       recipient: creatorKeypair.publicKey,
-      baseMint: baseMint,
-      quoteMint: WSOL_MINT,
+      mint: baseMint,
       nonce: new BN(0),
       signers: [creatorKeypair],
     });
-    console.log("✅ Creator base + quote fees claimed");
+    console.log("✅ Creator base fees claimed");
     logTx(signature);
   });
 
-  it("Step 17: Claim community fees (base + quote)", async () => {
-    console.log("=== Step 17: Claim Community Fees (base + quote) ===");
+  it("Step 16b: Claim creator fees (quote)", async () => {
+    console.log("=== Step 16b: Claim Creator Fees (quote) ===");
+
+    const { signature } = await dispatcherSdk.claim({
+      role: { creator: {} },
+      projectId: launchStateData.projectId,
+      launchState: launchPda,
+      recipient: creatorKeypair.publicKey,
+      mint: WSOL_MINT,
+      nonce: new BN(1),
+      signers: [creatorKeypair],
+    });
+    console.log("✅ Creator quote fees claimed");
+    logTx(signature);
+  });
+
+  it("Step 17: Claim community fees (base)", async () => {
+    console.log("=== Step 17: Claim Community Fees (base) ===");
 
     const { signature } = await dispatcherSdk.claim({
       role: { community: {} },
       projectId: launchStateData.projectId,
       launchState: launchPda,
       recipient: buyer1Keypair.publicKey,
-      baseMint: baseMint,
-      quoteMint: WSOL_MINT,
+      mint: baseMint,
       nonce: new BN(0),
       remainingAccounts: [
         { pubkey: communityWallet.publicKey, isWritable: false, isSigner: true },
@@ -858,11 +843,33 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [buyer1Keypair, communityWallet],
     });
 
-    console.log("✅ Community base + quote fees claimed");
+    console.log("✅ Community base fees claimed");
     logTx(signature);
 
     const nonceAccount = await dispatcherSdk.fetchNonce(launchStateData.projectId, buyer1Keypair.publicKey);
-    assert.equal(nonceAccount.nonce.toNumber(), 2, "Nonce should be 2 after claiming base + quote");
+    assert.equal(nonceAccount.nonce.toNumber(), 1, "Nonce should be 1 after claiming base");
+  });
+
+  it("Step 17b: Claim community fees (quote) - expect NothingToClaim", async () => {
+    console.log("=== Step 17b: Claim Community Fees (quote) - expect NothingToClaim ===");
+    console.log("Community only receives base tokens from pool fees, not SOL");
+
+    await utils.doAndCheckError(
+      dispatcherSdk.claim({
+        role: { community: {} },
+        projectId: launchStateData.projectId,
+        launchState: launchPda,
+        recipient: buyer1Keypair.publicKey,
+        mint: WSOL_MINT,
+        nonce: new BN(1),
+        remainingAccounts: [
+          { pubkey: communityWallet.publicKey, isWritable: false, isSigner: true },
+        ],
+        signers: [buyer1Keypair, communityWallet],
+      }),
+      "NothingToClaim"
+    );
+    console.log("✅ NothingToClaim error as expected");
   });
 
   it("Step 18: Verify BuyBack claim is not allowed (SDK only supports creator/community)", async () => {

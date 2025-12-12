@@ -98,9 +98,9 @@ const IncomeDispatcherSDK = {
       projectId: BN;
       launchState: anchor.web3.PublicKey;
       recipient: anchor.web3.PublicKey;
-      baseMint: anchor.web3.PublicKey;
-      quoteMint: anchor.web3.PublicKey;
+      mint: anchor.web3.PublicKey;
       nonce: BN;
+      amount?: BN;
       remainingAccounts?: { pubkey: anchor.web3.PublicKey; isWritable: boolean; isSigner: boolean }[];
       signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string }> {
@@ -109,9 +109,9 @@ const IncomeDispatcherSDK = {
         projectId: args.projectId,
         launchState: args.launchState,
         recipient: args.recipient,
-        baseMint: args.baseMint,
-        quoteMint: args.quoteMint,
+        mint: args.mint,
         nonce: args.nonce,
+        amount: args.amount,
         remainingAccounts: args.remainingAccounts,
       });
 

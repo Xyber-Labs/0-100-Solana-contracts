@@ -88,9 +88,7 @@ pub fn claim(
     let available = ctx.accounts.totals.available()?;
     let amount_to_claim = amount.unwrap_or(available).min(available);
 
-    if amount_to_claim == 0 {
-        return Ok(());
-    }
+    require!(amount_to_claim > 0, ErrorCode::NothingToClaim);
 
     let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];

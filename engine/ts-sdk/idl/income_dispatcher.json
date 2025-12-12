@@ -1885,6 +1885,11 @@
       "code": 6010,
       "name": "SerializationError",
       "msg": "Serialization error"
+    },
+    {
+      "code": 6011,
+      "name": "NothingToClaim",
+      "msg": "Nothing to claim"
     }
   ],
   "types": [
