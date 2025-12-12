@@ -44,20 +44,20 @@ impl Totals {
         Ok(())
     }
 
-    pub fn try_from_account(account: &AccountInfo) -> Result<Self> {
-        let data = account.try_borrow_data()?;
-        Self::try_deserialize(&mut &data[..]).map_err(|_| ErrorCode::SerializationError.into())
-    }
-
-    pub fn write_to_account(&self, account: &AccountInfo) -> Result<()> {
-        let mut data = account.try_borrow_mut_data()?;
-        self.try_serialize(&mut &mut data[..]).map_err(|_| ErrorCode::SerializationError.into())
-    }
-
     pub fn add_harvested(account: &AccountInfo, amount: u64) -> Result<()> {
         let mut totals = Self::try_from_account(account)?;
         totals.add_harvested_impl(amount)?;
         totals.write_to_account(account)
+    }
+
+    fn try_from_account(account: &AccountInfo) -> Result<Self> {
+        let data = account.try_borrow_data()?;
+        Self::try_deserialize(&mut &data[..]).map_err(|_| ErrorCode::SerializationError.into())
+    }
+
+    fn write_to_account(&self, account: &AccountInfo) -> Result<()> {
+        let mut data = account.try_borrow_mut_data()?;
+        self.try_serialize(&mut &mut data[..]).map_err(|_| ErrorCode::SerializationError.into())
     }
 }
 
