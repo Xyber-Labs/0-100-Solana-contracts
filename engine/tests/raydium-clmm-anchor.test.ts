@@ -11,7 +11,7 @@ import {
 import { Decimal } from "decimal.js";
 
 import { EngineSDK } from "../ts-sdk/src/engine";
-import { IncomeDispatcherSDK } from "../ts-sdk/src/income-dispatcher";
+import { IncomeDispatcherSDK, Role } from "../ts-sdk/src/income-dispatcher";
 import { PoolUtils, Raydium, TxVersion } from "@raydium-io/raydium-sdk-v2";
 
 import * as utils from "./utils";
@@ -39,9 +39,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   const sdk = EngineSDK.create(provider, program, admin1Keypair);
   const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
-  const { Role } = dispatcherSdk;
-
-  const logTx = (sig: string) => console.log("   tx:", utils.getExplorerUrl(provider, sig));
 
   let launchPda: anchor.web3.PublicKey;
   let baseMint: anchor.web3.PublicKey;
@@ -236,7 +233,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
         signers: [deployerKeypair],
       });
       console.log("✅ Income-dispatcher initialized");
-      logTx(signature);
+      console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
     } catch (e) {
       console.log("Income-dispatcher config already exists, skipping initialization.");
     }
@@ -261,7 +258,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     launchPda = launch;
 
     console.log("✅ Launch initialized");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
     console.log("   Launch PDA:", launchPda.toString());
 
     const launchData = await sdk.fetchLaunch(launchPda);
@@ -276,7 +273,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ Roster initialized");
-    logTx(rosterSig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, rosterSig));
 
     console.log("=== Initialize Roster Shard ===");
     const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
@@ -296,7 +293,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       shardId: 1,
     });
     console.log(`✅ Deposit 1 (buyer1: ${BUYER1_AMOUNT} SOL)`);
-    logTx(dep1Sig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, dep1Sig));
 
     const { signature: dep2Sig } = await sdk.deposit({
       launch: launchPda,
@@ -305,7 +302,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       shardId: 1,
     });
     console.log(`✅ Deposit 2 (buyer2: ${BUYER2_AMOUNT} SOL)`);
-    logTx(dep2Sig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, dep2Sig));
 
     const { signature: dep3Sig } = await sdk.deposit({
       launch: launchPda,
@@ -314,7 +311,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       shardId: 1,
     });
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
-    logTx(dep3Sig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
 
     const launchData = await sdk.fetchLaunch(launchPda);
     const totalSOL = launchData.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL;
@@ -345,7 +342,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ Roster shard finalized");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
   });
 
   it("Step 7: Set VRF seed", async () => {
@@ -357,7 +354,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ VRF seed set");
-    logTx(seedSig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, seedSig));
   });
 
   it("Step 8: Prepare pool creation", async () => {
@@ -369,7 +366,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ Pool creation prepared");
-    logTx(prepSig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, prepSig));
   });
 
   it("Step 9: Prepare quote mint", async () => {
@@ -407,7 +404,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     baseVault = result.baseVault;
 
     console.log("✅ Pool created");
-    logTx(result.signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, result.signature));
     console.log("   Base Mint:", baseMint.toString());
     console.log("   Base Token ATA:", baseTokenAta.toString());
     console.log("   Quote Vault:", quoteVault.toString());
@@ -438,7 +435,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await provider.connection.confirmTransaction(addLiquiditySig);
 
     console.log("✅ Liquidity added");
-    logTx(addLiquiditySig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, addLiquiditySig));
 
     raydiumPositionNftMint = addClmmLiquidityTx.raydiumPositionNftMint;
     raydiumPositionNftAccount = addClmmLiquidityTx.raydiumPositionNftAccount;
@@ -470,7 +467,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       );
       const fundSig = await provider.sendAndConfirm(fundTx, [admin1Keypair]);
       console.log(`✅ Funded trader ${i + 1}`);
-      logTx(fundSig);
+      console.log("Explorer url:", utils.getExplorerUrl(provider, fundSig));
     }
     const range = await sdk.getLiquidityRange({
       launch: launchPda,
@@ -545,7 +542,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const buyResult = await utils.withNoLogging(() => executeBuy({ sendAndConfirm: true }));
     console.log(`✅ Buy completed (traders[0])`);
-    logTx(buyResult.txId);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, buyResult.txId));
 
     // traders[0] sells some base tokens back (base → WSOL) to generate base fees
     console.log("\n--- traders[0] sells base tokens to generate base fees ---");
@@ -580,7 +577,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const sellResult = await utils.withNoLogging(() => executeSell({ sendAndConfirm: true }));
     console.log(`✅ Sell completed (traders[0])`);
-    logTx(sellResult.txId);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, sellResult.txId));
   });
 
   it("Step 14: Harvest CLMM fees through income-dispatcher", async () => {
@@ -656,7 +653,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       [admin1Keypair]
     );
     console.log("✅ CLMM fees harvested (ALT:", altAddress.toString(), ")");
-    logTx(harvestSig);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, harvestSig));
 
     type IncomeHarvestedEvent = anchor.IdlEvents<typeof incomeDispatcherProgram.idl>["incomeHarvested"];
 
@@ -747,7 +744,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [platformKeypair],
     });
     console.log("✅ Treasure quote fees claimed");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
 
     const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, WSOL_MINT);
     const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
@@ -808,7 +805,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [creatorKeypair],
     });
     console.log("✅ Creator base fees claimed");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
   });
 
   it("Step 16b: Claim creator fees (quote)", async () => {
@@ -824,7 +821,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [creatorKeypair],
     });
     console.log("✅ Creator quote fees claimed");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
   });
 
   it("Step 17: Claim community fees (base)", async () => {
@@ -844,7 +841,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ Community base fees claimed");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
 
     const nonceAccount = await dispatcherSdk.fetchNonce(launchStateData.projectId, buyer1Keypair.publicKey);
     assert.equal(nonceAccount.nonce.toNumber(), 1, "Nonce should be 1 after claiming base");
@@ -981,7 +978,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
     console.log("✅ XYBER/SOL pool created");
-    logTx(txId);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
 
     // Get pool addresses from extInfo
     const poolId = extInfo.address.id;
@@ -1055,7 +1052,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
     console.log("✅ Position opened");
-    logTx(txId);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
 
     // Set tick arrays for buyback swap
     const currentPriceTick = -69077;
@@ -1226,7 +1223,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     console.log("✅ BuyBack executed");
-    logTx(result.signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, result.signature));
 
     // Verify treasure received XYBER
     const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
@@ -1282,7 +1279,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       signers: [platformKeypair],
     });
     console.log("✅ XYBER claimed");
-    logTx(signature);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
 
     // Verify claim
     const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
