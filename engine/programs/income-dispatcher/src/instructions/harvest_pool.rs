@@ -255,8 +255,8 @@ fn distribute_income<'info>(
 
     let distribution = ctx.accounts.config.income_calculator.get_distribution(
         sqrt_price_x64,
-        base_harvested as u128,
-        quote_harvested as u128,
+        base_harvested,
+        quote_harvested,
     )?;
 
     for income in distribution.incomes {

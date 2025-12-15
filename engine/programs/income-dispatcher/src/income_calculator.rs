@@ -51,8 +51,8 @@ impl DistributionRule {
 #[derive(Clone)]
 pub struct Income {
     pub recipient: Role,
-    pub base_token: u128,
-    pub quote_token: u128,
+    pub base_token: u64,
+    pub quote_token: u64,
 }
 
 pub struct Distribution {
@@ -118,14 +118,16 @@ impl IncomeCalculator {
     pub fn get_distribution(
         &self,
         sqrt_price_x64: u128,
-        base_token_volume: u128,
-        quote_token_volume: u128,
+        base_token_volume: u64,
+        quote_token_volume: u64,
     ) -> Result<Box<Distribution>> {
         let applicable_rules = self.get_rules_by_price(sqrt_price_x64)?;
 
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
 
         // Calculate price dynamically: price_in_quote = (quote_volume * 10^base_decimals) / base_volume
+        let base_token_volume = base_token_volume as u128;
+        let quote_token_volume = quote_token_volume as u128;
         let price_in_quote = if base_token_volume > 0 {
             quote_token_volume
                 .checked_mul(base_decimals_divisor)
@@ -169,8 +171,9 @@ impl IncomeCalculator {
 
             distributions.push(Income {
                 recipient: rule.recipient,
-                base_token: base_taken,
-                quote_token: quote_taken,
+                base_token: u64::try_from(base_taken).map_err(|_| ErrorCode::ArithmeticOverflow)?,
+                quote_token: u64::try_from(quote_taken)
+                    .map_err(|_| ErrorCode::ArithmeticOverflow)?,
             });
         }
 
