@@ -26,4 +26,6 @@ pub enum ErrorCode {
     SerializationError,
     #[msg("Nothing to claim")]
     NothingToClaim,
+    #[msg("Invalid parameter")]
+    InvalidParameter,
 }

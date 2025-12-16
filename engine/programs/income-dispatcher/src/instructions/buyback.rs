@@ -85,13 +85,18 @@ pub struct BuyBack<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
+pub fn buyback<'info>(
+    ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>,
+    min_xyber_out: u64,
+) -> Result<()> {
+    require!(min_xyber_out > 0, ErrorCode::InvalidParameter);
+
     let wsol_amount = ctx.accounts.buyback_wsol_totals.available()?;
     require!(wsol_amount > 0, ErrorCode::NotAllowed);
 
     let xyber_balance_before = ctx.accounts.xyber_vault.amount;
 
-    execute_swap(&ctx, wsol_amount)?;
+    execute_swap(&ctx, wsol_amount, min_xyber_out)?;
 
     ctx.accounts.xyber_vault.reload()?;
     let xyber_received = ctx
@@ -115,6 +120,7 @@ pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result
 fn execute_swap<'info>(
     ctx: &Context<'_, '_, '_, 'info, BuyBack<'info>>,
     amount_in: u64,
+    min_amount_out: u64,
 ) -> Result<()> {
     let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
     let signer_seeds = &[&authority_seeds[..]];
@@ -144,5 +150,5 @@ fn execute_swap<'info>(
     )
     .with_remaining_accounts(remaining_accounts);
 
-    raydium_amm_v3::cpi::swap_v2(cpi_ctx, amount_in, 0, 0, true)
+    raydium_amm_v3::cpi::swap_v2(cpi_ctx, amount_in, min_amount_out, 0, true)
 }

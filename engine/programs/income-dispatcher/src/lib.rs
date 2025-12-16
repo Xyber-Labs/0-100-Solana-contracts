@@ -50,7 +50,10 @@ pub mod income_dispatcher {
         instructions::claim_platform(ctx)
     }
 
-    pub fn buyback<'info>(ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>) -> Result<()> {
-        instructions::buyback(ctx)
+    pub fn buyback<'info>(
+        ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>,
+        min_xyber_out: u64,
+    ) -> Result<()> {
+        instructions::buyback(ctx, min_xyber_out)
     }
 }

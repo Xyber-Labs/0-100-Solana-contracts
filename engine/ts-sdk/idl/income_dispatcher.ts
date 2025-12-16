@@ -425,7 +425,12 @@ export type IncomeDispatcher = {
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "minXyberOut",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "claim",
@@ -1896,6 +1901,11 @@ export type IncomeDispatcher = {
       "code": 6011,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
+    },
+    {
+      "code": 6012,
+      "name": "invalidParameter",
+      "msg": "Invalid parameter"
     }
   ],
   "types": [

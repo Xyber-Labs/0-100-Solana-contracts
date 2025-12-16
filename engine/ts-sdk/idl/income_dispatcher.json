@@ -419,7 +419,12 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "min_xyber_out",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "claim",
@@ -1890,6 +1895,11 @@
       "code": 6011,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidParameter",
+      "msg": "Invalid parameter"
     }
   ],
   "types": [

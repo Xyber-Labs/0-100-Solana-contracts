@@ -326,6 +326,7 @@ const IncomeDispatcherSDK = {
     }
 
     async function buyback(args: {
+      minXyberOut: anchor.BN;
       xyberMint: anchor.web3.PublicKey;
       raydiumPoolState: anchor.web3.PublicKey;
       raydiumAmmConfig: anchor.web3.PublicKey;
@@ -351,7 +352,7 @@ const IncomeDispatcherSDK = {
       )[0];
 
       const ix = await program.methods
-        .buyback()
+        .buyback(args.minXyberOut)
         .accountsStrict({
           payer: args.signers[0].publicKey,
           dispatcherConfig: config,
