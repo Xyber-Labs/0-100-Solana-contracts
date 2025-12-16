@@ -50,6 +50,7 @@ const IncomeDispatcherSDK = {
     }
 
     async function initialize(args: {
+      backend: anchor.web3.PublicKey;
       platformWallet: anchor.web3.PublicKey;
       communityWallet: anchor.web3.PublicKey;
       signers: anchor.web3.Keypair[];
@@ -58,7 +59,7 @@ const IncomeDispatcherSDK = {
       const admin = args.signers[0].publicKey;
 
       const ix = await program.methods
-        .initialize(args.platformWallet, args.communityWallet)
+        .initialize(args.backend, args.platformWallet, args.communityWallet)
         .accountsStrict({
           admin,
           config,

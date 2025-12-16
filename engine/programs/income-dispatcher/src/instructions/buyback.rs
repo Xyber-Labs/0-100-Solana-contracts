@@ -21,7 +21,7 @@ pub struct BuyBackExecuted {
 
 #[derive(Accounts)]
 pub struct BuyBack<'info> {
-    #[account(mut)]
+    #[account(mut, address = dispatcher_config.backend @ ErrorCode::Unauthorized)]
     pub payer: Signer<'info>,
 
     #[account(seeds = [DISPATCHER_SEED_ROOT, b"config"], bump)]

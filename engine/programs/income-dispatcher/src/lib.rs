@@ -23,10 +23,11 @@ pub mod income_dispatcher {
 
     pub fn initialize(
         ctx: Context<Initialize>,
+        backend: Pubkey,
         platform_wallet: Pubkey,
         community_wallet: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, platform_wallet, community_wallet)
+        instructions::initialize(ctx, backend, platform_wallet, community_wallet)
     }
 
     pub fn harvest_pool<'info>(

@@ -34,11 +34,13 @@ pub struct Initialize<'info> {
 
 pub fn initialize(
     ctx: Context<Initialize>,
+    backend: Pubkey,
     platform_wallet: Pubkey,
     community_wallet: Pubkey,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
     config.admin = Some(ctx.accounts.admin.key());
+    config.backend = backend;
     config.platform_wallet = platform_wallet;
     config.community_wallet = community_wallet;
 

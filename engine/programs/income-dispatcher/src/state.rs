@@ -17,6 +17,7 @@ pub enum Role {
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Option<Pubkey>,
+    pub backend: Pubkey,
     pub platform_wallet: Pubkey,
     pub community_wallet: Pubkey,
     pub income_calculator: IncomeCalculator,

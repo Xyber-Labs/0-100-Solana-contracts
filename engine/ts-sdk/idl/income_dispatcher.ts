@@ -1723,6 +1723,10 @@ export type IncomeDispatcher = {
       ],
       "args": [
         {
+          "name": "backend",
+          "type": "pubkey"
+        },
+        {
           "name": "platformWallet",
           "type": "pubkey"
         },
@@ -1967,6 +1971,10 @@ export type IncomeDispatcher = {
             "type": {
               "option": "pubkey"
             }
+          },
+          {
+            "name": "backend",
+            "type": "pubkey"
           },
           {
             "name": "platformWallet",

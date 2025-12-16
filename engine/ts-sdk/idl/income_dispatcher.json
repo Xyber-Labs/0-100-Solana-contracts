@@ -1717,6 +1717,10 @@
       ],
       "args": [
         {
+          "name": "backend",
+          "type": "pubkey"
+        },
+        {
           "name": "platform_wallet",
           "type": "pubkey"
         },
@@ -1961,6 +1965,10 @@
             "type": {
               "option": "pubkey"
             }
+          },
+          {
+            "name": "backend",
+            "type": "pubkey"
           },
           {
             "name": "platform_wallet",

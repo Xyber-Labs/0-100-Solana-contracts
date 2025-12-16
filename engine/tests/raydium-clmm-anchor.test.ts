@@ -28,6 +28,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const admin2Keypair = loadKeypair("keys/admin2.json");
   const admin3Keypair = loadKeypair("keys/admin3.json");
   const deployerKeypair = loadKeypair("keys/deployer.json");
+  const backendKeypair = loadKeypair("keys/backend.json");
   const xyberMintKeypair = loadKeypair("keys/xyber-mint.json");
   const treasuryKeypair = loadKeypair("keys/treasure.json");
   const platformKeypair = loadKeypair("keys/platform.json");
@@ -110,6 +111,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(backendKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(platformKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(creatorKeypair.publicKey, 1000 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(buyer1Keypair.publicKey, 500 * anchor.web3.LAMPORTS_PER_SOL),
@@ -228,6 +230,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     try {
       const { signature } = await dispatcherSdk.initialize({
+        backend: backendKeypair.publicKey,
         platformWallet: platformKeypair.publicKey,
         communityWallet: communityWallet.publicKey,
         signers: [deployerKeypair],
@@ -1220,7 +1223,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       remainingAccounts: swapRemainingAccounts,
       engineProgramId: program.programId,
       raydiumProgramId: sdk.getRaydiumClmmProgramId(),
-      signers: [admin1Keypair],
+      signers: [backendKeypair],
     });
 
     console.log("✅ BuyBack executed");
