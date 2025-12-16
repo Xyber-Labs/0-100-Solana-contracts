@@ -1024,7 +1024,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={faucetAmount}
-                  onChange={(e) => setFaucetAmount(Number(e.target.value))}
+                  onChange={(e) => setFaucetAmount(Number(e.currentTarget.value))}
                   className="terminal-input w-24"
                 />
                 <button
@@ -1039,7 +1039,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="checkbox"
                   checked={showLaunchForm}
-                  onChange={(e) => setShowLaunchForm(e.target.checked)}
+                  onChange={(e) => setShowLaunchForm(e.currentTarget.checked)}
                   className="terminal-input"
                 />
                 <span className="terminal-output">Customize Parameters</span>
@@ -1072,7 +1072,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.hardCapLamports / 1e9}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, hardCapLamports: parseFloat(e.target.value) * 1e9 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, hardCapLamports: parseFloat(e.currentTarget.value) * 1e9 }))}
                   className="terminal-input w-full"
                   step="0.1"
                 />
@@ -1082,7 +1082,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.minRaiseLamports / 1e9}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, minRaiseLamports: parseFloat(e.target.value) * 1e9 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, minRaiseLamports: parseFloat(e.currentTarget.value) * 1e9 }))}
                   className="terminal-input w-full"
                   step="0.1"
                 />
@@ -1092,7 +1092,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.perWalletCap / 1e9}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, perWalletCap: parseFloat(e.target.value) * 1e9 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, perWalletCap: parseFloat(e.currentTarget.value) * 1e9 }))}
                   className="terminal-input w-full"
                   step="0.1"
                 />
@@ -1105,7 +1105,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   onChange={(e) =>
                     setLaunchConfig({
                       ...launchConfig,
-                      tauLamports: Math.round(parseFloat(e.target.value) * 1e9),
+                      tauLamports: Math.round(parseFloat(e.currentTarget.value) * 1e9),
                     })
                   }
                   className="terminal-input w-full"
@@ -1116,7 +1116,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.baseTotalAllocationTokens}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, baseTotalAllocationTokens: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, baseTotalAllocationTokens: parseInt(e.currentTarget.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1125,7 +1125,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.saleBasisPoints}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleBasisPoints: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, saleBasisPoints: parseInt(e.currentTarget.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1134,7 +1134,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.lpBasisPoints}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpBasisPoints: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, lpBasisPoints: parseInt(e.currentTarget.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1144,7 +1144,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   <select
                     value={durationOption}
                     onChange={(e) => {
-                      const newOption = e.target.value;
+                      const newOption = e.currentTarget.value;
                       setDurationOption(newOption);
                       if (newOption === 'dropdown') {
                         // Reset custom seconds to match dropdown
@@ -1164,7 +1164,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     <select
                       value={launchConfig.fundingDurationDays}
                       onChange={(e) => {
-                        const daysValue = parseInt(e.target.value);
+                        const daysValue = parseInt(e.currentTarget.value);
                         setLaunchConfig(prev => ({
                           ...prev,
                           fundingDurationDays: daysValue,
@@ -1185,7 +1185,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     <input
                       type="number"
                       value={launchConfig.fundingDurationSeconds}
-                      onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationSeconds: parseInt(e.target.value) || 0 }))}
+                      onChange={(e) => setLaunchConfig(prev => ({ ...prev, fundingDurationSeconds: parseInt(e.currentTarget.value) || 0 }))}
                       className="terminal-input w-2/3"
                       placeholder="Enter seconds"
                     />
@@ -1197,7 +1197,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.unlockTimeSec}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, unlockTimeSec: parseInt(e.target.value) }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, unlockTimeSec: parseInt(e.currentTarget.value) }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1206,7 +1206,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.poolCreationGracePeriodSec}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, poolCreationGracePeriodSec: parseInt(e.target.value) }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, poolCreationGracePeriodSec: parseInt(e.currentTarget.value) }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1215,7 +1215,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={launchConfig.rosterShardCap}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.target.value) }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, rosterShardCap: parseInt(e.currentTarget.value) }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1225,7 +1225,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   type="number"
                   value={launchConfig.rosterShardsTotal || 0}
                   onChange={(e) => {
-                    const v = parseInt(e.target.value) || 0;
+                    const v = parseInt(e.currentTarget.value) || 0;
                     setLaunchConfig(prev => ({ ...prev, rosterShardsTotal: v > 0 ? v : undefined }));
                   }}
                   className="terminal-input w-full"
@@ -1240,7 +1240,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="text"
                   value={launchConfig.quoteMint || ''}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, quoteMint: e.target.value }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, quoteMint: e.currentTarget.value }))}
                   className="terminal-input w-full"
                   placeholder="So1111... (WSOL)"
                 />
@@ -1250,7 +1250,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="text"
                   value={launchConfig.ammConfig || ''}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, ammConfig: e.target.value }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, ammConfig: e.currentTarget.value }))}
                   className="terminal-input w-full"
                   placeholder="Raydium AmmConfig pubkey"
                 />
@@ -1260,7 +1260,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="text"
                   value={launchConfig.clmmProgram || ''}
-                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, clmmProgram: e.target.value }))}
+                  onChange={(e) => setLaunchConfig(prev => ({ ...prev, clmmProgram: e.currentTarget.value }))}
                   className="terminal-input w-full"
                   placeholder="Raydium CLMM program id"
                 />
@@ -1273,7 +1273,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={simConfig.numUsers}
-                  onChange={(e) => setSimConfig(prev => ({ ...prev, numUsers: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, numUsers: parseInt(e.currentTarget.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1283,7 +1283,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   type="number"
                   value={simConfig.minTicketsPerUser ?? 1}
                   onChange={(e) => {
-                    const v = parseInt(e.target.value) || 1;
+                    const v = parseInt(e.currentTarget.value) || 1;
                     setSimConfig(prev => ({ ...prev, minTicketsPerUser: v }));
                   }}
                   className="terminal-input w-full"
@@ -1294,7 +1294,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="number"
                   value={simConfig.maxTicketsPerUser}
-                  onChange={(e) => setSimConfig(prev => ({ ...prev, maxTicketsPerUser: parseInt(e.target.value) || 0 }))}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, maxTicketsPerUser: parseInt(e.currentTarget.value) || 0 }))}
                   className="terminal-input w-full"
                 />
               </div>
@@ -1307,7 +1307,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                     max={100}
                     value={simConfig.ticketsTargetMultiplier ?? 50}
                     onChange={(e) => {
-                      const v = parseInt(e.target.value) || 1;
+                      const v = parseInt(e.currentTarget.value) || 1;
                       const clamped = Math.max(1, Math.min(v, 100));
                       setSimConfig(prev => ({ ...prev, ticketsTargetMultiplier: clamped }));
                     }}
@@ -1322,7 +1322,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="checkbox"
                   checked={!!simConfig.useTestMintForBase}
-                  onChange={(e) => setSimConfig(prev => ({ ...prev, useTestMintForBase: e.target.checked }))}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, useTestMintForBase: e.currentTarget.checked }))}
                   className="terminal-input"
                 />
                 <span className="text-xs terminal-output">
@@ -1333,7 +1333,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="checkbox"
                   checked={!!simConfig.useAirdropForUsers}
-                  onChange={(e) => setSimConfig(prev => ({ ...prev, useAirdropForUsers: e.target.checked }))}
+                  onChange={(e) => setSimConfig(prev => ({ ...prev, useAirdropForUsers: e.currentTarget.checked }))}
                   className="terminal-input"
                 />
                 <span className="text-xs terminal-output">
@@ -1351,7 +1351,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   onChange={(e) =>
                     setSimConfig(prev => ({
                       ...prev,
-                      raydiumSwapsCount: parseInt(e.target.value) || 0,
+                      raydiumSwapsCount: parseInt(e.currentTarget.value) || 0,
                     }))
                   }
                   className="terminal-input w-full"
@@ -1365,7 +1365,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                   onChange={(e) =>
                     setSimConfig(prev => ({
                       ...prev,
-                      raydiumSolPerSwap: parseFloat(e.target.value) || 0,
+                      raydiumSolPerSwap: parseFloat(e.currentTarget.value) || 0,
                     }))
                   }
                   className="terminal-input w-full"
@@ -1414,7 +1414,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                         type="number"
                         placeholder="Enter Project ID..."
                         value={projectSearchId}
-                        onChange={(e) => setProjectSearchId(e.target.value)}
+                        onChange={(e) => setProjectSearchId(e.currentTarget.value)}
                         className="terminal-input flex-1"
                       />
                       <button
@@ -2106,7 +2106,7 @@ function EngineDemo({ testWallet }: EngineDemoProps) {
                 <input
                   type="checkbox"
                   checked={autoScroll}
-                  onChange={(e) => setAutoScroll(e.target.checked)}
+                  onChange={(e) => setAutoScroll(e.currentTarget.checked)}
                   className="terminal-input"
                 />
                 <span className="terminal-output">Auto-scroll</span>

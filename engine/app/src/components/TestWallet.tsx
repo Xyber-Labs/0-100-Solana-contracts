@@ -199,7 +199,7 @@ const TestWallet: React.FC<TestWalletProps> = ({ onWalletChange, currentWallet }
                   </label>
                   <textarea
                     value={secretKey}
-                    onChange={(e) => setSecretKey(e.target.value)}
+                    onChange={(e) => setSecretKey(e.currentTarget.value)}
                     placeholder="Enter secret key array or generate new one..."
                     className="terminal-input w-full h-20 text-xs"
                   />

@@ -1,6 +1,6 @@
 import { BN, AnchorProvider } from "@coral-xyz/anchor";
 import { SystemProgram, Transaction, PublicKey, Keypair } from "@solana/web3.js";
-import type EngineSDK from "@xyber-labs/0-100-sdk";
+import type { EngineSDK } from "@xyber-labs/0-100-sdk";
 
 export type AddLog = (msg: string) => void;
 

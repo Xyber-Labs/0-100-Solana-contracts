@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "types": ["mocha", "chai"],
+    "jsx": "react-jsx",
     "typeRoots": ["./node_modules/@types"],
     "lib": ["es2020"],
     "module": "commonjs",
@@ -10,5 +11,6 @@
     "paths": {
       "@xyber-labs/0-100-sdk": ["./ts-sdk/src/index"]
     }
-  }
+  },
+  "exclude": ["app", "node_modules"]
 }

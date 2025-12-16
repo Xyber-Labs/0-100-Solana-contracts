@@ -11,17 +11,17 @@ const DEFAULT_RPC_PORT = "8899";
 const DEFAULT_WS_PORT = "8900";
 
 const getBrowserHostname = (): string | undefined => {
-  if (typeof window === "undefined" || !window.location.hostname) {
-    return undefined;
+  if (typeof globalThis !== "undefined" && "window" in globalThis && globalThis.window && "location" in globalThis.window && globalThis.window.location.hostname) {
+    return globalThis.window.location.hostname;
   }
-  return window.location.hostname;
+  return undefined;
 };
 
 const getBrowserProtocol = (): string | undefined => {
-  if (typeof window === "undefined") {
-    return undefined;
+  if (typeof globalThis !== "undefined" && "window" in globalThis && globalThis.window && "location" in globalThis.window) {
+    return globalThis.window.location.protocol.replace(":", "");
   }
-  return window.location.protocol.replace(":", "");
+  return undefined;
 };
 
 const remoteHost =
