@@ -1210,6 +1210,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
 
     const result = await dispatcherSdk.buyback({
+      minXyberOut: new BN(1),
       xyberMint: xyberMintKeypair.publicKey,
       raydiumPoolState: xyberPoolState,
       raydiumAmmConfig: ammConfigAddress,
