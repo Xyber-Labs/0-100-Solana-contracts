@@ -1108,7 +1108,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const availableQuote = new BN(buybackQuoteTotals.harvested).sub(new BN(buybackQuoteTotals.spent));
     console.log("Available for buyback:", availableQuote.toString(), "lamports");
 
-    if (availableQuote.lten(0)) {
+    if (availableQuote.lte(new BN(0))) {
       console.log("⏭️  No quote available for buyback, skipping");
       return;
     }
