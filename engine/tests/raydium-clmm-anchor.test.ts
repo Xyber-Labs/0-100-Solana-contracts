@@ -1000,7 +1000,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 21: Add Liquidity to XYBER/SOL Pool ===");
 
     const { getPdaTickArrayAddress, TickUtils } = await import("@raydium-io/raydium-sdk-v2");
-    const BN = (await import("bn.js")).default;
 
     const clmmProgram = sdk.getRaydiumClmmProgramId();
     const tickSpacing = 10;
