@@ -14,7 +14,7 @@ const program = new Command();
 
 program
   .option("--pool-state <address>", "XYBER/SOL Raydium CLMM pool state address (derived from xyberMint if not provided)")
-  .option("--payer <path>", "Path to payer keypair (defaults to provider wallet)")
+  .requiredOption("--payer <path>", "Path to payer keypair")
   .option("--slippage-bps <bps>", "Slippage tolerance in basis points (default: 100 = 1%)", "100")
   .option("--info", "Show available SOL and expected XYBER without executing buyback", false)
   .parse(process.argv);
@@ -28,7 +28,7 @@ function parseArgs() {
   }
   return {
     poolStateOverride: opts.poolState ? new anchor.web3.PublicKey(opts.poolState) : null,
-    payerPath: opts.payer as string | undefined,
+    payerPath: opts.payer as string,
     slippage: slippageBps / 10000,
     infoOnly: opts.info,
   };
@@ -47,9 +47,7 @@ async function main() {
   const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram);
   const { Role } = dispatcherSdk;
 
-  const payerKeypair = args.payerPath
-    ? loadKeypair(args.payerPath)
-    : ((provider.wallet as any).payer as anchor.web3.Keypair);
+  const payerKeypair = loadKeypair(args.payerPath);
 
   console.log(args.infoOnly ? "=== BuyBack Info ===" : "=== BuyBack Execution ===");
   console.log("Payer:", payerKeypair.publicKey.toString());
