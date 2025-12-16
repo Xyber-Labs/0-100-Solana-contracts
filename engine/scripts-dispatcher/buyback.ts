@@ -71,7 +71,7 @@ async function main() {
   console.log("BuyBack WSOL spent:", buybackTotals.spent.toString());
   console.log("Available for buyback:", availableWsol.toString(), "lamports");
 
-  if (availableWsol.lten(0)) {
+  if (availableWsol.lte(new BN(0))) {
     console.log("⏭️  No WSOL available for buyback, exiting");
     return;
   }
