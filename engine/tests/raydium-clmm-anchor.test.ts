@@ -1248,7 +1248,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Available XYBER for claim:", availableXyber.toString());
 
     // Verify the XYBER is in the authority vault
-    const { getAssociatedTokenAddressSync } = await import("@solana/spl-token");
     const [authority] = dispatcherSdk.getAuthorityPda();
     const authorityXyberAta = getAssociatedTokenAddressSync(
       xyberMintKeypair.publicKey,
