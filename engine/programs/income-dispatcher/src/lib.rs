@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::instructions::*;
+use instructions::*;
+use state::Role;
 
 pub mod errors;
 pub mod income_calculator;
@@ -22,10 +23,11 @@ pub mod income_dispatcher {
 
     pub fn initialize(
         ctx: Context<Initialize>,
+        backend: Pubkey,
         platform_wallet: Pubkey,
         community_wallet: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, platform_wallet, community_wallet)
+        instructions::initialize(ctx, backend, platform_wallet, community_wallet)
     }
 
     pub fn harvest_pool<'info>(
@@ -38,11 +40,21 @@ pub mod income_dispatcher {
     pub fn claim(
         ctx: Context<Claim>,
         project_id: u64,
-        role: income_calculator::Role,
+        role: Role,
         nonce_value: u64,
-        limit_base_claim: Option<u64>,
-        limit_quote_claim: Option<u64>,
+        amount: Option<u64>,
     ) -> Result<()> {
-        instructions::claim(ctx, project_id, role, nonce_value, limit_base_claim, limit_quote_claim)
+        instructions::claim(ctx, project_id, role, nonce_value, amount)
+    }
+
+    pub fn claim_platform(ctx: Context<ClaimPlatform>) -> Result<()> {
+        instructions::claim_platform(ctx)
+    }
+
+    pub fn buyback<'info>(
+        ctx: Context<'_, '_, '_, 'info, BuyBack<'info>>,
+        min_xyber_out: u64,
+    ) -> Result<()> {
+        instructions::buyback(ctx, min_xyber_out)
     }
 }

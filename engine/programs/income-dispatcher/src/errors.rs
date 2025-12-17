@@ -20,4 +20,12 @@ pub enum ErrorCode {
     InvalidNonce,
     #[msg("Invalid calculator")]
     InvalidCalculator,
+    #[msg("Not allowed")]
+    NotAllowed,
+    #[msg("Serialization error")]
+    SerializationError,
+    #[msg("Nothing to claim")]
+    NothingToClaim,
+    #[msg("Invalid parameter")]
+    InvalidParameter,
 }

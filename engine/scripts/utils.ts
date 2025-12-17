@@ -9,13 +9,22 @@ export function initializeSdk() {
   return { provider, sdk };
 }
 
-export function getExplorerUrl(provider: anchor.AnchorProvider, signature: string): string {
-  const cluster = provider.connection.rpcEndpoint.includes('devnet') ? 'devnet'
-    : provider.connection.rpcEndpoint.includes('testnet') ? 'testnet'
-      : provider.connection.rpcEndpoint.includes('localhost') || provider.connection.rpcEndpoint.includes('127.0.0.1') ? 'custom&customUrl=' + encodeURIComponent(provider.connection.rpcEndpoint)
-        : 'mainnet-beta';
+function getCluster(provider: anchor.AnchorProvider): string {
+  const endpoint = provider.connection.rpcEndpoint;
+  if (endpoint.includes('devnet')) return 'devnet';
+  if (endpoint.includes('testnet')) return 'testnet';
+  if (endpoint.includes('localhost') || endpoint.includes('127.0.0.1')) {
+    return 'custom&customUrl=' + encodeURIComponent(endpoint);
+  }
+  return 'mainnet-beta';
+}
 
-  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
+export function getExplorerUrl(provider: anchor.AnchorProvider, signature: string): string {
+  return `https://explorer.solana.com/tx/${signature}?cluster=${getCluster(provider)}`;
+}
+
+export function getAccountUrl(provider: anchor.AnchorProvider, address: anchor.web3.PublicKey): string {
+  return `https://explorer.solana.com/address/${address.toString()}?cluster=${getCluster(provider)}`;
 }
 
 export async function runWithSdk(
@@ -55,4 +64,13 @@ export function loadKeypair(keyPath: string): anchor.web3.Keypair {
   const arr = JSON.parse(raw);
   const secret = Uint8Array.from(arr);
   return anchor.web3.Keypair.fromSecretKey(secret);
+}
+
+export function toPublicKey(acc: unknown): anchor.web3.PublicKey {
+  if (!acc) throw new Error("Cannot convert null/undefined to PublicKey");
+  if ((acc as any)._bn) return acc as anchor.web3.PublicKey;
+  if ((acc as any).pubkey) return new anchor.web3.PublicKey((acc as any).pubkey);
+  if ((acc as any).address) return new anchor.web3.PublicKey((acc as any).address);
+  if (typeof acc === "string") return new anchor.web3.PublicKey(acc);
+  return new anchor.web3.PublicKey(acc as any);
 }

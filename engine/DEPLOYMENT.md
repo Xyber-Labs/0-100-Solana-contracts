@@ -263,6 +263,7 @@ Initialize the Income Dispatcher program. This must be done with the deployer ke
 
 ```bash
 anchor run dispatcher-init --provider.cluster localnet -- \
+  --backend $(solana address -k keys/backend.json) \
   --platform-wallet $(solana address -k keys/platform.json) \
   --community-wallet $(solana address -k keys/backend.json) \
   --deployer-keypair ./keys/deployer.json

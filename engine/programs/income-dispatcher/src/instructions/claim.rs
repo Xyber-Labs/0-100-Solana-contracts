@@ -1,18 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, TokenAccount, transfer_checked, TransferChecked},
+    token::{Mint, Token, TokenAccount, transfer_checked, TransferChecked},
 };
 
 use crate::{
     DISPATCHER_SEED_ROOT,
     errors::ErrorCode,
-    income_calculator::Role,
-    state::{Config, IncomeConfig, Nonce},
+    state::{Config, Nonce, Role, Totals},
 };
 
 #[derive(Accounts)]
-#[instruction(project_id: u64, role: Role, nonce_value: u64, limit_base_claim: Option<u64>, limit_quote_claim: Option<u64>)]
+#[instruction(project_id: u64, role: Role, nonce_value: u64)]
 pub struct Claim<'info> {
     #[account(mut)]
     pub recipient: Signer<'info>,
@@ -27,12 +26,16 @@ pub struct Claim<'info> {
     )]
     pub launch_state: Box<Account<'info, engine::state::LaunchState>>,
 
-    #[account(mut, seeds = [DISPATCHER_SEED_ROOT, b"income_config", &project_id.to_be_bytes()], bump)]
-    pub income_config: Box<Account<'info, IncomeConfig>>,
+    #[account(
+        mut,
+        seeds = [DISPATCHER_SEED_ROOT, b"totals", &project_id.to_be_bytes(), &[role as u8], mint.key().as_ref()],
+        bump,
+    )]
+    pub totals: Box<Account<'info, Totals>>,
 
-    /// CHECK: Project authority PDA
-    #[account(seeds = [DISPATCHER_SEED_ROOT, b"project_authority", &project_id.to_be_bytes()], bump)]
-    pub project_authority: AccountInfo<'info>,
+    /// CHECK: Harvest authority PDA
+    #[account(seeds = [DISPATCHER_SEED_ROOT, b"authority"], bump)]
+    pub authority: AccountInfo<'info>,
 
     #[account(
         init_if_needed,
@@ -45,44 +48,27 @@ pub struct Claim<'info> {
     pub nonce: Box<Account<'info, Nonce>>,
 
     #[account(
-        constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint
+        constraint = mint.key() == launch_state.base_mint.unwrap()
+            || mint.key() == engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint
     )]
-    pub base_mint: Box<Account<'info, Mint>>,
-
-    #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
-    pub quote_mint: Box<Account<'info, Mint>>,
+    pub mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
-        associated_token::mint = base_mint,
-        associated_token::authority = project_authority,
+        associated_token::mint = mint,
+        associated_token::authority = authority,
     )]
-    pub base_vault: Box<Account<'info, TokenAccount>>,
-
-    #[account(
-        mut,
-        associated_token::mint = quote_mint,
-        associated_token::authority = project_authority,
-    )]
-    pub quote_vault: Box<Account<'info, TokenAccount>>,
+    pub source_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
         payer = recipient,
-        associated_token::mint = base_mint,
+        associated_token::mint = mint,
         associated_token::authority = recipient,
     )]
-    pub recipient_base_ata: Box<Account<'info, TokenAccount>>,
+    pub recipient_ata: Box<Account<'info, TokenAccount>>,
 
-    #[account(
-        init_if_needed,
-        payer = recipient,
-        associated_token::mint = quote_mint,
-        associated_token::authority = recipient,
-    )]
-    pub recipient_quote_ata: Box<Account<'info, TokenAccount>>,
-
-    pub token_program: Program<'info, anchor_spl::token::Token>,
+    pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
@@ -92,99 +78,44 @@ pub fn claim(
     project_id: u64,
     role: Role,
     _nonce_value: u64,
-    limit_base_claim: Option<u64>,
-    limit_quote_claim: Option<u64>,
+    amount: Option<u64>,
 ) -> Result<()> {
-    let nonce = &mut ctx.accounts.nonce.nonce;
-    *nonce = nonce.checked_add(1).ok_or(ErrorCode::ArithmeticOverflow)?;
-
     verify_role_authority(&ctx, role)?;
 
-    let income_config = &mut ctx.accounts.income_config;
-    let role_idx = role as usize;
-    let balance = &mut income_config.balances[role_idx];
+    ctx.accounts.nonce.nonce =
+        ctx.accounts.nonce.nonce.checked_add(1).ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    let project_authority_seeds = &[
-        DISPATCHER_SEED_ROOT,
-        b"project_authority",
-        &project_id.to_be_bytes(),
-        &[ctx.bumps.project_authority],
-    ];
-    let signers = &[&project_authority_seeds[..]];
+    let available = ctx.accounts.totals.available()?;
+    let amount_to_claim = amount.unwrap_or(available).min(available);
 
-    let mut base_to_claim = balance
-        .earned_base
-        .checked_sub(balance.claimed_base)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    require!(amount_to_claim > 0, ErrorCode::NothingToClaim);
 
-    if let Some(limit) = limit_base_claim {
-        base_to_claim = base_to_claim.min(limit);
-    }
+    let authority_seeds = &[DISPATCHER_SEED_ROOT, b"authority", &[ctx.bumps.authority]];
+    let signer_seeds = &[&authority_seeds[..]];
 
-    if base_to_claim > 0 {
-        transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                TransferChecked {
-                    from: ctx.accounts.base_vault.to_account_info(),
-                    to: ctx.accounts.recipient_base_ata.to_account_info(),
-                    authority: ctx.accounts.project_authority.to_account_info(),
-                    mint: ctx.accounts.base_mint.to_account_info(),
-                },
-                signers,
-            ),
-            base_to_claim,
-            ctx.accounts.base_mint.decimals,
-        )?;
-    }
+    transfer_checked(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.source_vault.to_account_info(),
+                to: ctx.accounts.recipient_ata.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        amount_to_claim,
+        ctx.accounts.mint.decimals,
+    )?;
 
-    let mut quote_to_claim = balance
-        .earned_quote
-        .checked_sub(balance.claimed_quote)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    if let Some(limit) = limit_quote_claim {
-        quote_to_claim = quote_to_claim.min(limit);
-    }
-
-    if quote_to_claim > 0 {
-        transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                TransferChecked {
-                    from: ctx.accounts.quote_vault.to_account_info(),
-                    to: ctx.accounts.recipient_quote_ata.to_account_info(),
-                    authority: ctx.accounts.project_authority.to_account_info(),
-                    mint: ctx.accounts.quote_mint.to_account_info(),
-                },
-                signers,
-            ),
-            quote_to_claim,
-            ctx.accounts.quote_mint.decimals,
-        )?;
-    }
-
-    balance.claimed_base =
-        balance.claimed_base.checked_add(base_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
-    balance.claimed_quote =
-        balance.claimed_quote.checked_add(quote_to_claim).ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    income_config.total_claimed_base = income_config
-        .total_claimed_base
-        .checked_add(base_to_claim)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
-    income_config.total_claimed_quote = income_config
-        .total_claimed_quote
-        .checked_add(quote_to_claim)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    ctx.accounts.totals.add_spent(amount_to_claim)?;
 
     emit!(ClaimEvent {
         project_id,
         role,
+        mint: ctx.accounts.mint.key(),
         recipient: ctx.accounts.recipient.key(),
-        base_amount: base_to_claim,
-        quote_amount: quote_to_claim,
+        amount: amount_to_claim,
     });
 
     Ok(())
@@ -192,12 +123,6 @@ pub fn claim(
 
 fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
     match role {
-        Role::Platform => {
-            require!(
-                ctx.accounts.recipient.key() == ctx.accounts.config.platform_wallet,
-                ErrorCode::Unauthorized
-            );
-        }
         Role::Creator => {
             require!(
                 ctx.accounts.recipient.key() == ctx.accounts.launch_state.creator,
@@ -213,6 +138,7 @@ fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
                 ErrorCode::Unauthorized
             );
         }
+        _ => return err!(ErrorCode::NotAllowed),
     }
     Ok(())
 }
@@ -221,7 +147,7 @@ fn verify_role_authority(ctx: &Context<Claim>, role: Role) -> Result<()> {
 pub struct ClaimEvent {
     pub project_id: u64,
     pub role: Role,
+    pub mint: Pubkey,
     pub recipient: Pubkey,
-    pub base_amount: u64,
-    pub quote_amount: u64,
+    pub amount: u64,
 }

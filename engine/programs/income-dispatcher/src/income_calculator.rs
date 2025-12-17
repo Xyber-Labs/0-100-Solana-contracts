@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::errors::ErrorCode;
+use crate::{errors::ErrorCode, state::Role};
 
 const BASIS_POINTS: u128 = 10_000;
 
@@ -20,20 +20,11 @@ macro_rules! mcap {
 
 pub(crate) use mcap;
 
-#[derive(
-    Clone, Copy, PartialEq, Eq, Ord, PartialOrd, AnchorSerialize, AnchorDeserialize, InitSpace,
-)]
-pub enum Role {
-    Platform = 0,
-    Creator = 1,
-    Community = 2,
-}
-
 #[account]
 #[derive(InitSpace)]
 pub struct IncomeCalculator {
     base_decimals: u8,
-    #[max_len(30)]
+    #[max_len(40)]
     rules: Vec<DistributionRule>,
 }
 
@@ -60,8 +51,8 @@ impl DistributionRule {
 #[derive(Clone)]
 pub struct Income {
     pub recipient: Role,
-    pub base_token: u128,
-    pub quote_token: u128,
+    pub base_token: u64,
+    pub quote_token: u64,
 }
 
 pub struct Distribution {
@@ -127,14 +118,16 @@ impl IncomeCalculator {
     pub fn get_distribution(
         &self,
         sqrt_price_x64: u128,
-        base_token_volume: u128,
-        quote_token_volume: u128,
+        base_token_volume: u64,
+        quote_token_volume: u64,
     ) -> Result<Box<Distribution>> {
         let applicable_rules = self.get_rules_by_price(sqrt_price_x64)?;
 
         let base_decimals_divisor = 10u128.pow(self.base_decimals as u32);
 
         // Calculate price dynamically: price_in_quote = (quote_volume * 10^base_decimals) / base_volume
+        let base_token_volume = base_token_volume as u128;
+        let quote_token_volume = quote_token_volume as u128;
         let price_in_quote = if base_token_volume > 0 {
             quote_token_volume
                 .checked_mul(base_decimals_divisor)
@@ -178,8 +171,9 @@ impl IncomeCalculator {
 
             distributions.push(Income {
                 recipient: rule.recipient,
-                base_token: base_taken,
-                quote_token: quote_taken,
+                base_token: u64::try_from(base_taken).map_err(|_| ErrorCode::ArithmeticOverflow)?,
+                quote_token: u64::try_from(quote_taken)
+                    .map_err(|_| ErrorCode::ArithmeticOverflow)?,
             });
         }
 
@@ -239,7 +233,7 @@ mod tests {
         assert!(market_cap > 500.0 && market_cap < 1500.0, "Expected market cap ~721 SOL");
         assert_eq!(rules.len(), 3, "Expected 3 rules for tier 501");
 
-        let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
+        let platform_rule = rules.iter().find(|r| r.recipient == Role::Treasure).unwrap();
         let creator_rule = rules.iter().find(|r| r.recipient == Role::Creator).unwrap();
         let community_rule = rules.iter().find(|r| r.recipient == Role::Community).unwrap();
 
@@ -275,7 +269,7 @@ mod tests {
         let setup = create_calculator_with_mcap_tiers(6);
         let rules = setup.calculator.get_rules_by_price(sqrt_price_x64).unwrap();
 
-        let platform_rule = rules.iter().find(|r| r.recipient == Role::Platform).unwrap();
+        let platform_rule = rules.iter().find(|r| r.recipient == Role::Treasure).unwrap();
         let creator_rule = rules.iter().find(|r| r.recipient == Role::Creator).unwrap();
         let community_rule = rules.iter().find(|r| r.recipient == Role::Community).unwrap();
 
@@ -390,46 +384,46 @@ mod tests {
     }
 
     fn create_calculator_with_mcap_tiers(base_decimals: u8) -> TestSetup {
-        let platform = Role::Platform;
+        let treasure = Role::Treasure;
         let community = Role::Community;
         let creator = Role::Creator;
 
         let calculator = IncomeCalculator::new(base_decimals)
             .expect("Expected to be created well")
-            .add_rule(DistributionRule::new(mcap!(0.0), platform, 6000, 1))
+            .add_rule(DistributionRule::new(mcap!(0.0), treasure, 6000, 1))
             .add_rule(DistributionRule::new(mcap!(0.0), creator, 2500, 2))
             .add_rule(DistributionRule::new(mcap!(0.0), community, 1500, 3))
-            .add_rule(DistributionRule::new(mcap!(501.0), platform, 3000, 1))
+            .add_rule(DistributionRule::new(mcap!(501.0), treasure, 3000, 1))
             .add_rule(DistributionRule::new(mcap!(501.0), creator, 5600, 2))
             .add_rule(DistributionRule::new(mcap!(501.0), community, 1400, 3))
-            .add_rule(DistributionRule::new(mcap!(1_501.0), platform, 3400, 1))
+            .add_rule(DistributionRule::new(mcap!(1_501.0), treasure, 3400, 1))
             .add_rule(DistributionRule::new(mcap!(1_501.0), creator, 5300, 2))
             .add_rule(DistributionRule::new(mcap!(1_501.0), community, 1300, 3))
-            .add_rule(DistributionRule::new(mcap!(4_001.0), platform, 3700, 1))
+            .add_rule(DistributionRule::new(mcap!(4_001.0), treasure, 3700, 1))
             .add_rule(DistributionRule::new(mcap!(4_001.0), creator, 5100, 2))
             .add_rule(DistributionRule::new(mcap!(4_001.0), community, 1200, 3))
-            .add_rule(DistributionRule::new(mcap!(10_001.0), platform, 4000, 1))
+            .add_rule(DistributionRule::new(mcap!(10_001.0), treasure, 4000, 1))
             .add_rule(DistributionRule::new(mcap!(10_001.0), creator, 4900, 2))
             .add_rule(DistributionRule::new(mcap!(10_001.0), community, 1100, 3))
-            .add_rule(DistributionRule::new(mcap!(20_001.0), platform, 4300, 1))
+            .add_rule(DistributionRule::new(mcap!(20_001.0), treasure, 4300, 1))
             .add_rule(DistributionRule::new(mcap!(20_001.0), creator, 4700, 2))
             .add_rule(DistributionRule::new(mcap!(20_001.0), community, 1000, 3))
-            .add_rule(DistributionRule::new(mcap!(30_001.0), platform, 4700, 1))
+            .add_rule(DistributionRule::new(mcap!(30_001.0), treasure, 4700, 1))
             .add_rule(DistributionRule::new(mcap!(30_001.0), creator, 4400, 2))
             .add_rule(DistributionRule::new(mcap!(30_001.0), community, 900, 3))
-            .add_rule(DistributionRule::new(mcap!(50_001.0), platform, 5100, 1))
+            .add_rule(DistributionRule::new(mcap!(50_001.0), treasure, 5100, 1))
             .add_rule(DistributionRule::new(mcap!(50_001.0), creator, 4100, 2))
             .add_rule(DistributionRule::new(mcap!(50_001.0), community, 800, 3))
-            .add_rule(DistributionRule::new(mcap!(70_001.0), platform, 5600, 1))
+            .add_rule(DistributionRule::new(mcap!(70_001.0), treasure, 5600, 1))
             .add_rule(DistributionRule::new(mcap!(70_001.0), creator, 3700, 2))
             .add_rule(DistributionRule::new(mcap!(70_001.0), community, 700, 3))
-            .add_rule(DistributionRule::new(mcap!(100_001.0), platform, 6000, 1))
+            .add_rule(DistributionRule::new(mcap!(100_001.0), treasure, 6000, 1))
             .add_rule(DistributionRule::new(mcap!(100_001.0), creator, 3400, 2))
             .add_rule(DistributionRule::new(mcap!(100_001.0), community, 600, 3));
 
         TestSetup {
             calculator,
-            platform,
+            platform: treasure,
             community,
             creator,
         }
