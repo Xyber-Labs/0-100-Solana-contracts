@@ -100,12 +100,6 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         state.total_deposited >= state.min_raise_lamports,
         ErrorCode::MinRaiseNotMet
     );
-    require!(
-        state.roster_shards > 0
-            && state.roster_highest_used_shard as i32 >= 1
-            && state.roster_finalized_up_to >= state.roster_highest_used_shard as i32,
-        ErrorCode::ShardsNotFullyFinalized
-    );
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),

@@ -1,8 +1,35 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::sysvar::clock::Clock;
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Eq, Debug)]
+pub struct TicketRange {
+    pub start: u32,
+    pub count: u32,
+}
+
+impl TicketRange {
+    pub fn new(start: u32, count: u32) -> Self {
+        Self { start, count }
+    }
+}
 
 // -------------------------------
 // Account Structures
 // -------------------------------
+
+#[account]
+#[derive(InitSpace)]
+pub struct VacantRanges {
+    pub launch: Pubkey,
+    #[max_len(100)]
+    pub ranges: Vec<TicketRange>,
+}
+
+impl VacantRanges {
+    pub fn push(&mut self, range: TicketRange) {
+        self.ranges.push(range);
+    }
+}
 
 #[account]
 #[derive(InitSpace)]
@@ -25,24 +52,14 @@ pub struct LaunchState {
     pub base_sale_basis_points: u64,
 
     // Funding
-    pub funding_period_end: i64, // Unix timestamp when funding period ends
+    pub funding_end: i64,
     pub total_deposited: u64,
     pub total_tickets: u32,
     pub k_capacity: u32,
 
     // Selection
     pub vrf_seed: Option<[u8; 32]>,
-    pub selection_processed: u32,
     pub selection_finalized: bool,
-    pub threshold_score: Option<u128>,
-
-    // Sharded roster and permutation-based selection fields
-    pub roster_shards: u16, // number of roster shards allocated for this launch
-    pub roster_initialized_up_to: i32, // 0 until first shard initialized; then last initialized shard_id
-    pub roster_finalized_up_to: i32, // 0 until finalization starts; then last finalized shard_id
-    pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
-    pub roster_shard_cap: u16,
-    pub roster_highest_used_shard: u16, // Highest shard id that has at least one wallet (used to allow partial finalization)
 
     // Claims
     pub tokens_per_ticket: Option<u64>,
@@ -55,7 +72,7 @@ pub struct LaunchState {
     pub creator_initial_deposit: u64,
     pub creator_max_deposit: u64,
     // --- appended for upgrade safety ---
-    pub funding_period_start: i64,
+    pub funding_start: i64,
     pub pool_creation_grace_period_sec: i64,
     pub team_allocation_basis_points: u64,
     pub team_vesting_duration_sec: i64,
@@ -75,6 +92,11 @@ impl LaunchState {
         );
         bump
     }
+
+    pub fn is_funding_active(&self) -> bool {
+        let now = Clock::get().map(|c| c.unix_timestamp).unwrap_or(0);
+        now >= self.funding_start && now < self.funding_end
+    }
 }
 
 #[account]
@@ -87,53 +109,74 @@ pub struct EscrowAccount {
 #[account]
 #[derive(InitSpace)]
 pub struct UserContribution {
-    pub launch: Pubkey,
-    pub wallet: Pubkey,
-    pub deposited: u64,
-    pub ticket_count: u32,
-    pub claimed_refund: bool,
-    pub claimed_tokens: bool,
-
-    // Sharded roster placement (assigned on first deposit)
-    pub shard_id: u16,
-    pub idx_in_shard: u32,
-
-    // --- appended for upgrade safety: finalized snapshot for claims ---
-    pub finalized_snapshot: bool, // default: false
-    pub final_t_base: u32,        // shard_base + prefix[u]
-    pub final_ticket_count: u32,  // counts[u] at seal time
+    pub tickets_claimed: u32,
+    pub tickets_refunded: u32,
+    pub withdraw_count: u8,
+    #[max_len(10)]
+    pub ticket_ranges: Vec<TicketRange>,
 }
 
-#[account]
-#[derive(InitSpace)]
-pub struct Roster {
-    pub launch: Pubkey,
+impl UserContribution {
+    pub fn total_tickets(&self) -> u32 {
+        self.ticket_ranges.iter().map(|r| r.count).sum()
+    }
 
-    // dynamic until close; then frozen
-    #[max_len(100)]
-    pub wallets: Vec<Pubkey>,
-    #[max_len(100)]
-    pub counts: Vec<u32>,
-
-    // built at close
-    #[max_len(100)]
-    pub prefix: Vec<u32>,
-    pub total_in_shard: u32,
-    pub shard_base: u32,
+    pub fn remove_tickets(&mut self, count: u32) -> Vec<TicketRange> {
+        let mut removed = Vec::new();
+        let mut remaining = count;
+        while remaining > 0 && !self.ticket_ranges.is_empty() {
+            let last_idx = self.ticket_ranges.len() - 1;
+            let range = &mut self.ticket_ranges[last_idx];
+            let take = remaining.min(range.count);
+            let removed_start = range.start + range.count - take;
+            removed.push(TicketRange::new(removed_start, take));
+            range.count -= take;
+            remaining -= take;
+            if range.count == 0 {
+                self.ticket_ranges.pop();
+            }
+        }
+        removed
+    }
 }
 
-// New sharded roster account
-#[account]
-pub struct RosterShard {
-    pub launch: Pubkey,
-    pub shard_id: u16,
-    pub created_by: Pubkey,
-    pub wallets: Vec<Pubkey>,
-    pub counts: Vec<u32>,
-    pub prefix: Vec<u32>,
-    pub total_in_shard: u32,
-    pub shard_base: u32,
-    pub sealed_count: u32,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_tickets() {
+        let mut uc = UserContribution {
+            tickets_claimed: 0,
+            tickets_refunded: 0,
+            withdraw_count: 0,
+            ticket_ranges: vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 5),
+                TicketRange::new(30, 8),
+            ],
+        };
+        assert_eq!(uc.total_tickets(), 23);
+
+        let removed = uc.remove_tickets(3);
+        assert_eq!(removed, vec![TicketRange::new(35, 3)]);
+        assert_eq!(uc.ticket_ranges, vec![
+            TicketRange::new(0, 10),
+            TicketRange::new(20, 5),
+            TicketRange::new(30, 5),
+        ]);
+
+        let removed = uc.remove_tickets(7);
+        assert_eq!(removed, vec![TicketRange::new(30, 5), TicketRange::new(23, 2)]);
+        assert_eq!(uc.ticket_ranges, vec![
+            TicketRange::new(0, 10),
+            TicketRange::new(20, 3),
+        ]);
+
+        let removed = uc.remove_tickets(100);
+        assert_eq!(removed, vec![TicketRange::new(20, 3), TicketRange::new(0, 10)]);
+        assert!(uc.ticket_ranges.is_empty());
+    }
 }
 
 #[account]
@@ -228,14 +271,14 @@ pub struct LaunchPreset {
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub unlock_time_sec: i64,
-    pub roster_shard_cap: u16,
-    pub roster_shards_total: u16,
     pub creator_initial_deposit_lamports: u64,
     pub creator_daily_lamports_limit: u64,
     pub creator_claim_lock_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
+    pub free_withdrawals_limit: u8,
+    pub withdraw_fee_lamports: u64,
 }
 
 impl LaunchPreset {
@@ -258,7 +301,6 @@ impl LaunchPreset {
             crate::errors::ErrorCode::MalformedPreset
         );
         require!(self.creator_claim_lock_period_sec > 0, crate::errors::ErrorCode::MalformedPreset);
-        require!(self.roster_shards_total > 0, crate::errors::ErrorCode::MalformedPreset);
         require!(
             self.funding_duration_seconds > 0 && self.funding_duration_seconds <= 60 * 60 * 24 * 7,
             crate::errors::ErrorCode::MalformedPreset

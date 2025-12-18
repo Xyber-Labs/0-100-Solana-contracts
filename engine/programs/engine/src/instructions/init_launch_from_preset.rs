@@ -90,8 +90,6 @@ pub fn init_launch_from_preset(
         funding_duration_seconds: p.funding_duration_seconds,
         sale_start_time_timestamp,
         unlock_time_sec: p.unlock_time_sec,
-        roster_shard_cap: p.roster_shard_cap,
-        roster_shards_total: p.roster_shards_total,
         creator_initial_deposit_lamports: p.creator_initial_deposit_lamports,
         creator_daily_lamports_limit: p.creator_daily_lamports_limit,
         creator_claim_lock_period_sec: p.creator_claim_lock_period_sec,

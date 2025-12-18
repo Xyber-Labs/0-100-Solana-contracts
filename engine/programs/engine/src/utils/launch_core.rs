@@ -30,12 +30,8 @@ pub struct InitLaunchParams {
     pub base_sale_basis_points: u64,
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
-    /// Absolute unix timestamp (seconds) when the sale starts.
-    /// If 0, the current time will be used.
     pub sale_start_time_timestamp: i64,
     pub unlock_time_sec: i64,
-    pub roster_shard_cap: u16,
-    pub roster_shards_total: u16,
     pub creator_initial_deposit_lamports: u64,
     pub creator_daily_lamports_limit: u64,
     pub creator_claim_lock_period_sec: i64,
@@ -78,7 +74,6 @@ pub fn init_launch_core<'info>(
         EngineErrorCode::MalformedPreset
     );
     require!(params.creator_claim_lock_period_sec > 0, EngineErrorCode::InvalidClaimLockPeriod);
-    require!(params.roster_shards_total > 0, EngineErrorCode::InvalidK);
     require!(
         params.creator_daily_lamports_limit >= params.tau_lamports,
         EngineErrorCode::InvalidCreatorDailyLimit
@@ -134,7 +129,6 @@ pub fn init_launch_core<'info>(
         crate::constants::TEAM_BASIS_POINTS
     };
     state.unlock_time_sec = params.unlock_time_sec;
-    state.roster_shard_cap = params.roster_shard_cap;
 
     let now = Clock::get()?.unix_timestamp;
     // If timestamp is 0 or in the past, start now; otherwise start at the given future timestamp.
@@ -146,8 +140,8 @@ pub fn init_launch_core<'info>(
     let end = start
         .checked_add(params.funding_duration_seconds)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    state.funding_period_start = start;
-    state.funding_period_end = end;
+    state.funding_start = start;
+    state.funding_end = end;
     state.total_deposited = 0;
     state.total_tickets = 0;
 
@@ -159,14 +153,7 @@ pub fn init_launch_core<'info>(
     state.k_capacity = k_cap_u64 as u32;
 
     state.selection_finalized = false;
-    state.selection_processed = 0;
-    state.threshold_score = None;
     state.vrf_seed = None;
-
-    state.roster_shards = params.roster_shards_total;
-    state.roster_initialized_up_to = 0;
-    state.roster_finalized_up_to = 0;
-    state.public_total_tickets = 0;
 
     state.tokens_per_ticket = None;
 
@@ -180,7 +167,6 @@ pub fn init_launch_core<'info>(
     } else {
         crate::constants::TEAM_VESTING_DURATION_SEC
     };
-    state.roster_highest_used_shard = 0;
 
     let amount = params.creator_initial_deposit_lamports;
     if amount > 0 {
@@ -261,8 +247,8 @@ pub fn init_launch_core<'info>(
         base_sale_basis_points: params.base_sale_basis_points,
         unlock_time_sec: state.unlock_time_sec,
         launch: launch_key,
-        funding_period_start: start,
-        funding_period_end: end,
+        funding_start: start,
+        funding_end: end,
     });
 
     let meta = token_metadata_config;

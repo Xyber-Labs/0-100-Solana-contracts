@@ -51,20 +51,13 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         launch_state.total_deposited >= launch_state.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
-    // Allow partial finalization: require all used shards to be finalized
-    require!(launch_state.roster_shards > 0, EngineErrorCode::ShardsNotFullyFinalized);
-    require!(launch_state.roster_highest_used_shard as i32 >= 1, EngineErrorCode::ShardsNotFullyFinalized);
-    require!(
-        launch_state.roster_finalized_up_to >= launch_state.roster_highest_used_shard as i32,
-        EngineErrorCode::ShardsNotFullyFinalized
-    );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
     let (valid_slot, valid_hash) = select_blockhash(
         &ctx.accounts.slot_hashes.to_account_info(),
         current_time,
-        launch_state.funding_period_end,
+        launch_state.funding_end,
         launch_state.pool_creation_grace_period_sec,
         launch_state.project_id,
         launch_state.unlock_time_sec,
@@ -107,12 +100,12 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 fn select_blockhash(
     slot_hashes: &AccountInfo,
     current_time: i64,
-    funding_period_end: i64,
+    funding_end: i64,
     pool_creation_grace_period_sec: i64,
     project_id: u64,
     unlock_time_sec: i64,
 ) -> Result<(u64, [u8; 32])> {
-    let effective_end = funding_period_end
+    let effective_end = funding_end
         .checked_add(pool_creation_grace_period_sec)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let random_pool_creation_expired =
@@ -187,16 +180,12 @@ fn finalize_selection(
 
     let total_allocation = launch_state.base_total_allocation;
     let sale_bps = launch_state.base_sale_basis_points;
-    // Compute sale allocation in u128 to avoid intermediate overflow, then use for per-ticket calc
     let sale_allocation_u128 = (total_allocation as u128)
         .checked_mul(sale_bps as u128)
         .and_then(|v| v.checked_div(10_000u128))
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    let grand_total_tickets = (launch_state.public_total_tickets as u64)
-        .checked_add(launch_state.creator_reserved_tickets as u64)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let divisor = grand_total_tickets.min(launch_state.k_capacity as u64);
+    let divisor = (launch_state.total_tickets as u64).min(launch_state.k_capacity as u64);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
     let tokens_per_ticket_u128 = sale_allocation_u128

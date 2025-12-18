@@ -16,14 +16,14 @@ pub struct InitLaunchPresetParams {
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub unlock_time_sec: i64,
-    pub roster_shard_cap: u16,
-    pub roster_shards_total: u16,
     pub creator_initial_deposit_lamports: u64,
     pub creator_daily_lamports_limit: u64,
     pub creator_claim_lock_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
+    pub free_withdrawals_limit: u8,
+    pub withdraw_fee_lamports: u64,
 }
 
 #[derive(Accounts)]
@@ -79,14 +79,14 @@ pub fn init_launch_preset(
     p.team_allocation_basis_points = params.team_allocation_basis_points;
     p.funding_duration_seconds = params.funding_duration_seconds;
     p.unlock_time_sec = params.unlock_time_sec;
-    p.roster_shard_cap = params.roster_shard_cap;
-    p.roster_shards_total = params.roster_shards_total;
     p.creator_initial_deposit_lamports = params.creator_initial_deposit_lamports;
     p.creator_daily_lamports_limit = params.creator_daily_lamports_limit;
     p.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
     p.creator_max_deposit = params.creator_max_deposit;
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
     p.team_vesting_duration_sec = params.team_vesting_duration_sec;
+    p.free_withdrawals_limit = params.free_withdrawals_limit;
+    p.withdraw_fee_lamports = params.withdraw_fee_lamports;
 
     p.is_valid()?;
 

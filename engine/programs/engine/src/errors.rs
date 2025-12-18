@@ -4,12 +4,10 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
     #[msg("Minimum raise not met")]
     MinRaiseNotMet,
-    #[msg("Funding period has ended")]
-    FundingPeriodEnded,
-    #[msg("Funding period has not started yet")]
-    FundingPeriodNotStarted,
-    #[msg("Funding period has not ended yet")]
-    FundingPeriodNotEnded,
+    #[msg("Funding is not active")]
+    FundingInactive,
+    #[msg("Funding has not ended yet")]
+    FundingNotEnded,
     #[msg("Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)")]
     InvalidFundingDuration,
     #[msg("Invalid start time")]
@@ -19,9 +17,9 @@ pub enum ErrorCode {
     #[msg("Unauthorized")]
     Unauthorized,
     #[msg("Amount must be multiple of tau")]
-    AmountNotMultipleTau,
+    BadAmount,
     #[msg("Per-wallet cap exceeded")]
-    PerWalletCapExceeded,
+    DepositCapExceeded,
     #[msg("Insufficient deposit")]
     InsufficientDeposit,
     #[msg("Seed already set")]
@@ -158,4 +156,7 @@ pub enum ErrorCode {
     InvalidInitOrder,
     #[msg("Roster shard not fully sealed")]
     ShardNotSealed,
+
+    #[msg("Bitmap is full")]
+    BitmapFull,
 }

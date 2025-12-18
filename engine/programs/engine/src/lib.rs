@@ -2,14 +2,11 @@
 
 use anchor_lang::prelude::*;
 
-pub use constants::WSOL_MINT;
 use constants::*;
+pub use constants::WSOL_MINT;
 use state::*;
 
-use crate::{
-    instructions::*,
-    utils::{clmm::LiquidityRange, launch_core::InitLaunchParams},
-};
+use crate::{instructions::*, utils::clmm::LiquidityRange};
 
 pub mod constants;
 pub mod errors;
@@ -28,43 +25,9 @@ declare_id!("xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p");
 pub mod engine {
     use super::*;
 
-    /// Create launch + PDAs (escrow, mint authority PDA is derived, not stored).
-    pub fn init_launch(
-        ctx: Context<InitLaunch>,
-        params: InitLaunchParams,
-        project_id: u64,
-    ) -> Result<()> {
-        instructions::init_launch(ctx, params, project_id)
-    }
-
-    /// Initialize roster shard account
-    pub fn init_roster_shard(ctx: Context<InitRosterShard>, shard_id: u16) -> Result<()> {
-        instructions::init_roster_shard(ctx, shard_id)
-    }
-
     /// Permissionless seed setter using recent blockhash.
     pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         instructions::set_seed(ctx)
-    }
-
-    /// Finalize roster shard (compute prefix, set shard_base, bump totals)
-    pub fn finalize_roster_shard(ctx: Context<FinalizeRosterShard>, shard_id: u16) -> Result<()> {
-        instructions::finalize_roster_shard(ctx, shard_id)
-    }
-
-    /// Seal roster shard by snapshotting user ticket ranges into UserContribution
-    pub fn seal_roster_shard<'info>(
-        ctx: Context<'_, '_, '_, 'info, SealRosterShard<'info>>,
-        shard_id: u16,
-        from: u32,
-        max: u16,
-    ) -> Result<()> {
-        instructions::seal_roster_shard(ctx, shard_id, from, max)
-    }
-
-    /// Close roster shard account after sealing
-    pub fn close_roster_shard(ctx: Context<CloseRosterShard>, shard_id: u16) -> Result<()> {
-        instructions::close_roster_shard(ctx, shard_id)
     }
 
     // -------------------------------
@@ -100,15 +63,7 @@ pub mod engine {
         instructions::init_launch_preset(ctx, id, params)
     }
 
-    pub fn update_launch_preset(
-        ctx: Context<UpdateLaunchPreset>,
-        id: u8,
-        patch: UpdateLaunchParams,
-    ) -> Result<()> {
-        instructions::update_launch_preset(ctx, id, patch)
-    }
-
-    /// Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow.
+    /// Deposit lamports (must be multiple of τ); allocate tickets in bitmap; move lamports to escrow.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         instructions::deposit(ctx, amount)
     }
@@ -146,21 +101,6 @@ pub mod engine {
         ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     ) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
-    }
-
-    /// Creator can increase special deposit during funding window
-    pub fn creator_deposit(ctx: Context<CreatorDeposit>, amount: u64) -> Result<()> {
-        instructions::creator_deposit(ctx, amount)
-    }
-
-    /// Creator can decrease special deposit during funding window
-    pub fn creator_withdraw(ctx: Context<CreatorWithdraw>, amount: u64) -> Result<()> {
-        instructions::creator_withdraw(ctx, amount)
-    }
-
-    #[cfg(feature = "test")]
-    pub fn mint_for_test(ctx: Context<MintForTest>) -> Result<()> {
-        instructions::mint_for_test(ctx)
     }
 
     pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {

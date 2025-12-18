@@ -36,8 +36,8 @@ pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
     // Check if funding period has ended and min raise was not met
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= launch_state.funding_period_end,
-        EngineErrorCode::FundingPeriodNotEnded
+        current_time >= launch_state.funding_end,
+        EngineErrorCode::FundingNotEnded
     );
     require!(
         launch_state.total_deposited < launch_state.min_raise_lamports,

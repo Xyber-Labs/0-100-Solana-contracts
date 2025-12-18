@@ -25,8 +25,8 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     // Check if funding period has ended
     let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= launch_state.funding_period_end,
-        crate::errors::ErrorCode::FundingPeriodNotEnded
+        current_time >= launch_state.funding_end,
+        crate::errors::ErrorCode::FundingNotEnded
     );
     require!(
         launch_state.total_deposited >= launch_state.min_raise_lamports,
