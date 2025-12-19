@@ -6,7 +6,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{LaunchPreset, LaunchState, TicketRange, UserContribution},
+    state::{Contribution, LaunchPreset, LaunchState, TicketRange},
     utils::bitmap::TicketBitmap,
 };
 
@@ -14,12 +14,13 @@ use crate::{
 #[instruction(amount: u64)]
 pub struct Deposit<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
-
-    pub launch_preset: Account<'info, LaunchPreset>,
+    pub contributor: Signer<'info>,
 
     #[account(mut, constraint = launch_state.is_funding_active() @ EngineErrorCode::FundingInactive)]
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK: Platform account for paying bitmap reallocation
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
@@ -30,12 +31,12 @@ pub struct Deposit<'info> {
 
     #[account(
         init_if_needed,
-        payer = user,
-        space = 8 + UserContribution::INIT_SPACE,
-        seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()],
+        payer = contributor,
+        space = 8 + Contribution::INIT_SPACE,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()],
         bump
     )]
-    pub user_contribution: Account<'info, UserContribution>,
+    pub contribution: Account<'info, Contribution>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -47,17 +48,17 @@ pub struct Deposit<'info> {
 pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let contribution = &mut ctx.accounts.user_contribution;
+    let contribution = &mut ctx.accounts.contribution;
 
     require!(amount > 0 && amount % launch_state.tau_lamports == 0, EngineErrorCode::BadAmount);
 
     let current_tickets = contribution.total_tickets();
     let current_deposit = checked_mul!(current_tickets as u64, launch_state.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
-    let is_creator = ctx.accounts.user.key() == launch_state.creator;
+    let is_creator = ctx.accounts.contributor.key() == launch_state.creator;
     let creator_cap = launch_preset.creator_max_deposit;
-    let user_cap = launch_preset.per_wallet_cap;
-    let cap = if is_creator { creator_cap } else { user_cap };
+    let contributor_cap = launch_preset.per_wallet_cap;
+    let cap = if is_creator { creator_cap } else { contributor_cap };
 
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
@@ -95,25 +96,22 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     contribution.ticket_ranges.push(TicketRange::new(start, new_tickets_count));
 
     let ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.user.key(),
+        &ctx.accounts.contributor.key(),
         &ctx.accounts.escrow_authority.key(),
         amount,
     );
     solana_program::program::invoke(
         &ix,
         &[
-            ctx.accounts.user.to_account_info(),
+            ctx.accounts.contributor.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
 
-    launch_state.total_deposited = checked_add!(launch_state.total_deposited, amount)?;
-    launch_state.total_tickets = launch_bitmap.bits_allocated;
-
     emit!(DepositMade {
         launch: launch_state.key(),
-        user: ctx.accounts.user.key(),
+        contributor: ctx.accounts.contributor.key(),
         amount,
     });
 
