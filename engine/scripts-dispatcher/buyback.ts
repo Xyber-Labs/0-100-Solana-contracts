@@ -7,6 +7,7 @@ import { getPdaTickArrayAddress, TickUtils } from "@raydium-io/raydium-sdk-v2";
 import EngineSDK from "../ts-sdk/src/engine";
 import IncomeDispatcherSDK from "../ts-sdk/src/income-dispatcher";
 import { getExplorerUrl, getAccountUrl, loadKeypair, toPublicKey } from "../scripts/utils";
+import { getRaydiumCluster } from "../scripts/raydium-utils";
 
 const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
@@ -80,7 +81,7 @@ async function main() {
   const raydium = await Raydium.load({
     owner: payerKeypair,
     connection: provider.connection,
-    cluster: "mainnet",
+    cluster: getRaydiumCluster(provider),
     disableFeatureCheck: true,
     disableLoadToken: true,
     blockhashCommitment: "finalized",

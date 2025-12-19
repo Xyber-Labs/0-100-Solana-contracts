@@ -8,7 +8,6 @@ import {
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount
 } from "@solana/spl-token";
-import { Decimal } from "decimal.js";
 
 import { EngineSDK } from "../ts-sdk/src/engine";
 import { IncomeDispatcherSDK, Role } from "../ts-sdk/src/income-dispatcher";
@@ -896,400 +895,400 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("\n✅ getRaydiumPoolByProjectId works correctly");
   });
 
-  it("Step 20: Create XYBER/SOL pool for buyback", async () => {
-    console.log("=== Step 20: Create XYBER/SOL Pool for BuyBack ===");
-
-    const xyberMint = xyberMintKeypair.publicKey;
-
-    const adminXyberAta = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      admin1Keypair,
-      xyberMint,
-      admin1Keypair.publicKey
-    );
-
-    const xyberAmount = BigInt(1_000_000_000_000); // 1M XYBER (6 decimals)
-    const { mintTo } = await import("@solana/spl-token");
-    await mintTo(
-      provider.connection,
-      admin1Keypair,
-      xyberMint,
-      adminXyberAta.address,
-      admin1Keypair,
-      xyberAmount
-    );
-    console.log("✅ Minted XYBER tokens for liquidity:", xyberAmount.toString());
-
-    const raydium = await Raydium.load({
-      owner: admin1Keypair,
-      connection: provider.connection,
-      cluster: 'mainnet',
-      disableFeatureCheck: true,
-      disableLoadToken: true,
-      blockhashCommitment: 'finalized',
-    });
-
-    const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
-    const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
-
-    const wsolToken = {
-      chainId: 101,
-      address: WSOL_MINT.toString(),
-      programId: TOKEN_PROGRAM_ID,
-      logoURI: "",
-      symbol: "SOL",
-      name: "Wrapped SOL",
-      decimals: 9,
-      tags: [],
-      extensions: {},
-    };
-
-    const xyberToken = {
-      chainId: 101,
-      address: xyberMint.toString(),
-      programId: TOKEN_PROGRAM_ID,
-      logoURI: "",
-      symbol: "XYBER",
-      name: "XYBER Token",
-      decimals: 6,
-      tags: [],
-      extensions: {},
-    };
-
-    const initialPrice = new Decimal(10000);
-    console.log("Initial price:", initialPrice.toString(), "SOL per XYBER");
-
-    const ammConfigInfo = {
-      id: ammConfigAddress,
-      index: 0,
-      protocolFeeRate: 12000,
-      tradeFeeRate: 2500,
-      tickSpacing: 10,
-      fundFeeRate: 0,
-      fundOwner: "",
-      description: "",
-    };
-
-    const { execute, extInfo } = await raydium.clmm.createPool({
-      programId: sdk.getRaydiumClmmProgramId(),
-      mint1: wsolToken as any,
-      mint2: xyberToken as any,
-      ammConfig: ammConfigInfo as any,
-      initialPrice,
-      txVersion: TxVersion.V0,
-    });
-
-    const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
-    console.log("✅ XYBER/SOL pool created");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
-
-    // Get pool addresses from extInfo
-    const poolId = extInfo.address.id;
-    xyberPoolState = new anchor.web3.PublicKey(poolId);
-    xyberPoolQuoteVault = new anchor.web3.PublicKey(extInfo.address.vault.A);
-    xyberPoolXyberVault = new anchor.web3.PublicKey(extInfo.address.vault.B);
-    xyberPoolObservationState = new anchor.web3.PublicKey(extInfo.address.observationId);
-
-    console.log("Pool State:", xyberPoolState.toString());
-    console.log("Quote Vault:", xyberPoolQuoteVault.toString());
-    console.log("XYBER Vault:", xyberPoolXyberVault.toString());
-    console.log("Observation:", xyberPoolObservationState.toString());
-  });
-
-  it("Step 21: Add liquidity to XYBER/SOL pool", async () => {
-    console.log("=== Step 21: Add Liquidity to XYBER/SOL Pool ===");
-
-    const { getPdaTickArrayAddress, TickUtils } = await import("@raydium-io/raydium-sdk-v2");
-
-    const clmmProgram = sdk.getRaydiumClmmProgramId();
-    const tickSpacing = 10;
-
-    const MIN_TICK = -443636;
-    const MAX_TICK = 443636;
-    const tickLower = Math.ceil(MIN_TICK / tickSpacing) * tickSpacing;
-    const tickUpper = Math.floor(MAX_TICK / tickSpacing) * tickSpacing;
-
-    console.log("Full range position: tickLower =", tickLower, ", tickUpper =", tickUpper);
-
-    const raydium = await Raydium.load({
-      owner: admin1Keypair,
-      connection: provider.connection,
-      cluster: 'mainnet',
-      disableFeatureCheck: true,
-      disableLoadToken: true,
-      blockhashCommitment: 'finalized',
-    });
-
-    // Get pool info via RPC (not API) - for devnet/local validator
-    const data = await raydium.clmm.getPoolInfoFromRpc(xyberPoolState.toString());
-    const poolInfo = data.poolInfo;
-    const poolKeys = data.poolKeys;
-    console.log("Pool info loaded via RPC");
-
-    const solAmount = new BN(7 * anchor.web3.LAMPORTS_PER_SOL);
-    const xyberAmount = new BN(500_000_000_000); // 500K XYBER (6 decimals)
-
-    console.log("Adding liquidity: SOL =", solAmount.toString(), ", XYBER =", xyberAmount.toString());
-    console.log("Pool mintA:", poolInfo.mintA.address, "mintB:", poolInfo.mintB.address);
-    console.log("WSOL mint:", WSOL_MINT.toString());
-
-    // Determine which mint is SOL
-    const isMintAWsol = poolInfo.mintA.address === WSOL_MINT.toString();
-    console.log("Is MintA WSOL?", isMintAWsol);
-
-    // Use SOL as base since we control SOL amount
-    const { execute, extInfo } = await raydium.clmm.openPositionFromBase({
-      poolInfo,
-      poolKeys,
-      ownerInfo: {
-        useSOLBalance: true,
-      },
-      tickLower,
-      tickUpper,
-      base: isMintAWsol ? "MintA" : "MintB",
-      baseAmount: solAmount,
-      otherAmountMax: xyberAmount,
-      txVersion: TxVersion.V0,
-    });
-
-    const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
-    console.log("✅ Position opened");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
-
-    // Set tick arrays for buyback swap
-    const currentPriceTick = -69077;
-    const tickArrayCurrentStartIndex = TickUtils.getTickArrayStartIndexByTick(currentPriceTick, tickSpacing);
-    const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, tickSpacing);
-    const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, tickSpacing);
-
-    const tickArrayCurrentPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayCurrentStartIndex);
-    const tickArrayLowerPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayLowerStartIndex);
-    const tickArrayUpperPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayUpperStartIndex);
-
-    xyberPoolTickArray0 = tickArrayCurrentPda.publicKey;
-    xyberPoolTickArray1 = tickArrayLowerPda.publicKey;
-    xyberPoolTickArray2 = tickArrayUpperPda.publicKey;
-
-    // Bitmap extension PDA for SwapV2
-    [xyberPoolBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("pool_tick_array_bitmap_extension"), xyberPoolState.toBuffer()],
-      clmmProgram
-    );
-
-    // Check if bitmap extension exists, if not - initialize it
-    const bitmapExtensionInfo = await provider.connection.getAccountInfo(xyberPoolBitmapExtension);
-    if (!bitmapExtensionInfo) {
-      console.log("Initializing tick array bitmap extension...");
-      const { execute: executeInit } = await raydium.clmm.initTickArrayBitmapExtension({
-        poolInfo,
-        txVersion: TxVersion.V0,
-      });
-      const { txId: initTxId } = await utils.withNoLogging(() => executeInit({ sendAndConfirm: true }));
-      console.log("✅ Bitmap extension initialized:", initTxId);
-    } else {
-      console.log("Bitmap extension already exists");
-    }
-
-    console.log("Tick Array Current (for swap):", xyberPoolTickArray0.toString());
-    console.log("Tick Array Lower:", xyberPoolTickArray1.toString());
-    console.log("Tick Array Upper:", xyberPoolTickArray2.toString());
-    console.log("Bitmap Extension:", xyberPoolBitmapExtension.toString());
-  });
-
-  it("Step 22: Execute BuyBack", async () => {
-    console.log("=== Step 22: Execute BuyBack ===");
-
-    // Check available quote for buyback
-    const buybackQuoteTotals = await dispatcherSdk.fetchTotals(Role.BuyBack, WSOL_MINT);
-    console.log("BuyBack harvested quote:", buybackQuoteTotals.harvested.toString());
-    console.log("BuyBack spent quote:", buybackQuoteTotals.spent.toString());
-
-    const availableQuote = new BN(buybackQuoteTotals.harvested).sub(new BN(buybackQuoteTotals.spent));
-    console.log("Available for buyback:", availableQuote.toString(), "lamports");
-
-    if (availableQuote.lte(new BN(0))) {
-      console.log("⏭️  No quote available for buyback, skipping");
-      return;
-    }
-
-    // Verify bitmap extension exists
-    const bitmapExtInfo = await provider.connection.getAccountInfo(xyberPoolBitmapExtension);
-    console.log("Bitmap extension account exists:", !!bitmapExtInfo);
-    console.log("Bitmap extension address:", xyberPoolBitmapExtension.toString());
-    if (bitmapExtInfo) {
-      console.log("Bitmap extension data length:", bitmapExtInfo.data.length);
-    }
-
-    // Load Raydium SDK and get pool info for proper tick array computation
-    const raydium = await Raydium.load({
-      owner: admin1Keypair,
-      connection: provider.connection,
-      cluster: 'mainnet',
-      disableFeatureCheck: true,
-      disableLoadToken: true,
-      blockhashCommitment: 'finalized',
-    });
-
-    const poolData = await raydium.clmm.getPoolInfoFromRpc(xyberPoolState.toString());
-    const poolInfo = poolData.poolInfo;
-    const clmmPoolInfo = poolData.computePoolInfo;
-    const tickCache = poolData.tickData;
-
-    // Log current pool state
-    console.log("Pool current tick:", clmmPoolInfo.tickCurrent);
-    console.log("Pool mintA:", poolInfo.mintA.address);
-    console.log("Pool mintB:", poolInfo.mintB.address);
-
-    // Compute swap to get correct tick arrays - buying XYBER with SOL (quote -> base in pool terms)
-    const { remainingAccounts } = await PoolUtils.computeAmountOutFormat({
-      poolInfo: clmmPoolInfo,
-      tickArrayCache: tickCache[xyberPoolState.toString()],
-      amountIn: availableQuote,
-      tokenOut: poolInfo.mintB, // XYBER is mintB (SOL is mintA based on address sorting)
-      slippage: 0.01,
-      epochInfo: await raydium.fetchEpochInfo(),
-    });
-
-    console.log("Computed remaining accounts for swap:", remainingAccounts.length);
-    console.log("remainingAccounts structure:", JSON.stringify(remainingAccounts, (key, value) =>
-      typeof value === 'bigint' ? value.toString() : value, 2));
-
-    // Extract tick arrays from remaining accounts - structure may vary
-    const getPublicKey = (acc: any): anchor.web3.PublicKey | null => {
-      if (!acc) return null;
-      // Already a PublicKey object (has _bn property)
-      if (acc._bn) return acc as anchor.web3.PublicKey;
-      if (acc.pubkey) return new anchor.web3.PublicKey(acc.pubkey);
-      if (acc.address) return new anchor.web3.PublicKey(acc.address);
-      if (typeof acc === 'string') return new anchor.web3.PublicKey(acc);
-      // Try to create from the object directly (in case it's PublicKey-like)
-      try {
-        return new anchor.web3.PublicKey(acc);
-      } catch {
-        return null;
-      }
-    };
-
-    // Use tick array for current tick (where swap will happen)
-    const { getPdaTickArrayAddress, TickUtils } = await import("@raydium-io/raydium-sdk-v2");
-    const tickSpacing = 10;
-    const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(clmmPoolInfo.tickCurrent, tickSpacing);
-    const currentTickArrayPda = getPdaTickArrayAddress(sdk.getRaydiumClmmProgramId(), xyberPoolState, currentTickArrayStartIndex);
-
-    console.log("Using tick array (current):", currentTickArrayPda.publicKey.toString());
-    console.log("Current tick array start index:", currentTickArrayStartIndex);
-
-    // Build remaining accounts for Raydium SwapV2:
-    // - tick arrays needed for swap (computed by SDK)
-    // - bitmap extension at the end (if needed for extended range)
-    const swapRemainingAccounts: { pubkey: anchor.web3.PublicKey; isWritable: boolean; isSigner: false }[] = [];
-
-    // Add computed tick arrays from SDK
-    console.log("Processing remaining accounts from SDK...");
-    for (const acc of remainingAccounts) {
-      console.log("  acc:", acc, "type:", typeof acc);
-      const pubkey = getPublicKey(acc);
-      console.log("  pubkey:", pubkey?.toString());
-      if (pubkey) {
-        swapRemainingAccounts.push({ pubkey, isWritable: true, isSigner: false });
-      }
-    }
-
-    // If no tick arrays from SDK, use the current tick array
-    if (swapRemainingAccounts.length === 0) {
-      console.log("No tick arrays from SDK, using current tick array");
-      swapRemainingAccounts.push({ pubkey: currentTickArrayPda.publicKey, isWritable: true, isSigner: false });
-    }
-
-    // Add bitmap extension at the end
-    swapRemainingAccounts.push({ pubkey: xyberPoolBitmapExtension, isWritable: false, isSigner: false });
-
-    console.log("Swap remaining accounts:");
-    swapRemainingAccounts.forEach((acc, i) => {
-      console.log(`  [${i}] ${acc.pubkey.toString()} (writable: ${acc.isWritable})`);
-    });
-
-    const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
-
-    const result = await dispatcherSdk.buyback({
-      minXyberOut: new BN(1),
-      xyberMint: xyberMintKeypair.publicKey,
-      raydiumPoolState: xyberPoolState,
-      raydiumAmmConfig: ammConfigAddress,
-      raydiumQuoteVault: xyberPoolQuoteVault,
-      raydiumXyberVault: xyberPoolXyberVault,
-      raydiumObservationState: xyberPoolObservationState,
-      remainingAccounts: swapRemainingAccounts,
-      engineProgramId: program.programId,
-      raydiumProgramId: sdk.getRaydiumClmmProgramId(),
-      signers: [backendKeypair],
-    });
-
-    console.log("✅ BuyBack executed");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, result.signature));
-
-    // Verify treasure received XYBER
-    const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
-    console.log("Treasure harvested XYBER:", treasureXyberTotals.harvested.toString());
-
-    assert.ok(new BN(treasureXyberTotals.harvested).gtn(0), "Treasure should have received XYBER from buyback");
-  });
-
-  it("Step 23: Verify XYBER in vault after BuyBack", async () => {
-    console.log("=== Step 23: Verify XYBER in Vault ===");
-
-    // Get treasure XYBER totals to see balance
-    const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
-    console.log("Treasure harvested XYBER:", treasureXyberTotals.harvested.toString());
-    console.log("Treasure spent XYBER:", treasureXyberTotals.spent.toString());
-
-    const availableXyber = new BN(treasureXyberTotals.harvested).sub(new BN(treasureXyberTotals.spent));
-    console.log("Available XYBER for claim:", availableXyber.toString());
-
-    // Verify the XYBER is in the authority vault
-    const [authority] = dispatcherSdk.getAuthorityPda();
-    const authorityXyberAta = getAssociatedTokenAddressSync(
-      xyberMintKeypair.publicKey,
-      authority,
-      true
-    );
-
-    const vaultBalance = await provider.connection.getTokenAccountBalance(authorityXyberAta);
-    console.log("Authority XYBER vault balance:", vaultBalance.value.amount);
-
-    // Verify balances match
-    assert.equal(
-      vaultBalance.value.amount,
-      availableXyber.toString(),
-      "Vault balance should match tracked XYBER amount"
-    );
-
-    console.log("✅ XYBER balance verified in harvest authority vault");
-  });
-
-  it("Step 24: Claim XYBER from BuyBack (platform treasure)", async () => {
-    console.log("=== Step 24: Claim XYBER from BuyBack ===");
-
-    // Get available XYBER before claim
-    const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
-    const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
-    console.log("Available XYBER before claim:", availableBefore.toString());
-
-    // Claim XYBER to platform wallet
-    const { signature } = await dispatcherSdk.claimPlatform({
-      mint: xyberMintKeypair.publicKey,
-      signers: [platformKeypair],
-    });
-    console.log("✅ XYBER claimed");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
-
-    // Verify claim
-    const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
-    const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
-    console.log("Available XYBER after claim:", availableAfter.toString());
-
-    assert.ok(availableAfter.eqn(0), "All XYBER should be claimed");
-    console.log("✅ XYBER from BuyBack claimed to platform wallet");
-  });
+  // it("Step 20: Create XYBER/SOL pool for buyback", async () => {
+  //   console.log("=== Step 20: Create XYBER/SOL Pool for BuyBack ===");
+  //
+  //   const xyberMint = xyberMintKeypair.publicKey;
+  //
+  //   const adminXyberAta = await getOrCreateAssociatedTokenAccount(
+  //     provider.connection,
+  //     admin1Keypair,
+  //     xyberMint,
+  //     admin1Keypair.publicKey
+  //   );
+  //
+  //   const xyberAmount = BigInt(1_000_000_000_000); // 1M XYBER (6 decimals)
+  //   const { mintTo } = await import("@solana/spl-token");
+  //   await mintTo(
+  //     provider.connection,
+  //     admin1Keypair,
+  //     xyberMint,
+  //     adminXyberAta.address,
+  //     admin1Keypair,
+  //     xyberAmount
+  //   );
+  //   console.log("✅ Minted XYBER tokens for liquidity:", xyberAmount.toString());
+  //
+  //   const raydium = await Raydium.load({
+  //     owner: admin1Keypair,
+  //     connection: provider.connection,
+  //     cluster: 'mainnet',
+  //     disableFeatureCheck: true,
+  //     disableLoadToken: true,
+  //     blockhashCommitment: 'finalized',
+  //   });
+  //
+  //   const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
+  //   const TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  //
+  //   const wsolToken = {
+  //     chainId: 101,
+  //     address: WSOL_MINT.toString(),
+  //     programId: TOKEN_PROGRAM_ID,
+  //     logoURI: "",
+  //     symbol: "SOL",
+  //     name: "Wrapped SOL",
+  //     decimals: 9,
+  //     tags: [],
+  //     extensions: {},
+  //   };
+  //
+  //   const xyberToken = {
+  //     chainId: 101,
+  //     address: xyberMint.toString(),
+  //     programId: TOKEN_PROGRAM_ID,
+  //     logoURI: "",
+  //     symbol: "XYBER",
+  //     name: "XYBER Token",
+  //     decimals: 6,
+  //     tags: [],
+  //     extensions: {},
+  //   };
+  //
+  //   const initialPrice = new Decimal(10000);
+  //   console.log("Initial price:", initialPrice.toString(), "SOL per XYBER");
+  //
+  //   const ammConfigInfo = {
+  //     id: ammConfigAddress,
+  //     index: 0,
+  //     protocolFeeRate: 12000,
+  //     tradeFeeRate: 2500,
+  //     tickSpacing: 10,
+  //     fundFeeRate: 0,
+  //     fundOwner: "",
+  //     description: "",
+  //   };
+  //
+  //   const { execute, extInfo } = await raydium.clmm.createPool({
+  //     programId: sdk.getRaydiumClmmProgramId(),
+  //     mint1: wsolToken as any,
+  //     mint2: xyberToken as any,
+  //     ammConfig: ammConfigInfo as any,
+  //     initialPrice,
+  //     txVersion: TxVersion.V0,
+  //   });
+  //
+  //   const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
+  //   console.log("✅ XYBER/SOL pool created");
+  //   console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
+  //
+  //   // Get pool addresses from extInfo
+  //   const poolId = extInfo.address.id;
+  //   xyberPoolState = new anchor.web3.PublicKey(poolId);
+  //   xyberPoolQuoteVault = new anchor.web3.PublicKey(extInfo.address.vault.A);
+  //   xyberPoolXyberVault = new anchor.web3.PublicKey(extInfo.address.vault.B);
+  //   xyberPoolObservationState = new anchor.web3.PublicKey(extInfo.address.observationId);
+  //
+  //   console.log("Pool State:", xyberPoolState.toString());
+  //   console.log("Quote Vault:", xyberPoolQuoteVault.toString());
+  //   console.log("XYBER Vault:", xyberPoolXyberVault.toString());
+  //   console.log("Observation:", xyberPoolObservationState.toString());
+  // });
+  //
+  // it("Step 21: Add liquidity to XYBER/SOL pool", async () => {
+  //   console.log("=== Step 21: Add Liquidity to XYBER/SOL Pool ===");
+  //
+  //   const { getPdaTickArrayAddress, TickUtils } = await import("@raydium-io/raydium-sdk-v2");
+  //
+  //   const clmmProgram = sdk.getRaydiumClmmProgramId();
+  //   const tickSpacing = 10;
+  //
+  //   const MIN_TICK = -443636;
+  //   const MAX_TICK = 443636;
+  //   const tickLower = Math.ceil(MIN_TICK / tickSpacing) * tickSpacing;
+  //   const tickUpper = Math.floor(MAX_TICK / tickSpacing) * tickSpacing;
+  //
+  //   console.log("Full range position: tickLower =", tickLower, ", tickUpper =", tickUpper);
+  //
+  //   const raydium = await Raydium.load({
+  //     owner: admin1Keypair,
+  //     connection: provider.connection,
+  //     cluster: 'mainnet',
+  //     disableFeatureCheck: true,
+  //     disableLoadToken: true,
+  //     blockhashCommitment: 'finalized',
+  //   });
+  //
+  //   // Get pool info via RPC (not API) - for devnet/local validator
+  //   const data = await raydium.clmm.getPoolInfoFromRpc(xyberPoolState.toString());
+  //   const poolInfo = data.poolInfo;
+  //   const poolKeys = data.poolKeys;
+  //   console.log("Pool info loaded via RPC");
+  //
+  //   const solAmount = new BN(7 * anchor.web3.LAMPORTS_PER_SOL);
+  //   const xyberAmount = new BN(500_000_000_000); // 500K XYBER (6 decimals)
+  //
+  //   console.log("Adding liquidity: SOL =", solAmount.toString(), ", XYBER =", xyberAmount.toString());
+  //   console.log("Pool mintA:", poolInfo.mintA.address, "mintB:", poolInfo.mintB.address);
+  //   console.log("WSOL mint:", WSOL_MINT.toString());
+  //
+  //   // Determine which mint is SOL
+  //   const isMintAWsol = poolInfo.mintA.address === WSOL_MINT.toString();
+  //   console.log("Is MintA WSOL?", isMintAWsol);
+  //
+  //   // Use SOL as base since we control SOL amount
+  //   const { execute, extInfo } = await raydium.clmm.openPositionFromBase({
+  //     poolInfo,
+  //     poolKeys,
+  //     ownerInfo: {
+  //       useSOLBalance: true,
+  //     },
+  //     tickLower,
+  //     tickUpper,
+  //     base: isMintAWsol ? "MintA" : "MintB",
+  //     baseAmount: solAmount,
+  //     otherAmountMax: xyberAmount,
+  //     txVersion: TxVersion.V0,
+  //   });
+  //
+  //   const { txId } = await utils.withNoLogging(() => execute({ sendAndConfirm: true }));
+  //   console.log("✅ Position opened");
+  //   console.log("Explorer url:", utils.getExplorerUrl(provider, txId));
+  //
+  //   // Set tick arrays for buyback swap
+  //   const currentPriceTick = -69077;
+  //   const tickArrayCurrentStartIndex = TickUtils.getTickArrayStartIndexByTick(currentPriceTick, tickSpacing);
+  //   const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, tickSpacing);
+  //   const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, tickSpacing);
+  //
+  //   const tickArrayCurrentPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayCurrentStartIndex);
+  //   const tickArrayLowerPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayLowerStartIndex);
+  //   const tickArrayUpperPda = getPdaTickArrayAddress(clmmProgram, xyberPoolState, tickArrayUpperStartIndex);
+  //
+  //   xyberPoolTickArray0 = tickArrayCurrentPda.publicKey;
+  //   xyberPoolTickArray1 = tickArrayLowerPda.publicKey;
+  //   xyberPoolTickArray2 = tickArrayUpperPda.publicKey;
+  //
+  //   // Bitmap extension PDA for SwapV2
+  //   [xyberPoolBitmapExtension] = anchor.web3.PublicKey.findProgramAddressSync(
+  //     [Buffer.from("pool_tick_array_bitmap_extension"), xyberPoolState.toBuffer()],
+  //     clmmProgram
+  //   );
+  //
+  //   // Check if bitmap extension exists, if not - initialize it
+  //   const bitmapExtensionInfo = await provider.connection.getAccountInfo(xyberPoolBitmapExtension);
+  //   if (!bitmapExtensionInfo) {
+  //     console.log("Initializing tick array bitmap extension...");
+  //     const { execute: executeInit } = await raydium.clmm.initTickArrayBitmapExtension({
+  //       poolInfo,
+  //       txVersion: TxVersion.V0,
+  //     });
+  //     const { txId: initTxId } = await utils.withNoLogging(() => executeInit({ sendAndConfirm: true }));
+  //     console.log("✅ Bitmap extension initialized:", initTxId);
+  //   } else {
+  //     console.log("Bitmap extension already exists");
+  //   }
+  //
+  //   console.log("Tick Array Current (for swap):", xyberPoolTickArray0.toString());
+  //   console.log("Tick Array Lower:", xyberPoolTickArray1.toString());
+  //   console.log("Tick Array Upper:", xyberPoolTickArray2.toString());
+  //   console.log("Bitmap Extension:", xyberPoolBitmapExtension.toString());
+  // });
+  //
+  // it("Step 22: Execute BuyBack", async () => {
+  //   console.log("=== Step 22: Execute BuyBack ===");
+  //
+  //   // Check available quote for buyback
+  //   const buybackQuoteTotals = await dispatcherSdk.fetchTotals(Role.BuyBack, WSOL_MINT);
+  //   console.log("BuyBack harvested quote:", buybackQuoteTotals.harvested.toString());
+  //   console.log("BuyBack spent quote:", buybackQuoteTotals.spent.toString());
+  //
+  //   const availableQuote = new BN(buybackQuoteTotals.harvested).sub(new BN(buybackQuoteTotals.spent));
+  //   console.log("Available for buyback:", availableQuote.toString(), "lamports");
+  //
+  //   if (availableQuote.lte(new BN(0))) {
+  //     console.log("⏭️  No quote available for buyback, skipping");
+  //     return;
+  //   }
+  //
+  //   // Verify bitmap extension exists
+  //   const bitmapExtInfo = await provider.connection.getAccountInfo(xyberPoolBitmapExtension);
+  //   console.log("Bitmap extension account exists:", !!bitmapExtInfo);
+  //   console.log("Bitmap extension address:", xyberPoolBitmapExtension.toString());
+  //   if (bitmapExtInfo) {
+  //     console.log("Bitmap extension data length:", bitmapExtInfo.data.length);
+  //   }
+  //
+  //   // Load Raydium SDK and get pool info for proper tick array computation
+  //   const raydium = await Raydium.load({
+  //     owner: admin1Keypair,
+  //     connection: provider.connection,
+  //     cluster: 'mainnet',
+  //     disableFeatureCheck: true,
+  //     disableLoadToken: true,
+  //     blockhashCommitment: 'finalized',
+  //   });
+  //
+  //   const poolData = await raydium.clmm.getPoolInfoFromRpc(xyberPoolState.toString());
+  //   const poolInfo = poolData.poolInfo;
+  //   const clmmPoolInfo = poolData.computePoolInfo;
+  //   const tickCache = poolData.tickData;
+  //
+  //   // Log current pool state
+  //   console.log("Pool current tick:", clmmPoolInfo.tickCurrent);
+  //   console.log("Pool mintA:", poolInfo.mintA.address);
+  //   console.log("Pool mintB:", poolInfo.mintB.address);
+  //
+  //   // Compute swap to get correct tick arrays - buying XYBER with SOL (quote -> base in pool terms)
+  //   const { remainingAccounts } = await PoolUtils.computeAmountOutFormat({
+  //     poolInfo: clmmPoolInfo,
+  //     tickArrayCache: tickCache[xyberPoolState.toString()],
+  //     amountIn: availableQuote,
+  //     tokenOut: poolInfo.mintB, // XYBER is mintB (SOL is mintA based on address sorting)
+  //     slippage: 0.01,
+  //     epochInfo: await raydium.fetchEpochInfo(),
+  //   });
+  //
+  //   console.log("Computed remaining accounts for swap:", remainingAccounts.length);
+  //   console.log("remainingAccounts structure:", JSON.stringify(remainingAccounts, (key, value) =>
+  //     typeof value === 'bigint' ? value.toString() : value, 2));
+  //
+  //   // Extract tick arrays from remaining accounts - structure may vary
+  //   const getPublicKey = (acc: any): anchor.web3.PublicKey | null => {
+  //     if (!acc) return null;
+  //     // Already a PublicKey object (has _bn property)
+  //     if (acc._bn) return acc as anchor.web3.PublicKey;
+  //     if (acc.pubkey) return new anchor.web3.PublicKey(acc.pubkey);
+  //     if (acc.address) return new anchor.web3.PublicKey(acc.address);
+  //     if (typeof acc === 'string') return new anchor.web3.PublicKey(acc);
+  //     // Try to create from the object directly (in case it's PublicKey-like)
+  //     try {
+  //       return new anchor.web3.PublicKey(acc);
+  //     } catch {
+  //       return null;
+  //     }
+  //   };
+  //
+  //   // Use tick array for current tick (where swap will happen)
+  //   const { getPdaTickArrayAddress, TickUtils } = await import("@raydium-io/raydium-sdk-v2");
+  //   const tickSpacing = 10;
+  //   const currentTickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(clmmPoolInfo.tickCurrent, tickSpacing);
+  //   const currentTickArrayPda = getPdaTickArrayAddress(sdk.getRaydiumClmmProgramId(), xyberPoolState, currentTickArrayStartIndex);
+  //
+  //   console.log("Using tick array (current):", currentTickArrayPda.publicKey.toString());
+  //   console.log("Current tick array start index:", currentTickArrayStartIndex);
+  //
+  //   // Build remaining accounts for Raydium SwapV2:
+  //   // - tick arrays needed for swap (computed by SDK)
+  //   // - bitmap extension at the end (if needed for extended range)
+  //   const swapRemainingAccounts: { pubkey: anchor.web3.PublicKey; isWritable: boolean; isSigner: false }[] = [];
+  //
+  //   // Add computed tick arrays from SDK
+  //   console.log("Processing remaining accounts from SDK...");
+  //   for (const acc of remainingAccounts) {
+  //     console.log("  acc:", acc, "type:", typeof acc);
+  //     const pubkey = getPublicKey(acc);
+  //     console.log("  pubkey:", pubkey?.toString());
+  //     if (pubkey) {
+  //       swapRemainingAccounts.push({ pubkey, isWritable: true, isSigner: false });
+  //     }
+  //   }
+  //
+  //   // If no tick arrays from SDK, use the current tick array
+  //   if (swapRemainingAccounts.length === 0) {
+  //     console.log("No tick arrays from SDK, using current tick array");
+  //     swapRemainingAccounts.push({ pubkey: currentTickArrayPda.publicKey, isWritable: true, isSigner: false });
+  //   }
+  //
+  //   // Add bitmap extension at the end
+  //   swapRemainingAccounts.push({ pubkey: xyberPoolBitmapExtension, isWritable: false, isSigner: false });
+  //
+  //   console.log("Swap remaining accounts:");
+  //   swapRemainingAccounts.forEach((acc, i) => {
+  //     console.log(`  [${i}] ${acc.pubkey.toString()} (writable: ${acc.isWritable})`);
+  //   });
+  //
+  //   const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
+  //
+  //   const result = await dispatcherSdk.buyback({
+  //     minXyberOut: new BN(1),
+  //     xyberMint: xyberMintKeypair.publicKey,
+  //     raydiumPoolState: xyberPoolState,
+  //     raydiumAmmConfig: ammConfigAddress,
+  //     raydiumQuoteVault: xyberPoolQuoteVault,
+  //     raydiumXyberVault: xyberPoolXyberVault,
+  //     raydiumObservationState: xyberPoolObservationState,
+  //     remainingAccounts: swapRemainingAccounts,
+  //     engineProgramId: program.programId,
+  //     raydiumProgramId: sdk.getRaydiumClmmProgramId(),
+  //     signers: [backendKeypair],
+  //   });
+  //
+  //   console.log("✅ BuyBack executed");
+  //   console.log("Explorer url:", utils.getExplorerUrl(provider, result.signature));
+  //
+  //   // Verify treasure received XYBER
+  //   const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
+  //   console.log("Treasure harvested XYBER:", treasureXyberTotals.harvested.toString());
+  //
+  //   assert.ok(new BN(treasureXyberTotals.harvested).gtn(0), "Treasure should have received XYBER from buyback");
+  // });
+  //
+  // it("Step 23: Verify XYBER in vault after BuyBack", async () => {
+  //   console.log("=== Step 23: Verify XYBER in Vault ===");
+  //
+  //   // Get treasure XYBER totals to see balance
+  //   const treasureXyberTotals = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
+  //   console.log("Treasure harvested XYBER:", treasureXyberTotals.harvested.toString());
+  //   console.log("Treasure spent XYBER:", treasureXyberTotals.spent.toString());
+  //
+  //   const availableXyber = new BN(treasureXyberTotals.harvested).sub(new BN(treasureXyberTotals.spent));
+  //   console.log("Available XYBER for claim:", availableXyber.toString());
+  //
+  //   // Verify the XYBER is in the authority vault
+  //   const [authority] = dispatcherSdk.getAuthorityPda();
+  //   const authorityXyberAta = getAssociatedTokenAddressSync(
+  //     xyberMintKeypair.publicKey,
+  //     authority,
+  //     true
+  //   );
+  //
+  //   const vaultBalance = await provider.connection.getTokenAccountBalance(authorityXyberAta);
+  //   console.log("Authority XYBER vault balance:", vaultBalance.value.amount);
+  //
+  //   // Verify balances match
+  //   assert.equal(
+  //     vaultBalance.value.amount,
+  //     availableXyber.toString(),
+  //     "Vault balance should match tracked XYBER amount"
+  //   );
+  //
+  //   console.log("✅ XYBER balance verified in harvest authority vault");
+  // });
+  //
+  // it("Step 24: Claim XYBER from BuyBack (platform treasure)", async () => {
+  //   console.log("=== Step 24: Claim XYBER from BuyBack ===");
+  //
+  //   // Get available XYBER before claim
+  //   const totalsBefore = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
+  //   const availableBefore = new BN(totalsBefore.harvested).sub(new BN(totalsBefore.spent));
+  //   console.log("Available XYBER before claim:", availableBefore.toString());
+  //
+  //   // Claim XYBER to platform wallet
+  //   const { signature } = await dispatcherSdk.claimPlatform({
+  //     mint: xyberMintKeypair.publicKey,
+  //     signers: [platformKeypair],
+  //   });
+  //   console.log("✅ XYBER claimed");
+  //   console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
+  //
+  //   // Verify claim
+  //   const totalsAfter = await dispatcherSdk.fetchTotals(Role.Treasure, xyberMintKeypair.publicKey);
+  //   const availableAfter = new BN(totalsAfter.harvested).sub(new BN(totalsAfter.spent));
+  //   console.log("Available XYBER after claim:", availableAfter.toString());
+  //
+  //   assert.ok(availableAfter.eqn(0), "All XYBER should be claimed");
+  //   console.log("✅ XYBER from BuyBack claimed to platform wallet");
+  // });
 
 });

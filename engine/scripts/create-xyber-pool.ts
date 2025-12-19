@@ -3,10 +3,11 @@ import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { Decimal } from "decimal.js";
 import { Raydium, TxVersion, PoolUtils, ApiV3PoolInfoConcentratedItem } from "@raydium-io/raydium-sdk-v2";
-import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+import { getOrCreateAssociatedTokenAccount, mintTo, getMint } from "@solana/spl-token";
 import { getPdaTickArrayAddress, TickUtils } from "@raydium-io/raydium-sdk-v2";
 
 import { getExplorerUrl, initializeSdk, loadKeypair } from "./utils";
+import { getRaydiumCluster, fetchAmmConfig } from "./raydium-utils";
 
 interface InitTickArrayBitmapExtensionParams<T extends TxVersion> {
   poolInfo: ApiV3PoolInfoConcentratedItem;
@@ -33,6 +34,7 @@ program
   .option("--mint-xyber", "Mint XYBER tokens to admin wallet before adding liquidity")
   .option("--mint-amount <number>", "Amount of XYBER to mint (with decimals)", "1000000000000")
   .option("--skip-liquidity", "Only create pool, skip adding liquidity")
+  .option("--amm-config-index <number>", "Raydium AMM config index", "2")
   .parse(process.argv);
 
 const opts = program.opts();
@@ -45,6 +47,7 @@ interface Args {
   mintXyber: boolean;
   mintAmount: bigint;
   skipLiquidity: boolean;
+  ammConfigIndex: number;
 }
 
 function parseArgs(): Args {
@@ -56,6 +59,7 @@ function parseArgs(): Args {
     mintXyber: !!opts.mintXyber,
     mintAmount: BigInt(opts.mintAmount),
     skipLiquidity: !!opts.skipLiquidity,
+    ammConfigIndex: parseInt(opts.ammConfigIndex, 10),
   };
 }
 
@@ -109,13 +113,31 @@ async function main() {
   const raydium = await Raydium.load({
     owner: payerKeypair,
     connection: provider.connection,
-    cluster: "mainnet",
+    cluster: getRaydiumCluster(provider),
     disableFeatureCheck: true,
     disableLoadToken: true,
     blockhashCommitment: "finalized",
   });
 
-  const [ammConfigAddress] = sdk.getRaydiumAmmConfigPda();
+  const clmmProgram = sdk.getRaydiumClmmProgramId();
+  const indexBuffer = Buffer.alloc(2);
+  indexBuffer.writeUInt16BE(args.ammConfigIndex, 0);
+  const [ammConfigAddress] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("amm_config"), indexBuffer],
+    clmmProgram
+  );
+
+  const ammConfigData = await fetchAmmConfig(provider.connection, ammConfigAddress);
+  console.log("AMM Config index:", ammConfigData.index);
+  console.log("AMM Config tickSpacing:", ammConfigData.tickSpacing);
+  console.log("AMM Config tradeFeeRate:", ammConfigData.tradeFeeRate);
+  console.log("AMM Config protocolFeeRate:", ammConfigData.protocolFeeRate);
+
+  const xyberMintInfo = await getMint(provider.connection, args.xyberMint);
+  if (xyberMintInfo.decimals === undefined) {
+    throw new Error("Failed to fetch XYBER mint decimals");
+  }
+  console.log("XYBER decimals:", xyberMintInfo.decimals);
 
   const wsolToken = {
     chainId: 101,
@@ -136,17 +158,17 @@ async function main() {
     logoURI: "",
     symbol: "XYBER",
     name: "XYBER Token",
-    decimals: 6,
+    decimals: xyberMintInfo.decimals,
     tags: [],
     extensions: {},
   };
 
   const ammConfigInfo = {
     id: ammConfigAddress,
-    index: 0,
-    protocolFeeRate: 12000,
-    tradeFeeRate: 2500,
-    tickSpacing: 10,
+    index: ammConfigData.index,
+    protocolFeeRate: ammConfigData.protocolFeeRate,
+    tradeFeeRate: ammConfigData.tradeFeeRate,
+    tickSpacing: ammConfigData.tickSpacing,
     fundFeeRate: 0,
     fundOwner: "",
     description: "",
@@ -186,8 +208,7 @@ async function main() {
 
   console.log("\n--- Adding liquidity to XYBER/SOL pool ---");
 
-  const clmmProgram = sdk.getRaydiumClmmProgramId();
-  const tickSpacing = 10;
+  const tickSpacing = ammConfigData.tickSpacing;
 
   const MIN_TICK = -443636;
   const MAX_TICK = 443636;
