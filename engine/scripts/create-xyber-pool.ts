@@ -2,11 +2,26 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN } from "@coral-xyz/anchor";
 import { Command } from "commander";
 import { Decimal } from "decimal.js";
-import { Raydium, TxVersion, PoolUtils } from "@raydium-io/raydium-sdk-v2";
+import { Raydium, TxVersion, PoolUtils, ApiV3PoolInfoConcentratedItem } from "@raydium-io/raydium-sdk-v2";
 import { getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 import { getPdaTickArrayAddress, TickUtils } from "@raydium-io/raydium-sdk-v2";
 
 import { getExplorerUrl, initializeSdk, loadKeypair } from "./utils";
+
+interface InitTickArrayBitmapExtensionParams<T extends TxVersion> {
+  poolInfo: ApiV3PoolInfoConcentratedItem;
+  txVersion: T;
+}
+
+interface InitTickArrayBitmapExtensionResult {
+  execute: (opts: { sendAndConfirm: boolean }) => Promise<{ txId: string }>;
+}
+
+interface ClmmWithBitmapExtension {
+  initTickArrayBitmapExtension<T extends TxVersion>(
+    params: InitTickArrayBitmapExtensionParams<T>
+  ): Promise<InitTickArrayBitmapExtensionResult>;
+}
 
 const program = new Command();
 
@@ -231,12 +246,13 @@ async function main() {
   const bitmapExtensionInfo = await provider.connection.getAccountInfo(bitmapExtension);
   if (!bitmapExtensionInfo) {
     console.log("\n--- Initializing tick array bitmap extension ---");
-    const { execute: executeInit } = await (raydium.clmm as any).initTickArrayBitmapExtension({
+    const clmmWithExtension = raydium.clmm as unknown as ClmmWithBitmapExtension;
+    const { execute: executeInit } = await clmmWithExtension.initTickArrayBitmapExtension({
       poolInfo,
       txVersion: TxVersion.V0,
     });
     const initResult = await withNoLogging(() => executeInit({ sendAndConfirm: true }));
-    console.log("Bitmap extension initialized:", (initResult as any).txId);
+    console.log("Bitmap extension initialized:", initResult.txId);
   } else {
     console.log("Bitmap extension already exists");
   }
