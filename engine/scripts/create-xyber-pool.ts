@@ -184,6 +184,7 @@ async function main() {
   const data = await raydium.clmm.getPoolInfoFromRpc(poolState.toString());
   const poolInfo = data.poolInfo;
   const poolKeys = data.poolKeys;
+  const computePoolInfo = data.computePoolInfo;
 
   console.log("Adding liquidity: SOL =", args.solAmount.toString(), ", XYBER =", args.xyberAmount.toString());
   console.log("Pool mintA:", poolInfo.mintA.address, "mintB:", poolInfo.mintB.address);
@@ -209,7 +210,11 @@ async function main() {
   console.log("Position opened!");
   console.log("Explorer:", getExplorerUrl(provider, openPosTxId));
 
-  const currentPriceTick = -69077;
+  if (computePoolInfo.tickCurrent === undefined) {
+    throw new Error("Pool tickCurrent is undefined - cannot determine current tick array");
+  }
+  const currentPriceTick = Number(computePoolInfo.tickCurrent);
+  console.log("Pool current tick:", currentPriceTick);
   const tickArrayCurrentStartIndex = TickUtils.getTickArrayStartIndexByTick(currentPriceTick, tickSpacing);
   const tickArrayLowerStartIndex = TickUtils.getTickArrayStartIndexByTick(tickLower, tickSpacing);
   const tickArrayUpperStartIndex = TickUtils.getTickArrayStartIndexByTick(tickUpper, tickSpacing);
