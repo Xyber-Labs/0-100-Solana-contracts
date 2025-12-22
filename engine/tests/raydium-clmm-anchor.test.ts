@@ -8,7 +8,6 @@ import {
   getAssociatedTokenAddressSync,
   getOrCreateAssociatedTokenAccount
 } from "@solana/spl-token";
-import { Decimal } from "decimal.js";
 
 import { EngineSDK } from "../ts-sdk/src/engine";
 import { IncomeDispatcherSDK, Role } from "../ts-sdk/src/income-dispatcher";
