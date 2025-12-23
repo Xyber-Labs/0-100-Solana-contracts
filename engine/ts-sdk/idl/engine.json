@@ -5547,6 +5547,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
             "name": "project_id",
             "type": "u64"
           },

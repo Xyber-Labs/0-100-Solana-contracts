@@ -5553,6 +5553,10 @@ export type Engine = {
         "kind": "struct",
         "fields": [
           {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
             "name": "projectId",
             "type": "u64"
           },

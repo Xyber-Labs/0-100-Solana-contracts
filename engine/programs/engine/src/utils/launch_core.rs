@@ -1,14 +1,17 @@
+use anchor_lang::{
+    prelude::*,
+    solana_program::{
+        keccak,
+        sysvar::{clock::Clock, Sysvar},
+    },
+};
+use anchor_spl::token::{self, Token, TokenAccount};
+
 use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::{CreatorGranted, LaunchInitialized},
     state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
 };
-use anchor_lang::solana_program::keccak;
-use anchor_lang::{
-    prelude::*,
-    solana_program::sysvar::{clock::Clock, Sysvar},
-};
-use anchor_spl::token::{self, Token, TokenAccount};
 
 fn make_pending_key(creator: &Pubkey, project_id: u64) -> [u8; 32] {
     let h = keccak::hashv(&[
@@ -120,6 +123,7 @@ pub fn init_launch_core<'info>(
     counter.last_project_id = project_id;
 
     let state = launch_state;
+    state.created_at = Clock::get()?.unix_timestamp;
     state.project_id = project_id;
     state.creator = creator.key();
     state.hard_cap_lamports = params.hard_cap_lamports;
