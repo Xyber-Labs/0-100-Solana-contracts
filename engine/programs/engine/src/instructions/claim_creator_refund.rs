@@ -1,10 +1,12 @@
-use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+use anchor_lang::prelude::*;
 
 use crate::{
+    checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::RefundClaimed,
-    state::{CreatorGrant, LaunchState},
+    state::{CreatorGrant, LaunchPreset, LaunchState, WithdrawnRanges},
+    utils::bitmap::TicketBitmap,
 };
 
 #[derive(Accounts)]
@@ -13,6 +15,15 @@ pub struct ClaimCreatorRefund<'info> {
     pub creator: Signer<'info>,
 
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
+    pub launch_bitmap: Account<'info, TicketBitmap>,
+
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
     #[account(
         mut,
@@ -29,18 +40,21 @@ pub struct ClaimCreatorRefund<'info> {
 
 pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
     let creator_grant = &mut ctx.accounts.creator_grant;
+    let bitmap = &ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
 
     require!(!creator_grant.refunded, EngineErrorCode::CreatorRefundAlreadyClaimed);
-
-    // Check if funding period has ended and min raise was not met
-    let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= launch_state.funding_end,
+        launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
         EngineErrorCode::FundingNotEnded
     );
+
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, launch_preset.tau_lamports)?;
     require!(
-        launch_state.total_deposited < launch_state.min_raise_lamports,
+        total_deposited < launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
 
@@ -71,7 +85,7 @@ pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
 
     emit!(RefundClaimed {
         launch: launch_state.key(),
-        user: ctx.accounts.creator.key(),
+        contributor: ctx.accounts.creator.key(),
         refunded_lamports: refund,
         y_approved: 0,
     });

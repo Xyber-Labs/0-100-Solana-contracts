@@ -1,15 +1,37 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::clock::Clock;
+use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct TicketRange {
-    pub start: u32,
-    pub count: u32,
+    pub start: u64,
+    pub end: u64,
 }
 
 impl TicketRange {
-    pub fn new(start: u32, count: u32) -> Self {
-        Self { start, count }
+    pub fn new(start: u64, end: u64) -> Self {
+        Self { start, end }
+    }
+
+    #[inline]
+    pub fn count(&self) -> u64 {
+        self.end - self.start
+    }
+
+    #[inline]
+    pub fn contains(&self, index: u64) -> bool {
+        index >= self.start && index < self.end
+    }
+
+    pub fn split_tail(&mut self, count: u64) -> Option<Self> {
+        if count == 0 || count > self.count() {
+            return None;
+        }
+        let split_point = self.end - count;
+        let tail = Self {
+            start: split_point,
+            end: self.end,
+        };
+        self.end = split_point;
+        Some(tail)
     }
 }
 
@@ -19,63 +41,51 @@ impl TicketRange {
 
 #[account]
 #[derive(InitSpace)]
-pub struct VacantRanges {
+pub struct WithdrawnRanges {
     pub launch: Pubkey,
-    #[max_len(100)]
+    #[max_len(0)]
     pub ranges: Vec<TicketRange>,
 }
 
-impl VacantRanges {
+impl WithdrawnRanges {
     pub fn push(&mut self, range: TicketRange) {
         self.ranges.push(range);
+    }
+
+    pub fn total_withdrawn(&self) -> u64 {
+        self.ranges.iter().map(|r| r.count()).sum()
+    }
+}
+
+impl crate::utils::realloc::Reallocatable for WithdrawnRanges {
+    fn required_space(&self) -> usize {
+        let elements_space = self.ranges.len()
+            .checked_mul(TicketRange::INIT_SPACE)
+            .expect("overflow in required_space");
+        8 + Self::INIT_SPACE + elements_space
     }
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct LaunchState {
-    // Project identification
     pub project_id: u64,
-
-    // creator
     pub creator: Pubkey,
-
-    // Config
-    pub hard_cap_lamports: u64,
-    pub min_raise_lamports: u64,
-    pub per_wallet_cap: u64,
-    pub tau_lamports: u64,
-    pub unlock_time_sec: i64,
+    pub preset: Pubkey,
 
     pub base_mint: Option<Pubkey>,
-    pub base_total_allocation: u64,
-    pub base_sale_basis_points: u64,
 
-    // Funding
-    pub funding_end: i64,
-    pub total_deposited: u64,
-    pub total_tickets: u32,
-    pub k_capacity: u32,
+    pub funding_start: i64,
 
-    // Selection
     pub vrf_seed: Option<[u8; 32]>,
     pub selection_finalized: bool,
 
-    // Claims
     pub tokens_per_ticket: Option<u64>,
 
-    // Creator grant fields
-    pub creator_reserved_tickets: u32,
+    pub creator_reserved_tickets: u64,
     pub creator_grant_present: bool,
     pub claims_opened_at: Option<i64>,
-    pub creator_claim_lock_period_sec: i64,
-    pub creator_initial_deposit: u64,
-    pub creator_max_deposit: u64,
-    // --- appended for upgrade safety ---
-    pub funding_start: i64,
-    pub pool_creation_grace_period_sec: i64,
-    pub team_allocation_basis_points: u64,
-    pub team_vesting_duration_sec: i64,
+
     pub raydium_pool_state: Option<Pubkey>,
     pub raydium_position_nft_mint: Option<Pubkey>,
 }
@@ -93,9 +103,20 @@ impl LaunchState {
         bump
     }
 
-    pub fn is_funding_active(&self) -> bool {
+    pub fn funding_end(&self, funding_duration_seconds: i64) -> Option<i64> {
+        self.funding_start.checked_add(funding_duration_seconds)
+    }
+
+    pub fn is_funding_active(&self, funding_duration_seconds: i64) -> bool {
         let now = Clock::get().map(|c| c.unix_timestamp).unwrap_or(0);
-        now >= self.funding_start && now < self.funding_end
+        let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
+        now >= self.funding_start && now < end
+    }
+
+    pub fn is_funding_ended(&self, funding_duration_seconds: i64) -> bool {
+        let now = Clock::get().map(|c| c.unix_timestamp).unwrap_or(0);
+        let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
+        now >= end
     }
 }
 
@@ -108,31 +129,30 @@ pub struct EscrowAccount {
 
 #[account]
 #[derive(InitSpace)]
-pub struct UserContribution {
-    pub tickets_claimed: u32,
-    pub tickets_refunded: u32,
+pub struct Contribution {
+    pub tickets_claimed: u64,
+    pub tickets_refunded: u64,
     pub withdraw_count: u8,
     #[max_len(10)]
     pub ticket_ranges: Vec<TicketRange>,
 }
 
-impl UserContribution {
-    pub fn total_tickets(&self) -> u32 {
-        self.ticket_ranges.iter().map(|r| r.count).sum()
+impl Contribution {
+    pub fn total_tickets(&self) -> u64 {
+        self.ticket_ranges.iter().map(|r| r.count()).sum()
     }
 
-    pub fn remove_tickets(&mut self, count: u32) -> Vec<TicketRange> {
+    pub fn remove_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {
         let mut removed = Vec::new();
-        let mut remaining = count;
-        while remaining > 0 && !self.ticket_ranges.is_empty() {
+        while count > 0 && !self.ticket_ranges.is_empty() {
             let last_idx = self.ticket_ranges.len() - 1;
             let range = &mut self.ticket_ranges[last_idx];
-            let take = remaining.min(range.count);
-            let removed_start = range.start + range.count - take;
-            removed.push(TicketRange::new(removed_start, take));
-            range.count -= take;
-            remaining -= take;
-            if range.count == 0 {
+            let take = count.min(range.count());
+            if let Some(tail) = range.split_tail(take) {
+                removed.push(tail);
+                count -= take;
+            }
+            if range.count() == 0 {
                 self.ticket_ranges.pop();
             }
         }
@@ -146,35 +166,35 @@ mod tests {
 
     #[test]
     fn test_remove_tickets() {
-        let mut uc = UserContribution {
+        let mut uc = Contribution {
             tickets_claimed: 0,
             tickets_refunded: 0,
             withdraw_count: 0,
             ticket_ranges: vec![
                 TicketRange::new(0, 10),
-                TicketRange::new(20, 5),
-                TicketRange::new(30, 8),
+                TicketRange::new(20, 25),
+                TicketRange::new(30, 38),
             ],
         };
         assert_eq!(uc.total_tickets(), 23);
 
         let removed = uc.remove_tickets(3);
-        assert_eq!(removed, vec![TicketRange::new(35, 3)]);
-        assert_eq!(uc.ticket_ranges, vec![
-            TicketRange::new(0, 10),
-            TicketRange::new(20, 5),
-            TicketRange::new(30, 5),
-        ]);
+        assert_eq!(removed, vec![TicketRange::new(35, 38)]);
+        assert_eq!(
+            uc.ticket_ranges,
+            vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 25),
+                TicketRange::new(30, 35),
+            ]
+        );
 
         let removed = uc.remove_tickets(7);
-        assert_eq!(removed, vec![TicketRange::new(30, 5), TicketRange::new(23, 2)]);
-        assert_eq!(uc.ticket_ranges, vec![
-            TicketRange::new(0, 10),
-            TicketRange::new(20, 3),
-        ]);
+        assert_eq!(removed, vec![TicketRange::new(30, 35), TicketRange::new(23, 25),]);
+        assert_eq!(uc.ticket_ranges, vec![TicketRange::new(0, 10), TicketRange::new(20, 23),]);
 
         let removed = uc.remove_tickets(100);
-        assert_eq!(removed, vec![TicketRange::new(20, 3), TicketRange::new(0, 10)]);
+        assert_eq!(removed, vec![TicketRange::new(20, 23), TicketRange::new(0, 10),]);
         assert!(uc.ticket_ranges.is_empty());
     }
 }
@@ -207,16 +227,16 @@ pub struct CreatorGrant {
     pub locked_lamports: u64,
 
     // How many tickets are guaranteed (8 SOL / τ)
-    pub reserved_tickets: u32,
+    pub reserved_tickets: u64,
 
     // Daily limit in lamports (usually = 1 SOL)
     pub daily_lamports_limit: u64,
 
     // Cap in tickets/day = floor(daily_lamports_limit / τ)
-    pub daily_ticket_cap: u32,
+    pub daily_ticket_cap: u64,
 
     // How many "tickets" they have already claimed
-    pub claimed_tickets: u32,
+    pub claimed_tickets: u64,
 
     pub refunded: bool,
 }
@@ -277,34 +297,22 @@ pub struct LaunchPreset {
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
-    pub free_withdrawals_limit: u8,
-    pub withdraw_fee_lamports: u64,
+    pub withdrawal_limit: u8,
 }
 
 impl LaunchPreset {
-    pub fn is_valid(&self) -> Result<()> {
-        require!(self.tau_lamports > 0, crate::errors::ErrorCode::MalformedPreset);
-        require!(
-            self.hard_cap_lamports % self.tau_lamports == 0,
-            crate::errors::ErrorCode::MalformedPreset
-        );
-        require!(
-            self.per_wallet_cap >= self.tau_lamports,
-            crate::errors::ErrorCode::MalformedPreset
-        );
-        require!(
-            self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE,
-            crate::errors::ErrorCode::MalformedPreset
-        );
-        require!(
-            self.min_raise_lamports <= self.hard_cap_lamports,
-            crate::errors::ErrorCode::MalformedPreset
-        );
-        require!(self.creator_claim_lock_period_sec > 0, crate::errors::ErrorCode::MalformedPreset);
-        require!(
-            self.funding_duration_seconds > 0 && self.funding_duration_seconds <= 60 * 60 * 24 * 7,
-            crate::errors::ErrorCode::MalformedPreset
-        );
-        Ok(())
+    pub fn is_valid(&self) -> bool {
+        self.tau_lamports > 0
+            && self.hard_cap_lamports % self.tau_lamports == 0
+            && self.per_wallet_cap >= self.tau_lamports
+            && self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE
+            && self.min_raise_lamports <= self.hard_cap_lamports
+            && self.creator_claim_lock_period_sec > 0
+            && self.funding_duration_seconds > 0
+            && self.funding_duration_seconds <= 60 * 60 * 24 * 7
+    }
+
+    pub fn k_capacity(&self) -> Result<u64> {
+        Ok(crate::checked_div!(self.hard_cap_lamports, self.tau_lamports)?)
     }
 }

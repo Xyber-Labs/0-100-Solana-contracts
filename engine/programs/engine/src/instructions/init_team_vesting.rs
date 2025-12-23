@@ -4,7 +4,7 @@ use crate::{
     constants::{SEED_ROOT, TEAM_BASIS_POINTS, TEAM_CLAIM_MIN_INTERVAL_SEC, TEAM_VESTING_DURATION_SEC},
     errors::ErrorCode,
     events::TeamVestingInitialized,
-    state::{LaunchState, TeamVesting},
+    state::{LaunchPreset, LaunchState, TeamVesting},
 };
 
 #[derive(Accounts)]
@@ -14,6 +14,9 @@ pub struct InitTeamVesting<'info> {
 
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
 
     #[account(
         init,
@@ -29,16 +32,16 @@ pub struct InitTeamVesting<'info> {
 
 pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
     let state = &ctx.accounts.launch_state;
+    let preset = &ctx.accounts.launch_preset;
 
-    let team_bps = if state.team_allocation_basis_points > 0 {
-        state.team_allocation_basis_points
+    let team_bps = if preset.team_allocation_basis_points > 0 {
+        preset.team_allocation_basis_points
     } else {
         TEAM_BASIS_POINTS
     };
-    require!(state.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps), ErrorCode::InvalidShareSum);
+    require!(preset.base_sale_basis_points <= 10_000u64.saturating_sub(team_bps), ErrorCode::InvalidShareSum);
 
-    // Compute in u128 to avoid overflow, then downcast to u64
-    let total_alloc_u128 = (state.base_total_allocation as u128)
+    let total_alloc_u128 = (preset.base_total_allocation as u128)
         .checked_mul(team_bps as u128)
         .and_then(|v| v.checked_div(10_000u128))
         .ok_or(ErrorCode::ArithmeticOverflow)?;
@@ -50,12 +53,11 @@ pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
     team.creator = state.creator;
     team.total_allocation = total_alloc;
     team.claimed = 0;
-    // Start vesting now (or from claims_opened_at if present)
     let now = Clock::get()?.unix_timestamp;
     team.start_ts = state.claims_opened_at.unwrap_or(now);
-    let duration = if state.team_vesting_duration_sec > 0 {
-        state.team_vesting_duration_sec
-    } else if state.team_allocation_basis_points == 0 {
+    let duration = if preset.team_vesting_duration_sec > 0 {
+        preset.team_vesting_duration_sec
+    } else if preset.team_allocation_basis_points == 0 {
         1
     } else {
         TEAM_VESTING_DURATION_SEC

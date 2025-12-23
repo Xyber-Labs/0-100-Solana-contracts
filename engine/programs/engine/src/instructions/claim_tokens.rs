@@ -3,7 +3,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::TokensClaimed,
-    state::{LaunchState, PoolState, UserContribution},
+    state::{Contribution, LaunchPreset, LaunchState, PoolState, WithdrawnRanges},
     utils::{bitmap::TicketBitmap, lottery::count_winning_in_ranges},
 };
 use anchor_lang::prelude::*;
@@ -12,12 +12,16 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 #[derive(Accounts)]
 pub struct ClaimTokens<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub contributor: Signer<'info>,
     pub launch_state: Account<'info, LaunchState>,
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
     #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
     pub launch_bitmap: Account<'info, TicketBitmap>,
-    #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
-    pub user_contribution: Account<'info, UserContribution>,
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    #[account(mut, seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()], bump)]
+    pub contribution: Account<'info, Contribution>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
     pub pool_state: Account<'info, PoolState>,
@@ -38,16 +42,18 @@ pub struct ClaimTokens<'info> {
 
     #[account(
         mut,
-        constraint = user_ata.mint == base_mint.key() @ EngineErrorCode::InvalidMint,
-        constraint = user_ata.owner == user.key() @ EngineErrorCode::InvalidOwner,
+        constraint = contributor_ata.mint == base_mint.key() @ EngineErrorCode::InvalidMint,
+        constraint = contributor_ata.owner == contributor.key() @ EngineErrorCode::InvalidOwner,
     )]
-    pub user_ata: Account<'info, TokenAccount>,
+    pub contributor_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }
 
 pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
     let bitmap = &ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
 
     require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
     require!(
@@ -57,15 +63,17 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
 
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, launch_preset.tau_lamports)?;
     require!(
-        launch_state.total_deposited >= launch_state.min_raise_lamports,
+        total_deposited >= launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
 
-    let user = &mut ctx.accounts.user_contribution;
+    let contribution = &mut ctx.accounts.contribution;
 
-    let winning_tickets = count_winning_in_ranges(bitmap, &user.ticket_ranges);
-    let claimable = checked_sub!(winning_tickets, user.tickets_claimed)?;
+    let winning_tickets = count_winning_in_ranges(bitmap, &contribution.ticket_ranges);
+    let claimable = checked_sub!(winning_tickets, contribution.tickets_claimed)?;
 
     require!(claimable > 0, EngineErrorCode::AlreadyClaimedTokens);
 
@@ -82,7 +90,7 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     let signer_seeds = &[seeds];
     let cpi_accounts = Transfer {
         from: ctx.accounts.base_escrow_ata.to_account_info(),
-        to: ctx.accounts.user_ata.to_account_info(),
+        to: ctx.accounts.contributor_ata.to_account_info(),
         authority: ctx.accounts.escrow_authority.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(
@@ -92,11 +100,11 @@ pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
     );
     token::transfer(cpi_ctx, amount)?;
 
-    user.tickets_claimed = winning_tickets;
+    contribution.tickets_claimed = winning_tickets;
 
     emit!(TokensClaimed {
         launch: launch_state.key(),
-        user: ctx.accounts.user.key(),
+        contributor: ctx.accounts.contributor.key(),
         amount,
         y_approved: winning_tickets,
     });

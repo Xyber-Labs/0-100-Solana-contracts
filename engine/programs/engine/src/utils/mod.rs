@@ -36,8 +36,8 @@ construct_uint! {
 
 pub mod bitmap;
 pub mod clmm;
-pub mod launch_core;
 pub mod lottery;
 pub mod mint;
 pub mod pool;
+pub mod realloc;
 pub mod selection;

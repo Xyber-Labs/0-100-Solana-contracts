@@ -22,8 +22,7 @@ pub struct InitLaunchPresetParams {
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
     pub team_vesting_duration_sec: i64,
-    pub free_withdrawals_limit: u8,
-    pub withdraw_fee_lamports: u64,
+    pub withdrawal_limit: u8,
 }
 
 #[derive(Accounts)]
@@ -85,10 +84,8 @@ pub fn init_launch_preset(
     p.creator_max_deposit = params.creator_max_deposit;
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
     p.team_vesting_duration_sec = params.team_vesting_duration_sec;
-    p.free_withdrawals_limit = params.free_withdrawals_limit;
-    p.withdraw_fee_lamports = params.withdraw_fee_lamports;
+    p.withdrawal_limit = params.withdrawal_limit;
 
-    p.is_valid()?;
-
+    require!(p.is_valid(), crate::errors::ErrorCode::MalformedPreset);
     Ok(())
 }

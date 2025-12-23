@@ -9,10 +9,11 @@ use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{
     BASE_TOKEN_DECIMALS,
+    checked_mul,
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{PoolState, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, PoolState, TokenMetadataConfig, WithdrawnRanges}, utils::{bitmap::TicketBitmap, clmm::ClmmOrder, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -24,9 +25,17 @@ pub struct CreateClmmPool<'info> {
         mut,
         constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
         constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
-        constraint = launch_state.total_deposited >= launch_state.min_raise_lamports @ ErrorCode::MinRaiseNotMet,
     )]
     pub launch_state: Box<Account<'info, LaunchState>>,
+
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
+    pub launch_bitmap: Account<'info, TicketBitmap>,
+
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
     #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
     pub pool_state: Account<'info, PoolState>,
@@ -96,8 +105,14 @@ pub struct CreateClmmPool<'info> {
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
+    let preset = &ctx.accounts.launch_preset;
+    let bitmap = &ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
+
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, preset.tau_lamports)?;
     require!(
-        state.total_deposited >= state.min_raise_lamports,
+        total_deposited >= preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet
     );
 
@@ -107,7 +122,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.base_escrow_ata.to_account_info(),
         &ctx.accounts.escrow_authority.to_account_info(),
         &state.key(),
-        state.base_total_allocation,
+        preset.base_total_allocation,
     )?;
 
     mint_utils::ensure_token_metadata_for_launch(
@@ -124,14 +139,15 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     state.base_mint = Some(ctx.accounts.base_mint.key());
     state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
 
-    raydium_create_pool_impl(&ctx)?;
+    raydium_create_pool_impl(&ctx, total_deposited)?;
 
     Ok(())
 }
 
-fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
+fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>, total_deposited: u64) -> Result<()> {
     let order = ClmmOrder::from_inputs(
-        &ctx.accounts.launch_state,
+        &ctx.accounts.launch_preset,
+        total_deposited,
         &ctx.accounts.quote_mint,
         &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,

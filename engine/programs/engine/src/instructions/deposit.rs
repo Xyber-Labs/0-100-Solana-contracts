@@ -1,13 +1,12 @@
 use anchor_lang::{prelude::*, solana_program};
-use solana_program::sysvar::rent::Rent;
 
 use crate::{
-    checked_add, checked_div, checked_mul, checked_sub,
+    checked_add, checked_div, checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
     state::{Contribution, LaunchPreset, LaunchState, TicketRange},
-    utils::bitmap::TicketBitmap,
+    utils::{bitmap::TicketBitmap, realloc::realloc_with_payer},
 };
 
 #[derive(Accounts)]
@@ -16,7 +15,7 @@ pub struct Deposit<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.is_funding_active() @ EngineErrorCode::FundingInactive)]
+    #[account(mut, constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds) @ EngineErrorCode::FundingInactive)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
@@ -50,10 +49,10 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
 
-    require!(amount > 0 && amount % launch_state.tau_lamports == 0, EngineErrorCode::BadAmount);
+    require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
 
     let current_tickets = contribution.total_tickets();
-    let current_deposit = checked_mul!(current_tickets as u64, launch_state.tau_lamports)?;
+    let current_deposit = checked_mul!(current_tickets as u64, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
     let is_creator = ctx.accounts.contributor.key() == launch_state.creator;
     let creator_cap = launch_preset.creator_max_deposit;
@@ -62,38 +61,21 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
-    let new_tickets_count = checked_div!(amount, launch_state.tau_lamports)?;
-    require!(new_tickets_count <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
-    let new_tickets_count = new_tickets_count as u32;
+    let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
 
-    let bitmap_info = ctx.accounts.launch_bitmap.to_account_info();
     let launch_bitmap = &mut ctx.accounts.launch_bitmap;
 
     let start = launch_bitmap
         .allocate(new_tickets_count, is_creator)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    let required_space = launch_bitmap.required_space();
-    let current_space = bitmap_info.data_len();
+    realloc_with_payer(
+        &ctx.accounts.launch_bitmap,
+        &ctx.accounts.realloc_funds.to_account_info(),
+    )?;
 
-    if required_space > current_space {
-        bitmap_info.realloc(required_space, false)?;
-
-        let rent = Rent::get()?;
-        let new_min_balance = rent.minimum_balance(required_space);
-        let current_lamports = bitmap_info.lamports();
-        let diff = checked_sub!(new_min_balance, current_lamports)?;
-
-        **ctx.accounts.realloc_funds.try_borrow_mut_lamports()? = ctx
-            .accounts
-            .realloc_funds
-            .lamports()
-            .checked_sub(diff)
-            .ok_or(EngineErrorCode::InsufficientFeeBalance)?;
-        **bitmap_info.try_borrow_mut_lamports()? = checked_add!(current_lamports, diff)?;
-    }
-
-    contribution.ticket_ranges.push(TicketRange::new(start, new_tickets_count));
+    let end = checked_add!(start, new_tickets_count)?;
+    contribution.ticket_ranges.push(TicketRange::new(start, end));
 
     let ix = solana_program::system_instruction::transfer(
         &ctx.accounts.contributor.key(),

@@ -7,10 +7,12 @@ use anchor_spl::{
 use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
+    checked_mul,
     constants::AMM_CONFIG_INDEX,
-    LaunchState,
+    errors::ErrorCode,
     SEED_ROOT,
-    state::PoolState, utils::clmm::{ClmmOrder, get_liquidity_range_impl},
+    state::{LaunchPreset, LaunchState, PoolState, WithdrawnRanges},
+    utils::{bitmap::TicketBitmap, clmm::{ClmmOrder, get_liquidity_range_impl}},
 };
 
 #[derive(Accounts)]
@@ -20,6 +22,15 @@ pub struct AddClmmLiquidity<'info> {
 
     #[account(mut)]
     pub launch_state: Box<Account<'info, LaunchState>>,
+
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
+    pub launch_bitmap: Account<'info, TicketBitmap>,
+
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
     #[account(
         constraint = launch_state.base_mint == Some(base_mint.key()),
@@ -107,17 +118,28 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    // TODO: base_mint to be used instead of this explicit approach
+    let bitmap = &ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
+
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, ctx.accounts.launch_preset.tau_lamports)?;
+    require!(
+        total_deposited >= ctx.accounts.launch_preset.min_raise_lamports,
+        ErrorCode::MinRaiseNotMet
+    );
+
     ctx.accounts.pool_state.claims_ready = true;
-    add_initial_liquidity_impl(ctx)?;
+    add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())
 }
 
 fn add_initial_liquidity_impl<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    total_deposited: u64,
 ) -> Result<()> {
     let order = ClmmOrder::from_inputs(
-        &ctx.accounts.launch_state,
+        &ctx.accounts.launch_preset,
+        total_deposited,
         &ctx.accounts.quote_mint,
         &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,

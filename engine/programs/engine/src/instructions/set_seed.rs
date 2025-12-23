@@ -1,10 +1,14 @@
-use crate::{events::SeedSet, state::LaunchState};
+use crate::{
+    checked_mul,
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::SeedSet,
+    state::{LaunchPreset, LaunchState, WithdrawnRanges},
+    utils::bitmap::TicketBitmap,
+};
 use anchor_lang::{
     prelude::*,
-    solana_program::{
-        keccak,
-        sysvar::{self, clock::Clock, Sysvar},
-    },
+    solana_program::{keccak, sysvar},
 };
 
 #[derive(Accounts)]
@@ -13,6 +17,12 @@ pub struct SetSeed<'info> {
     pub payer: Signer<'info>,
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
+    pub launch_bitmap: Account<'info, TicketBitmap>,
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -21,26 +31,27 @@ pub struct SetSeed<'info> {
 
 pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
+    let bitmap = &ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
 
-    // Check if funding period has ended
-    let current_time = Clock::get()?.unix_timestamp;
     require!(
-        current_time >= launch_state.funding_end,
-        crate::errors::ErrorCode::FundingNotEnded
+        launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
+        EngineErrorCode::FundingNotEnded
     );
+
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, launch_preset.tau_lamports)?;
     require!(
-        launch_state.total_deposited >= launch_state.min_raise_lamports,
-        crate::errors::ErrorCode::MinRaiseNotMet
+        total_deposited >= launch_preset.min_raise_lamports,
+        EngineErrorCode::MinRaiseNotMet
     );
 
     require!(launch_state.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
 
-    // Get the most recent blockhash from the SlotHashes sysvar
     let slot_hashes = &ctx.accounts.slot_hashes;
     let data = slot_hashes.try_borrow_data()?;
 
-    // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
-    // We take the most recent one.
     let num_hashes = u64::from_le_bytes(
         data[0..8].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
     );
@@ -56,12 +67,11 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         .checked_mul(forty)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
-    // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
     let last_hash_pos = 8u64
         .checked_add(offset)
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?
         .checked_add(8)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?; // 8 for slot
+        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
     let start = last_hash_pos as usize;
     let end =
@@ -72,7 +82,6 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
 
     launch_state.vrf_seed = Some(seed);
 
-    // Hash the seed for security (don't expose raw seed)
     let seed_hash = keccak::hash(&seed);
 
     emit!(SeedSet {

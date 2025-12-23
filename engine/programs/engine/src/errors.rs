@@ -22,6 +22,8 @@ pub enum ErrorCode {
     DepositCapExceeded,
     #[msg("Insufficient deposit")]
     InsufficientDeposit,
+    #[msg("Limit exceeded")]
+    LimitExceeded,
     #[msg("Seed already set")]
     SeedAlreadySet,
     #[msg("Seed missing")]

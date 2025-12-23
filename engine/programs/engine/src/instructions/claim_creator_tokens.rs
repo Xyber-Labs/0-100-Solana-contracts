@@ -2,7 +2,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::CreatorClaimed,
-    state::{CreatorGrant, LaunchState, PoolState},
+    state::{CreatorGrant, LaunchPreset, LaunchState, PoolState},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
@@ -13,6 +13,9 @@ pub struct ClaimCreatorTokens<'info> {
     pub creator: Signer<'info>,
 
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
 
     #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
     pub pool_state: Account<'info, PoolState>,
@@ -50,6 +53,7 @@ pub struct ClaimCreatorTokens<'info> {
 
 pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
     require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
     require!(
         ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(),
@@ -60,17 +64,15 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
     let creator_grant = &mut ctx.accounts.creator_grant;
 
-    // Calculate how many tokens have vested/accrued over time.
     let now = Clock::get()?.unix_timestamp;
     let start = launch_state.claims_opened_at.unwrap_or(now);
 
-    // How many full periods have passed since claiming opened.
-    let periods_passed = (now - start).div_euclid(launch_state.creator_claim_lock_period_sec);
+    let periods_passed = (now - start).div_euclid(launch_preset.creator_claim_lock_period_sec);
 
     // Calculate the ceiling of claimable tickets based on periods passed.
     // We add 1 to include the current, partially-elapsed period.
     let unlocked_ceiling =
-        (periods_passed as u32).saturating_add(1).saturating_mul(creator_grant.daily_ticket_cap);
+        (periods_passed as u64).saturating_add(1).saturating_mul(creator_grant.daily_ticket_cap);
 
     // The total unlocked amount cannot exceed the total reserved tickets.
     // Reserved tickets are finalized and stored on launch_state during pool creation.
@@ -119,11 +121,11 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         launch: launch_state.key(),
         creator: ctx.accounts.creator.key(),
         tickets_claimed: to_claim,
-        lamports_equiv: (to_claim as u64)
-            .checked_mul(launch_state.tau_lamports)
+        lamports_equiv: to_claim
+            .checked_mul(launch_preset.tau_lamports)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?,
         tokens_minted: amount,
-        day_index: periods_passed, // Using periods_passed for logging
+        day_index: periods_passed,
         remaining_tickets: launch_state
             .creator_reserved_tickets
             .saturating_sub(creator_grant.claimed_tickets),

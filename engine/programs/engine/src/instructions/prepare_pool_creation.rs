@@ -4,11 +4,12 @@ use anchor_lang::{
 };
 
 use crate::{
+    checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{PoolCreated, SelectionFinalized},
-    state::{CreatorGrant, LaunchState, PoolState},
-    utils::pool,
+    state::{CreatorGrant, LaunchPreset, LaunchState, PoolState, WithdrawnRanges},
+    utils::{bitmap::TicketBitmap, lottery, pool},
 };
 
 #[derive(Accounts)]
@@ -18,6 +19,15 @@ pub struct CreatePool<'info> {
 
     #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    #[account(mut, seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
+    pub launch_bitmap: Account<'info, TicketBitmap>,
+
+    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
     #[account(
         mut,
@@ -44,38 +54,49 @@ pub struct CreatePool<'info> {
 
 pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
     let pool_state = &mut ctx.accounts.pool_state;
+    let bitmap = &mut ctx.accounts.launch_bitmap;
+    let withdrawn = &ctx.accounts.withdrawn_ranges;
 
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
+
+    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
+    let total_deposited = checked_mul!(active_tickets as u64, launch_preset.tau_lamports)?;
     require!(
-        launch_state.total_deposited >= launch_state.min_raise_lamports,
+        total_deposited >= launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
+    let funding_end = launch_state
+        .funding_end(launch_preset.funding_duration_seconds)
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
     let (valid_slot, valid_hash) = select_blockhash(
         &ctx.accounts.slot_hashes.to_account_info(),
         current_time,
-        launch_state.funding_end,
-        launch_state.pool_creation_grace_period_sec,
+        funding_end,
+        launch_preset.pool_creation_grace_period_sec,
         launch_state.project_id,
-        launch_state.unlock_time_sec,
+        launch_preset.unlock_time_sec,
     )?;
 
     pool_state.launch = launch_state.key();
-    pool_state.pool_id = launch_state.project_id; // Use project_id as pool_id for 1-to-1 mapping
+    pool_state.pool_id = launch_state.project_id;
     pool_state.project_id = launch_state.project_id;
     pool_state.created_slot = valid_slot;
     pool_state.created_blockhash = valid_hash;
     pool_state.created = true;
 
-    finalize_selection(launch_state, &mut ctx.accounts.creator_grant)?;
+    let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
+    let k_capacity = launch_preset.k_capacity()?;
+    lottery::conduct_lottery(&seed, k_capacity, bitmap, &withdrawn.ranges)?;
 
-    // Open claims timestamp
+    finalize_selection(launch_state, launch_preset, &mut ctx.accounts.creator_grant, active_tickets)?;
+
     launch_state.claims_opened_at = Some(current_time);
 
-    // for claims and withdrawal testing, without pool creation
     #[cfg(feature = "test")]
     {
         ctx.accounts.pool_state.claims_ready = true;
@@ -83,7 +104,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     emit!(SelectionFinalized {
         launch: launch_state.key(),
-        k_capacity: launch_state.k_capacity,
+        k_capacity: launch_preset.k_capacity()?,
     });
 
     emit!(PoolCreated {
@@ -162,30 +183,32 @@ fn select_blockhash(
 
 fn finalize_selection(
     launch_state: &mut LaunchState,
+    launch_preset: &LaunchPreset,
     creator_grant: &mut CreatorGrant,
+    active_tickets: u64,
 ) -> Result<()> {
+    let k_capacity = launch_preset.k_capacity()?;
+
     if launch_state.creator_grant_present {
-        require!(launch_state.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
+        require!(launch_preset.hard_cap_lamports > 0, EngineErrorCode::InvalidDivisor);
 
         let creator_reserved_u128 = (creator_grant.locked_lamports as u128)
-            .checked_mul(launch_state.k_capacity as u128)
+            .checked_mul(k_capacity as u128)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?
-            .checked_div(launch_state.hard_cap_lamports as u128)
+            .checked_div(launch_preset.hard_cap_lamports as u128)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        require!(creator_reserved_u128 <= u32::MAX as u128, EngineErrorCode::U64ConversionOverflow);
-        let creator_reserved_u32 = creator_reserved_u128 as u32;
-        launch_state.creator_reserved_tickets = creator_reserved_u32;
-        creator_grant.reserved_tickets = creator_reserved_u32;
+        require!(creator_reserved_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
+        let creator_reserved = creator_reserved_u128 as u64;
+        launch_state.creator_reserved_tickets = creator_reserved;
+        creator_grant.reserved_tickets = creator_reserved;
     }
 
-    let total_allocation = launch_state.base_total_allocation;
-    let sale_bps = launch_state.base_sale_basis_points;
-    let sale_allocation_u128 = (total_allocation as u128)
-        .checked_mul(sale_bps as u128)
+    let sale_allocation_u128 = (launch_preset.base_total_allocation as u128)
+        .checked_mul(launch_preset.base_sale_basis_points as u128)
         .and_then(|v| v.checked_div(10_000u128))
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    let divisor = (launch_state.total_tickets as u64).min(launch_state.k_capacity as u64);
+    let divisor = active_tickets.min(k_capacity);
     require!(divisor > 0, EngineErrorCode::InvalidDivisor);
 
     let tokens_per_ticket_u128 = sale_allocation_u128

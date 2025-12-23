@@ -7,7 +7,7 @@ use raydium_amm_v3::{
     states::TickArrayState,
 };
 
-use crate::{errors::ErrorCode, LaunchState};
+use crate::{errors::ErrorCode, state::LaunchPreset};
 
 pub(crate) struct ClmmOrder<'info> {
     pub(crate) token_mint_0: AccountInfo<'info>,
@@ -32,7 +32,8 @@ pub(crate) const AMMV3_CREATION_RESERVE: u64 = 152_500_000;
 
 impl<'info> ClmmOrder<'info> {
     pub(crate) fn from_inputs(
-        launch_state: &Account<'info, LaunchState>,
+        launch_preset: &Account<'info, LaunchPreset>,
+        total_deposited: u64,
         quote_mint: &Account<'info, Mint>,
         base_mint: &Account<'info, Mint>,
         quote_vault: &UncheckedAccount<'info>,
@@ -42,20 +43,20 @@ impl<'info> ClmmOrder<'info> {
         base_source: Option<&Account<'info, TokenAccount>>,
         quote_source: Option<&Account<'info, TokenAccount>>,
     ) -> Result<ClmmOrder<'info>> {
-        let quote_clmm_supply = min(launch_state.total_deposited, launch_state.hard_cap_lamports)
+        let quote_clmm_supply = min(total_deposited, launch_preset.hard_cap_lamports)
             .checked_sub(AMMV3_CREATION_RESERVE)
-            .expect("quote counted well");
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        let base_sale_supply = (launch_state.base_total_allocation as u128)
-            .checked_mul(launch_state.base_sale_basis_points as u128)
+        let base_sale_supply = (launch_preset.base_total_allocation as u128)
+            .checked_mul(launch_preset.base_sale_basis_points as u128)
             .and_then(|v| v.checked_div(MYRIAD))
             .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        let base_clmm_supply = (launch_state.base_total_allocation as u128)
+        let base_clmm_supply = (launch_preset.base_total_allocation as u128)
             .checked_mul(
                 MYRIAD
-                    .checked_sub(launch_state.base_sale_basis_points as u128)
-                    .and_then(|v| v.checked_sub(launch_state.team_allocation_basis_points as u128))
+                    .checked_sub(launch_preset.base_sale_basis_points as u128)
+                    .and_then(|v| v.checked_sub(launch_preset.team_allocation_basis_points as u128))
                     .ok_or(ErrorCode::ArithmeticOverflow)?,
             )
             .and_then(|v| v.checked_div(MYRIAD))
