@@ -55,6 +55,23 @@ impl WithdrawnRanges {
     pub fn total_withdrawn(&self) -> u64 {
         self.ranges.iter().map(|r| r.count()).sum()
     }
+
+    pub fn take_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {
+        let mut taken = Vec::new();
+        while count > 0 && !self.ranges.is_empty() {
+            let last_idx = self.ranges.len() - 1;
+            let range = &mut self.ranges[last_idx];
+            let take = count.min(range.count());
+            if let Some(tail) = range.split_tail(take) {
+                taken.push(tail);
+                count -= take;
+            }
+            if range.count() == 0 {
+                self.ranges.pop();
+            }
+        }
+        taken
+    }
 }
 
 impl crate::utils::realloc::Reallocatable for WithdrawnRanges {
@@ -196,6 +213,109 @@ mod tests {
         let removed = uc.remove_tickets(100);
         assert_eq!(removed, vec![TicketRange::new(20, 23), TicketRange::new(0, 10),]);
         assert!(uc.ticket_ranges.is_empty());
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_partial() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 30),
+            ],
+        };
+        assert_eq!(wr.total_withdrawn(), 20);
+
+        let taken = wr.take_tickets(5);
+        assert_eq!(taken, vec![TicketRange::new(25, 30)]);
+        assert_eq!(wr.ranges, vec![TicketRange::new(0, 10), TicketRange::new(20, 25)]);
+        assert_eq!(wr.total_withdrawn(), 15);
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_exact_range() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 30),
+            ],
+        };
+
+        let taken = wr.take_tickets(10);
+        assert_eq!(taken, vec![TicketRange::new(20, 30)]);
+        assert_eq!(wr.ranges, vec![TicketRange::new(0, 10)]);
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_cross_ranges() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 25),
+                TicketRange::new(30, 38),
+            ],
+        };
+        assert_eq!(wr.total_withdrawn(), 23);
+
+        let taken = wr.take_tickets(12);
+        assert_eq!(taken, vec![
+            TicketRange::new(30, 38),
+            TicketRange::new(21, 25),
+        ]);
+        assert_eq!(wr.ranges, vec![TicketRange::new(0, 10), TicketRange::new(20, 21)]);
+        assert_eq!(wr.total_withdrawn(), 11);
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_all() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![
+                TicketRange::new(0, 10),
+                TicketRange::new(20, 30),
+            ],
+        };
+
+        let taken = wr.take_tickets(20);
+        assert_eq!(taken, vec![TicketRange::new(20, 30), TicketRange::new(0, 10)]);
+        assert!(wr.ranges.is_empty());
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_more_than_available() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![TicketRange::new(0, 10)],
+        };
+
+        let taken = wr.take_tickets(100);
+        assert_eq!(taken, vec![TicketRange::new(0, 10)]);
+        assert!(wr.ranges.is_empty());
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_empty() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![],
+        };
+
+        let taken = wr.take_tickets(10);
+        assert!(taken.is_empty());
+    }
+
+    #[test]
+    fn test_withdrawn_ranges_take_tickets_zero() {
+        let mut wr = WithdrawnRanges {
+            launch: Pubkey::default(),
+            ranges: vec![TicketRange::new(0, 10)],
+        };
+
+        let taken = wr.take_tickets(0);
+        assert!(taken.is_empty());
+        assert_eq!(wr.ranges, vec![TicketRange::new(0, 10)]);
     }
 }
 

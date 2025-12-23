@@ -1,11 +1,11 @@
 use anchor_lang::{prelude::*, solana_program};
 
 use crate::{
-    checked_add, checked_div, checked_mul,
+    checked_add, checked_div, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{Contribution, LaunchPreset, LaunchState, TicketRange},
+    state::{Contribution, LaunchPreset, LaunchState, TicketRange, WithdrawnRanges},
     utils::{bitmap::TicketBitmap, realloc::realloc_with_payer},
 };
 
@@ -27,6 +27,9 @@ pub struct Deposit<'info> {
 
     #[account(mut, seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
     pub launch_bitmap: Account<'info, TicketBitmap>,
+
+    #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
+    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
     #[account(
         init_if_needed,
@@ -52,7 +55,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
 
     let current_tickets = contribution.total_tickets();
-    let current_deposit = checked_mul!(current_tickets as u64, launch_preset.tau_lamports)?;
+    let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
     let is_creator = ctx.accounts.contributor.key() == launch_state.creator;
     let creator_cap = launch_preset.creator_max_deposit;
@@ -64,18 +67,31 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
 
     let launch_bitmap = &mut ctx.accounts.launch_bitmap;
+    let withdrawn_ranges = &mut ctx.accounts.withdrawn_ranges;
 
-    let start = launch_bitmap
-        .allocate(new_tickets_count, is_creator)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let mut reused_ranges = withdrawn_ranges.take_tickets(new_tickets_count);
+    let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
+
+    let remaining = checked_sub!(new_tickets_count, reused_count)?;
+    if remaining > 0 {
+        let start = launch_bitmap
+            .allocate(remaining, false)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+        reused_ranges.push(TicketRange::new(start, checked_add!(start, remaining)?));
+    }
+
+    for range in reused_ranges {
+        if is_creator {
+            launch_bitmap.set_range(&range);
+        }
+        contribution.ticket_ranges.push(range);
+    }
 
     realloc_with_payer(
         &ctx.accounts.launch_bitmap,
         &ctx.accounts.realloc_funds.to_account_info(),
     )?;
-
-    let end = checked_add!(start, new_tickets_count)?;
-    contribution.ticket_ranges.push(TicketRange::new(start, end));
 
     let ix = solana_program::system_instruction::transfer(
         &ctx.accounts.contributor.key(),
