@@ -5548,6 +5548,9 @@
         "fields": [
           {
             "name": "created_at",
+            "docs": [
+              "Unix timestamp (seconds) when the launch was created"
+            ],
             "type": "i64"
           },
           {

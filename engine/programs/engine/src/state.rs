@@ -7,6 +7,7 @@ use anchor_lang::prelude::*;
 #[account]
 #[derive(InitSpace)]
 pub struct LaunchState {
+    /// Unix timestamp (seconds) when the launch was created
     pub created_at: i64,
 
     // Project identification

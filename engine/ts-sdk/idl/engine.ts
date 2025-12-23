@@ -5554,6 +5554,9 @@ export type Engine = {
         "fields": [
           {
             "name": "createdAt",
+            "docs": [
+              "Unix timestamp (seconds) when the launch was created"
+            ],
             "type": "i64"
           },
           {
