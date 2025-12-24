@@ -1309,6 +1309,10 @@ const EngineSDK = {
       return txBuilder.fetchTeamVesting(launch);
     }
 
+    async function fetchLaunchPreset(id: number) {
+      return txBuilder.fetchLaunchPreset(id);
+    }
+
     async function getNextProjectId(): Promise<BN> {
       try {
         const counter: any = await fetchProjectCounter();
@@ -1510,6 +1514,7 @@ const EngineSDK = {
 
       fetchEngineConfig,
       fetchLaunch,
+      fetchLaunchPreset,
       fetchUserContribution,
       fetchCreatorGrant,
       fetchTeamVesting,

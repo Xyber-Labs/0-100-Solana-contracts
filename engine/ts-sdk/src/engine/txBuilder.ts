@@ -1190,6 +1190,12 @@ export class TxBuilder {
     return this.program.account.teamVesting.fetch(pda);
   }
 
+  async fetchLaunchPreset(id: number) {
+    const [pda] = this.getLaunchPresetPda(id);
+    const launchPreset = await this.program.account.launchPreset.fetch(pda);
+    return { pda, launchPreset };
+  }
+
   async claimCreatorTokensTx(params: {
     launch: web3.PublicKey;
     baseMint: web3.PublicKey;
