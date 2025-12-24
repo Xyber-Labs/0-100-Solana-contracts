@@ -2112,6 +2112,13 @@ export type IncomeDispatcher = {
         "kind": "struct",
         "fields": [
           {
+            "name": "createdAt",
+            "docs": [
+              "Unix timestamp (seconds) when the launch was created"
+            ],
+            "type": "i64"
+          },
+          {
             "name": "projectId",
             "type": "u64"
           },

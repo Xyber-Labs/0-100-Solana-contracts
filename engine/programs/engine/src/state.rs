@@ -7,6 +7,9 @@ use anchor_lang::prelude::*;
 #[account]
 #[derive(InitSpace)]
 pub struct LaunchState {
+    /// Unix timestamp (seconds) when the launch was created
+    pub created_at: i64,
+
     // Project identification
     pub project_id: u64,
 
@@ -39,8 +42,8 @@ pub struct LaunchState {
     // Sharded roster and permutation-based selection fields
     pub roster_shards: u16, // number of roster shards allocated for this launch
     pub roster_initialized_up_to: i32, // 0 until first shard initialized; then last initialized shard_id
-    pub roster_finalized_up_to: i32, // 0 until finalization starts; then last finalized shard_id
-    pub public_total_tickets: u32, // sum of total_in_shard over finalized shards
+    pub roster_finalized_up_to: i32,   // 0 until finalization starts; then last finalized shard_id
+    pub public_total_tickets: u32,     // sum of total_in_shard over finalized shards
     pub roster_shard_cap: u16,
     pub roster_highest_used_shard: u16, // Highest shard id that has at least one wallet (used to allow partial finalization)
 
