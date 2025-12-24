@@ -34,9 +34,10 @@ construct_uint! {
     pub struct U256(4);
 }
 
-pub mod bitmap;
 pub mod clmm;
 pub mod lottery;
+#[cfg(test)]
+mod lottery_tests;
 pub mod mint;
 pub mod pool;
 pub mod realloc;

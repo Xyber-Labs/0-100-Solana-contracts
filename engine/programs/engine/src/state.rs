@@ -95,12 +95,7 @@ pub struct LaunchState {
     pub funding_start: i64,
 
     pub vrf_seed: Option<[u8; 32]>,
-    pub selection_finalized: bool,
 
-    pub tokens_per_ticket: Option<u64>,
-
-    pub creator_reserved_tickets: u64,
-    pub creator_grant_present: bool,
     pub claims_opened_at: Option<i64>,
 
     pub raydium_pool_state: Option<Pubkey>,
@@ -339,30 +334,6 @@ pub struct PoolState {
 
 #[account]
 #[derive(InitSpace)]
-pub struct CreatorGrant {
-    pub launch: Pubkey,
-    pub creator: Pubkey,
-
-    // Creator's special deposit locked in escrow
-    pub locked_lamports: u64,
-
-    // How many tickets are guaranteed (8 SOL / τ)
-    pub reserved_tickets: u64,
-
-    // Daily limit in lamports (usually = 1 SOL)
-    pub daily_lamports_limit: u64,
-
-    // Cap in tickets/day = floor(daily_lamports_limit / τ)
-    pub daily_ticket_cap: u64,
-
-    // How many "tickets" they have already claimed
-    pub claimed_tickets: u64,
-
-    pub refunded: bool,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct TeamVesting {
     pub launch: Pubkey,
     pub creator: Pubkey,
@@ -430,9 +401,37 @@ impl LaunchPreset {
             && self.creator_claim_lock_period_sec > 0
             && self.funding_duration_seconds > 0
             && self.funding_duration_seconds <= 60 * 60 * 24 * 7
+            && self.base_sale_basis_points <= 10_000
+            && self.team_allocation_basis_points <= 10_000
+    }
+
+    pub fn sale_allocation(&self) -> u64 {
+        (self.base_total_allocation as u128 * self.base_sale_basis_points as u128 / 10_000) as u64
     }
 
     pub fn k_capacity(&self) -> Result<u64> {
         Ok(crate::checked_div!(self.hard_cap_lamports, self.tau_lamports)?)
+    }
+
+    pub fn tokens_per_ticket(&self, active_tickets: u64) -> Result<u64> {
+        let k_capacity = self.k_capacity()?;
+
+        let sale_allocation_u128 = (self.base_total_allocation as u128)
+            .checked_mul(self.base_sale_basis_points as u128)
+            .and_then(|v| v.checked_div(10_000u128))
+            .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+
+        let divisor = active_tickets.min(k_capacity);
+        require!(divisor > 0, crate::errors::ErrorCode::InvalidDivisor);
+
+        let tokens_per_ticket_u128 = sale_allocation_u128
+            .checked_div(divisor as u128)
+            .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+        require!(
+            tokens_per_ticket_u128 <= u64::MAX as u128,
+            crate::errors::ErrorCode::U64ConversionOverflow
+        );
+
+        Ok(tokens_per_ticket_u128 as u64)
     }
 }

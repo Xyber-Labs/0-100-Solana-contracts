@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
     #[msg("Minimum raise not met")]
     MinRaiseNotMet,
+    #[msg("Minimum raise met, refund not available")]
+    MinRaiseMet,
     #[msg("Funding is not active")]
     FundingInactive,
     #[msg("Funding has not ended yet")]

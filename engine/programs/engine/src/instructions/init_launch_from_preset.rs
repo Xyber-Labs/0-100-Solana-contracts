@@ -11,9 +11,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::LaunchInitialized,
-    state::{
-        CreatorGrant, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
-    },
+    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -49,14 +47,6 @@ pub struct InitLaunchFromPreset<'info> {
     /// CHECK: PDA for SOL escrow
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
-    #[account(
-        init_if_needed,
-        payer = creator,
-        space = 8 + CreatorGrant::INIT_SPACE,
-        seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
-        bump
-    )]
-    pub creator_grant: Box<Account<'info, CreatorGrant>>,
     #[account(
         init,
         payer = creator,
@@ -134,29 +124,12 @@ pub fn init_launch_from_preset(
     state.base_mint = None;
     state.funding_start = start;
     state.vrf_seed = None;
-    state.selection_finalized = false;
-    state.tokens_per_ticket = None;
-    state.creator_reserved_tickets = 0;
-    state.creator_grant_present = false;
     state.claims_opened_at = None;
     state.raydium_pool_state = None;
     state.raydium_position_nft_mint = None;
 
-    let launch_key = state.key();
-    let grant = &mut ctx.accounts.creator_grant;
-    grant.launch = launch_key;
-    grant.creator = creator.key();
-    grant.locked_lamports = 0;
-    grant.reserved_tickets = 0;
-    grant.daily_lamports_limit = p.creator_daily_lamports_limit;
-    grant.daily_ticket_cap = p
-        .creator_daily_lamports_limit
-        .checked_div(p.tau_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    grant.claimed_tickets = 0;
-    grant.refunded = false;
-
     let pending_key = make_pending_key(&creator.key(), project_id);
+    let launch_key = state.key();
 
     emit!(LaunchInitialized {
         launch: launch_key,

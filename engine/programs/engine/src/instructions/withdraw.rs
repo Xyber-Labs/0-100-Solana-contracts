@@ -6,7 +6,7 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
     state::{Contribution, LaunchPreset, LaunchState, WithdrawnRanges},
-    utils::{bitmap::TicketBitmap, realloc::realloc_with_payer},
+    utils::{lottery::Lottery, realloc::realloc_with_payer},
 };
 
 #[derive(Accounts)]
@@ -29,8 +29,13 @@ pub struct Withdraw<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
-    pub launch_bitmap: Account<'info, TicketBitmap>,
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_in_progress() @ EngineErrorCode::AlreadyFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
 
     #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
     pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
@@ -50,7 +55,7 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
-    let launch_bitmap = &mut ctx.accounts.launch_bitmap;
+    let lottery = &mut ctx.accounts.lottery;
 
     require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
 
@@ -61,8 +66,9 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     );
     let removed_ranges = contribution.remove_tickets(tickets_to_remove);
 
+    lottery.inactive += removed_ranges.iter().map(|r| r.count()).sum::<u64>();
     for range in removed_ranges {
-        launch_bitmap.clear_range(&range);
+        lottery.clear_range(&range);
         ctx.accounts.withdrawn_ranges.push(range);
     }
 

@@ -6,7 +6,7 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
     state::{Contribution, LaunchPreset, LaunchState, TicketRange, WithdrawnRanges},
-    utils::{bitmap::TicketBitmap, realloc::realloc_with_payer},
+    utils::{lottery::Lottery, realloc::realloc_with_payer},
 };
 
 #[derive(Accounts)]
@@ -21,12 +21,17 @@ pub struct Deposit<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Platform account for paying bitmap reallocation
+    /// CHECK: Platform account for paying reallocation
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
-    pub launch_bitmap: Account<'info, TicketBitmap>,
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_in_progress() @ EngineErrorCode::AlreadyFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
 
     #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
     pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
@@ -66,15 +71,16 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
 
-    let launch_bitmap = &mut ctx.accounts.launch_bitmap;
+    let lottery = &mut ctx.accounts.lottery;
     let withdrawn_ranges = &mut ctx.accounts.withdrawn_ranges;
 
     let mut reused_ranges = withdrawn_ranges.take_tickets(new_tickets_count);
     let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
+    lottery.inactive = withdrawn_ranges.total_withdrawn();
 
     let remaining = checked_sub!(new_tickets_count, reused_count)?;
     if remaining > 0 {
-        let start = launch_bitmap
+        let start = lottery
             .allocate(remaining, false)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
@@ -83,13 +89,13 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     for range in reused_ranges {
         if is_creator {
-            launch_bitmap.set_range(&range);
+            lottery.set_range(&range);
         }
         contribution.ticket_ranges.push(range);
     }
 
     realloc_with_payer(
-        &ctx.accounts.launch_bitmap,
+        &ctx.accounts.lottery,
         &ctx.accounts.realloc_funds.to_account_info(),
     )?;
 

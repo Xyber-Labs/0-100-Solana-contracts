@@ -1,11 +1,14 @@
+use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+
 use crate::{
+    checked_div, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::CreatorClaimed,
-    state::{CreatorGrant, LaunchPreset, LaunchState, PoolState},
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::lottery::Lottery,
 };
-use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct ClaimCreatorTokens<'info> {
@@ -17,34 +20,34 @@ pub struct ClaimCreatorTokens<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],bump)]
-    pub pool_state: Account<'info, PoolState>,
+    #[account(
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_finalized() @ EngineErrorCode::NotFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
 
     #[account(
         mut,
-        seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
-        bump,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), creator.key().as_ref()],
+        bump
     )]
-    pub creator_grant: Account<'info, CreatorGrant>,
+    pub contribution: Account<'info, Contribution>,
 
-    #[account(address = launch_state.base_mint.unwrap())]
+    #[account(address = launch_state.base_mint.expect("Expected base_mint"))]
     pub base_mint: Account<'info, Mint>,
 
     /// CHECK: PDA owning the escrow ATA for base_mint
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    #[account(
-        mut,
-        associated_token::mint = base_mint,
-        associated_token::authority = escrow_authority,
-    )]
+    #[account(mut, associated_token::mint = base_mint, associated_token::authority = escrow_authority)]
     pub base_escrow_ata: Account<'info, TokenAccount>,
 
     #[account(
         mut,
         constraint = creator_ata.mint == base_mint.key() @ EngineErrorCode::InvalidMint,
-        constraint = creator_ata.owner == creator.key() @ EngineErrorCode::InvalidOwner,
+        constraint = creator_ata.owner == creator.key() @ EngineErrorCode::InvalidOwner
     )]
     pub creator_ata: Account<'info, TokenAccount>,
 
@@ -54,45 +57,30 @@ pub struct ClaimCreatorTokens<'info> {
 pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    require!(launch_state.base_mint.is_some(), EngineErrorCode::Unauthorized);
-    require!(
-        ctx.accounts.base_mint.key() == launch_state.base_mint.unwrap(),
-        EngineErrorCode::Unauthorized
-    );
-    require!(ctx.accounts.pool_state.claims_ready, EngineErrorCode::PoolNotCreated);
-
-    let per = launch_state.tokens_per_ticket.ok_or(EngineErrorCode::TokensPerTicketMissing)?;
-    let creator_grant = &mut ctx.accounts.creator_grant;
+    let lottery = &ctx.accounts.lottery;
+    let contribution = &mut ctx.accounts.contribution;
 
     let now = Clock::get()?.unix_timestamp;
     let start = launch_state.claims_opened_at.unwrap_or(now);
-
     let periods_passed = (now - start).div_euclid(launch_preset.creator_claim_lock_period_sec);
 
-    // Calculate the ceiling of claimable tickets based on periods passed.
-    // We add 1 to include the current, partially-elapsed period.
+    let daily_ticket_cap =
+        checked_div!(launch_preset.creator_daily_lamports_limit, launch_preset.tau_lamports)?;
+
     let unlocked_ceiling =
-        (periods_passed as u64).saturating_add(1).saturating_mul(creator_grant.daily_ticket_cap);
+        (periods_passed as u64).saturating_add(1).saturating_mul(daily_ticket_cap);
 
-    // The total unlocked amount cannot exceed the total reserved tickets.
-    // Reserved tickets are finalized and stored on launch_state during pool creation.
-    let total_unlocked = unlocked_ceiling.min(launch_state.creator_reserved_tickets);
+    let winning_tickets = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
+    let total_unlocked = unlocked_ceiling.min(winning_tickets);
+    let to_claim = checked_sub!(total_unlocked, contribution.tickets_claimed)?;
 
-    // The amount to claim now is the difference between what's unlocked and what's already been claimed.
-    let to_claim = total_unlocked
-        .checked_sub(creator_grant.claimed_tickets)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-    // If there's nothing to claim, exit.
     require!(to_claim > 0, EngineErrorCode::NothingToClaim);
 
-    let amount_u128 = (per as u128)
-        .checked_mul(to_claim as u128)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let per = launch_preset.tokens_per_ticket(lottery.active_tickets())?;
+    let amount_u128 = checked_mul!(per as u128, to_claim as u128)?;
     require!(amount_u128 <= u64::MAX as u128, EngineErrorCode::U64ConversionOverflow);
     let amount = amount_u128 as u64;
 
-    // Transfer tokens from escrow ATA to creator ATA
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"escrow_authority",
@@ -112,23 +100,16 @@ pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
     );
     token::transfer(cpi_ctx, amount)?;
 
-    creator_grant.claimed_tickets = creator_grant
-        .claimed_tickets
-        .checked_add(to_claim)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    contribution.tickets_claimed = total_unlocked;
 
     emit!(CreatorClaimed {
         launch: launch_state.key(),
         creator: ctx.accounts.creator.key(),
         tickets_claimed: to_claim,
-        lamports_equiv: to_claim
-            .checked_mul(launch_preset.tau_lamports)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?,
+        lamports_equiv: checked_mul!(to_claim, launch_preset.tau_lamports)?,
         tokens_minted: amount,
         day_index: periods_passed,
-        remaining_tickets: launch_state
-            .creator_reserved_tickets
-            .saturating_sub(creator_grant.claimed_tickets),
+        remaining_tickets: winning_tickets.saturating_sub(contribution.tickets_claimed),
     });
 
     Ok(())

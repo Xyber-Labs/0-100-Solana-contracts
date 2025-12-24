@@ -3,8 +3,8 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::SeedSet,
-    state::{LaunchPreset, LaunchState, WithdrawnRanges},
-    utils::bitmap::TicketBitmap,
+    state::{LaunchPreset, LaunchState},
+    utils::lottery::Lottery,
 };
 use anchor_lang::{
     prelude::*,
@@ -19,10 +19,12 @@ pub struct SetSeed<'info> {
     pub launch_state: Account<'info, LaunchState>,
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
-    pub launch_bitmap: Account<'info, TicketBitmap>,
-    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    #[account(
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_in_progress() @ EngineErrorCode::AlreadyFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -32,16 +34,14 @@ pub struct SetSeed<'info> {
 pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let bitmap = &ctx.accounts.launch_bitmap;
-    let withdrawn = &ctx.accounts.withdrawn_ranges;
+    let lottery = &ctx.accounts.lottery;
 
     require!(
         launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
         EngineErrorCode::FundingNotEnded
     );
 
-    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
-    let total_deposited = checked_mul!(active_tickets as u64, launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets() as u64, launch_preset.tau_lamports)?;
     require!(
         total_deposited >= launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet

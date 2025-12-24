@@ -11,8 +11,8 @@ use crate::{
     constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
     SEED_ROOT,
-    state::{LaunchPreset, LaunchState, PoolState, WithdrawnRanges},
-    utils::{bitmap::TicketBitmap, clmm::{ClmmOrder, get_liquidity_range_impl}},
+    state::{LaunchPreset, LaunchState, PoolState},
+    utils::{lottery::Lottery, clmm::{ClmmOrder, get_liquidity_range_impl}},
 };
 
 #[derive(Accounts)]
@@ -26,11 +26,12 @@ pub struct AddClmmLiquidity<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
-    pub launch_bitmap: Account<'info, TicketBitmap>,
-
-    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    #[account(
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_finalized() @ ErrorCode::NotFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
 
     #[account(
         constraint = launch_state.base_mint == Some(base_mint.key()),
@@ -118,11 +119,9 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    let bitmap = &ctx.accounts.launch_bitmap;
-    let withdrawn = &ctx.accounts.withdrawn_ranges;
+    let lottery = &ctx.accounts.lottery;
 
-    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
-    let total_deposited = checked_mul!(active_tickets as u64, ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets() as u64, ctx.accounts.launch_preset.tau_lamports)?;
     require!(
         total_deposited >= ctx.accounts.launch_preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet

@@ -13,7 +13,7 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, PoolState, TokenMetadataConfig, WithdrawnRanges}, utils::{bitmap::TicketBitmap, clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, PoolState, TokenMetadataConfig}, utils::{lottery::Lottery, clmm::ClmmOrder, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -21,21 +21,18 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(
-        mut,
-        constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
-        constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
-    )]
+    #[account(mut, constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated)]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(seeds = [SEED_ROOT, b"bitmap", launch_state.key().as_ref()], bump)]
-    pub launch_bitmap: Account<'info, TicketBitmap>,
-
-    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    #[account(
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_finalized() @ ErrorCode::NotFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
 
     #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
     pub pool_state: Account<'info, PoolState>,
@@ -106,11 +103,9 @@ pub struct CreateClmmPool<'info> {
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
     let preset = &ctx.accounts.launch_preset;
-    let bitmap = &ctx.accounts.launch_bitmap;
-    let withdrawn = &ctx.accounts.withdrawn_ranges;
+    let lottery = &ctx.accounts.lottery;
 
-    let active_tickets = bitmap.bits_allocated - withdrawn.total_withdrawn();
-    let total_deposited = checked_mul!(active_tickets as u64, preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets() as u64, preset.tau_lamports)?;
     require!(
         total_deposited >= preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet
