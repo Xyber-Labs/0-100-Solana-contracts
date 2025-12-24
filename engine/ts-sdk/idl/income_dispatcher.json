@@ -2114,24 +2114,8 @@
             "type": "pubkey"
           },
           {
-            "name": "hard_cap_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
+            "name": "preset",
+            "type": "pubkey"
           },
           {
             "name": "base_mint",
@@ -2140,28 +2124,8 @@
             }
           },
           {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_end",
+            "name": "funding_start",
             "type": "i64"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "k_capacity",
-            "type": "u32"
           },
           {
             "name": "vrf_seed",
@@ -2175,90 +2139,10 @@
             }
           },
           {
-            "name": "selection_processed",
-            "type": "u32"
-          },
-          {
-            "name": "selection_finalized",
-            "type": "bool"
-          },
-          {
-            "name": "threshold_score",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "roster_shards",
-            "type": "u16"
-          },
-          {
-            "name": "roster_initialized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "roster_finalized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "public_total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_highest_used_shard",
-            "type": "u16"
-          },
-          {
-            "name": "tokens_per_ticket",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_reserved_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "creator_grant_present",
-            "type": "bool"
-          },
-          {
             "name": "claims_opened_at",
             "type": {
               "option": "i64"
             }
-          },
-          {
-            "name": "creator_claim_lock_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_initial_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_start",
-            "type": "i64"
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "team_vesting_duration_sec",
-            "type": "i64"
           },
           {
             "name": "raydium_pool_state",

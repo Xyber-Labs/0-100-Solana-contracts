@@ -1,0 +1,93 @@
+use anchor_lang::prelude::*;
+
+use crate::{
+    checked_mul, checked_sub,
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    events::Refunded,
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::lottery::Lottery,
+};
+
+#[derive(Accounts)]
+pub struct Refund<'info> {
+    #[account(mut)]
+    pub contributor: Signer<'info>,
+
+    pub launch_state: Account<'info, LaunchState>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    #[account(
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery.is_finalized() || lottery.is_cancelled() @ EngineErrorCode::NotFinalized
+    )]
+    pub lottery: Account<'info, Lottery>,
+
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()],
+        bump
+    )]
+    pub contribution: Account<'info, Contribution>,
+
+    /// CHECK: SOL escrow PDA
+    #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
+    pub escrow_authority: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn refund(ctx: Context<Refund>) -> Result<()> {
+    let launch_state = &ctx.accounts.launch_state;
+
+    let contribution = &mut ctx.accounts.contribution;
+    let lottery = &ctx.accounts.lottery;
+
+    let total_tickets = contribution.total_tickets();
+
+    let refundable_total = if lottery.is_cancelled() {
+        total_tickets
+    } else {
+        let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
+        checked_sub!(total_tickets, winners)?
+    };
+
+    let refundable = checked_sub!(refundable_total, contribution.tickets_refunded)?;
+    require!(refundable > 0, EngineErrorCode::AlreadyRefunded);
+    contribution.tickets_refunded = refundable_total;
+
+    let tau_lamports = ctx.accounts.launch_preset.tau_lamports;
+    let refund_amount = checked_mul!(refundable, tau_lamports)?;
+
+    let launch_key = launch_state.key();
+    let seeds = [
+        SEED_ROOT,
+        b"escrow_authority",
+        launch_key.as_ref(),
+        &[ctx.bumps.escrow_authority],
+    ];
+    let signer = &[&seeds[..]];
+
+    anchor_lang::system_program::transfer(
+        CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            anchor_lang::system_program::Transfer {
+                from: ctx.accounts.escrow_authority.to_account_info(),
+                to: ctx.accounts.contributor.to_account_info(),
+            },
+            signer,
+        ),
+        refund_amount,
+    )?;
+
+    emit!(Refunded {
+        launch: launch_state.key(),
+        contributor: ctx.accounts.contributor.key(),
+        refunded_lamports: refund_amount,
+    });
+
+    Ok(())
+}

@@ -37,11 +37,10 @@ pub struct SelectionFinalized {
 }
 
 #[event]
-pub struct RefundClaimed {
+pub struct Refunded {
     pub launch: Pubkey,
     pub contributor: Pubkey,
     pub refunded_lamports: u64,
-    pub y_approved: u64,
 }
 
 #[event]

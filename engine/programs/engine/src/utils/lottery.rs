@@ -13,6 +13,7 @@ pub enum LotteryStatus {
         tokens_per_ticket: u64,
         sol_per_ticket: u64,
     },
+    Cancelled,
 }
 
 #[account]
@@ -34,6 +35,10 @@ impl Lottery {
 
     pub fn is_finalized(&self) -> bool {
         matches!(self.status, LotteryStatus::Finalized { .. })
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self.status, LotteryStatus::Cancelled)
     }
 
     pub fn active_tickets(&self) -> u64 {

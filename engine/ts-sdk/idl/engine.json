@@ -30,6 +30,49 @@
           "writable": true
         },
         {
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
           "name": "base_mint"
         },
         {
@@ -555,132 +598,7 @@
       "args": []
     },
     {
-      "name": "claim_creator_refund",
-      "docs": [
-        "Claim creator refund for failed launches"
-      ],
-      "discriminator": [
-        168,
-        92,
-        198,
-        50,
-        65,
-        220,
-        247,
-        185
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state"
-        },
-        {
-          "name": "creator_grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "claim_creator_tokens",
-      "docs": [
-        "Claim creator tokens with daily limits"
-      ],
       "discriminator": [
         126,
         208,
@@ -701,7 +619,10 @@
           "name": "launch_state"
         },
         {
-          "name": "pool_state",
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
           "pda": {
             "seeds": [
               {
@@ -724,10 +645,13 @@
               {
                 "kind": "const",
                 "value": [
-                  112,
+                  108,
                   111,
-                  111,
-                  108
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
                 ]
               },
               {
@@ -738,7 +662,7 @@
           }
         },
         {
-          "name": "creator_grant",
+          "name": "contribution",
           "writable": true,
           "pda": {
             "seeds": [
@@ -763,9 +687,13 @@
                 "kind": "const",
                 "value": [
                   99,
+                  111,
+                  110,
+                  116,
                   114,
-                  101,
-                  97,
+                  105,
+                  98,
+                  117,
                   116,
                   111,
                   114
@@ -774,6 +702,10 @@
               {
                 "kind": "account",
                 "path": "launch_state"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
               }
             ]
           }
@@ -927,134 +859,6 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "claim_refund",
-      "docs": [
-        "Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ)."
-      ],
-      "discriminator": [
-        15,
-        16,
-        30,
-        161,
-        255,
-        228,
-        97,
-        60
-      ],
-      "accounts": [
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state"
-        },
-        {
-          "name": "user_contribution",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  117,
-                  115,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              },
-              {
-                "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "roster_shard",
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "escrow_authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1277,9 +1081,6 @@
     },
     {
       "name": "claim_tokens",
-      "docs": [
-        "Claim tokens (post open_claims): mint tokens_per_ticket * y_i to user ATA."
-      ],
       "discriminator": [
         108,
         216,
@@ -1292,7 +1093,7 @@
       ],
       "accounts": [
         {
-          "name": "user",
+          "name": "contributor",
           "writable": true,
           "signer": true
         },
@@ -1300,7 +1101,50 @@
           "name": "launch_state"
         },
         {
-          "name": "user_contribution",
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "contribution",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1324,9 +1168,16 @@
               {
                 "kind": "const",
                 "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  105,
+                  98,
                   117,
-                  115,
-                  101,
+                  116,
+                  111,
                   114
                 ]
               },
@@ -1336,49 +1187,7 @@
               },
               {
                 "kind": "account",
-                "path": "user"
-              }
-            ]
-          }
-        },
-        {
-          "name": "roster_shard",
-          "writable": true,
-          "optional": true
-        },
-        {
-          "name": "pool_state",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
+                "path": "contributor"
               }
             ]
           }
@@ -1526,7 +1335,7 @@
           }
         },
         {
-          "name": "user_ata",
+          "name": "contributor_ata",
           "writable": true
         },
         {
@@ -1535,97 +1344,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "close_roster_shard",
-      "docs": [
-        "Close roster shard account after sealing"
-      ],
-      "discriminator": [
-        87,
-        131,
-        169,
-        146,
-        4,
-        168,
-        88,
-        103
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster_shard",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114,
-                  95,
-                  115,
-                  104,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              },
-              {
-                "kind": "arg",
-                "path": "shard_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "refund_to",
-          "writable": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "shard_id",
-          "type": "u16"
-        }
-      ]
     },
     {
       "name": "create_clmm_pool",
@@ -1648,6 +1366,49 @@
         {
           "name": "launch_state",
           "writable": true
+        },
+        {
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
         },
         {
           "name": "pool_state",
@@ -1967,271 +1728,9 @@
       "args": []
     },
     {
-      "name": "creator_deposit",
-      "docs": [
-        "Creator can increase special deposit during funding window"
-      ],
-      "discriminator": [
-        214,
-        153,
-        77,
-        240,
-        195,
-        20,
-        138,
-        159
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "launch_state"
-          ]
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "escrow_authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "creator_withdraw",
-      "docs": [
-        "Creator can decrease special deposit during funding window"
-      ],
-      "discriminator": [
-        92,
-        117,
-        206,
-        254,
-        174,
-        108,
-        37,
-        106
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "launch_state"
-          ]
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "escrow_authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "deposit",
       "docs": [
-        "Deposit lamports (must be multiple of τ); update user + roster; move lamports to escrow."
+        "Deposit lamports (must be multiple of τ); allocate tickets in bitmap; move lamports to escrow."
       ],
       "discriminator": [
         242,
@@ -2245,7 +1744,7 @@
       ],
       "accounts": [
         {
-          "name": "user",
+          "name": "contributor",
           "writable": true,
           "signer": true
         },
@@ -2254,7 +1753,10 @@
           "writable": true
         },
         {
-          "name": "user_contribution",
+          "name": "launch_preset"
+        },
+        {
+          "name": "realloc_funds",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2278,9 +1780,143 @@
               {
                 "kind": "const",
                 "value": [
-                  117,
-                  115,
+                  114,
                   101,
+                  97,
+                  108,
+                  108,
+                  111,
+                  99,
+                  95,
+                  102,
+                  117,
+                  110,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "lottery",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawn_ranges",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "contribution",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
                   114
                 ]
               },
@@ -2290,14 +1926,10 @@
               },
               {
                 "kind": "account",
-                "path": "user"
+                "path": "contributor"
               }
             ]
           }
-        },
-        {
-          "name": "roster_shard",
-          "writable": true
         },
         {
           "name": "escrow_authority",
@@ -2350,9 +1982,6 @@
           }
         },
         {
-          "name": "launch"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -2361,89 +1990,6 @@
         {
           "name": "amount",
           "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "finalize_roster_shard",
-      "docs": [
-        "Finalize roster shard (compute prefix, set shard_base, bump totals)"
-      ],
-      "discriminator": [
-        124,
-        151,
-        200,
-        25,
-        61,
-        233,
-        114,
-        255
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster_shard",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114,
-                  95,
-                  115,
-                  104,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              },
-              {
-                "kind": "arg",
-                "path": "shard_id"
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "shard_id",
-          "type": "u16"
         }
       ]
     },
@@ -2462,6 +2008,49 @@
       "accounts": [
         {
           "name": "launch_state"
+        },
+        {
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
         },
         {
           "name": "base_mint"
@@ -2628,324 +2217,6 @@
       ]
     },
     {
-      "name": "init_launch",
-      "docs": [
-        "Create launch + PDAs (escrow, mint authority PDA is derived, not stored)."
-      ],
-      "discriminator": [
-        75,
-        162,
-        31,
-        198,
-        192,
-        109,
-        36,
-        169
-      ],
-      "accounts": [
-        {
-          "name": "creator",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "project_counter",
-          "docs": [
-            "Global project counter"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  106,
-                  101,
-                  99,
-                  116,
-                  95,
-                  99,
-                  111,
-                  117,
-                  110,
-                  116,
-                  101,
-                  114
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "launch_state",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  97,
-                  117,
-                  110,
-                  99,
-                  104
-                ]
-              },
-              {
-                "kind": "arg",
-                "path": "project_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "escrow_authority",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  101,
-                  115,
-                  99,
-                  114,
-                  111,
-                  119,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_grant",
-          "docs": [
-            "Creator grant account (PDA off launch_state)"
-          ],
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "token_metadata_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  109,
-                  101,
-                  116,
-                  97,
-                  100,
-                  97,
-                  116,
-                  97
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "engine_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_xyber_ata",
-          "writable": true
-        },
-        {
-          "name": "treasury_xyber_ata",
-          "writable": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "InitLaunchParams"
-            }
-          }
-        },
-        {
-          "name": "project_id",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "init_launch_from_preset",
       "discriminator": [
         134,
@@ -3089,47 +2360,6 @@
                   105,
                   116,
                   121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creator_grant",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114
                 ]
               },
               {
@@ -3343,93 +2573,6 @@
       ]
     },
     {
-      "name": "init_roster_shard",
-      "docs": [
-        "Initialize roster shard account"
-      ],
-      "discriminator": [
-        251,
-        25,
-        110,
-        80,
-        137,
-        49,
-        197,
-        88
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "roster_shard",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  115,
-                  116,
-                  101,
-                  114,
-                  95,
-                  115,
-                  104,
-                  97,
-                  114,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              },
-              {
-                "kind": "arg",
-                "path": "shard_id"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "shard_id",
-          "type": "u16"
-        }
-      ]
-    },
-    {
       "name": "init_team_vesting",
       "discriminator": [
         223,
@@ -3450,6 +2593,9 @@
         {
           "name": "launch_state",
           "writable": true
+        },
+        {
+          "name": "launch_preset"
         },
         {
           "name": "team_vesting",
@@ -3522,7 +2668,10 @@
           "writable": true
         },
         {
-          "name": "creator_grant",
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
           "writable": true,
           "pda": {
             "seeds": [
@@ -3546,13 +2695,55 @@
               {
                 "kind": "const",
                 "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
+                  108,
                   111,
-                  114
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawn_ranges",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  110
                 ]
               },
               {
@@ -3612,36 +2803,71 @@
       "args": []
     },
     {
-      "name": "seal_roster_shard",
-      "docs": [
-        "Seal roster shard by snapshotting user ticket ranges into UserContribution"
-      ],
+      "name": "refund",
       "discriminator": [
-        18,
-        100,
-        12,
-        188,
-        84,
-        188,
-        103,
-        13
+        2,
+        96,
+        183,
+        251,
+        63,
+        208,
+        46,
+        46
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "contributor",
           "writable": true,
           "signer": true
         },
         {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
+          "name": "launch_state"
         },
         {
-          "name": "launch_state",
-          "writable": true
+          "name": "launch_preset"
         },
         {
-          "name": "roster_shard",
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "contribution",
           "writable": true,
           "pda": {
             "seeds": [
@@ -3665,18 +2891,17 @@
               {
                 "kind": "const",
                 "value": [
-                  114,
+                  99,
                   111,
-                  115,
+                  110,
                   116,
-                  101,
                   114,
-                  95,
-                  115,
-                  104,
-                  97,
-                  114,
-                  100
+                  105,
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
                 ]
               },
               {
@@ -3684,27 +2909,68 @@
                 "path": "launch_state"
               },
               {
-                "kind": "arg",
-                "path": "shard_id"
+                "kind": "account",
+                "path": "contributor"
               }
             ]
           }
+        },
+        {
+          "name": "escrow_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "shard_id",
-          "type": "u16"
-        },
-        {
-          "name": "from",
-          "type": "u32"
-        },
-        {
-          "name": "max",
-          "type": "u16"
-        }
-      ]
+      "args": []
     },
     {
       "name": "set_seed",
@@ -3730,6 +2996,49 @@
         {
           "name": "launch_state",
           "writable": true
+        },
+        {
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
         },
         {
           "name": "slot_hashes",
@@ -3809,25 +3118,29 @@
       ]
     },
     {
-      "name": "update_launch_preset",
+      "name": "withdraw",
+      "docs": [
+        "Withdraw during funding window (reduces ticket_count and returns lamports)."
+      ],
       "discriminator": [
-        137,
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
         161,
-        39,
-        168,
-        45,
-        186,
-        69,
-        79
+        34
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "contributor",
           "writable": true,
           "signer": true
         },
         {
-          "name": "engine_config",
+          "name": "contribution",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -3853,61 +3166,36 @@
                   99,
                   111,
                   110,
-                  102,
+                  116,
+                  114,
                   105,
-                  103
+                  98,
+                  117,
+                  116,
+                  111,
+                  114
                 ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              },
+              {
+                "kind": "account",
+                "path": "contributor"
               }
             ]
           }
-        },
-        {
-          "name": "launch_preset",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "id",
-          "type": "u8"
-        },
-        {
-          "name": "patch",
-          "type": {
-            "defined": {
-              "name": "UpdateLaunchParams"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "withdraw",
-      "docs": [
-        "Withdraw during funding window (reduces ticket_count and returns lamports)."
-      ],
-      "discriminator": [
-        183,
-        18,
-        70,
-        156,
-        148,
-        109,
-        161,
-        34
-      ],
-      "accounts": [
-        {
-          "name": "user",
-          "writable": true,
-          "signer": true
         },
         {
           "name": "launch_state",
           "writable": true
         },
         {
-          "name": "user_contribution",
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery",
           "writable": true,
           "pda": {
             "seeds": [
@@ -3931,26 +3219,107 @@
               {
                 "kind": "const",
                 "value": [
-                  117,
-                  115,
+                  108,
+                  111,
+                  116,
+                  116,
                   101,
-                  114
+                  114,
+                  121
                 ]
               },
               {
                 "kind": "account",
                 "path": "launch_state"
-              },
-              {
-                "kind": "account",
-                "path": "user"
               }
             ]
           }
         },
         {
-          "name": "roster_shard",
-          "writable": true
+          "name": "withdrawn_ranges",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "realloc_funds",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  97,
+                  108,
+                  108,
+                  111,
+                  99,
+                  95,
+                  102,
+                  117,
+                  110,
+                  100,
+                  115
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "escrow_authority",
@@ -4003,9 +3372,6 @@
           }
         },
         {
-          "name": "launch"
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -4033,16 +3399,16 @@
       ]
     },
     {
-      "name": "CreatorGrant",
+      "name": "Contribution",
       "discriminator": [
-        80,
-        101,
-        45,
-        193,
-        223,
-        50,
-        10,
-        157
+        182,
+        187,
+        14,
+        111,
+        72,
+        167,
+        242,
+        212
       ]
     },
     {
@@ -4085,6 +3451,19 @@
       ]
     },
     {
+      "name": "Lottery",
+      "discriminator": [
+        162,
+        182,
+        26,
+        12,
+        164,
+        214,
+        112,
+        3
+      ]
+    },
+    {
       "name": "PoolState",
       "discriminator": [
         247,
@@ -4108,19 +3487,6 @@
         9,
         88,
         148
-      ]
-    },
-    {
-      "name": "RosterShard",
-      "discriminator": [
-        31,
-        213,
-        128,
-        164,
-        233,
-        238,
-        137,
-        178
       ]
     },
     {
@@ -4150,46 +3516,20 @@
       ]
     },
     {
-      "name": "UserContribution",
+      "name": "WithdrawnRanges",
       "discriminator": [
-        89,
-        250,
-        199,
-        201,
-        234,
-        203,
-        119,
-        235
+        47,
+        111,
+        181,
+        144,
+        152,
+        72,
+        94,
+        67
       ]
     }
   ],
   "events": [
-    {
-      "name": "BatchProcessed",
-      "discriminator": [
-        199,
-        28,
-        80,
-        191,
-        111,
-        11,
-        127,
-        180
-      ]
-    },
-    {
-      "name": "ClaimsOpened",
-      "discriminator": [
-        126,
-        92,
-        24,
-        148,
-        242,
-        66,
-        8,
-        28
-      ]
-    },
     {
       "name": "CreatorClaimed",
       "discriminator": [
@@ -4204,32 +3544,6 @@
       ]
     },
     {
-      "name": "CreatorDepositChanged",
-      "discriminator": [
-        103,
-        171,
-        3,
-        222,
-        255,
-        235,
-        37,
-        104
-      ]
-    },
-    {
-      "name": "CreatorGranted",
-      "discriminator": [
-        139,
-        253,
-        204,
-        61,
-        77,
-        195,
-        247,
-        170
-      ]
-    },
-    {
       "name": "DepositMade",
       "discriminator": [
         210,
@@ -4240,32 +3554,6 @@
         203,
         155,
         199
-      ]
-    },
-    {
-      "name": "FundingPeriodStarted",
-      "discriminator": [
-        24,
-        17,
-        247,
-        144,
-        200,
-        76,
-        119,
-        198
-      ]
-    },
-    {
-      "name": "FundingScheduleSet",
-      "discriminator": [
-        250,
-        45,
-        8,
-        244,
-        214,
-        71,
-        244,
-        171
       ]
     },
     {
@@ -4295,81 +3583,16 @@
       ]
     },
     {
-      "name": "RefundClaimed",
+      "name": "Refunded",
       "discriminator": [
-        136,
-        64,
-        242,
-        99,
-        4,
-        244,
-        208,
-        130
-      ]
-    },
-    {
-      "name": "RosterInitialized",
-      "discriminator": [
-        111,
-        28,
-        99,
-        210,
-        82,
-        158,
-        188,
-        249
-      ]
-    },
-    {
-      "name": "RosterShardFinalized",
-      "discriminator": [
-        136,
-        212,
-        55,
-        122,
-        118,
-        122,
-        150,
-        85
-      ]
-    },
-    {
-      "name": "RosterShardFull",
-      "discriminator": [
-        188,
+        35,
+        103,
+        149,
+        246,
+        196,
         123,
-        134,
-        176,
-        96,
-        36,
-        251,
-        182
-      ]
-    },
-    {
-      "name": "RosterShardInitialized",
-      "discriminator": [
-        110,
-        2,
-        21,
-        250,
-        126,
-        114,
-        61,
-        90
-      ]
-    },
-    {
-      "name": "RosterShardNearFull",
-      "discriminator": [
-        5,
-        204,
-        207,
-        21,
-        163,
-        159,
-        216,
-        110
+        221,
+        99
       ]
     },
     {
@@ -4459,18 +3682,18 @@
     },
     {
       "code": 6001,
-      "name": "FundingPeriodEnded",
-      "msg": "Funding period has ended"
+      "name": "MinRaiseMet",
+      "msg": "Minimum raise met, refund not available"
     },
     {
       "code": 6002,
-      "name": "FundingPeriodNotStarted",
-      "msg": "Funding period has not started yet"
+      "name": "FundingInactive",
+      "msg": "Funding is not active"
     },
     {
       "code": 6003,
-      "name": "FundingPeriodNotEnded",
-      "msg": "Funding period has not ended yet"
+      "name": "FundingNotEnded",
+      "msg": "Funding has not ended yet"
     },
     {
       "code": 6004,
@@ -4494,12 +3717,12 @@
     },
     {
       "code": 6008,
-      "name": "AmountNotMultipleTau",
+      "name": "BadAmount",
       "msg": "Amount must be multiple of tau"
     },
     {
       "code": 6009,
-      "name": "PerWalletCapExceeded",
+      "name": "DepositCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
@@ -4509,318 +3732,328 @@
     },
     {
       "code": 6011,
+      "name": "LimitExceeded",
+      "msg": "Limit exceeded"
+    },
+    {
+      "code": 6012,
       "name": "SeedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "SeedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "AlreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "NotFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "ThresholdMissing",
       "msg": "Threshold missing"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "TokensPerTicketMissing",
       "msg": "Tokens per ticket missing"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "InvalidTau",
       "msg": "Invalid tau"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "InvalidK",
       "msg": "Invalid K"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "InvalidDivisor",
       "msg": "Divisor must be greater than zero"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "HeapNotFull",
       "msg": "Heap not full"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "UserNotFoundInRoster",
       "msg": "User not found in roster"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "TOutOfRange",
       "msg": "t out of range"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "MappingError",
       "msg": "Mapping error"
     },
     {
-      "code": 6024,
-      "name": "AlreadyClaimedRefund",
+      "code": 6025,
+      "name": "AlreadyRefunded",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "AlreadyClaimedTokens",
       "msg": "Already claimed tokens"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "NoRecentBlockhashes",
       "msg": "No recent blockhashes found in SlotHashes sysvar"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "PoolAlreadyCreated",
       "msg": "Pool already created"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "NoValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "InvalidNumPartitions",
       "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "InvalidSlotHashesData",
       "msg": "Invalid slot hashes data"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "RosterFull",
       "msg": "Roster is full"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "HeapCapacityExceeded",
       "msg": "Heap capacity exceeded"
     },
     {
-      "code": 6033,
+      "code": 6034,
       "name": "MintAlreadyExists",
       "msg": "Mint already exists"
     },
     {
-      "code": 6034,
+      "code": 6035,
       "name": "ArithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6035,
+      "code": 6036,
       "name": "U64ConversionOverflow",
       "msg": "u64 to u32 conversion overflow"
     },
     {
-      "code": 6036,
+      "code": 6037,
       "name": "ReservedExceedsCapacity",
       "msg": "Creator reserved tickets exceed capacity"
     },
     {
-      "code": 6037,
+      "code": 6038,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6038,
+      "code": 6039,
       "name": "InvalidCreatorDeposit",
       "msg": "Creator initial deposit must be multiple of tau"
     },
     {
-      "code": 6039,
+      "code": 6040,
       "name": "CreatorRefundAlreadyClaimed",
       "msg": "Creator refund already claimed"
     },
     {
-      "code": 6040,
+      "code": 6041,
       "name": "InvalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6041,
+      "code": 6042,
       "name": "InvalidOwner",
       "msg": "Invalid owner for ATA"
     },
     {
-      "code": 6042,
+      "code": 6043,
       "name": "InvalidAuthority",
       "msg": "Invalid authority"
     },
     {
-      "code": 6043,
+      "code": 6044,
       "name": "InvalidHardCap",
       "msg": "Hard cap must be > 0"
     },
     {
-      "code": 6044,
+      "code": 6045,
       "name": "InvalidMinRaise",
       "msg": "Min raise must be > 0"
     },
     {
-      "code": 6045,
+      "code": 6046,
       "name": "HardCapNotDivisibleByTau",
       "msg": "Hard cap must be divisible by tau"
     },
     {
-      "code": 6046,
+      "code": 6047,
       "name": "PerWalletCapTooSmall",
       "msg": "Per-wallet cap must be >= tau"
     },
     {
-      "code": 6047,
+      "code": 6048,
       "name": "MalformedPreset",
       "msg": "Malformed preset"
     },
     {
-      "code": 6048,
+      "code": 6049,
       "name": "InvalidClaimLockPeriod",
       "msg": "Creator claim lock period must be > 0"
     },
     {
-      "code": 6049,
+      "code": 6050,
       "name": "InvalidCreatorDailyLimit",
       "msg": "Creator daily lamports limit must be >= tau"
     },
     {
-      "code": 6050,
+      "code": 6051,
       "name": "NotSupported",
       "msg": "Operation not supported in current version"
     },
     {
-      "code": 6051,
+      "code": 6052,
       "name": "RosterShardFull",
       "msg": "Roster shard is full"
     },
     {
-      "code": 6052,
+      "code": 6053,
       "name": "InvalidFinalizeOrder",
       "msg": "Roster finalization order violated"
     },
     {
-      "code": 6053,
+      "code": 6054,
       "name": "ShardNotFinalized",
       "msg": "Roster shard not finalized"
     },
     {
-      "code": 6054,
+      "code": 6055,
       "name": "ShardsNotFullyFinalized",
       "msg": "Claims cannot be opened before all shards finalized"
     },
     {
-      "code": 6055,
+      "code": 6056,
       "name": "ShardIdOutOfRange",
       "msg": "Roster shard id is out of allowed range"
     },
     {
-      "code": 6056,
+      "code": 6057,
       "name": "NoTokensToClaim",
       "msg": "User has no tokens to claim"
     },
     {
-      "code": 6057,
+      "code": 6058,
       "name": "NoDistributionRules",
       "msg": "No distribution rules found for market cap"
     },
     {
-      "code": 6058,
+      "code": 6059,
       "name": "RecipientNotFound",
       "msg": "Recipient not found in distribution"
     },
     {
-      "code": 6059,
+      "code": 6060,
       "name": "InvalidShareSum",
       "msg": "Sum of shares in tier must equal 10000 basis points"
     },
     {
-      "code": 6060,
+      "code": 6061,
       "name": "InvalidBaseDecimals",
       "msg": "Base token decimals must be less than 18"
     },
     {
-      "code": 6061,
+      "code": 6062,
       "name": "PoolNotCreated",
       "msg": "Pool not created yet"
     },
     {
-      "code": 6062,
+      "code": 6063,
       "name": "TeamVestingMissing",
       "msg": "Team vesting account is missing"
     },
     {
-      "code": 6063,
+      "code": 6064,
       "name": "TeamVestingNotStarted",
       "msg": "Team vesting is not started yet"
     },
     {
-      "code": 6064,
+      "code": 6065,
       "name": "TeamClaimsNotOpen",
       "msg": "Team claims are not open yet"
     },
     {
-      "code": 6065,
+      "code": 6066,
       "name": "TeamClaimTooFrequent",
       "msg": "Claim is too frequent"
     },
     {
-      "code": 6066,
+      "code": 6067,
       "name": "NotEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6067,
+      "code": 6068,
       "name": "InvalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6068,
+      "code": 6069,
       "name": "InvalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6069,
+      "code": 6070,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6070,
+      "code": 6071,
       "name": "InvalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6071,
+      "code": 6072,
       "name": "PriceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6072,
+      "code": 6073,
       "name": "InvalidInitOrder",
       "msg": "Roster initialization order violated"
     },
     {
-      "code": 6073,
+      "code": 6074,
       "name": "ShardNotSealed",
       "msg": "Roster shard not fully sealed"
+    },
+    {
+      "code": 6075,
+      "name": "BitmapFull",
+      "msg": "Bitmap is full"
     }
   ],
   "types": [
@@ -4899,41 +4132,31 @@
       }
     },
     {
-      "name": "BatchProcessed",
+      "name": "Contribution",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "launch",
-            "type": "pubkey"
+            "name": "tickets_claimed",
+            "type": "u64"
           },
           {
-            "name": "from_t",
-            "type": "u32"
+            "name": "tickets_refunded",
+            "type": "u64"
           },
           {
-            "name": "processed",
-            "type": "u32"
+            "name": "withdraw_count",
+            "type": "u8"
           },
           {
-            "name": "heap_len",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ClaimsOpened",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "opened_at",
-            "type": "i64"
+            "name": "ticket_ranges",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TicketRange"
+                }
+              }
+            }
           }
         ]
       }
@@ -4953,7 +4176,7 @@
           },
           {
             "name": "tickets_claimed",
-            "type": "u32"
+            "type": "u64"
           },
           {
             "name": "lamports_equiv",
@@ -4969,98 +4192,6 @@
           },
           {
             "name": "remaining_tickets",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "CreatorDepositChanged",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "delta_lamports",
-            "type": "i64"
-          },
-          {
-            "name": "new_locked_lamports",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "CreatorGrant",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "locked_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "reserved_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "daily_lamports_limit",
-            "type": "u64"
-          },
-          {
-            "name": "daily_ticket_cap",
-            "type": "u32"
-          },
-          {
-            "name": "claimed_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "refunded",
-            "type": "bool"
-          }
-        ]
-      }
-    },
-    {
-      "name": "CreatorGranted",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "locked_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "reserved_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "daily_lamports_limit",
             "type": "u64"
           }
         ]
@@ -5076,28 +4207,12 @@
             "type": "pubkey"
           },
           {
-            "name": "user",
+            "name": "contributor",
             "type": "pubkey"
           },
           {
             "name": "amount",
             "type": "u64"
-          },
-          {
-            "name": "tickets_before",
-            "type": "u32"
-          },
-          {
-            "name": "tickets_after",
-            "type": "u32"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
           }
         ]
       }
@@ -5136,42 +4251,6 @@
       }
     },
     {
-      "name": "FundingPeriodStarted",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "funding_period_end",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "FundingScheduleSet",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "funding_period_start",
-            "type": "i64"
-          },
-          {
-            "name": "funding_period_end",
-            "type": "i64"
-          }
-        ]
-      }
-    },
-    {
       "name": "InitEngineConfigParams",
       "type": {
         "kind": "struct",
@@ -5200,110 +4279,6 @@
           {
             "name": "threshold",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "InitLaunchParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "hard_cap_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "funding_duration_seconds",
-            "type": "i64"
-          },
-          {
-            "name": "sale_start_time_timestamp",
-            "docs": [
-              "Absolute unix timestamp (seconds) when the sale starts.",
-              "If 0, the current time will be used."
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_shards_total",
-            "type": "u16"
-          },
-          {
-            "name": "creator_initial_deposit_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "creator_daily_lamports_limit",
-            "type": "u64"
-          },
-          {
-            "name": "creator_claim_lock_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_vesting_duration_sec",
-            "type": "i64"
-          },
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "symbol",
-            "type": "string"
-          },
-          {
-            "name": "uri",
-            "type": "string"
-          },
-          {
-            "name": "is_mutable",
-            "type": "bool"
-          },
-          {
-            "name": "seller_fee_basis_points",
-            "type": "u16"
           }
         ]
       }
@@ -5350,14 +4325,6 @@
             "type": "i64"
           },
           {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_shards_total",
-            "type": "u16"
-          },
-          {
             "name": "creator_initial_deposit_lamports",
             "type": "u64"
           },
@@ -5380,6 +4347,10 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
+          },
+          {
+            "name": "withdrawal_limit",
+            "type": "u8"
           }
         ]
       }
@@ -5390,6 +4361,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
             "name": "project_id",
             "type": "u64"
           },
@@ -5398,16 +4373,12 @@
             "type": "pubkey"
           },
           {
-            "name": "creator_max_deposit",
-            "type": "u64"
+            "name": "preset_id",
+            "type": "u8"
           },
           {
-            "name": "creator_initial_deposit_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "base_mint",
-            "type": "pubkey"
+            "name": "funding_start",
+            "type": "i64"
           },
           {
             "name": "pending_key",
@@ -5417,46 +4388,6 @@
                 32
               ]
             }
-          },
-          {
-            "name": "hard_cap_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
-          },
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "funding_period_start",
-            "type": "i64"
-          },
-          {
-            "name": "funding_period_end",
-            "type": "i64"
           }
         ]
       }
@@ -5507,14 +4438,6 @@
             "type": "i64"
           },
           {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_shards_total",
-            "type": "u16"
-          },
-          {
             "name": "creator_initial_deposit_lamports",
             "type": "u64"
           },
@@ -5537,6 +4460,10 @@
           {
             "name": "team_vesting_duration_sec",
             "type": "i64"
+          },
+          {
+            "name": "withdrawal_limit",
+            "type": "u8"
           }
         ]
       }
@@ -5555,24 +4482,8 @@
             "type": "pubkey"
           },
           {
-            "name": "hard_cap_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
+            "name": "preset",
+            "type": "pubkey"
           },
           {
             "name": "base_mint",
@@ -5581,28 +4492,8 @@
             }
           },
           {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_end",
+            "name": "funding_start",
             "type": "i64"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "k_capacity",
-            "type": "u32"
           },
           {
             "name": "vrf_seed",
@@ -5616,90 +4507,10 @@
             }
           },
           {
-            "name": "selection_processed",
-            "type": "u32"
-          },
-          {
-            "name": "selection_finalized",
-            "type": "bool"
-          },
-          {
-            "name": "threshold_score",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "roster_shards",
-            "type": "u16"
-          },
-          {
-            "name": "roster_initialized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "roster_finalized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "public_total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_highest_used_shard",
-            "type": "u16"
-          },
-          {
-            "name": "tokens_per_ticket",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_reserved_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "creator_grant_present",
-            "type": "bool"
-          },
-          {
             "name": "claims_opened_at",
             "type": {
               "option": "i64"
             }
-          },
-          {
-            "name": "creator_claim_lock_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_initial_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_start",
-            "type": "i64"
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "team_vesting_duration_sec",
-            "type": "i64"
           },
           {
             "name": "raydium_pool_state",
@@ -5736,6 +4547,63 @@
           {
             "name": "tick_array_upper_start_index",
             "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lottery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bits_allocated",
+            "type": "u64"
+          },
+          {
+            "name": "inactive",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "LotteryStatus"
+              }
+            }
+          },
+          {
+            "name": "bits",
+            "type": {
+              "vec": "u64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LotteryStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "InProgress"
+          },
+          {
+            "name": "Finalized",
+            "fields": [
+              {
+                "name": "tokens_per_ticket",
+                "type": "u64"
+              },
+              {
+                "name": "sol_per_ticket",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "Cancelled"
           }
         ]
       }
@@ -5827,7 +4695,7 @@
       }
     },
     {
-      "name": "RefundClaimed",
+      "name": "Refunded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -5836,170 +4704,12 @@
             "type": "pubkey"
           },
           {
-            "name": "user",
+            "name": "contributor",
             "type": "pubkey"
           },
           {
             "name": "refunded_lamports",
             "type": "u64"
-          },
-          {
-            "name": "y_approved",
-            "docs": [
-              "Number of tickets that were approved for token allocation.",
-              "If the min raise was not met, this will be 0."
-            ],
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterInitialized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterShard",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          },
-          {
-            "name": "created_by",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallets",
-            "type": {
-              "vec": "pubkey"
-            }
-          },
-          {
-            "name": "counts",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "prefix",
-            "type": {
-              "vec": "u32"
-            }
-          },
-          {
-            "name": "total_in_shard",
-            "type": "u32"
-          },
-          {
-            "name": "shard_base",
-            "type": "u32"
-          },
-          {
-            "name": "sealed_count",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterShardFinalized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          },
-          {
-            "name": "total_in_shard",
-            "type": "u32"
-          },
-          {
-            "name": "shard_base",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterShardFull",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          },
-          {
-            "name": "cap",
-            "type": "u16"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterShardInitialized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          }
-        ]
-      }
-    },
-    {
-      "name": "RosterShardNearFull",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          },
-          {
-            "name": "used",
-            "type": "u16"
-          },
-          {
-            "name": "cap",
-            "type": "u16"
-          },
-          {
-            "name": "threshold_percent",
-            "type": "u8"
           }
         ]
       }
@@ -6036,7 +4746,7 @@
           },
           {
             "name": "k_capacity",
-            "type": "u32"
+            "type": "u64"
           }
         ]
       }
@@ -6134,6 +4844,22 @@
       }
     },
     {
+      "name": "TicketRange",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "start",
+            "type": "u64"
+          },
+          {
+            "name": "end",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "TokenMetadataConfig",
       "type": {
         "kind": "struct",
@@ -6203,7 +4929,7 @@
             "type": "pubkey"
           },
           {
-            "name": "user",
+            "name": "contributor",
             "type": "pubkey"
           },
           {
@@ -6212,10 +4938,7 @@
           },
           {
             "name": "y_approved",
-            "docs": [
-              "Number of winning tickets."
-            ],
-            "type": "u32"
+            "type": "u64"
           }
         ]
       }
@@ -6264,168 +4987,6 @@
       }
     },
     {
-      "name": "UpdateLaunchParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "hard_cap_lamports",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "tau_lamports",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "base_total_allocation",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "funding_duration_seconds",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": {
-              "option": "u16"
-            }
-          },
-          {
-            "name": "roster_shards_total",
-            "type": {
-              "option": "u16"
-            }
-          },
-          {
-            "name": "creator_initial_deposit_lamports",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_daily_lamports_limit",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_claim_lock_period_sec",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "team_vesting_duration_sec",
-            "type": {
-              "option": "i64"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "UserContribution",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "deposited",
-            "type": "u64"
-          },
-          {
-            "name": "ticket_count",
-            "type": "u32"
-          },
-          {
-            "name": "claimed_refund",
-            "type": "bool"
-          },
-          {
-            "name": "claimed_tokens",
-            "type": "bool"
-          },
-          {
-            "name": "shard_id",
-            "type": "u16"
-          },
-          {
-            "name": "idx_in_shard",
-            "type": "u32"
-          },
-          {
-            "name": "finalized_snapshot",
-            "type": "bool"
-          },
-          {
-            "name": "final_t_base",
-            "type": "u32"
-          },
-          {
-            "name": "final_ticket_count",
-            "type": "u32"
-          }
-        ]
-      }
-    },
-    {
       "name": "Withdrawn",
       "type": {
         "kind": "struct",
@@ -6435,28 +4996,34 @@
             "type": "pubkey"
           },
           {
-            "name": "user",
+            "name": "contributor",
             "type": "pubkey"
           },
           {
             "name": "amount",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithdrawnRanges",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
           },
           {
-            "name": "tickets_before",
-            "type": "u32"
-          },
-          {
-            "name": "tickets_after",
-            "type": "u32"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
+            "name": "ranges",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "TicketRange"
+                }
+              }
+            }
           }
         ]
       }

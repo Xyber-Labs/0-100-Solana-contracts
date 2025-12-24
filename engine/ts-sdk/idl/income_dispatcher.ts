@@ -2120,24 +2120,8 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "hardCapLamports",
-            "type": "u64"
-          },
-          {
-            "name": "minRaiseLamports",
-            "type": "u64"
-          },
-          {
-            "name": "perWalletCap",
-            "type": "u64"
-          },
-          {
-            "name": "tauLamports",
-            "type": "u64"
-          },
-          {
-            "name": "unlockTimeSec",
-            "type": "i64"
+            "name": "preset",
+            "type": "pubkey"
           },
           {
             "name": "baseMint",
@@ -2146,28 +2130,8 @@ export type IncomeDispatcher = {
             }
           },
           {
-            "name": "baseTotalAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "baseSaleBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "fundingPeriodEnd",
+            "name": "fundingStart",
             "type": "i64"
-          },
-          {
-            "name": "totalDeposited",
-            "type": "u64"
-          },
-          {
-            "name": "totalTickets",
-            "type": "u32"
-          },
-          {
-            "name": "kCapacity",
-            "type": "u32"
           },
           {
             "name": "vrfSeed",
@@ -2181,90 +2145,10 @@ export type IncomeDispatcher = {
             }
           },
           {
-            "name": "selectionProcessed",
-            "type": "u32"
-          },
-          {
-            "name": "selectionFinalized",
-            "type": "bool"
-          },
-          {
-            "name": "thresholdScore",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "rosterShards",
-            "type": "u16"
-          },
-          {
-            "name": "rosterInitializedUpTo",
-            "type": "i32"
-          },
-          {
-            "name": "rosterFinalizedUpTo",
-            "type": "i32"
-          },
-          {
-            "name": "publicTotalTickets",
-            "type": "u32"
-          },
-          {
-            "name": "rosterShardCap",
-            "type": "u16"
-          },
-          {
-            "name": "rosterHighestUsedShard",
-            "type": "u16"
-          },
-          {
-            "name": "tokensPerTicket",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creatorReservedTickets",
-            "type": "u32"
-          },
-          {
-            "name": "creatorGrantPresent",
-            "type": "bool"
-          },
-          {
             "name": "claimsOpenedAt",
             "type": {
               "option": "i64"
             }
-          },
-          {
-            "name": "creatorClaimLockPeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "creatorInitialDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "creatorMaxDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "fundingPeriodStart",
-            "type": "i64"
-          },
-          {
-            "name": "poolCreationGracePeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "teamAllocationBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "teamVestingDurationSec",
-            "type": "i64"
           },
           {
             "name": "raydiumPoolState",

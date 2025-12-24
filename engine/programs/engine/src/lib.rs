@@ -73,24 +73,16 @@ pub mod engine {
         instructions::withdraw(ctx, amount)
     }
 
-    /// Claim refund after selection finalized: recompute y_i and pay back (deposited - y_i*τ).
-    pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
-        instructions::claim_refund(ctx)
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        instructions::refund(ctx)
     }
 
-    /// Claim tokens (post open_claims): mint tokens_per_ticket * y_i to user ATA.
     pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
         instructions::claim_tokens(ctx)
     }
 
-    /// Claim creator tokens with daily limits
     pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
         instructions::claim_creator_tokens(ctx)
-    }
-
-    /// Claim creator refund for failed launches
-    pub fn claim_creator_refund(ctx: Context<ClaimCreatorRefund>) -> Result<()> {
-        instructions::claim_creator_refund(ctx)
     }
 
     pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {

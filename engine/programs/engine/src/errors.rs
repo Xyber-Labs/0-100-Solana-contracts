@@ -53,7 +53,7 @@ pub enum ErrorCode {
     #[msg("Mapping error")]
     MappingError,
     #[msg("Already claimed refund")]
-    AlreadyClaimedRefund,
+    AlreadyRefunded,
     #[msg("Already claimed tokens")]
     AlreadyClaimedTokens,
     #[msg("No recent blockhashes found in SlotHashes sysvar")]
