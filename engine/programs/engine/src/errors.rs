@@ -163,4 +163,10 @@ pub enum ErrorCode {
 
     #[msg("Bitmap is full")]
     BitmapFull,
+
+    #[msg("Missing contribution account for sale claim")]
+    MissingContribution,
+
+    #[msg("Invalid vesting parameters")]
+    InvalidVestingParams,
 }

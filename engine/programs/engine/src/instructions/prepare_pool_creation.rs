@@ -59,11 +59,9 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
 
-    let total_deposited = checked_mul!(lottery.active_tickets() as u64, launch_preset.tau_lamports)?;
-    require!(
-        total_deposited >= launch_preset.min_raise_lamports,
-        EngineErrorCode::MinRaiseNotMet
-    );
+    let total_deposited =
+        checked_mul!(lottery.active_tickets() as u64, launch_preset.tau_lamports)?;
+    require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
     require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
@@ -88,7 +86,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
-    lottery.finalize(&seed, k_capacity, &withdrawn.ranges, total_deposited, launch_preset.sale_allocation())?;
+    lottery.finalize(&seed, k_capacity, &withdrawn.ranges, launch_preset.sale_allocation())?;
 
     launch_state.claims_opened_at = Some(current_time);
 

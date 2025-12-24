@@ -1,5 +1,25 @@
 use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+pub enum VestingType {
+    Contributor,
+    Creator,
+    Team,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
+#[repr(u8)]
+pub enum Bucket {
+    Sale = 0,
+    Team = 1,
+}
+
+#[account]
+#[derive(InitSpace, Default)]
+pub struct TicketsClaimed {
+    pub value: u64,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub struct TicketRange {
     pub start: u64,
@@ -76,7 +96,9 @@ impl WithdrawnRanges {
 
 impl crate::utils::realloc::Reallocatable for WithdrawnRanges {
     fn required_space(&self) -> usize {
-        let elements_space = self.ranges.len()
+        let elements_space = self
+            .ranges
+            .len()
             .checked_mul(TicketRange::INIT_SPACE)
             .expect("overflow in required_space");
         8 + Self::INIT_SPACE + elements_space
@@ -142,7 +164,6 @@ pub struct EscrowAccount {
 #[account]
 #[derive(InitSpace)]
 pub struct Contribution {
-    pub tickets_claimed: u64,
     pub tickets_refunded: u64,
     pub withdraw_count: u8,
     #[max_len(10)]
@@ -179,7 +200,6 @@ mod tests {
     #[test]
     fn test_remove_tickets() {
         let mut uc = Contribution {
-            tickets_claimed: 0,
             tickets_refunded: 0,
             withdraw_count: 0,
             ticket_ranges: vec![
@@ -214,10 +234,7 @@ mod tests {
     fn test_withdrawn_ranges_take_tickets_partial() {
         let mut wr = WithdrawnRanges {
             launch: Pubkey::default(),
-            ranges: vec![
-                TicketRange::new(0, 10),
-                TicketRange::new(20, 30),
-            ],
+            ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
         assert_eq!(wr.total_withdrawn(), 20);
 
@@ -231,10 +248,7 @@ mod tests {
     fn test_withdrawn_ranges_take_tickets_exact_range() {
         let mut wr = WithdrawnRanges {
             launch: Pubkey::default(),
-            ranges: vec![
-                TicketRange::new(0, 10),
-                TicketRange::new(20, 30),
-            ],
+            ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
 
         let taken = wr.take_tickets(10);
@@ -255,10 +269,7 @@ mod tests {
         assert_eq!(wr.total_withdrawn(), 23);
 
         let taken = wr.take_tickets(12);
-        assert_eq!(taken, vec![
-            TicketRange::new(30, 38),
-            TicketRange::new(21, 25),
-        ]);
+        assert_eq!(taken, vec![TicketRange::new(30, 38), TicketRange::new(21, 25),]);
         assert_eq!(wr.ranges, vec![TicketRange::new(0, 10), TicketRange::new(20, 21)]);
         assert_eq!(wr.total_withdrawn(), 11);
     }
@@ -267,10 +278,7 @@ mod tests {
     fn test_withdrawn_ranges_take_tickets_all() {
         let mut wr = WithdrawnRanges {
             launch: Pubkey::default(),
-            ranges: vec![
-                TicketRange::new(0, 10),
-                TicketRange::new(20, 30),
-            ],
+            ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
 
         let taken = wr.take_tickets(20);
@@ -334,19 +342,6 @@ pub struct PoolState {
 
 #[account]
 #[derive(InitSpace)]
-pub struct TeamVesting {
-    pub launch: Pubkey,
-    pub creator: Pubkey,
-    pub total_allocation: u64,
-    pub claimed: u64,
-    pub start_ts: i64,
-    pub duration_sec: i64,
-    pub min_interval_sec: i64,
-    pub last_claim_ts: i64,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct EngineConfig {
     pub treasury: Pubkey,
     pub creation_fee: u64,
@@ -382,12 +377,12 @@ pub struct LaunchPreset {
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub unlock_time_sec: i64,
-    pub creator_initial_deposit_lamports: u64,
-    pub creator_daily_lamports_limit: u64,
-    pub creator_claim_lock_period_sec: i64,
+    pub creator_period_unlock: u64,
+    pub creator_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
-    pub team_vesting_duration_sec: i64,
+    pub team_duration_sec: i64,
+    pub team_period_sec: i64,
     pub withdrawal_limit: u8,
 }
 
@@ -398,15 +393,32 @@ impl LaunchPreset {
             && self.per_wallet_cap >= self.tau_lamports
             && self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE
             && self.min_raise_lamports <= self.hard_cap_lamports
-            && self.creator_claim_lock_period_sec > 0
+            && self.creator_period_sec > 0
             && self.funding_duration_seconds > 0
             && self.funding_duration_seconds <= 60 * 60 * 24 * 7
-            && self.base_sale_basis_points <= 10_000
-            && self.team_allocation_basis_points <= 10_000
+            && self.base_sale_basis_points + self.team_allocation_basis_points <= 10_000
+            && self.team_period_sec > 0
+            && self.team_duration_sec > 0
     }
 
     pub fn sale_allocation(&self) -> u64 {
         (self.base_total_allocation as u128 * self.base_sale_basis_points as u128 / 10_000) as u64
+    }
+
+    pub fn team_allocation(&self) -> u64 {
+        (self.base_total_allocation as u128 * self.team_allocation_basis_points as u128 / 10_000)
+            as u64
+    }
+
+    pub fn team_vesting_params(&self) -> (u64, i64, i64) {
+        (self.team_allocation(), self.team_duration_sec, self.team_period_sec)
+    }
+
+    pub fn creator_vesting_params(&self, deposit: u64) -> Result<(i64, i64)> {
+        let period = self.creator_period_sec;
+        let periods = crate::checked_div!(deposit, self.creator_period_unlock)?.max(1);
+        let duration = crate::checked_mul!(periods, period as u64)? as i64;
+        Ok((duration, period))
     }
 
     pub fn k_capacity(&self) -> Result<u64> {

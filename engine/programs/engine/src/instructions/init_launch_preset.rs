@@ -16,12 +16,12 @@ pub struct InitLaunchPresetParams {
     pub team_allocation_basis_points: u64,
     pub funding_duration_seconds: i64,
     pub unlock_time_sec: i64,
-    pub creator_initial_deposit_lamports: u64,
-    pub creator_daily_lamports_limit: u64,
-    pub creator_claim_lock_period_sec: i64,
+    pub creator_period_unlock: u64,
+    pub creator_period_sec: i64,
     pub creator_max_deposit: u64,
     pub pool_creation_grace_period_sec: i64,
-    pub team_vesting_duration_sec: i64,
+    pub team_duration_sec: i64,
+    pub team_period_sec: i64,
     pub withdrawal_limit: u8,
 }
 
@@ -78,12 +78,12 @@ pub fn init_launch_preset(
     p.team_allocation_basis_points = params.team_allocation_basis_points;
     p.funding_duration_seconds = params.funding_duration_seconds;
     p.unlock_time_sec = params.unlock_time_sec;
-    p.creator_initial_deposit_lamports = params.creator_initial_deposit_lamports;
-    p.creator_daily_lamports_limit = params.creator_daily_lamports_limit;
-    p.creator_claim_lock_period_sec = params.creator_claim_lock_period_sec;
+    p.creator_period_unlock = params.creator_period_unlock;
+    p.creator_period_sec = params.creator_period_sec;
     p.creator_max_deposit = params.creator_max_deposit;
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
-    p.team_vesting_duration_sec = params.team_vesting_duration_sec;
+    p.team_duration_sec = params.team_duration_sec;
+    p.team_period_sec = params.team_period_sec;
     p.withdrawal_limit = params.withdrawal_limit;
 
     require!(p.is_valid(), crate::errors::ErrorCode::MalformedPreset);

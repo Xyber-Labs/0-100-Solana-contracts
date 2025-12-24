@@ -1,9 +1,6 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::keccak::hash;
+use anchor_lang::{prelude::*, solana_program::keccak::hash};
 
-use crate::errors::ErrorCode;
-use crate::state::TicketRange;
-use crate::utils::realloc::Reallocatable;
+use crate::{errors::ErrorCode, state::TicketRange, utils::realloc::Reallocatable};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace, PartialEq, Debug)]
 pub enum LotteryStatus {
@@ -11,7 +8,6 @@ pub enum LotteryStatus {
     InProgress,
     Finalized {
         tokens_per_ticket: u64,
-        sol_per_ticket: u64,
     },
     Cancelled,
 }
@@ -43,6 +39,13 @@ impl Lottery {
 
     pub fn active_tickets(&self) -> u64 {
         self.bits_allocated - self.inactive
+    }
+
+    pub fn sale_allocation(&self, ranges: &[TicketRange]) -> u64 {
+        let LotteryStatus::Finalized { tokens_per_ticket } = self.status else {
+            panic!("Expected be finalized")
+        };
+        self.count_winning_in_ranges(ranges) * tokens_per_ticket
     }
 
     #[inline]
@@ -142,7 +145,6 @@ impl Lottery {
         seed: &[u8; 32],
         capacity: u64,
         withdrawn: &[TicketRange],
-        total_deposited: u64,
         total_tokens: u64,
     ) -> Result<u64> {
         assert!(self.bits_allocated > 0);
@@ -164,7 +166,6 @@ impl Lottery {
 
         self.status = LotteryStatus::Finalized {
             tokens_per_ticket: total_tokens / winners,
-            sol_per_ticket: total_deposited / winners,
         };
 
         Ok(winners)
@@ -175,7 +176,9 @@ impl Lottery {
         data[..32].copy_from_slice(seed);
         data[32..40].copy_from_slice(&i.to_le_bytes());
         let h = hash(&data);
-        let val = u64::from_le_bytes([h.0[0], h.0[1], h.0[2], h.0[3], h.0[4], h.0[5], h.0[6], h.0[7]]);
+        let val = u64::from_le_bytes([
+            h.0[0], h.0[1], h.0[2], h.0[3], h.0[4], h.0[5], h.0[6], h.0[7],
+        ]);
         val % n
     }
 }
@@ -183,5 +186,55 @@ impl Lottery {
 impl Reallocatable for Lottery {
     fn required_space(&self) -> usize {
         8 + Self::INIT_SPACE + self.bits.len() * 8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn finalized_lottery(tokens_per_ticket: u64, bits: Vec<u64>) -> Lottery {
+        Lottery {
+            bits_allocated: bits.len() as u64 * 64,
+            inactive: 0,
+            status: LotteryStatus::Finalized { tokens_per_ticket },
+            bits,
+        }
+    }
+
+    #[test]
+    fn test_sale_allocation_all_winning() {
+        let lottery = finalized_lottery(1000, vec![0b1111]);
+        let ranges = vec![TicketRange::new(0, 4)];
+        assert_eq!(lottery.sale_allocation(&ranges), 4 * 1000);
+    }
+
+    #[test]
+    fn test_sale_allocation_partial_winning() {
+        let lottery = finalized_lottery(500, vec![0b1010]);
+        let ranges = vec![TicketRange::new(0, 4)];
+        assert_eq!(lottery.sale_allocation(&ranges), 2 * 500);
+    }
+
+    #[test]
+    fn test_sale_allocation_no_winning() {
+        let lottery = finalized_lottery(1000, vec![0b0000]);
+        let ranges = vec![TicketRange::new(0, 4)];
+        assert_eq!(lottery.sale_allocation(&ranges), 0);
+    }
+
+    #[test]
+    fn test_sale_allocation_multiple_ranges() {
+        let lottery = finalized_lottery(100, vec![0b11111111]);
+        let ranges = vec![TicketRange::new(0, 3), TicketRange::new(5, 8)];
+        assert_eq!(lottery.sale_allocation(&ranges), 6 * 100);
+    }
+
+    #[test]
+    #[should_panic(expected = "Expected be finalized")]
+    fn test_sale_allocation_not_finalized() {
+        let lottery = Lottery::default();
+        let ranges = vec![TicketRange::new(0, 4)];
+        lottery.sale_allocation(&ranges);
     }
 }

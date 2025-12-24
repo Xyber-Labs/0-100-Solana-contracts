@@ -42,7 +42,6 @@ pub struct Refund<'info> {
 
 pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
-
     let contribution = &mut ctx.accounts.contribution;
     let lottery = &ctx.accounts.lottery;
 

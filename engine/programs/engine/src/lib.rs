@@ -77,12 +77,8 @@ pub mod engine {
         instructions::refund(ctx)
     }
 
-    pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
-        instructions::claim_tokens(ctx)
-    }
-
-    pub fn claim_creator_tokens(ctx: Context<ClaimCreatorTokens>) -> Result<()> {
-        instructions::claim_creator_tokens(ctx)
+    pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
+        instructions::claim(ctx, bucket)
     }
 
     pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
@@ -93,14 +89,6 @@ pub mod engine {
         ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
     ) -> Result<()> {
         instructions::add_clmm_liquidity(ctx)
-    }
-
-    pub fn init_team_vesting(ctx: Context<InitTeamVesting>) -> Result<()> {
-        instructions::init_team_vesting(ctx)
-    }
-
-    pub fn claim_team_tokens(ctx: Context<ClaimTeamTokens>) -> Result<()> {
-        instructions::claim_team_tokens(ctx)
     }
 
     pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
