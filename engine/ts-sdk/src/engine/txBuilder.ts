@@ -316,17 +316,16 @@ export class TxBuilder {
     tauLamports: BN;
     baseTotalAllocation: BN;
     baseSaleBasisPoints: BN;
+    teamAllocationBasisPoints: number;
     fundingDurationSeconds: number;
-    unlockTimeSec?: number;
-    rosterShardCap: number;
-    rosterShardsTotal: number;
-    creatorInitialDepositLamports: BN;
-    creatorDailyLamportsLimit: BN;
-    creatorClaimLockPeriodSec: BN;
-    creatorMaxDepositLamports: BN;
-    poolCreationGracePeriodSec?: number;
-    teamVestingDurationSec?: number;
-    teamAllocationBasisPoints?: number;
+    unlockTimeSec: number;
+    creatorPeriodUnlock: BN;
+    creatorPeriodSec: number;
+    creatorMaxDeposit: BN;
+    poolCreationGracePeriodSec: number;
+    teamDurationSec: number;
+    teamPeriodSec: number;
+    withdrawalLimit: number;
     signerAdmins: web3.PublicKey[];
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -343,21 +342,16 @@ export class TxBuilder {
       tauLamports: params.tauLamports,
       baseTotalAllocation: params.baseTotalAllocation,
       baseSaleBasisPoints: params.baseSaleBasisPoints,
-      teamAllocationBasisPoints: new BN(
-        typeof params.teamAllocationBasisPoints === "number"
-          ? params.teamAllocationBasisPoints
-          : 1000
-      ),
+      teamAllocationBasisPoints: new BN(params.teamAllocationBasisPoints),
       fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-      unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
-      rosterShardCap: params.rosterShardCap,
-      rosterShardsTotal: params.rosterShardsTotal,
-      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
-      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
-      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-      creatorMaxDeposit: params.creatorMaxDepositLamports,
-      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
-      teamVestingDurationSec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
+      unlockTimeSec: new BN(params.unlockTimeSec),
+      creatorPeriodUnlock: params.creatorPeriodUnlock,
+      creatorPeriodSec: new BN(params.creatorPeriodSec),
+      creatorMaxDeposit: params.creatorMaxDeposit,
+      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec),
+      teamDurationSec: new BN(params.teamDurationSec),
+      teamPeriodSec: new BN(params.teamPeriodSec),
+      withdrawalLimit: params.withdrawalLimit,
     };
 
     const method = this.getIxMethod("initLaunchPreset", "init_launch_preset");
@@ -374,73 +368,6 @@ export class TxBuilder {
       )
       .instruction();
     return { instruction, launchPreset, engineConfig };
-  }
-
-  async updateLaunchPresetIx(params: {
-    payer: web3.PublicKey;
-    id: number;
-    patch: {
-      hardCapLamports?: BN;
-      minRaiseLamports?: BN;
-      perWalletCap?: BN;
-      tauLamports?: BN;
-      baseTotalAllocation?: BN;
-      baseSaleBasisPoints?: BN;
-      teamAllocationBasisPoints?: number;
-      fundingDurationSeconds?: number;
-      unlockTimeSec?: number;
-      rosterShardCap?: number;
-      rosterShardsTotal?: number;
-      creatorInitialDepositLamports?: BN;
-      creatorDailyLamportsLimit?: BN;
-      creatorClaimLockPeriodSec?: BN;
-      creatorMaxDepositLamports?: BN;
-      poolCreationGracePeriodSec?: number;
-      teamVestingDurationSec?: number;
-    };
-    signerAdmins: web3.PublicKey[];
-  }): Promise<{
-    instruction: web3.TransactionInstruction;
-    launchPreset: web3.PublicKey;
-    engineConfig: web3.PublicKey
-  }> {
-    const [engineConfig] = this.getPda(["config"]);
-    const [launchPreset] = this.getLaunchPresetPda(params.id);
-    const method = this.getIxMethod("updateLaunchPreset", "update_launch_preset");
-    if (!method) throw new Error("updateLaunchPreset method not found in program IDL");
-    const p = params.patch;
-    const ix = await method(
-      new BN(params.id),
-      {
-        hardCapLamports: p.hardCapLamports ?? null,
-        minRaiseLamports: p.minRaiseLamports ?? null,
-        perWalletCap: p.perWalletCap ?? null,
-        tauLamports: p.tauLamports ?? null,
-        baseTotalAllocation: p.baseTotalAllocation ?? null,
-        baseSaleBasisPoints: p.baseSaleBasisPoints ?? null,
-        teamAllocationBasisPoints: typeof p.teamAllocationBasisPoints === "number" ? new BN(p.teamAllocationBasisPoints) : null,
-        fundingDurationSeconds: typeof p.fundingDurationSeconds === "number" ? new BN(p.fundingDurationSeconds) : null,
-        unlockTimeSec: typeof p.unlockTimeSec === "number" ? new BN(p.unlockTimeSec) : null,
-        rosterShardCap: typeof p.rosterShardCap === "number" ? p.rosterShardCap : null,
-        rosterShardsTotal: typeof p.rosterShardsTotal === "number" ? p.rosterShardsTotal : null,
-        creatorInitialDepositLamports: p.creatorInitialDepositLamports ?? null,
-        creatorDailyLamportsLimit: p.creatorDailyLamportsLimit ?? null,
-        creatorClaimLockPeriodSec: p.creatorClaimLockPeriodSec ?? null,
-        creatorMaxDeposit: p.creatorMaxDepositLamports ?? null,
-        poolCreationGracePeriodSec: typeof p.poolCreationGracePeriodSec === "number" ? new BN(p.poolCreationGracePeriodSec) : null,
-        teamVestingDurationSec: typeof p.teamVestingDurationSec === "number" ? new BN(p.teamVestingDurationSec) : null,
-      }
-    )
-      .accountsStrict({
-        payer: params.payer,
-        engineConfig,
-        launchPreset,
-      })
-      .remainingAccounts(
-        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
-      )
-      .instruction();
-    return { instruction: ix, launchPreset, engineConfig };
   }
 
   async initEngineConfigIx(params: {

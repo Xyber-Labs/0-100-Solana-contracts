@@ -5,7 +5,7 @@ use crate::{constants::SEED_ROOT, errors::ErrorCode as EngineErrorCode, state::E
 #[derive(Accounts)]
 #[instruction(params: InitEngineConfigParams)]
 pub struct InitEngineConfig<'info> {
-    #[account(mut)]
+    #[account( signer, mut, constraint = engine_config.multisig == Pubkey::default() && multisig.key() == DEPLOYER || engine_config.multisig == multisig.key() @ EngineErrorCode::Unauthorized)]
     pub payer: Signer<'info>,
 
     #[account(
@@ -29,8 +29,14 @@ pub struct InitEngineConfigParams {
     pub threshold: u8,
 }
 
-pub fn init_engine_config(ctx: Context<InitEngineConfig>, params: InitEngineConfigParams) -> Result<()> {
-    require!(params.threshold == 2 || params.threshold == 3, EngineErrorCode::InvalidAdminThreshold);
+pub fn init_engine_config(
+    ctx: Context<InitEngineConfig>,
+    params: InitEngineConfigParams,
+) -> Result<()> {
+    require!(
+        params.threshold == 2 || params.threshold == 3,
+        EngineErrorCode::InvalidAdminThreshold
+    );
 
     let mut unique: std::collections::BTreeSet<Pubkey> = std::collections::BTreeSet::new();
     for k in params.admins.iter() {
@@ -39,12 +45,8 @@ pub fn init_engine_config(ctx: Context<InitEngineConfig>, params: InitEngineConf
     }
     require!(unique.len() == 3, EngineErrorCode::InvalidAdminSet);
 
-    let signer_set: std::collections::BTreeSet<Pubkey> = ctx
-        .remaining_accounts
-        .iter()
-        .filter(|ai| ai.is_signer)
-        .map(|ai| ai.key())
-        .collect();
+    let signer_set: std::collections::BTreeSet<Pubkey> =
+        ctx.remaining_accounts.iter().filter(|ai| ai.is_signer).map(|ai| ai.key()).collect();
     let mut signed = 0u8;
     for k in params.admins.iter() {
         if signer_set.contains(k) {
@@ -62,5 +64,3 @@ pub fn init_engine_config(ctx: Context<InitEngineConfig>, params: InitEngineConf
 
     Ok(())
 }
-
-

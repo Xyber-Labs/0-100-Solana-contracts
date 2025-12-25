@@ -81,41 +81,6 @@ const EngineSDK = {
       return txBuilder.getPda(["launch", baseMint]);
     }
 
-    async function updateLaunchPreset(args: {
-      id: number;
-      patch: {
-        hardCapLamports?: BN;
-        minRaiseLamports?: BN;
-        perWalletCap?: BN;
-        tauLamports?: BN;
-        baseTotalAllocation?: BN;
-        baseSaleBasisPoints?: BN;
-        teamAllocationBasisPoints?: number;
-        fundingDurationSeconds?: number;
-        unlockTimeSec?: number;
-        rosterShardCap?: number;
-        rosterShardsTotal?: number;
-        creatorInitialDepositLamports?: BN;
-        creatorDailyLamportsLimit?: BN;
-        creatorClaimLockPeriodSec?: BN;
-        creatorMaxDepositLamports?: BN;
-        poolCreationGracePeriodSec?: number;
-        teamVestingDurationSec?: number;
-      };
-      adminKeypairs: anchor.web3.Keypair[];
-    }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
-      const { instruction, launchPreset } = await txBuilder.updateLaunchPresetIx({
-        payer,
-        id: args.id,
-        patch: args.patch,
-        signerAdmins: args.adminKeypairs.map((k) => k.publicKey),
-      });
-      const signers = args.adminKeypairs;
-      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(new anchor.web3.Transaction().add(instruction), signers);
-      return { launchPreset, signature };
-    }
-
     function getLaunchPdaByProjectId(projectId: number | BN): [anchor.web3.PublicKey, number] {
       const le = BN.isBN(projectId)
         ? (projectId as BN).toArrayLike(Uint8Array as any, "le", 8) as Uint8Array
@@ -472,21 +437,19 @@ const EngineSDK = {
         tauLamports: BN;
         baseTotalAllocation: BN;
         baseSaleBasisPoints: BN;
+        teamAllocationBasisPoints: number;
         fundingDurationSeconds: number;
-        unlockTimeSec?: number;
-        rosterShardCap: number;
-        rosterShardsTotal: number;
-        creatorInitialDepositLamports: BN;
-        creatorDailyLamportsLimit: BN;
-        creatorClaimLockPeriodSec: BN;
-        creatorMaxDepositLamports: BN;
-        poolCreationGracePeriodSec?: number;
-        teamVestingDurationSec?: number;
-        teamAllocationBasisPoints?: number;
+        unlockTimeSec: number;
+        creatorPeriodUnlock: BN;
+        creatorPeriodSec: number;
+        creatorMaxDeposit: BN;
+        poolCreationGracePeriodSec: number;
+        teamDurationSec: number;
+        teamPeriodSec: number;
+        withdrawalLimit: number;
       };
       adminKeypairs: anchor.web3.Keypair[];
     }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
-
       const { instruction, launchPreset } = await txBuilder.initLaunchPresetIx({
         payer: args.adminKeypairs[0].publicKey,
         id: args.id,
@@ -740,7 +703,6 @@ const EngineSDK = {
       estimateQuoteForBase,
       initLaunchFromPreset,
       initLaunchPreset,
-      updateLaunchPreset,
 
       // Tx/Ix builders
       setSeedTx: txBuilder.setSeedTx.bind(txBuilder),
@@ -753,9 +715,12 @@ const EngineSDK = {
       refundIx: txBuilder.refundIx.bind(txBuilder),
       claimTx: txBuilder.claimTx.bind(txBuilder),
       claimIx: txBuilder.claimIx.bind(txBuilder),
+      claimRefundTx: txBuilder.claimRefundTx.bind(txBuilder),
+      claimRefundIx: txBuilder.claimRefundIx.bind(txBuilder),
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
       preparePoolCreationTx: txBuilder.preparePoolCreationTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
+      addClmmLiquidityIx: txBuilder.addClmmLiquidityIx.bind(txBuilder),
 
       // Fetch helpers
       fetchEngineConfig,
@@ -786,6 +751,13 @@ const EngineSDK = {
       updateEngineConfig,
       initEngineConfigIx: txBuilder.initEngineConfigIx.bind(txBuilder),
       updateEngineConfigIx: txBuilder.updateEngineConfigIx.bind(txBuilder),
+
+      // Preset Ix builders
+      initLaunchPresetIx: txBuilder.initLaunchPresetIx.bind(txBuilder),
+      initLaunchFromPresetIx: txBuilder.initLaunchFromPresetIx.bind(txBuilder),
+
+      // Additional fetch helpers
+      fetchLaunchPreset: txBuilder.fetchLaunchPreset.bind(txBuilder),
     };
   },
 };

@@ -9,12 +9,11 @@
   "teamAllocationBasisPoints": 1000,
   "fundingDurationSeconds": 30,
   "unlockTimeSec": 0,
-  "rosterShardCap": 100,
-  "rosterShardsTotal": 1,
-  "creatorInitialDepositLamports": 0,
-  "creatorDailyLamportsLimit": 100000000,
-  "creatorClaimLockPeriodSec": 10,
-  "creatorMaxDepositLamports": 8000000000,
+  "creatorPeriodUnlock": 100000000,
+  "creatorPeriodSec": 10,
+  "creatorMaxDeposit": 8000000000,
   "poolCreationGracePeriodSec": 60,
-  "teamVestingDurationSec": 60
+  "teamDurationSec": 60,
+  "teamPeriodSec": 10,
+  "withdrawalLimit": 3
 }
