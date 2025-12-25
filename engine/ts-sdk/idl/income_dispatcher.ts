@@ -2033,10 +2033,6 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "creationFee",
-            "type": "u64"
-          },
-          {
             "name": "xyberMint",
             "type": "pubkey"
           },

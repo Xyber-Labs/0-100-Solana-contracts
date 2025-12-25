@@ -2094,6 +2094,90 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
+          "name": "lottery",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawnRanges",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         },
@@ -2610,72 +2694,6 @@ export type Engine = {
         }
       ],
       "args": []
-    },
-    {
-      "name": "updateEngineConfig",
-      "discriminator": [
-        62,
-        159,
-        32,
-        233,
-        137,
-        163,
-        225,
-        42
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "engineConfig",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "updateEngineConfigParams"
-            }
-          }
-        }
-      ]
     },
     {
       "name": "withdraw",
@@ -3759,10 +3777,6 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "creationFee",
-            "type": "u64"
-          },
-          {
             "name": "xyberMint",
             "type": "pubkey"
           },
@@ -3790,10 +3804,6 @@ export type Engine = {
           {
             "name": "treasury",
             "type": "pubkey"
-          },
-          {
-            "name": "creationFee",
-            "type": "u64"
           },
           {
             "name": "xyberMint",
@@ -3883,6 +3893,10 @@ export type Engine = {
           {
             "name": "withdrawalLimit",
             "type": "u8"
+          },
+          {
+            "name": "creationFee",
+            "type": "u64"
           }
         ]
       }
@@ -3996,6 +4010,10 @@ export type Engine = {
           {
             "name": "withdrawalLimit",
             "type": "u8"
+          },
+          {
+            "name": "creationFee",
+            "type": "u64"
           }
         ]
       }
@@ -4368,49 +4386,6 @@ export type Engine = {
       }
     },
     {
-      "name": "updateEngineConfigParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "newTreasury",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "newCreationFee",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "newXyberMint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "newAdmins",
-            "type": {
-              "option": {
-                "array": [
-                  "pubkey",
-                  3
-                ]
-              }
-            }
-          },
-          {
-            "name": "newThreshold",
-            "type": {
-              "option": "u8"
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "withdrawn",
       "type": {
         "kind": "struct",
@@ -4435,10 +4410,6 @@ export type Engine = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
           {
             "name": "ranges",
             "type": {

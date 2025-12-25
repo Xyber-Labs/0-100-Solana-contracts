@@ -80,9 +80,8 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     let remaining = checked_sub!(new_tickets_count, reused_count)?;
     if remaining > 0 {
-        let start = lottery
-            .allocate(remaining, false)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let start =
+            lottery.allocate(remaining, false).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         reused_ranges.push(TicketRange::new(start, checked_add!(start, remaining)?));
     }
@@ -94,10 +93,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         contribution.ticket_ranges.push(range);
     }
 
-    realloc_with_payer(
-        &ctx.accounts.lottery,
-        &ctx.accounts.realloc_funds.to_account_info(),
-    )?;
+    realloc_with_payer(&ctx.accounts.lottery, &ctx.accounts.realloc_funds.to_account_info())?;
 
     let ix = solana_program::system_instruction::transfer(
         &ctx.accounts.contributor.key(),

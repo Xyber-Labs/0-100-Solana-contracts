@@ -62,7 +62,6 @@ impl TicketRange {
 #[account]
 #[derive(InitSpace)]
 pub struct WithdrawnRanges {
-    pub launch: Pubkey,
     #[max_len(0)]
     pub ranges: Vec<TicketRange>,
 }
@@ -233,7 +232,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_partial() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
         assert_eq!(wr.total_withdrawn(), 20);
@@ -247,7 +245,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_exact_range() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
 
@@ -259,7 +256,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_cross_ranges() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![
                 TicketRange::new(0, 10),
                 TicketRange::new(20, 25),
@@ -277,7 +273,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_all() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![TicketRange::new(0, 10), TicketRange::new(20, 30)],
         };
 
@@ -289,7 +284,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_more_than_available() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![TicketRange::new(0, 10)],
         };
 
@@ -301,7 +295,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_empty() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![],
         };
 
@@ -312,7 +305,6 @@ mod tests {
     #[test]
     fn test_withdrawn_ranges_take_tickets_zero() {
         let mut wr = WithdrawnRanges {
-            launch: Pubkey::default(),
             ranges: vec![TicketRange::new(0, 10)],
         };
 
@@ -344,7 +336,6 @@ pub struct PoolState {
 #[derive(InitSpace)]
 pub struct EngineConfig {
     pub treasury: Pubkey,
-    pub creation_fee: u64,
     pub xyber_mint: Pubkey,
     pub admins: [Pubkey; 3],
     pub threshold: u8,
@@ -384,6 +375,7 @@ pub struct LaunchPreset {
     pub team_duration_sec: i64,
     pub team_period_sec: i64,
     pub withdrawal_limit: u8,
+    pub creation_fee: u64,
 }
 
 impl LaunchPreset {

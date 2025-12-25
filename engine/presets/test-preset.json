@@ -15,5 +15,6 @@
   "poolCreationGracePeriodSec": 60,
   "teamDurationSec": 60,
   "teamPeriodSec": 10,
-  "withdrawalLimit": 3
+  "withdrawalLimit": 3,
+  "creationFee": 100000000
 }

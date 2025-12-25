@@ -2027,10 +2027,6 @@
             "type": "pubkey"
           },
           {
-            "name": "creation_fee",
-            "type": "u64"
-          },
-          {
             "name": "xyber_mint",
             "type": "pubkey"
           },

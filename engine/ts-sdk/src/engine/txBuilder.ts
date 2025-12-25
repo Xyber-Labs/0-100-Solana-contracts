@@ -3,8 +3,6 @@ import type { Engine as EngineIDL } from "../../idl/engine";
 import EngineIDLJson from "../../idl/engine.json";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createInitializeMintInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID
@@ -238,9 +236,10 @@ export class TxBuilder {
     launchState: web3.PublicKey;
     escrowAuthority: web3.PublicKey;
     projectCounter: web3.PublicKey;
-    creatorGrant: web3.PublicKey;
     tokenMetadataConfig: web3.PublicKey;
     launchPreset: web3.PublicKey;
+    lottery: web3.PublicKey;
+    withdrawnRanges: web3.PublicKey;
   }> {
     const projectIdLe = (() => {
       if (BN.isBN(params.projectId as any)) {
@@ -254,10 +253,11 @@ export class TxBuilder {
     const [launchState] = this.getPda(["launch", projectIdLe]);
     const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
     const [projectCounter] = this.getPda(["project_counter"]);
-    const [creatorGrant] = this.getPda(["creator", launchState]);
     const [tokenMetadataConfig] = this.getTokenMetadataConfigPda(launchState);
     const [engineConfig] = this.getPda(["config"]);
     const [launchPreset] = this.getLaunchPresetPda(params.presetId);
+    const [lottery] = this.getLotteryPda(launchState);
+    const [withdrawnRanges] = this.getWithdrawnRangesPda(launchState);
 
     // Fetch config to get xyberMint and treasury owner
     const cfg: any = await (this.program.account as any).engineConfig.fetch(engineConfig);
@@ -285,12 +285,13 @@ export class TxBuilder {
         projectCounter,
         launchState,
         escrowAuthority,
-        creatorGrant,
         tokenMetadataConfig,
         engineConfig,
         creatorXyberAta,
         treasuryXyberAta,
         launchPreset,
+        lottery,
+        withdrawnRanges,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
@@ -301,9 +302,10 @@ export class TxBuilder {
       launchState,
       escrowAuthority,
       projectCounter,
-      creatorGrant,
       tokenMetadataConfig,
       launchPreset,
+      lottery,
+      withdrawnRanges,
     };
   }
 
@@ -326,6 +328,7 @@ export class TxBuilder {
     teamDurationSec: number;
     teamPeriodSec: number;
     withdrawalLimit: number;
+    creationFee: BN;
     signerAdmins: web3.PublicKey[];
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -352,6 +355,7 @@ export class TxBuilder {
       teamDurationSec: new BN(params.teamDurationSec),
       teamPeriodSec: new BN(params.teamPeriodSec),
       withdrawalLimit: params.withdrawalLimit,
+      creationFee: params.creationFee,
     };
 
     const method = this.getIxMethod("initLaunchPreset", "init_launch_preset");
@@ -373,7 +377,6 @@ export class TxBuilder {
   async initEngineConfigIx(params: {
     payer: web3.PublicKey;
     treasury: web3.PublicKey;
-    creationFee: BN;
     xyberMint: web3.PublicKey;
     admins: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
     threshold: number;
@@ -384,7 +387,6 @@ export class TxBuilder {
     if (!method) throw new Error("initEngineConfig method not found in program IDL");
     const ix = await method({
       treasury: params.treasury,
-      creationFee: params.creationFee,
       xyberMint: params.xyberMint,
       admins: params.admins,
       threshold: params.threshold,
@@ -400,36 +402,6 @@ export class TxBuilder {
           isSigner: params.signerAdmins.some((s) => s.equals(pubkey)),
           isWritable: false
         }))
-      )
-      .instruction();
-    return { instruction: ix, engineConfig };
-  }
-
-  async updateEngineConfigIx(params: {
-    payer: web3.PublicKey;
-    newTreasury?: web3.PublicKey;
-    newCreationFee?: BN;
-    newXyberMint?: web3.PublicKey;
-    newAdmins?: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
-    newThreshold?: number;
-    signerAdmins: web3.PublicKey[];
-  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey }> {
-    const [engineConfig] = this.getConfigPda();
-    const method = this.getIxMethod("updateEngineConfig", "update_engine_config");
-    if (!method) throw new Error("updateEngineConfig method not found in program IDL");
-    const ix = await method({
-      newTreasury: params.newTreasury ?? null,
-      newCreationFee: params.newCreationFee ?? null,
-      newXyberMint: params.newXyberMint ?? null,
-      newAdmins: params.newAdmins ?? null,
-      newThreshold: typeof params.newThreshold === "number" ? params.newThreshold : null,
-    })
-      .accountsStrict({
-        payer: params.payer,
-        engineConfig,
-      })
-      .remainingAccounts(
-        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
       )
       .instruction();
     return { instruction: ix, engineConfig };

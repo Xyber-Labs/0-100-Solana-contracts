@@ -5,7 +5,7 @@ use crate::{constants::SEED_ROOT, errors::ErrorCode as EngineErrorCode, state::E
 #[derive(Accounts)]
 #[instruction(params: InitEngineConfigParams)]
 pub struct InitEngineConfig<'info> {
-    #[account( signer, mut, constraint = engine_config.multisig == Pubkey::default() && multisig.key() == DEPLOYER || engine_config.multisig == multisig.key() @ EngineErrorCode::Unauthorized)]
+    #[account(mut)]
     pub payer: Signer<'info>,
 
     #[account(
@@ -23,7 +23,6 @@ pub struct InitEngineConfig<'info> {
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitEngineConfigParams {
     pub treasury: Pubkey,
-    pub creation_fee: u64,
     pub xyber_mint: Pubkey,
     pub admins: [Pubkey; 3],
     pub threshold: u8,
@@ -57,7 +56,6 @@ pub fn init_engine_config(
 
     let cfg = &mut ctx.accounts.engine_config;
     cfg.treasury = params.treasury;
-    cfg.creation_fee = params.creation_fee;
     cfg.xyber_mint = params.xyber_mint;
     cfg.admins = params.admins;
     cfg.threshold = params.threshold;

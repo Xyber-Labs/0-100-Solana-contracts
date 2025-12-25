@@ -382,7 +382,6 @@ const EngineSDK = {
 
     async function initEngineConfig(args: {
       treasury: anchor.web3.PublicKey;
-      creationFee: BN;
       xyberMint: anchor.web3.PublicKey;
       admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
       threshold: number;
@@ -391,7 +390,6 @@ const EngineSDK = {
       const { instruction, engineConfig } = await txBuilder.initEngineConfigIx({
         payer,
         treasury: args.treasury,
-        creationFee: args.creationFee,
         xyberMint: args.xyberMint,
         admins: args.admins,
         threshold: args.threshold,
@@ -399,30 +397,6 @@ const EngineSDK = {
       });
       const tx = new anchor.web3.Transaction().add(instruction);
       const signers = args.adminKeypairs ?? [];
-      if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(tx, signers);
-      return { engineConfig, signature };
-    }
-
-    async function updateEngineConfig(args: {
-      newTreasury?: anchor.web3.PublicKey;
-      newCreationFee?: BN;
-      newXyberMint?: anchor.web3.PublicKey;
-      newAdmins?: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
-      newThreshold?: number;
-      signerAdmins: anchor.web3.Keypair[];
-    }): Promise<{ engineConfig: anchor.web3.PublicKey; signature: string }> {
-      const { instruction, engineConfig } = await txBuilder.updateEngineConfigIx({
-        payer,
-        newTreasury: args.newTreasury,
-        newCreationFee: args.newCreationFee,
-        newXyberMint: args.newXyberMint,
-        newAdmins: args.newAdmins,
-        newThreshold: args.newThreshold,
-        signerAdmins: args.signerAdmins.map((k) => k.publicKey),
-      });
-      const tx = new anchor.web3.Transaction().add(instruction);
-      const signers = args.signerAdmins ?? [];
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
       const signature = await provider.sendAndConfirm(tx, signers);
       return { engineConfig, signature };
@@ -447,6 +421,7 @@ const EngineSDK = {
         teamDurationSec: number;
         teamPeriodSec: number;
         withdrawalLimit: number;
+        creationFee: BN;
       };
       adminKeypairs: anchor.web3.Keypair[];
     }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
@@ -683,6 +658,7 @@ const EngineSDK = {
       getProjectCounterPda,
       getPoolPda,
       getLaunchPresetPda,
+      getReallocFundsPda: txBuilder.getReallocFundsPda.bind(txBuilder),
       deriveAllPdas: deriveAllPdasByProjectId,
 
       // Utils
@@ -748,9 +724,7 @@ const EngineSDK = {
 
       // Config
       initEngineConfig,
-      updateEngineConfig,
       initEngineConfigIx: txBuilder.initEngineConfigIx.bind(txBuilder),
-      updateEngineConfigIx: txBuilder.updateEngineConfigIx.bind(txBuilder),
 
       // Preset Ix builders
       initLaunchPresetIx: txBuilder.initLaunchPresetIx.bind(txBuilder),

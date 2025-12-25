@@ -23,6 +23,7 @@ pub struct InitLaunchPresetParams {
     pub team_duration_sec: i64,
     pub team_period_sec: i64,
     pub withdrawal_limit: u8,
+    pub creation_fee: u64,
 }
 
 #[derive(Accounts)]
@@ -85,6 +86,7 @@ pub fn init_launch_preset(
     p.team_duration_sec = params.team_duration_sec;
     p.team_period_sec = params.team_period_sec;
     p.withdrawal_limit = params.withdrawal_limit;
+    p.creation_fee = params.creation_fee;
 
     require!(p.is_valid(), crate::errors::ErrorCode::MalformedPreset);
     Ok(())

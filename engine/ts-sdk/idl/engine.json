@@ -2088,6 +2088,90 @@
           "name": "launch_preset"
         },
         {
+          "name": "lottery",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withdrawn_ranges",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  100,
+                  114,
+                  97,
+                  119,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         },
@@ -2604,72 +2688,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "update_engine_config",
-      "discriminator": [
-        62,
-        159,
-        32,
-        233,
-        137,
-        163,
-        225,
-        42
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "engine_config",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        }
-      ],
-      "args": [
-        {
-          "name": "params",
-          "type": {
-            "defined": {
-              "name": "UpdateEngineConfigParams"
-            }
-          }
-        }
-      ]
     },
     {
       "name": "withdraw",
@@ -3753,10 +3771,6 @@
             "type": "pubkey"
           },
           {
-            "name": "creation_fee",
-            "type": "u64"
-          },
-          {
             "name": "xyber_mint",
             "type": "pubkey"
           },
@@ -3784,10 +3798,6 @@
           {
             "name": "treasury",
             "type": "pubkey"
-          },
-          {
-            "name": "creation_fee",
-            "type": "u64"
           },
           {
             "name": "xyber_mint",
@@ -3877,6 +3887,10 @@
           {
             "name": "withdrawal_limit",
             "type": "u8"
+          },
+          {
+            "name": "creation_fee",
+            "type": "u64"
           }
         ]
       }
@@ -3990,6 +4004,10 @@
           {
             "name": "withdrawal_limit",
             "type": "u8"
+          },
+          {
+            "name": "creation_fee",
+            "type": "u64"
           }
         ]
       }
@@ -4362,49 +4380,6 @@
       }
     },
     {
-      "name": "UpdateEngineConfigParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "new_treasury",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "new_creation_fee",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "new_xyber_mint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "new_admins",
-            "type": {
-              "option": {
-                "array": [
-                  "pubkey",
-                  3
-                ]
-              }
-            }
-          },
-          {
-            "name": "new_threshold",
-            "type": {
-              "option": "u8"
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "Withdrawn",
       "type": {
         "kind": "struct",
@@ -4429,10 +4404,6 @@
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
           {
             "name": "ranges",
             "type": {

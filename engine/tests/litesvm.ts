@@ -186,21 +186,19 @@ describe("engine litesvm", () => {
     const treasuryKeypair = anchor.web3.Keypair.generate();
     client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
     treasuryPubkey = treasuryKeypair.publicKey;
-    const treasuryAta = sdk.getUserAta(mint.publicKey, treasuryPubkey);
 
     const tx = new anchor.web3.Transaction()
       .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
       .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000)));
+      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(200_000_000)));
     await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
 
     const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
     const { instruction } = await (sdk as any).initEngineConfigIx({
       payer: admin.publicKey,
       treasury: treasuryPubkey,
-      creationFee: new anchor.BN(0),
       xyberMint: mint.publicKey,
       admins,
       threshold: 2,
@@ -213,7 +211,6 @@ describe("engine litesvm", () => {
     assert.ok(config, "EngineConfig should exist");
     assert.ok(config.xyberMint.equals(mint.publicKey));
     assert.ok(config.treasury.equals(treasuryPubkey));
-    assert.equal(config.creationFee.toNumber(), 0);
     assert.equal(config.threshold, 2);
   });
 
@@ -259,12 +256,6 @@ describe("engine litesvm", () => {
     assert.ok(state.preset, "Preset should be set");
     assert.isNull(state.baseMint);
     assert.isNull(state.vrfSeed);
-  });
-
-  it.skip("Sets the VRF seed", async () => {
-    // This test is flaky due to litesvm's time simulation.
-    // The functionality is fully covered in the "Complete flow" test.
-    // TODO (@wotory, @xykeeper): to get this test properly alive
   });
 
   it.skip("Rejects initLaunch with wrong XYBER mint", async () => {
@@ -405,69 +396,36 @@ describe("engine litesvm", () => {
     assert.equal(state.rosterShards, patch.rosterShardsTotal as number);
   });
 
-  it.skip("Allows deposits", async () => {
-    const nextId = await sdk.getNextProjectId();
-
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
-    });
-
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
+  it("Allows deposits", async () => {
     const depositor = await createAndFundAccount(client, 20);
     const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const depositTx = await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-    console.log("Deposit tx signature:", depositTx);
+    // Fund realloc_funds PDA for reallocation costs (must be owned by program)
+    const [reallocFundsPda] = sdk.getReallocFundsPda();
+    client.setAccount(reallocFundsPda, {
+      lamports: 100 * anchor.web3.LAMPORTS_PER_SOL,
+      data: Buffer.alloc(0),
+      owner: program.programId,
+      executable: false,
+    });
 
-    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userContrib.deposited.toNumber(), depositAmount.toNumber());
-    assert.equal(userContrib.ticketCount, 2);
+    const { instruction, contribution } = await sdk.depositIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: depositAmount,
+    });
 
-    const state = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(state.totalDeposited.toNumber(), depositAmount.toNumber());
-    assert.equal(state.totalTickets, 2);
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [depositor]);
+
+    const userContrib = await sdk.fetchContribution(launchState, depositor.publicKey);
+    const totalTickets = userContrib.ticketRanges.reduce(
+      (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
+      0
+    );
+    assert.equal(totalTickets, 20);
+
+    const lottery = await sdk.fetchLottery(launchState);
+    assert.equal(lottery.bitsAllocated.toNumber(), 20);
   });
 
   it.skip("Allows withdrawals", async () => {

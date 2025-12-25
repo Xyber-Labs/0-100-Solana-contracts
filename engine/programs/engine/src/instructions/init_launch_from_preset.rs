@@ -11,7 +11,8 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::LaunchInitialized,
-    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
+    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig, WithdrawnRanges},
+    utils::lottery::Lottery,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -63,6 +64,22 @@ pub struct InitLaunchFromPreset<'info> {
     pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(seeds = [SEED_ROOT, b"preset", &[preset_id]], bump)]
     pub launch_preset: Box<Account<'info, LaunchPreset>>,
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + Lottery::INIT_SPACE,
+        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        bump
+    )]
+    pub lottery: Box<Account<'info, Lottery>>,
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + WithdrawnRanges::INIT_SPACE,
+        seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()],
+        bump
+    )]
+    pub withdrawn_ranges: Box<Account<'info, WithdrawnRanges>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
@@ -80,7 +97,7 @@ pub fn init_launch_from_preset(
 
     require!(p.is_valid(), EngineErrorCode::MalformedPreset);
 
-    let fee = engine_config.creation_fee;
+    let fee = p.creation_fee;
     if fee > 0 {
         let creator_xyber_ata = &ctx.accounts.creator_xyber_ata;
         let treasury_xyber_ata = &ctx.accounts.treasury_xyber_ata;

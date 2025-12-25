@@ -102,13 +102,6 @@ pub mod engine {
         instructions::init_engine_config(ctx, params)
     }
 
-    pub fn update_engine_config(
-        ctx: Context<UpdateEngineConfig>,
-        params: UpdateEngineConfigParams,
-    ) -> Result<()> {
-        instructions::update_engine_config(ctx, params)
-    }
-
     pub fn claim_clmm_fees<'info>(
         ctx: Context<'_, '_, '_, 'info, ClaimClmmFees<'info>>,
     ) -> Result<()> {
