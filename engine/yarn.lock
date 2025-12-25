@@ -325,7 +325,7 @@
   dependencies:
     "@solana/codecs" "2.0.0-rc.1"
 
-"@solana/spl-token@^0.4.13", "@solana/spl-token@^0.4.14", "@solana/spl-token@^0.4.8":
+"@solana/spl-token@^0.4.14", "@solana/spl-token@^0.4.8":
   version "0.4.14"
   resolved "https://registry.npmjs.org/@solana/spl-token/-/spl-token-0.4.14.tgz"
   integrity sha512-u09zr96UBpX4U685MnvQsNzlvw9TiY005hk1vJmJr7gMJldoPG1eYU5/wNEyOA5lkMLiR/gOi9SFD4MefOYEsA==
@@ -433,7 +433,7 @@
   version "0.1.12"
   dependencies:
     "@coral-xyz/anchor" "^0.31.1"
-    "@solana/spl-token" "^0.4.13"
+    "@solana/spl-token" "^0.4.14"
     decimal.js "^10.6.0"
 
 agentkeepalive@^4.5.0:

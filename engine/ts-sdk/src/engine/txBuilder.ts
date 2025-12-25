@@ -191,11 +191,6 @@ export class TxBuilder {
     return web3.PublicKey.findProgramAddressSync(seedBuffers, this.program.programId);
   }
 
-  getRosterShardPda(launch: web3.PublicKey, shardId: number): [web3.PublicKey, number] {
-    const le = Buffer.from(Uint8Array.of(shardId & 0xff, (shardId >> 8) & 0xff));
-    return this.getPda(["roster_shard", launch, le]);
-  }
-
   getLaunchPresetPda(id: number): [web3.PublicKey, number] {
     const one = Buffer.from(Uint8Array.of(id & 0xff));
     return this.getPda(["preset", one]);
@@ -205,125 +200,25 @@ export class TxBuilder {
     return this.getPda(["token_metadata", launch]);
   }
 
-  getTeamVestingPda(launch: web3.PublicKey): [web3.PublicKey, number] {
-    return this.getPda(["team", launch]);
+  getLotteryPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["lottery", launch]);
   }
 
-  async initLaunchIx(params: {
-    creator: web3.PublicKey;
-    projectId: BN | number;
-    hardCapLamports: BN;
-    minRaiseLamports: BN;
-    perWalletCap: BN;
-    tauLamports: BN;
-    baseTotalAllocation: BN;
-    baseSaleBasisPoints: BN;
-    fundingDurationSeconds: number;
-    /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
-    saleStartTimeTimestamp?: number;
-    unlockTimeSec?: number;
-    rosterShardCap: number;
-    rosterShardsTotal: number;
-    creatorInitialDepositLamports: BN;
-    creatorDailyLamportsLimit: BN;
-    creatorClaimLockPeriodSec: BN;
-    creatorMaxDepositLamports: BN;
-    poolCreationGracePeriodSec?: number;
-    xyberMint: web3.PublicKey;
-    name: string;
-    symbol: string;
-    uri: string;
-    isMutable?: boolean;
-    sellerFeeBasisPoints?: number;
-    teamVestingDurationSec?: number;
-    teamAllocationBasisPoints?: number;
-  }): Promise<{
-    instruction: web3.TransactionInstruction;
-    launchState: web3.PublicKey;
-    escrowAuthority: web3.PublicKey;
-    projectCounter: web3.PublicKey;
-    creatorGrant: web3.PublicKey;
-  }> {
-    const projectIdLe = (() => {
-      if (BN.isBN(params.projectId as any)) {
-        return (params.projectId as BN).toArrayLike(Uint8Array as any, "le", 8) as Uint8Array;
-      }
-      const buf = new Uint8Array(8);
-      const view = new DataView(buf.buffer);
-      view.setBigUint64(0, BigInt(params.projectId as number), true);
-      return buf;
-    })();
-    const [launchState] = this.getPda(["launch", projectIdLe]);
-    const [escrowAuthority] = this.getPda(["escrow_authority", launchState]);
-    const [projectCounter] = this.getPda(["project_counter"]);
-    const [creatorGrant] = this.getPda(["creator", launchState]);
+  getContributionPda(launch: web3.PublicKey, contributor: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["contributor", launch, contributor]);
+  }
 
-    const initParams: any = {
-      hardCapLamports: params.hardCapLamports,
-      minRaiseLamports: params.minRaiseLamports,
-      perWalletCap: params.perWalletCap,
-      tauLamports: params.tauLamports,
-      baseTotalAllocation: params.baseTotalAllocation,
-      baseSaleBasisPoints: params.baseSaleBasisPoints,
-      teamAllocationBasisPoints: new BN(
-        typeof params.teamAllocationBasisPoints === "number"
-          ? params.teamAllocationBasisPoints
-          : 1000
-      ),
-      fundingDurationSeconds: new BN(params.fundingDurationSeconds),
-      saleStartTimeTimestamp: new BN(params.saleStartTimeTimestamp ?? 0),
-      unlockTimeSec: new BN(params.unlockTimeSec ?? 0),
-      rosterShardCap: params.rosterShardCap,
-      rosterShardsTotal: params.rosterShardsTotal,
-      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
-      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
-      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-      creatorMaxDeposit: params.creatorMaxDepositLamports,
-      poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec ?? 0),
-      teamVestingDurationSec: new BN(params.teamVestingDurationSec ?? 365 * 24 * 60 * 60),
-      name: params.name,
-      symbol: params.symbol,
-      uri: params.uri,
-      isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
-      sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
-    };
+  getWithdrawnRangesPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["withdrawn", launch]);
+  }
 
-    const [engineConfig] = this.getPda(["config"]);
-    let treasury: web3.PublicKey | undefined;
-    try {
-      const cfg: any = (await (this.program.account as any).engineConfig.fetch(engineConfig)) as any;
-      treasury = (cfg?.treasury as web3.PublicKey) ?? undefined;
-    } catch {
-    }
-    // Fallback to creator as treasury owner if config fetch fails on some clusters
-    const treasuryOwner = treasury ?? params.creator;
-    const creatorXyberAta = getAssociatedTokenAddressSync(params.xyberMint, params.creator, true);
-    const treasuryXyberAta = getAssociatedTokenAddressSync(params.xyberMint, treasuryOwner, true);
+  getReallocFundsPda(): [web3.PublicKey, number] {
+    return this.getPda(["realloc_funds"]);
+  }
 
-    const instruction = await (this.program.methods as any)
-      .initLaunch(initParams, BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId))
-      .accountsStrict({
-        creator: params.creator,
-        launchState: launchState,
-        escrowAuthority: escrowAuthority,
-        projectCounter: projectCounter,
-        creatorGrant: creatorGrant,
-        engineConfig,
-        creatorXyberAta,
-        treasuryXyberAta,
-        tokenMetadataConfig: this.getTokenMetadataConfigPda(launchState)[0],
-        systemProgram: web3.SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      } as any)
-      .instruction();
-
-    return {
-      instruction,
-      launchState,
-      escrowAuthority,
-      projectCounter,
-      creatorGrant,
-    };
+  getTicketsClaimedPda(launch: web3.PublicKey, bucket: number, participant: web3.PublicKey): [web3.PublicKey, number] {
+    const bucketByte = Buffer.from(Uint8Array.of(bucket & 0xff));
+    return this.getPda(["tickets_claimed", launch, bucketByte, participant]);
   }
 
   async initLaunchFromPresetIx(params: {
@@ -548,89 +443,6 @@ export class TxBuilder {
     return { instruction: ix, launchPreset, engineConfig };
   }
 
-  async initLaunchTx(params: {
-    creator: web3.PublicKey;
-    projectId: BN | number;
-    hardCapLamports: BN;
-    minRaiseLamports: BN;
-    perWalletCap: BN;
-    tauLamports: BN;
-    baseTotalAllocation: BN;
-    baseSaleBasisPoints: BN;
-    fundingDurationSeconds: number;
-    /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
-    saleStartTimeTimestamp?: number;
-    unlockTimeSec?: number;
-    rosterShardCap: number;
-    rosterShardsTotal: number;
-    creatorInitialDepositLamports: BN;
-    creatorDailyLamportsLimit: BN;
-    creatorClaimLockPeriodSec: BN;
-    provider: any;
-    creatorMaxDepositLamports: BN;
-    poolCreationGracePeriodSec?: number;
-    xyberMint: web3.PublicKey;
-    name: string;
-    symbol: string;
-    uri: string;
-    isMutable?: boolean;
-    sellerFeeBasisPoints?: number;
-    // Missing optional fields to be forwarded to initLaunchIx:
-    teamVestingDurationSec?: number;
-    teamAllocationBasisPoints?: number;
-  }): Promise<{
-    initLaunchTx: web3.Transaction;
-    launchState: web3.PublicKey;
-    escrowAuthority: web3.PublicKey;
-    creatorGrant: web3.PublicKey;
-    signers: web3.Keypair[];
-  }> {
-    const {
-      instruction: initLaunchIx,
-      launchState,
-      escrowAuthority,
-      creatorGrant,
-    } = await this.initLaunchIx({
-      creator: params.creator,
-      projectId: params.projectId,
-      hardCapLamports: params.hardCapLamports,
-      minRaiseLamports: params.minRaiseLamports,
-      perWalletCap: params.perWalletCap,
-      tauLamports: params.tauLamports,
-      baseTotalAllocation: params.baseTotalAllocation,
-      baseSaleBasisPoints: params.baseSaleBasisPoints,
-      fundingDurationSeconds: params.fundingDurationSeconds,
-      saleStartTimeTimestamp: params.saleStartTimeTimestamp ?? 0,
-      unlockTimeSec: params.unlockTimeSec ?? 0,
-      rosterShardCap: params.rosterShardCap,
-      rosterShardsTotal: params.rosterShardsTotal,
-      creatorInitialDepositLamports: params.creatorInitialDepositLamports,
-      creatorDailyLamportsLimit: params.creatorDailyLamportsLimit,
-      creatorClaimLockPeriodSec: params.creatorClaimLockPeriodSec,
-      creatorMaxDepositLamports: params.creatorMaxDepositLamports,
-      poolCreationGracePeriodSec: params.poolCreationGracePeriodSec,
-      xyberMint: params.xyberMint,
-      name: params.name,
-      symbol: params.symbol,
-      uri: params.uri,
-      isMutable: params.isMutable,
-      sellerFeeBasisPoints: params.sellerFeeBasisPoints,
-      // Forward team vesting config so we don't silently fall back to 1y default
-      teamAllocationBasisPoints: params.teamAllocationBasisPoints,
-      teamVestingDurationSec: params.teamVestingDurationSec,
-    });
-
-    const initLaunchTx = new web3.Transaction().add(initLaunchIx);
-
-    return {
-      initLaunchTx,
-      launchState,
-      escrowAuthority,
-      creatorGrant,
-      signers: [],
-    };
-  }
-
   async initEngineConfigIx(params: {
     payer: web3.PublicKey;
     treasury: web3.PublicKey;
@@ -696,64 +508,23 @@ export class TxBuilder {
     return { instruction: ix, engineConfig };
   }
 
-  async initRosterIx(params: {
-    launch: web3.PublicKey;
-    payer: web3.PublicKey;
-  }): Promise<{ instruction: web3.TransactionInstruction; rosterPda: web3.PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, 1);
-    const instruction = await this.program.methods
-      .initRosterShard(1)
-      .accountsStrict({
-        payer: params.payer,
-        launchState: params.launch,
-        rosterShard,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .instruction();
-    const [rosterPda] = this.getPda(["roster", params.launch]);
-    return { instruction, rosterPda };
-  }
-
-  async initRosterTx(params: {
-    launch: web3.PublicKey;
-    payer: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; rosterPda: web3.PublicKey }> {
-    const { instruction, rosterPda } = await this.initRosterIx(params);
-    const transaction = new web3.Transaction().add(instruction);
-    return { transaction, rosterPda };
-  }
-
-  // metadata is set during initLaunch; no extra instruction needed
-
-  async initRosterShardIx(params: {
-    launch: web3.PublicKey;
-    payer: web3.PublicKey;
-    shardId: number;
-  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    const instruction = await (this.program.methods as any)
-      .initRosterShard(params.shardId)
-      .accounts({
-        payer: params.payer,
-        launchState: params.launch,
-        rosterShard,
-        systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
-    return { instruction, rosterShard };
-  }
-
   async setSeedIx(params: { launch: web3.PublicKey; payer: web3.PublicKey }): Promise<{
     instruction: web3.TransactionInstruction;
     selectionPda: web3.PublicKey;
   }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
       .setSeed()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        launchPreset: presetAddress,
+        lottery,
         slotHashes: web3.SYSVAR_SLOT_HASHES_PUBKEY,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -773,411 +544,205 @@ export class TxBuilder {
 
   async depositIx(params: {
     launch: web3.PublicKey;
-    user: web3.PublicKey;
+    contributor: web3.PublicKey;
     amount: BN;
-    roster?: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number; // if rosterShard not provided
-    escrow?: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
-    userContribution: web3.PublicKey;
+    contribution: web3.PublicKey;
   }> {
-    const [userContribution] = this.getPda([
-      "user",
-      params.launch,
-      params.user,
-    ]);
-    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
-    const shardId = params.shardId ?? 1;
-    const rosterShard =
-      params.rosterShard ??
-      this.getRosterShardPda(params.launch, shardId)[0];
-    const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
+    const [contribution] = this.getContributionPda(params.launch, params.contributor);
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
+    const [reallocFunds] = this.getReallocFundsPda();
+    const [launchPreset] = this.getLaunchPresetPda(1); // TODO: get from launch state
 
-    let builder = this.program.methods
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
+
+    const instruction = await this.program.methods
       .deposit(params.amount)
-      .accounts({
-        user: params.user,
+      .accountsStrict({
+        contributor: params.contributor,
         launchState: params.launch,
-        userContribution: userContribution,
-        roster: roster,
-        rosterShard,
-        escrowAuthority: escrowAuthority,
-        launch: params.launch,
+        launchPreset: presetAddress,
+        reallocFunds,
+        lottery,
+        withdrawnRanges,
+        contribution,
+        escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
-      } as any);
+      })
+      .instruction();
 
-    if (shardId > 1) {
-      const prevId = shardId - 1;
-      const [prevRosterShard] = this.getRosterShardPda(params.launch, prevId);
-      builder = builder.remainingAccounts([
-        { pubkey: prevRosterShard, isSigner: false, isWritable: false },
-      ]);
-    }
-
-    const instruction = await builder.instruction();
-
-    return { instruction, userContribution };
+    return { instruction, contribution };
   }
 
   async depositTx(params: {
     launch: web3.PublicKey;
-    user: web3.PublicKey;
+    contributor: web3.PublicKey;
     amount: BN;
-    roster?: web3.PublicKey;
-    escrow?: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
-    const { instruction, userContribution } = await this.depositIx(params);
+  }): Promise<{ transaction: web3.Transaction; contribution: web3.PublicKey }> {
+    const { instruction, contribution } = await this.depositIx(params);
     const transaction = new web3.Transaction().add(instruction);
-    return { transaction, userContribution };
+    return { transaction, contribution };
   }
 
   async withdrawIx(params: {
     launch: web3.PublicKey;
-    user: web3.PublicKey;
+    contributor: web3.PublicKey;
     amount: BN;
-    roster?: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number;
-    escrow?: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
-    userContribution: web3.PublicKey;
+    contribution: web3.PublicKey;
   }> {
-    const [userContribution] = this.getPda([
-      "user",
-      params.launch,
-      params.user,
-    ]);
-    const roster = params.roster ?? this.getPda(["roster", params.launch])[0];
-    const rosterShard =
-      params.rosterShard ??
-      this.getRosterShardPda(params.launch, params.shardId ?? 1)[0];
-    const escrowAuthority = this.getPda(["escrow_authority", params.launch])[0];
+    const [contribution] = this.getContributionPda(params.launch, params.contributor);
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
+    const [reallocFunds] = this.getReallocFundsPda();
+
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
       .withdraw(params.amount)
-      .accounts({
-        user: params.user,
+      .accountsStrict({
+        contributor: params.contributor,
+        contribution,
         launchState: params.launch,
-        userContribution: userContribution,
-        roster: roster,
-        rosterShard,
-        // escrow removed
-        escrowAuthority: escrowAuthority,
-        launch: params.launch,
+        launchPreset: presetAddress,
+        lottery,
+        withdrawnRanges,
+        reallocFunds,
+        escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
-      } as any)
+      })
       .instruction();
 
-    return { instruction, userContribution };
+    return { instruction, contribution };
   }
 
   async withdrawTx(params: {
     launch: web3.PublicKey;
-    user: web3.PublicKey;
+    contributor: web3.PublicKey;
     amount: BN;
-    roster?: web3.PublicKey;
-    escrow?: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
-    const { instruction, userContribution } = await this.withdrawIx(params);
+  }): Promise<{ transaction: web3.Transaction; contribution: web3.PublicKey }> {
+    const { instruction, contribution } = await this.withdrawIx(params);
     const transaction = new web3.Transaction().add(instruction);
-    return { transaction, userContribution };
+    return { transaction, contribution };
   }
 
-  async claimRefundIx(params: {
+  async refundIx(params: {
     launch: web3.PublicKey;
-    user: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number;
-    escrow?: web3.PublicKey;
+    contributor: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
-    userContribution: web3.PublicKey;
+    contribution: web3.PublicKey;
   }> {
-    const [userContribution] = this.getPda([
-      "user",
-      params.launch,
-      params.user,
-    ]);
-    const rosterShard = params.rosterShard; // do not auto-fill or fallback; omit when not provided
-    // escrow removed
-
+    const [contribution] = this.getContributionPda(params.launch, params.contributor);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const method = this.program.methods.claimRefund();
-    const acct: any = {
-      user: params.user,
-      launchState: params.launch,
-      userContribution,
-      escrowAuthority,
-      systemProgram: web3.SystemProgram.programId,
-    };
-    // Optional account must be present for accountsStrict; pass null when absent
-    acct.rosterShard = rosterShard ?? null;
-    const instruction = await (method as any).accountsStrict(acct).instruction();
+    const [lottery] = this.getLotteryPda(params.launch);
 
-    return { instruction, userContribution };
-  }
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
-  async claimRefundTx(params: {
-    launch: web3.PublicKey;
-    user: web3.PublicKey;
-    selection?: web3.PublicKey;
-    escrow?: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; userContribution: web3.PublicKey }> {
-    const { instruction, userContribution } = await this.claimRefundIx(params);
-    const transaction = new web3.Transaction().add(instruction);
-    return { transaction, userContribution };
-  }
-
-  async claimTokensIx(params: {
-    launch: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    user: web3.PublicKey;
-    rosterShard?: web3.PublicKey;
-    shardId?: number;
-    userAta?: web3.PublicKey;
-    createAtaIfMissing?: boolean;
-    payer: web3.PublicKey;
-  }): Promise<{ instructions: web3.TransactionInstruction[]; userAta: web3.PublicKey }> {
-    const [userContribution] = this.getPda([
-      "user",
-      params.launch,
-      params.user,
-    ]);
-    const rosterShard = params.rosterShard; // do not auto-fill; omit when not provided
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [poolState] = this.getPda(["pool", params.launch]);
-    const userAta =
-      params.userAta ??
-      getAssociatedTokenAddressSync(params.baseMint, params.user, true);
-
-    const instructions: web3.TransactionInstruction[] = [];
-
-    if (params.createAtaIfMissing) {
-      // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
-      try {
-        const ataInfo = await this.program.provider.connection.getAccountInfo(
-          userAta
-        );
-        if (!ataInfo) {
-          instructions.push(
-            createAssociatedTokenAccountInstruction(
-              params.payer,
-              userAta,
-              params.user,
-              params.baseMint
-            )
-          );
-        }
-      } catch (error) {
-        // If connection.getAccountInfo fails (e.g., in LiteSVM), always create ATA
-        instructions.push(
-          createAssociatedTokenAccountInstruction(
-            params.payer,
-            userAta,
-            params.user,
-            params.baseMint
-          )
-        );
-      }
-    }
-
-    const method = this.program.methods.claimTokens();
-    const accts: any = {
-      user: params.user,
-      launchState: params.launch,
-      userContribution,
-      poolState,
-      baseMint: params.baseMint,
-      escrowAuthority,
-      baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
-      userAta,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    };
-    // Optional account must be present for accountsStrict; pass null when absent
-    accts.rosterShard = rosterShard ?? null;
-    const claimIx = await (method as any).accountsStrict(accts).instruction();
-
-    instructions.push(claimIx);
-
-    return { instructions, userAta };
-  }
-
-  async sealRosterShardIx(params: {
-    payer: web3.PublicKey;
-    launch: web3.PublicKey;
-    shardId: number;
-    from: number;
-    max: number;
-    walletsSlice: web3.PublicKey[]; // wallets[from..end] in exact order
-  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    const method = (this.program.methods as any).sealRosterShard(params.shardId, params.from, params.max);
-    const ixBuilder = method.accounts({
-      payer: params.payer,
-      systemProgram: web3.SystemProgram.programId,
-      launchState: params.launch,
-      rosterShard,
-    });
-    const remaining = params.walletsSlice.map((w) => {
-      const [userPda] = this.getPda(["user", params.launch, w]);
-      return { pubkey: userPda, isSigner: false, isWritable: true };
-    });
-    const instruction = await ixBuilder.remainingAccounts(remaining).instruction();
-    return { instruction, rosterShard };
-  }
-
-  async closeRosterShardIx(params: {
-    payer: web3.PublicKey;
-    launch: web3.PublicKey;
-    shardId: number;
-    refundTo: web3.PublicKey;
-  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
     const instruction = await this.program.methods
-      .closeRosterShard(params.shardId)
+      .refund()
       .accountsStrict({
-        payer: params.payer,
+        contributor: params.contributor,
         launchState: params.launch,
-        rosterShard,
-        refundTo: params.refundTo,
+        launchPreset: presetAddress,
+        lottery,
+        contribution,
+        escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
-    return { instruction, rosterShard };
+
+    return { instruction, contribution };
   }
 
-  async claimTokensTx(params: {
+  async refundTx(params: {
     launch: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    user: web3.PublicKey;
-    selection?: web3.PublicKey;
-    userAta?: web3.PublicKey;
-    createAtaIfMissing?: boolean;
-    payer: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; userAta: web3.PublicKey }> {
-    const { instructions, userAta } = await this.claimTokensIx(params);
-    const transaction = new web3.Transaction().add(...instructions);
-    return { transaction, userAta };
-  }
-
-  async initTeamVestingIx(params: { payer: web3.PublicKey; launch: web3.PublicKey }): Promise<{
-    instruction: web3.TransactionInstruction;
-    teamVesting: web3.PublicKey;
-  }> {
-    const [teamVesting] = this.getTeamVestingPda(params.launch);
-    const method = this.getIxMethod("initTeamVesting", "init_team_vesting");
-    if (!method) throw new Error("initTeamVesting method not found in program IDL");
-    const instruction = await method()
-      .accountsStrict({
-        payer: params.payer,
-        launchState: params.launch,
-        teamVesting,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .instruction();
-    return { instruction, teamVesting };
-  }
-
-  async initTeamVestingTx(params: { payer: web3.PublicKey; launch: web3.PublicKey }): Promise<{
-    transaction: web3.Transaction;
-    teamVesting: web3.PublicKey;
-  }> {
-    const { instruction, teamVesting } = await this.initTeamVestingIx(params);
+    contributor: web3.PublicKey;
+  }): Promise<{ transaction: web3.Transaction; contribution: web3.PublicKey }> {
+    const { instruction, contribution } = await this.refundIx(params);
     const transaction = new web3.Transaction().add(instruction);
-    return { transaction, teamVesting };
+    return { transaction, contribution };
   }
 
-  async claimTeamTokensTx(params: {
+  async claimIx(params: {
     launch: web3.PublicKey;
     baseMint: web3.PublicKey;
-    creator: web3.PublicKey;
-    creatorAta?: web3.PublicKey;
-    createAtaIfMissing?: boolean;
-    payer: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; creatorAta: web3.PublicKey }> {
-    const [poolState] = this.getPda(["pool", params.launch]);
-    const [teamVesting] = this.getTeamVestingPda(params.launch);
+    participant: web3.PublicKey;
+    bucket: number;
+  }): Promise<{ instruction: web3.TransactionInstruction; participantAta: web3.PublicKey }> {
+    const [contribution] = this.getContributionPda(params.launch, params.participant);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const creatorAta = params.creatorAta ?? getAssociatedTokenAddressSync(params.baseMint, params.creator, true);
+    const [lottery] = this.getLotteryPda(params.launch);
+    const [ticketsClaimed] = this.getTicketsClaimedPda(params.launch, params.bucket, params.participant);
 
-    const transaction = new web3.Transaction();
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
-    if (params.createAtaIfMissing) {
-      try {
-        const ataInfo = await this.program.provider.connection.getAccountInfo(creatorAta);
-        if (!ataInfo) {
-          transaction.add(
-            createAssociatedTokenAccountInstruction(
-              params.payer,
-              creatorAta,
-              params.creator,
-              params.baseMint
-            )
-          );
-        }
-      } catch (error) {
-        transaction.add(
-          createAssociatedTokenAccountInstruction(
-            params.payer,
-            creatorAta,
-            params.creator,
-            params.baseMint
-          )
-        );
-      }
-    }
+    const participantAta = getAssociatedTokenAddressSync(params.baseMint, params.participant, true);
+    const bucketArg = params.bucket === 0 ? { sale: {} } : { team: {} };
 
-    const method = this.getIxMethod("claimTeamTokens", "claim_team_tokens");
-    if (!method) throw new Error("claimTeamTokens method not found in program IDL");
-    const ix = await method()
-      .accounts({
-        creator: params.creator,
+    const instruction = await this.program.methods
+      .claim(bucketArg as any)
+      .accountsStrict({
+        participant: params.participant,
         launchState: params.launch,
-        poolState,
-        teamVesting,
+        launchPreset: presetAddress,
+        lottery,
+        contribution,
+        ticketsClaimed,
         baseMint: params.baseMint,
         escrowAuthority,
         baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
-        creatorAta,
+        participantAta,
         tokenProgram: TOKEN_PROGRAM_ID,
-      } as any)
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      })
       .instruction();
 
-    transaction.add(ix);
-
-    return { transaction, creatorAta };
+    return { instruction, participantAta };
   }
 
+  async claimTx(params: {
+    launch: web3.PublicKey;
+    baseMint: web3.PublicKey;
+    participant: web3.PublicKey;
+    bucket: number;
+  }): Promise<{ transaction: web3.Transaction; participantAta: web3.PublicKey }> {
+    const { instruction, participantAta } = await this.claimIx(params);
+    const transaction = new web3.Transaction().add(instruction);
+    return { transaction, participantAta };
+  }
+
+  async fetchContribution(launch: web3.PublicKey, contributor: web3.PublicKey) {
+    const [pda] = this.getContributionPda(launch, contributor);
+    return this.program.account.contribution.fetch(pda);
+  }
+
+  async fetchLottery(launch: web3.PublicKey) {
+    const [pda] = this.getLotteryPda(launch);
+    return this.program.account.lottery.fetch(pda);
+  }
+
+  // Legacy aliases for backwards compatibility
+  async claimRefundIx(params: { launch: web3.PublicKey; user: web3.PublicKey }) {
+    return this.refundIx({ launch: params.launch, contributor: params.user });
+  }
+
+  async claimRefundTx(params: { launch: web3.PublicKey; user: web3.PublicKey }) {
+    return this.refundTx({ launch: params.launch, contributor: params.user });
+  }
 
   async fetchLaunch(launch: web3.PublicKey) {
     return this.program.account.launchState.fetch(launch);
-  }
-
-  async finalizeRosterShardIx(params: {
-    launch: web3.PublicKey;
-    payer: web3.PublicKey;
-    shardId: number;
-  }): Promise<{ instruction: web3.TransactionInstruction; rosterShard: web3.PublicKey }> {
-    const [rosterShard] = this.getRosterShardPda(params.launch, params.shardId);
-    const instruction = await (this.program.methods as any)
-      .finalizeRosterShard(params.shardId)
-      .accounts({
-        payer: params.payer,
-        launchState: params.launch,
-        rosterShard,
-      } as any)
-      .instruction();
-    return { instruction, rosterShard };
-  }
-
-  // openClaimsIx removed; preparePoolCreation now handles finalization + claims opening
-
-  async fetchUserContribution(launch: web3.PublicKey, user: web3.PublicKey) {
-    const [pda] = this.getPda(["user", launch, user]);
-    return this.program.account.userContribution.fetch(pda);
   }
 
   async fetchProjectCounter() {
@@ -1185,143 +750,10 @@ export class TxBuilder {
     return this.program.account.projectCounter.fetch(pda);
   }
 
-  async fetchTeamVesting(launch: web3.PublicKey) {
-    const [pda] = this.getTeamVestingPda(launch);
-    return this.program.account.teamVesting.fetch(pda);
+  async fetchLaunchPreset(id: number) {
+    const [pda] = this.getLaunchPresetPda(id);
+    return this.program.account.launchPreset.fetch(pda);
   }
-
-  async claimCreatorTokensTx(params: {
-    launch: web3.PublicKey;
-    baseMint: web3.PublicKey;
-    creator: web3.PublicKey;
-    creatorAta?: web3.PublicKey;
-    createAtaIfMissing?: boolean;
-    payer: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction; creatorAta: web3.PublicKey }> {
-    const [creatorGrant] = this.getPda(["creator", params.launch]);
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [poolState] = this.getPda(["pool", params.launch]);
-    const creatorAta =
-      params.creatorAta ??
-      getAssociatedTokenAddressSync(params.baseMint, params.creator, true);
-
-    const transaction = new web3.Transaction();
-
-    if (params.createAtaIfMissing) {
-      // In LiteSVM, connection.getAccountInfo may not work, so always create ATA
-      try {
-        const ataInfo = await this.program.provider.connection.getAccountInfo(
-          creatorAta
-        );
-        if (!ataInfo) {
-          transaction.add(
-            createAssociatedTokenAccountInstruction(
-              params.payer,
-              creatorAta,
-              params.creator,
-              params.baseMint
-            )
-          );
-        }
-      } catch (error) {
-        // If connection.getAccountInfo fails (e.g., in LiteSVM), always create ATA
-        transaction.add(
-          createAssociatedTokenAccountInstruction(
-            params.payer,
-            creatorAta,
-            params.creator,
-            params.baseMint
-          )
-        );
-      }
-    }
-
-    const claimIx = await this.program.methods
-      .claimCreatorTokens()
-      .accountsStrict({
-        creator: params.creator,
-        launchState: params.launch,
-        creatorGrant,
-        baseMint: params.baseMint,
-        escrowAuthority,
-        baseEscrowAta: getAssociatedTokenAddressSync(params.baseMint, escrowAuthority, true),
-        creatorAta,
-        poolState,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .instruction();
-
-    transaction.add(claimIx);
-
-    return { transaction, creatorAta };
-  }
-
-  async claimCreatorRefundTx(params: {
-    launch: web3.PublicKey;
-    creator: web3.PublicKey;
-  }): Promise<{ transaction: web3.Transaction }> {
-    const [creatorGrant] = this.getPda(["creator", params.launch]);
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-
-    const transaction = new web3.Transaction();
-
-    const claimIx = await this.program.methods
-      .claimCreatorRefund()
-      .accountsStrict({
-        creator: params.creator,
-        launchState: params.launch,
-        creatorGrant,
-        escrowAuthority,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .instruction();
-
-    transaction.add(claimIx);
-
-    return { transaction };
-  }
-
-  async creatorDepositIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{
-    instruction: web3.TransactionInstruction
-  }> {
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [creatorGrant] = this.getPda(["creator", params.launch]);
-    const instruction = await (this.program.methods as any)
-      .creatorDeposit(params.amount)
-      .accountsStrict({
-        creator: params.creator,
-        launchState: params.launch,
-        escrowAuthority,
-        creatorGrant,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .instruction();
-    return { instruction };
-  }
-
-  async creatorWithdrawIx(params: { launch: web3.PublicKey; creator: web3.PublicKey; amount: BN }): Promise<{
-    instruction: web3.TransactionInstruction
-  }> {
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [creatorGrant] = this.getPda(["creator", params.launch]);
-    const instruction = await (this.program.methods as any)
-      .creatorWithdraw(params.amount)
-      .accountsStrict({
-        creator: params.creator,
-        launchState: params.launch,
-        escrowAuthority,
-        creatorGrant,
-        systemProgram: web3.SystemProgram.programId,
-      })
-      .instruction();
-    return { instruction };
-  }
-
-  async fetchCreatorGrant(launch: web3.PublicKey) {
-    const [creatorGrantPda] = this.getPda(["creator", launch]);
-    return this.program.account.creatorGrant.fetch(creatorGrantPda);
-  }
-
 
   async preparePoolCreationTx(params: {
     payer: web3.PublicKey;
@@ -1333,15 +765,21 @@ export class TxBuilder {
     poolState: web3.PublicKey;
   }> {
     const [poolState] = this.getPda(["pool", params.launch]);
-    const [creatorGrant] = this.getPda(["creator", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
+
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
     const ix = await this.program.methods
       .preparePoolCreation()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
-        creatorGrant,
+        launchPreset: presetAddress,
+        lottery,
+        withdrawnRanges,
         poolState,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: web3.SystemProgram.programId,
@@ -1401,12 +839,18 @@ export class TxBuilder {
 
     const raydiumAmmConfig = this.getRaydiumAmmConfigPda()[0];
     const [enginePoolState] = this.getPda(["pool", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
     const createClmmPoolIx = await (this.program.methods as any)
       .createClmmPool()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
+        launchPreset: presetAddress,
+        lottery,
         poolState: enginePoolState,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
@@ -1453,84 +897,6 @@ export class TxBuilder {
       tickArrayBitmap,
       quoteVault,
       baseVault,
-    };
-  }
-
-  async mintForTestTx(params: {
-    payer: web3.PublicKey;
-    launch: web3.PublicKey;
-    baseMint: web3.Keypair | web3.PublicKey; // create and initialize if Keypair provided
-    preIxs?: web3.TransactionInstruction[];
-  }): Promise<{
-    transaction: web3.Transaction;
-    signers: web3.Keypair[];
-    baseMint: web3.PublicKey;
-    baseTokenAta: web3.PublicKey;
-  }> {
-    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-
-    const isKeypair = !!((params as any).baseMint?.publicKey && typeof (params as any).baseMint.publicKey?.toBuffer === "function");
-    const baseMint = (isKeypair
-        ? (params.baseMint as any).publicKey
-        : (params.baseMint as web3.PublicKey)
-    );
-
-    const maybeCreateMintIxs: web3.TransactionInstruction[] = [];
-    if (isKeypair) {
-      let existing: any = null;
-      try {
-        existing = await this.program.provider.connection.getAccountInfo(baseMint);
-      } catch (_) {
-        existing = null; // LiteSVM throws if account missing
-      }
-      if (!existing) {
-        const createMintAccountIx = web3.SystemProgram.createAccount({
-          fromPubkey: params.payer,
-          newAccountPubkey: baseMint,
-          space: 82,
-          lamports: await this.program.provider.connection.getMinimumBalanceForRentExemption(82),
-          programId: TOKEN_PROGRAM_ID,
-        });
-        const initializeMintIx = createInitializeMintInstruction(
-          baseMint,
-          9,
-          escrowAuthority,
-          null
-        );
-        maybeCreateMintIxs.push(createMintAccountIx, initializeMintIx);
-      }
-    }
-
-    const baseTokenAta = getAssociatedTokenAddressSync(
-      baseMint,
-      escrowAuthority,
-      true
-    );
-
-    const ix = await (this.program.methods as any)
-      .mintForTest()
-      .accounts({
-        payer: params.payer,
-        launchState: params.launch,
-        escrowAuthority: escrowAuthority,
-        baseMint: baseMint,
-        baseEscrowAta: baseTokenAta,
-        baseTokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        systemProgram: web3.SystemProgram.programId,
-      } as any)
-      .instruction();
-
-    const transaction = new web3.Transaction();
-    if (params.preIxs?.length) transaction.add(...params.preIxs);
-    if (maybeCreateMintIxs.length) transaction.add(...maybeCreateMintIxs);
-    transaction.add(ix);
-
-    return {
-      transaction,
-      signers: isKeypair && maybeCreateMintIxs.length ? [(params.baseMint as web3.Keypair)] : [],
-      baseMint,
-      baseTokenAta,
     };
   }
 
@@ -1606,19 +972,25 @@ export class TxBuilder {
     const [tickArrayUpper] = this.getRaydiumTickArrayPda(raydiumPoolPda, tickArrayUpperStartIndex);
 
     const [poolState] = this.getPda(["pool", params.launch]);
+    const [lottery] = this.getLotteryPda(params.launch);
+
+    const launchState = await this.fetchLaunch(params.launch);
+    const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
       .addClmmLiquidity()
       .accountsStrict({
         payer: params.payer,
-        raydiumProgram: clmmProgram,
         launchState: params.launch,
+        launchPreset: presetAddress,
+        lottery,
         baseMint: params.baseMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         quoteMint: WSOL_MINT,
-        poolState: poolState,
+        quoteEscrowAta: quoteEscrowAta,
         raydiumAmmConfig: ammConfigForAdd,
+        poolState: poolState,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
@@ -1628,8 +1000,8 @@ export class TxBuilder {
         raydiumProtocolPosition: protocolPosition,
         raydiumTickArrayLower: tickArrayLower,
         raydiumTickArrayUpper: tickArrayUpper,
-        quoteEscrowAta: quoteEscrowAta,
         token2022Program: TOKEN_2022_PROGRAM_ID,
+        raydiumProgram: clmmProgram,
         quoteTokenProgram: TOKEN_PROGRAM_ID,
         baseTokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,

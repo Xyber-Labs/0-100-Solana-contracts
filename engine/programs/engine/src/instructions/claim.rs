@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{self, Mint, Token, TokenAccount, Transfer},
+};
 
 use crate::{
     checked_mul, checked_sub,
@@ -54,13 +57,15 @@ pub struct Claim<'info> {
     pub base_escrow_ata: Account<'info, TokenAccount>,
 
     #[account(
-        mut,
-        constraint = participant_ata.mint == base_mint.key() @ ErrorCode::InvalidMint,
-        constraint = participant_ata.owner == participant.key() @ ErrorCode::InvalidOwner
+        init_if_needed,
+        payer = participant,
+        associated_token::mint = base_mint,
+        associated_token::authority = participant
     )]
     pub participant_ata: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
