@@ -164,6 +164,7 @@ describe("engine litesvm", () => {
   const presetParams = parsePresetParams(presetData);
 
   let adminBKeypair: anchor.web3.Keypair;
+  let treasuryPubkey: anchor.web3.PublicKey;
   before(async () => {
     client = fromWorkspace("./");
     provider = new LiteSVMProvider(client);
@@ -173,10 +174,65 @@ describe("engine litesvm", () => {
     adminKeypair = (provider.wallet as any).payer;
     sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
-    // Fund the admin account with more SOL for account creation
     client.airdrop(admin.publicKey, BigInt(100 * anchor.web3.LAMPORTS_PER_SOL));
 
-    // Note: EngineConfig/XYBER mint initialized in the suite-level setup below
+    adminBKeypair = anchor.web3.Keypair.generate();
+  });
+
+  it("Initializes engine config with XYBER mint", async () => {
+    const mint = anchor.web3.Keypair.generate();
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
+    const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
+    const treasuryKeypair = anchor.web3.Keypair.generate();
+    client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
+    treasuryPubkey = treasuryKeypair.publicKey;
+    const treasuryAta = sdk.getUserAta(mint.publicKey, treasuryPubkey);
+
+    const tx = new anchor.web3.Transaction()
+      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+      .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
+      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
+      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
+      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000)));
+    await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
+
+    const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
+    const { instruction } = await (sdk as any).initEngineConfigIx({
+      payer: admin.publicKey,
+      treasury: treasuryPubkey,
+      creationFee: new anchor.BN(0),
+      xyberMint: mint.publicKey,
+      admins,
+      threshold: 2,
+      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
+    xyberMint = mint.publicKey;
+
+    const config = await sdk.fetchEngineConfig();
+    assert.ok(config, "EngineConfig should exist");
+    assert.ok(config.xyberMint.equals(mint.publicKey));
+    assert.ok(config.treasury.equals(treasuryPubkey));
+    assert.equal(config.creationFee.toNumber(), 0);
+    assert.equal(config.threshold, 2);
+  });
+
+  it("Initializes launch preset from file", async () => {
+    const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
+      payer: admin.publicKey,
+      id: Number(presetData.id),
+      ...presetParams,
+      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [admin.payer, adminBKeypair]);
+
+    const preset = await sdk.fetchLaunchPreset(Number(presetData.id));
+    assert.ok(preset, "Preset should exist");
+    assert.equal(preset.hardCapLamports.toNumber(), 450_000_000_000);
+    assert.equal(preset.minRaiseLamports.toNumber(), 100_000_000_000);
+    assert.equal(preset.tauLamports.toNumber(), 100_000_000);
+    assert.equal(preset.fundingDurationSeconds, 3);
+    assert.equal(preset.withdrawalLimit, 3);
   });
 
   it("Initializes the launch state correctly", async () => {
@@ -209,48 +265,6 @@ describe("engine litesvm", () => {
     // This test is flaky due to litesvm's time simulation.
     // The functionality is fully covered in the "Complete flow" test.
     // TODO (@wotory, @xykeeper): to get this test properly alive
-  });
-
-  // Global Xyber/config for all tests in this suite
-  let xyberMint: anchor.web3.PublicKey;
-  before(async () => {
-    // Setup XYBER mint + ATAs and EngineConfig with fee=0
-    const mint = anchor.web3.Keypair.generate();
-    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
-    const treasuryKeypair = anchor.web3.Keypair.generate();
-    client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
-    const treasury = treasuryKeypair.publicKey;
-    const treasuryAta = sdk.getUserAta(mint.publicKey, treasury);
-    const tx = new anchor.web3.Transaction()
-      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasury, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000))); // pre-mint some XYBER for potential fee
-    await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
-
-    adminBKeypair = anchor.web3.Keypair.generate();
-    const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
-    const { instruction } = await (sdk as any).initEngineConfigIx({
-      payer: admin.publicKey,
-      treasury,
-      creationFee: new anchor.BN(0),
-      xyberMint: mint.publicKey,
-      admins,
-      threshold: 2,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-    });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
-    xyberMint = mint.publicKey;
-
-    const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
-      payer: admin.publicKey,
-      id: Number(presetData.id),
-      ...presetParams,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-    });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [admin.payer, adminBKeypair]);
   });
 
   it.skip("Rejects initLaunch with wrong XYBER mint", async () => {
