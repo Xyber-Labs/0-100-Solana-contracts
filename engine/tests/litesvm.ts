@@ -20,7 +20,7 @@ import { execSync } from "child_process";
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 
-import { advanceTime, createAndFundAccount, injectSlotHashesForRange, parsePresetParams } from "./utils";
+import { advanceTime, createAndFundAccount, doAndCheckError, injectSlotHashesForRange, parsePresetParams } from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 
 function ensureRaydiumResources(): void {
@@ -189,10 +189,10 @@ describe("engine litesvm", () => {
 
     const tx = new anchor.web3.Transaction()
       .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
+      .add(createInitializeMintInstruction(mint.publicKey, 6, admin.publicKey, null))
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(200_000_000)));
+      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000_000)));
     await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
 
     const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
@@ -258,142 +258,39 @@ describe("engine litesvm", () => {
     assert.isNull(state.vrfSeed);
   });
 
-  it.skip("Rejects initLaunch with wrong XYBER mint", async () => {
+  it("Rejects initLaunch with wrong XYBER mint", async () => {
     const nextId = await sdk.getNextProjectId();
-    // 1) Ensure EngineConfig has non-zero fee (so InvalidMint is checked)
-    const fee = new anchor.BN(1234);
-    {
-      const { instruction } = await (sdk as any).updateEngineConfigIx({
-        payer: admin.publicKey,
-        newCreationFee: fee,
-        signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-      });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
-      // verify fee applied
-      const [cfgPdaVerify] = (sdk as any).getConfigPda();
-      const cfgVerify: any = await (program.account as any).engineConfig.fetch(cfgPdaVerify);
-      assert.equal(Number(cfgVerify.creationFee), Number(fee));
-    }
-    // 2) Prepare a wrong mint and ATAs for creator/treasury with enough balance on creator ATA
+    const fee = new anchor.BN(presetData.creationFee);
+
     const wrongMintKp = anchor.web3.Keypair.generate();
     const wrongMint = wrongMintKp.publicKey;
-    const [cfgPda] = (sdk as any).getConfigPda();
-    const cfg: any = await (program.account as any).engineConfig.fetch(cfgPda);
-    const treasury: anchor.web3.PublicKey = cfg.treasury as anchor.web3.PublicKey;
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
     const creatorAta = getAssociatedTokenAddressSync(wrongMint, admin.publicKey);
-    const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasury);
+    const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasuryPubkey);
     {
       const tx = new anchor.web3.Transaction()
         .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-        .add(createInitializeMintInstruction(wrongMint, 9, admin.publicKey, null))
+        .add(createInitializeMintInstruction(wrongMint, 6, admin.publicKey, null))
         .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, wrongMint))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasury, wrongMint))
+        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasuryPubkey, wrongMint))
         .add(createMintToInstruction(wrongMint, creatorAta, admin.publicKey, BigInt(fee.toString())));
       await safeSendAndConfirm(provider, client, tx, [admin.payer, wrongMintKp]);
     }
-    // 3) Build initLaunchTx with wrong mint and simulate signed
-    const { initLaunchTx } = await sdk.initLaunchTx({
+
+    const { instruction } = await (sdk as any).initLaunchFromPresetIx({
       creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint: wrongMint,
-    });
-    let failed = false;
-    try {
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-      failed = true; // should not reach
-    } catch (e) {
-      const msg = String((e as any)?.message ?? e);
-      assert.isTrue(
-        msg.includes("InvalidMint") || msg.includes("0x4b0") || msg.includes("custom program error") || msg.includes("3012"),
-        `Expected program failure due to wrong XYBER mint; got: ${msg}`
-      );
-    }
-    if (failed) {
-      assert.fail("initLaunch unexpectedly succeeded with wrong xyberMint");
-    }
-  });
-
-  it.skip("Creates preset and launches from it", async () => {
-    const presetId = 1;
-    // Prepare preset parameters
-    const params = {
-      hardCapLamports: new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL),
-      minRaiseLamports: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      perWalletCap: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      tauLamports: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
-      baseTotalAllocation: new anchor.BN(1_000_000),
-      baseSaleBasisPoints: new anchor.BN(8000),
-      fundingDurationSeconds: 10,
-      unlockTimeSec: 0,
-      rosterShardCap: 100,
-      rosterShardsTotal: 10,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      creatorMaxDepositLamports: new anchor.BN(0),
-      poolCreationGracePeriodSec: 0,
-      teamVestingDurationSec: 365 * 24 * 60 * 60,
-      teamAllocationBasisPoints: 1000,
-    };
-    // Create preset by admins
-    const { launchPreset } = await (sdk as any).initLaunchPreset({
-      id: presetId,
-      params,
-      adminKeypairs: [adminKeypair, adminBKeypair],
-    });
-    assert.ok(launchPreset);
-
-    // Update preset parameters (admin-gated)
-    const patch = {
-      minRaiseLamports: new anchor.BN(7 * anchor.web3.LAMPORTS_PER_SOL),
-      baseSaleBasisPoints: new anchor.BN(7500),
-      rosterShardsTotal: 12,
-      // Optionally also tweak funding duration, etc.
-      // fundingDurationSeconds: 20,
-    };
-    await (sdk as any).updateLaunchPreset({
-      id: presetId,
-      patch,
-      adminKeypairs: [adminKeypair, adminBKeypair],
-    });
-
-    // Launch from preset
-    const nextId = await sdk.getNextProjectId();
-    const { launchPda } = await (sdk as any).initLaunchFromPreset({
-      presetId,
+      presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
-      name: "PresetToken",
-      symbol: "PST",
-      uri: "https://metadata.xyberlabs.dev/preset/default.json",
-      isMutable: true,
-      sellerFeeBasisPoints: 0,
+      name: "WrongMintTest",
+      symbol: "WMT",
+      uri: "https://example.com/wmt.json",
+      xyberMint: wrongMint,
     });
-
-    const { data: state } = await sdk.fetchLaunch(launchPda);
-    assert.equal(state.projectId.toNumber(), nextId.toNumber ? nextId.toNumber() : Number(nextId));
-    assert.equal(state.hardCapLamports.toNumber(), params.hardCapLamports.toNumber());
-    // minRaise and some fields should reflect updated preset values
-    assert.equal(state.minRaiseLamports.toNumber(), (patch.minRaiseLamports as anchor.BN).toNumber());
-    assert.equal(state.tauLamports.toNumber(), params.tauLamports.toNumber());
-    assert.equal(state.baseTotalAllocation.toNumber(), params.baseTotalAllocation.toNumber());
-    assert.equal(state.baseSaleBasisPoints.toNumber(), (patch.baseSaleBasisPoints as anchor.BN).toNumber());
-    assert.equal(state.rosterShardCap, params.rosterShardCap);
-    assert.equal(state.rosterShards, patch.rosterShardsTotal as number);
+    await doAndCheckError(
+      safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer]),
+      "InvalidMint"
+    );
   });
 
   it("Allows deposits", async () => {
@@ -433,263 +330,116 @@ describe("engine litesvm", () => {
     assert.equal(lottery.bits.length, 2, "bits array should have 2 u64 elements for 100 bits");
   });
 
-  it.skip("Allows withdrawals", async () => {
-    const nextId = await sdk.getNextProjectId();
-
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
-    });
-
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
+  it("Allows withdrawals", async () => {
+    const { data: lotteryInitial } = await sdk.fetchLottery(launchState);
+    const initialBitsAllocated = lotteryInitial.bitsAllocated.toNumber();
+    assert.equal(initialBitsAllocated, 100, "Initial bits_allocated from previous test");
 
     const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const depositAmount = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL); // 50 tickets
+    const withdrawAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL); // 20 tickets
 
-    await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-
-    const initialBalance = client.getBalance(depositor.publicKey);
-
-    const withdrawSig = await program.methods
-      .withdraw(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-
-    console.log("Withdraw tx signature:", withdrawSig);
-
-    const finalBalance = client.getBalance(depositor.publicKey);
-
-    assert.isAbove(Number(finalBalance), Number(initialBalance));
-
-    const { data: state } = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(state.totalDeposited.toNumber(), 0);
-
-    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userContrib.deposited.toNumber(), 0);
-  });
-
-  it.skip("Seals and closes shard; verifies closure (and rent delta logged)", async () => {
-    const nextId = await sdk.getNextProjectId();
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL),
-      minRaiseLamports: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      perWalletCap: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      tauLamports: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      baseTotalAllocation: new anchor.BN(1000),
-      baseSaleBasisPoints: new anchor.BN(10000),
-      fundingDurationSeconds: 10,
-      rosterShardCap: 100,
-      rosterShardsTotal: 1,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
+    const { instruction: depositIx } = await sdk.depositIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: depositAmount,
     });
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depositIx), [depositor]);
 
-    await sdk.initRoster({ launch: testLaunchState });
+    const { data: contribBefore } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(contribBefore.ticketRanges.length, 1, "Should have 1 range after deposit");
+    assert.equal(contribBefore.ticketRanges[0].start.toNumber(), 100, "Range start should be 100");
+    assert.equal(contribBefore.ticketRanges[0].end.toNumber(), 150, "Range end should be 150");
 
-    const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(testLaunchState, depositor.publicKey)[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
+    const { data: lotteryAfterDeposit } = await sdk.fetchLottery(launchState);
+    assert.equal(lotteryAfterDeposit.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
 
-    await advanceTime(client, { seconds: BigInt(12) });
-    await sdk.setSeed({ launch: testLaunchState });
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
+    const balanceBefore = client.getBalance(depositor.publicKey);
 
-    // seal
-    const walletsSlice = [depositor.publicKey];
-    const { transaction: sealTx } = await (sdk as any).sealRosterShardTx({ launch: testLaunchState, shardId: 1, from: 0, max: 1, walletsSlice });
-    await safeSendAndConfirm(provider, client, sealTx, [admin.payer]);
+    const { instruction: withdrawIx } = await sdk.withdrawIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: withdrawAmount,
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(withdrawIx), [depositor]);
 
-    // close
-    let beforeLamports = 0;
-    try {
-      const beforeInfo = await provider.connection.getAccountInfo(rosterShard);
-      beforeLamports = Number(beforeInfo?.lamports ?? 0);
-    } catch (_) {}
-    const beforePayer = Number(client.getBalance(admin.publicKey));
-    const { transaction: closeTx } = await sdk.closeRosterShardTx({ launch: testLaunchState, shardId: 1, payer: admin.publicKey, refundTo: admin.publicKey });
-    await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
-    let afterInfo: any = null;
-    try {
-      afterInfo = await provider.connection.getAccountInfo(rosterShard);
-    } catch (_) {
-      afterInfo = null;
-    }
-    const afterPayer = Number(client.getBalance(admin.publicKey));
-    assert.isTrue(afterInfo === null, "Roster shard should be closed");
-    console.log("Seal/close test: payer delta", afterPayer - beforePayer, "rent was", beforeLamports);
+    const balanceAfter = client.getBalance(depositor.publicKey);
+    const balanceDiff = Number(balanceAfter) - Number(balanceBefore);
+    assert.equal(balanceDiff, 2 * anchor.web3.LAMPORTS_PER_SOL, "Should receive exactly 2 SOL back");
+
+    const { data: contribAfter } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(contribAfter.ticketRanges.length, 1, "Should still have 1 range");
+    assert.equal(contribAfter.ticketRanges[0].start.toNumber(), 100, "Range start unchanged at 100");
+    assert.equal(contribAfter.ticketRanges[0].end.toNumber(), 130, "Range end should be 130 after withdraw");
+
+    const { data: lotteryAfterWithdraw } = await sdk.fetchLottery(launchState);
+    assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
+
+    const [withdrawnRangesPda] = sdk.getWithdrawnRangesPda(launchState);
+    const withdrawnRanges = await program.account.withdrawnRanges.fetch(withdrawnRangesPda);
+    assert.equal(withdrawnRanges.ranges.length, 1, "Should have exactly 1 withdrawn range");
+    assert.equal(withdrawnRanges.ranges[0].start.toNumber(), 130, "Withdrawn range start should be 130");
+    assert.equal(withdrawnRanges.ranges[0].end.toNumber(), 150, "Withdrawn range end should be 150");
   });
-  it.skip("Project ID increments correctly", async () => {
+
+  it("Project ID increments correctly", async () => {
+    const { data: counterBefore } = await sdk.fetchProjectCounter();
+    const lastIdBefore = counterBefore.lastProjectId.toNumber();
+
+    // Create project 1
     const projectId1 = await sdk.getNextProjectId();
-    const [project1Launch] = sdk.getLaunchPdaByProjectId(projectId1);
+    assert.equal(projectId1.toNumber(), lastIdBefore + 1, "Next project ID should be lastId + 1");
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId1,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
+    const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchFromPresetIx({
+      creator: admin.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId1,
+      saleStartTimeTimestamp: 0,
+      name: "Project1",
+      symbol: "P1",
+      uri: "https://example.com/p1.json",
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix1), [admin.payer]);
 
     const projectId2 = await sdk.getNextProjectId();
-    const [project2Launch] = sdk.getLaunchPdaByProjectId(projectId2);
+    assert.equal(projectId2.toNumber(), projectId1.toNumber() + 1, "Project 2 ID should be project1 + 1");
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId2,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
+    const { instruction: ix2, launchState: launch2 } = await (sdk as any).initLaunchFromPresetIx({
+      creator: admin.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId2,
+      saleStartTimeTimestamp: 0,
+      name: "Project2",
+      symbol: "P2",
+      uri: "https://example.com/p2.json",
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix2), [admin.payer]);
 
     const projectId3 = await sdk.getNextProjectId();
-    const [project3Launch] = sdk.getLaunchPdaByProjectId(projectId3);
+    assert.equal(projectId3.toNumber(), projectId2.toNumber() + 1, "Project 3 ID should be project2 + 1");
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId3,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
-
-    const { data: project1State } = await sdk.fetchLaunch(project1Launch);
-    const { data: project2State } = await sdk.fetchLaunch(project2Launch);
-    const { data: project3State } = await sdk.fetchLaunch(project3Launch);
-
-    assert.equal(
-      project2State.projectId.toNumber(),
-      project1State.projectId.toNumber() + 1
-    );
-    assert.equal(
-      project3State.projectId.toNumber(),
-      project2State.projectId.toNumber() + 1
-    );
-
-    console.log("Project IDs increment correctly:", {
-      project1: project1State.projectId.toNumber(),
-      project2: project2State.projectId.toNumber(),
-      project3: project3State.projectId.toNumber(),
+    const { instruction: ix3, launchState: launch3 } = await (sdk as any).initLaunchFromPresetIx({
+      creator: admin.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId3,
+      saleStartTimeTimestamp: 0,
+      name: "Project3",
+      symbol: "P3",
+      uri: "https://example.com/p3.json",
     });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix3), [admin.payer]);
+
+    const { data: state1 } = await sdk.fetchLaunch(launch1);
+    const { data: state2 } = await sdk.fetchLaunch(launch2);
+    const { data: state3 } = await sdk.fetchLaunch(launch3);
+
+    assert.equal(state1.projectId.toNumber(), projectId1.toNumber(), "Launch 1 projectId mismatch");
+    assert.equal(state2.projectId.toNumber(), projectId2.toNumber(), "Launch 2 projectId mismatch");
+    assert.equal(state3.projectId.toNumber(), projectId3.toNumber(), "Launch 3 projectId mismatch");
+
+    // Verify counter updated
+    const { data: counterAfter } = await sdk.fetchProjectCounter();
+    assert.equal(counterAfter.lastProjectId.toNumber(), projectId3.toNumber(), "Counter should equal last project ID");
   });
 
   it.skip("PDA derivation consistency", async () => {
