@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [features.localnet]
-engine = ["test", "anchor-test", "devnet"]
+engine = ["test", "devnet"]
 
 [programs.localnet]
 engine = "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7"

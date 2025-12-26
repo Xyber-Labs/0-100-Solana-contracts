@@ -20,7 +20,13 @@ import { execSync } from "child_process";
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 
-import { advanceTime, createAndFundAccount, doAndCheckError, injectSlotHashesForRange, parsePresetParams } from "./utils";
+import {
+  advanceTime,
+  createAndFundAccount,
+  doAndCheckError,
+  injectSlotHashesForRange,
+  parsePresetParams
+} from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 
 function ensureRaydiumResources(): void {
@@ -488,7 +494,7 @@ describe("engine litesvm", () => {
   });
 
   // NOTE: This test requires build WITHOUT anchor-test feature (blockhash check is disabled with anchor-test)
-  it.skip("Blockhash verification in preparePoolCreation", async () => {
+  it("Blockhash verification in preparePoolCreation", async () => {
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     // Create a fresh launch for this test
@@ -564,7 +570,6 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    // preparePoolCreation should fail with invalid blockhash
     await doAndCheckError(
       (async () => {
         const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
@@ -572,6 +577,10 @@ describe("engine litesvm", () => {
       })(),
       "NoValidBlockhash"
     );
+
+
+    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
+    assert.ok(lottery.status.inProgress, "Lottery should be in progress after preparePoolCreation");
 
     // Write VALID SlotHashes (one hash inside project's range)
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
@@ -585,6 +594,7 @@ describe("engine litesvm", () => {
         bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataValid, offset + 8);
       }
     }
+
     client.setAccount(SLOT_HASHES_SYSVAR, {
       lamports: 1_000_000,
       data: slotHashesDataValid,
