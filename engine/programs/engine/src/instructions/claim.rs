@@ -123,7 +123,7 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let periods_count = duration / period;
 
     let available_to_claim = (allocation as u128)
-        .checked_mul((periods_passed + 1) as u128)
+        .checked_mul(periods_passed as u128)
         .and_then(|mul| mul.checked_div(periods_count as u128))
         .ok_or_else(|| ErrorCode::ArithmeticOverflow)? as u64;
     let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)? as u64;

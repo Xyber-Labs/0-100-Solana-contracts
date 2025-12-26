@@ -398,7 +398,7 @@ describe("engine litesvm", () => {
 
   it("Allows deposits", async () => {
     const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const depositAmount = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
 
     // Fund realloc_funds PDA for reallocation costs (must be owned by program)
     const [reallocFundsPda] = sdk.getReallocFundsPda();
@@ -418,14 +418,19 @@ describe("engine litesvm", () => {
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [depositor]);
 
     const userContrib = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(userContrib.ticketRanges.length, 1, "Should have 1 range");
+    assert.equal(userContrib.ticketRanges[0].start.toNumber(), 0, "Range should start at 0");
+    assert.equal(userContrib.ticketRanges[0].end.toNumber(), 100, "Range should end at 100");
+
     const totalTickets = userContrib.ticketRanges.reduce(
       (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
       0
     );
-    assert.equal(totalTickets, 20);
+    assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
     const lottery = await sdk.fetchLottery(launchState);
-    assert.equal(lottery.bitsAllocated.toNumber(), 20);
+    assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
+    assert.equal(lottery.bits.length, 2, "bits array should have 2 u64 elements for 100 bits");
   });
 
   it.skip("Allows withdrawals", async () => {
