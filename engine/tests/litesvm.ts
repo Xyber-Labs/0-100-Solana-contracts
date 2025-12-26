@@ -620,138 +620,117 @@ describe("engine litesvm", () => {
   });
 
   // NOTE: This test requires build WITHOUT anchor-test feature (blockhash check is disabled with anchor-test)
-  it.skip("Grace period: invalid hashes fail within grace; succeed after", async () => {
-    const GRACE = 20;
-    const HARD_CAP = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    const TAU = new anchor.BN(1); // 1 lamport to avoid divisibility issues
-    const MIN_RAISE = TAU.clone();
-    const PER_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const TOTAL = new anchor.BN(1000000);
-    const SALE_BPS = new anchor.BN(10000);
+  it("Grace period: invalid hashes fail within grace; succeed after", async () => {
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    const projectId = await sdk.getNextProjectId();
-    const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
+    // Create a fresh launch for this test
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+      creator: admin.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "GracePeriodTest",
+      symbol: "GPT",
+      uri: "https://example.com/gpt.json",
+    });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer]);
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId,
-        hardCapLamports: HARD_CAP,
-        minRaiseLamports: MIN_RAISE,
-        perWalletCap: PER_CAP,
-        tauLamports: TAU,
-        baseTotalAllocation: TOTAL,
-        baseSaleBasisPoints: SALE_BPS,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 0,
-        rosterShardCap: 100,
-      rosterShardsTotal: 1,
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        poolCreationGracePeriodSec: GRACE,
-        xyberMint,
+    // Deposit enough to meet min_raise
+    const minRaise = new anchor.BN(presetData.minRaiseLamports);
+    const perWallet = new anchor.BN(presetData.perWalletCap);
+    let totalDeposited = new anchor.BN(0);
+
+    while (totalDeposited.lt(minRaise)) {
+      const depositor = await createAndFundAccount(client, 250);
+      const remaining = minRaise.sub(totalDeposited);
+      const amount = remaining.gt(perWallet) ? perWallet : remaining;
+
+      const { instruction: depIx } = await sdk.depositIx({
+        contributor: depositor.publicKey,
+        launch: testLaunch,
+        amount,
       });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [depositor]);
+      totalDeposited = totalDeposited.add(amount);
     }
 
-    await sdk.initRoster({ launch: launchPda });
+    // Advance time beyond funding period
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
-    const depositor = await createAndFundAccount(client, 20);
-    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
-    const { data: stateAfterInit } = await sdk.fetchLaunch(launchPda) as any;
-    const tauBn = new anchor.BN((stateAfterInit.tauLamports as anchor.BN).toString());
-    const [userContribution] = sdk.getUserContributionPda(launchPda, depositor.publicKey);
-    const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-    const depIx = await (program.methods as any)
-      .deposit(tauBn)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: launchPda,
-        userContribution,
-        rosterShard,
-        escrowAuthority,
-        launch: launchPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .instruction();
-    const depTx = new anchor.web3.Transaction().add(depIx);
-    await safeSendAndConfirm(provider, client, depTx, [depositor]);
-    // ignore remainder if any, to keep multiples of tau strictly
+    // Set VRF seed
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [admin.payer]);
 
-    await advanceTime(client, { seconds: BigInt(12) });
-    await sdk.setSeed({ launch: launchPda });
-    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1, signers: [] });
+    // Verify lottery is still in progress
+    let { data: lottery } = await sdk.fetchLottery(testLaunch);
+    assert.ok(lottery.status.inProgress, "Lottery should be in progress before preparePoolCreation");
 
-    const { data: state } = await sdk.fetchLaunch(launchPda);
-    const project = state.projectId.toNumber();
-    const unlock = Number((state as any).unlockTimeSec);
+    // Get launch state for blockhash range calculation
+    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
+    const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const currentClock = client.getClock();
+
+    // Compute project's personal blockhash range
+    const projectId = launchAccount.projectId.toNumber();
+    const unlock = Number(presetAccount.unlockTimeSec);
     const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
     const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-    const rangeStart = width * BigInt(project - 1);
+    const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width;
 
-    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
-    const invalidNumHashes = 512;
-    const currentClock = client.getClock();
-    const data = Buffer.alloc(8 + invalidNumHashes * 40);
-    data.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
-    for (let i = 0; i < invalidNumHashes; i++) {
+    // Write INVALID SlotHashes (all hashes outside project's range)
+    const numHashes = 512;
+    const slotHashesDataInvalid = Buffer.alloc(8 + numHashes * 40);
+    slotHashesDataInvalid.writeBigUInt64LE(BigInt(numHashes), 0);
+    for (let i = 0; i < numHashes; i++) {
       const offset = 8 + i * 40;
-      data.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-      bigIntTo32BytesBE(rangeEnd).copy(data, offset + 8);
+      slotHashesDataInvalid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8); // rangeEnd is outside valid range
     }
-    client.setAccount(SLOT_HASHES_SYSVAR, { lamports: 1_000_000, data, owner: anchor.web3.SystemProgram.programId, executable: false });
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesDataInvalid,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
+    });
 
-    let threw = false;
-    try {
-      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda });
-      await provider.simulate(transaction);
-    } catch (_) {
-      threw = true;
-    }
-    assert.isTrue(threw, "Expected failure within grace when no in-range blockhash present");
+    // Within grace period: should fail with NoValidBlockhash
+    await doAndCheckError(
+      (async () => {
+        const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
+        await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
+      })(),
+      "NoValidBlockhash"
+    );
 
-    await advanceTime(client, { seconds: BigInt(GRACE + 5) });
-    injectSlotHashesForRange(client, rangeStart, rangeEnd);
-    const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda, computeUnits: 1_500_000 });
-    const sig = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
-    assert.isString(sig);
-    const poolState = await sdk.fetchPoolState(launchPda);
-    assert.isTrue(poolState.created);
+    // Verify lottery still in progress after failed attempt
+    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
+    assert.ok(lottery.status.inProgress, "Lottery should still be in progress after failed preparePoolCreation");
+
+    // Advance time beyond grace period
+    const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(gracePeriod + 10) });
+
+    // After grace period expires, preparePoolCreation should succeed even with invalid hashes
+    // (because random_pool_creation_expired becomes true)
+    const { transaction } = await sdk.preparePoolCreationTx({
+      payer: admin.publicKey,
+      launch: testLaunch,
+      computeUnits: 2_000_000,
+    });
+    await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
+
+    // Verify lottery is now finalized
+    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
+    assert.ok(lottery.status.finalized, "Lottery should be finalized after grace period expired");
+
+    // Verify claims_opened_at is set
+    const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
   });
 
 });
-
-describe("engine litesvm - raydium clmm", () => {
-  let raydiumProgramId: anchor.web3.PublicKey;
-  let raydiumAmmConfig: anchor.web3.PublicKey;
-
-  const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-  const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-  const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-  const ROSTER_SHARD_CAP = 100;
-
-  before(async () => {
-    client = fromWorkspace("./");
-    provider = new LiteSVMProvider(client);
-    anchor.setProvider(provider);
-    program = anchor.workspace.engine as Program<Engine>;
-    admin = provider.wallet;
-    adminKeypair = (provider.wallet as any).payer;
-    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
-    client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
-
-    const raydiumSetup = await setupRaydiumCLMM(client);
-    raydiumProgramId = raydiumSetup.raydiumProgramId;
-    raydiumAmmConfig = raydiumSetup.ammConfig;
-  });
-
-  
-});
-
 
 describe("Full flow", () => {
   let client: LiteSVM;
