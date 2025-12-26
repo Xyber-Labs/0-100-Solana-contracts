@@ -282,44 +282,6 @@ export type Engine = {
           }
         },
         {
-          "name": "poolState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "raydiumPoolState",
           "writable": true
         },
@@ -1031,44 +993,6 @@ export type Engine = {
                   101,
                   114,
                   121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "poolState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
                 ]
               },
               {
@@ -2398,44 +2322,6 @@ export type Engine = {
           }
         },
         {
-          "name": "poolState",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  111,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "slotHashes",
           "address": "SysvarS1otHashes111111111111111111111111111"
         },
@@ -3039,19 +2925,6 @@ export type Engine = {
         214,
         112,
         3
-      ]
-    },
-    {
-      "name": "poolState",
-      "discriminator": [
-        247,
-        237,
-        227,
-        245,
-        215,
-        195,
-        222,
-        70
       ]
     },
     {
@@ -4183,47 +4056,6 @@ export type Engine = {
           {
             "name": "slot",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "poolState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "poolId",
-            "type": "u64"
-          },
-          {
-            "name": "projectId",
-            "type": "u64"
-          },
-          {
-            "name": "createdSlot",
-            "type": "u64"
-          },
-          {
-            "name": "createdBlockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "created",
-            "type": "bool"
-          },
-          {
-            "name": "claimsReady",
-            "type": "bool"
           }
         ]
       }

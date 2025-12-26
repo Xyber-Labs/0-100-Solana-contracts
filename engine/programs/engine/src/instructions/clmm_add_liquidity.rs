@@ -11,7 +11,7 @@ use crate::{
     constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
     SEED_ROOT,
-    state::{LaunchPreset, LaunchState, PoolState},
+    state::{LaunchPreset, LaunchState},
     utils::{lottery::Lottery, clmm::{ClmmOrder, get_liquidity_range_impl}},
 };
 
@@ -70,9 +70,6 @@ pub struct AddClmmLiquidity<'info> {
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
-    pub pool_state: Account<'info, PoolState>,
-
     /// CHECK: Pool state PDA (created by Raydium)
     #[account(mut)]
     pub raydium_pool_state: UncheckedAccount<'info>,
@@ -127,7 +124,6 @@ pub fn add_clmm_liquidity<'info>(
         ErrorCode::MinRaiseNotMet
     );
 
-    ctx.accounts.pool_state.claims_ready = true;
     add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())
 }

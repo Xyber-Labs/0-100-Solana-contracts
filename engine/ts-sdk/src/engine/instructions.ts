@@ -143,10 +143,6 @@ const EngineSDK = {
       return txBuilder.getLaunchPresetPda(id);
     }
 
-    function getPoolPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getPda(["pool", launch]);
-    }
-
     function getUserAta(mint: anchor.web3.PublicKey, owner: anchor.web3.PublicKey): anchor.web3.PublicKey {
       return getAssociatedTokenAddressSync(mint, owner, true);
     }
@@ -514,11 +510,6 @@ const EngineSDK = {
       return txBuilder.fetchProjectCounter();
     }
 
-    async function fetchPoolState(launch: anchor.web3.PublicKey) {
-      const [pda] = getPoolPda(launch);
-      return program.account.poolState.fetch(pda);
-    }
-
     async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
       const [launch] = getLaunchPdaByProjectId(projectId);
       const launchState = await program.account.launchState.fetch(launch);
@@ -656,7 +647,6 @@ const EngineSDK = {
       getUserContributionPda,
       getMintAuthPda,
       getProjectCounterPda,
-      getPoolPda,
       getLaunchPresetPda,
       getReallocFundsPda: txBuilder.getReallocFundsPda.bind(txBuilder),
       deriveAllPdas: deriveAllPdasByProjectId,
@@ -704,7 +694,6 @@ const EngineSDK = {
       fetchContribution,
       fetchLottery,
       fetchProjectCounter,
-      fetchPoolState,
       getRaydiumPoolByProjectId,
       getNextProjectId,
       fetchAllProjects,

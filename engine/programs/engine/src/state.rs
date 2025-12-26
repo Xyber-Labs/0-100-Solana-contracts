@@ -322,18 +322,6 @@ pub struct ProjectCounter {
 
 #[account]
 #[derive(InitSpace)]
-pub struct PoolState {
-    pub launch: Pubkey,
-    pub pool_id: u64,
-    pub project_id: u64,
-    pub created_slot: u64,
-    pub created_blockhash: [u8; 32],
-    pub created: bool,
-    pub claims_ready: bool,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct EngineConfig {
     pub treasury: Pubkey,
     pub xyber_mint: Pubkey,

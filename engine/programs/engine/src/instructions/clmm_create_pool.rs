@@ -13,7 +13,7 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, PoolState, TokenMetadataConfig}, utils::{lottery::Lottery, clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{lottery::Lottery, clmm::ClmmOrder, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -33,9 +33,6 @@ pub struct CreateClmmPool<'info> {
         constraint = lottery.is_finalized() @ ErrorCode::NotFinalized
     )]
     pub lottery: Account<'info, Lottery>,
-
-    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
-    pub pool_state: Account<'info, PoolState>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]

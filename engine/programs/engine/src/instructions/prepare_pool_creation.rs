@@ -8,7 +8,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::{PoolCreated, SelectionFinalized},
-    state::{LaunchPreset, LaunchState, PoolState, WithdrawnRanges},
+    state::{LaunchPreset, LaunchState, WithdrawnRanges},
     utils::{lottery::Lottery, pool},
 };
 
@@ -34,15 +34,6 @@ pub struct CreatePool<'info> {
     #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
     pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
 
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + PoolState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()],
-        bump
-    )]
-    pub pool_state: Account<'info, PoolState>,
-
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
@@ -53,7 +44,6 @@ pub struct CreatePool<'info> {
 pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let pool_state = &mut ctx.accounts.pool_state;
     let lottery = &mut ctx.accounts.lottery;
     let withdrawn = &ctx.accounts.withdrawn_ranges;
 
@@ -62,7 +52,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let total_deposited =
         checked_mul!(lottery.active_tickets() as u64, launch_preset.tau_lamports)?;
     require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-    require!(!pool_state.created, EngineErrorCode::PoolAlreadyCreated);
 
     let current_time = Clock::get()?.unix_timestamp;
     let funding_end = launch_state
@@ -77,23 +66,11 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         launch_preset.unlock_time_sec,
     )?;
 
-    pool_state.launch = launch_state.key();
-    pool_state.pool_id = launch_state.project_id;
-    pool_state.project_id = launch_state.project_id;
-    pool_state.created_slot = valid_slot;
-    pool_state.created_blockhash = valid_hash;
-    pool_state.created = true;
-
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
     lottery.finalize(&seed, k_capacity, &withdrawn.ranges, launch_preset.sale_allocation())?;
 
     launch_state.claims_opened_at = Some(current_time);
-
-    #[cfg(feature = "test")]
-    {
-        ctx.accounts.pool_state.claims_ready = true;
-    }
 
     emit!(SelectionFinalized {
         launch: launch_state.key(),

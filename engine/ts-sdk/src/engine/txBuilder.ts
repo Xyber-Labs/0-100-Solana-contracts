@@ -661,9 +661,7 @@ export class TxBuilder {
     computeUnitPriceMicroLamports?: number;
   }): Promise<{
     transaction: web3.Transaction;
-    poolState: web3.PublicKey;
   }> {
-    const [poolState] = this.getPda(["pool", params.launch]);
     const [lottery] = this.getLotteryPda(params.launch);
     const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
@@ -679,7 +677,6 @@ export class TxBuilder {
         launchPreset: presetAddress,
         lottery,
         withdrawnRanges,
-        poolState,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -699,7 +696,7 @@ export class TxBuilder {
     if (preIxs.length) transaction.add(...preIxs);
     transaction.add(ix);
 
-    return { transaction, poolState };
+    return { transaction };
   }
 
   async createClmmPoolTx(params: {
@@ -737,7 +734,6 @@ export class TxBuilder {
 
 
     const raydiumAmmConfig = this.getRaydiumAmmConfigPda()[0];
-    const [enginePoolState] = this.getPda(["pool", params.launch]);
     const [lottery] = this.getLotteryPda(params.launch);
 
     const launchState = await this.fetchLaunch(params.launch);
@@ -750,7 +746,6 @@ export class TxBuilder {
         launchState: params.launch,
         launchPreset: presetAddress,
         lottery,
-        poolState: enginePoolState,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
@@ -870,7 +865,6 @@ export class TxBuilder {
     const [tickArrayLower] = this.getRaydiumTickArrayPda(raydiumPoolPda, tickArrayLowerStartIndex);
     const [tickArrayUpper] = this.getRaydiumTickArrayPda(raydiumPoolPda, tickArrayUpperStartIndex);
 
-    const [poolState] = this.getPda(["pool", params.launch]);
     const [lottery] = this.getLotteryPda(params.launch);
 
     const launchState = await this.fetchLaunch(params.launch);
@@ -889,7 +883,6 @@ export class TxBuilder {
         quoteMint: WSOL_MINT,
         quoteEscrowAta: quoteEscrowAta,
         raydiumAmmConfig: ammConfigForAdd,
-        poolState: poolState,
         raydiumPoolState: raydiumPoolPda,
         raydiumQuoteVault: quoteVault,
         raydiumBaseVault: baseVault,
