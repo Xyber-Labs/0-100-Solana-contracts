@@ -7,7 +7,7 @@ use crate::{
     checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::{PoolCreated, SelectionFinalized},
+    events::SelectionFinalized,
     state::{LaunchPreset, LaunchState, WithdrawnRanges},
     utils::{lottery::Lottery, pool},
 };
@@ -57,7 +57,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let funding_end = launch_state
         .funding_end(launch_preset.funding_duration_seconds)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let (valid_slot, valid_hash) = select_blockhash(
+    select_blockhash(
         &ctx.accounts.slot_hashes.to_account_info(),
         current_time,
         funding_end,
@@ -77,14 +77,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         k_capacity: launch_preset.k_capacity()?,
     });
 
-    emit!(PoolCreated {
-        launch: launch_state.key(),
-        pool_id: launch_state.project_id,
-        project_id: launch_state.project_id,
-        blockhash: valid_hash,
-        slot: valid_slot,
-    });
-
     Ok(())
 }
 
@@ -95,7 +87,7 @@ fn select_blockhash(
     pool_creation_grace_period_sec: i64,
     project_id: u64,
     unlock_time_sec: i64,
-) -> Result<(u64, [u8; 32])> {
+) -> Result<()> {
     let effective_end = funding_end
         .checked_add(pool_creation_grace_period_sec)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
@@ -107,20 +99,7 @@ fn select_blockhash(
     require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
     if random_pool_creation_expired {
-        let slot_pos = 8u64;
-        let blockhash_pos = slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-        let valid_slot = u64::from_le_bytes(
-            data[slot_pos as usize
-                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-                .try_into()
-                .unwrap(),
-        );
-        let valid_hash: [u8; 32] = data[blockhash_pos as usize
-            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-            .try_into()
-            .unwrap();
-        return Ok((valid_slot, valid_hash));
+        return Ok(());
     }
 
     let hashes_to_check = std::cmp::min(512, num_hashes);
@@ -130,22 +109,15 @@ fn select_blockhash(
         let hash_pos = 8u64
             .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let slot_pos = hash_pos;
         let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-        let slot = u64::from_le_bytes(
-            data[slot_pos as usize
-                ..(slot_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
-                .try_into()
-                .unwrap(),
-        );
         let blockhash: [u8; 32] = data[blockhash_pos as usize
             ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
             .try_into()
             .unwrap();
 
         if pool::is_blockhash_in_project_range(&blockhash, project_id, num_partitions) {
-            return Ok((slot, blockhash));
+            return Ok(());
         }
     }
     err!(EngineErrorCode::NoValidBlockhash)

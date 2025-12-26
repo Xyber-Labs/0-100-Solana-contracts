@@ -3015,19 +3015,6 @@
       ]
     },
     {
-      "name": "PoolCreated",
-      "discriminator": [
-        202,
-        44,
-        41,
-        88,
-        104,
-        220,
-        157,
-        82
-      ]
-    },
-    {
       "name": "Refunded",
       "discriminator": [
         35,
@@ -4017,39 +4004,6 @@
           },
           {
             "name": "Cancelled"
-          }
-        ]
-      }
-    },
-    {
-      "name": "PoolCreated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "pool_id",
-            "type": "u64"
-          },
-          {
-            "name": "project_id",
-            "type": "u64"
-          },
-          {
-            "name": "blockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "slot",
-            "type": "u64"
           }
         ]
       }

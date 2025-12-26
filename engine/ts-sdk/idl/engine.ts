@@ -3021,19 +3021,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "poolCreated",
-      "discriminator": [
-        202,
-        44,
-        41,
-        88,
-        104,
-        220,
-        157,
-        82
-      ]
-    },
-    {
       "name": "refunded",
       "discriminator": [
         35,
@@ -4023,39 +4010,6 @@ export type Engine = {
           },
           {
             "name": "cancelled"
-          }
-        ]
-      }
-    },
-    {
-      "name": "poolCreated",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "poolId",
-            "type": "u64"
-          },
-          {
-            "name": "projectId",
-            "type": "u64"
-          },
-          {
-            "name": "blockhash",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          },
-          {
-            "name": "slot",
-            "type": "u64"
           }
         ]
       }

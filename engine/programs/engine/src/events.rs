@@ -50,12 +50,3 @@ pub struct Claimed {
     pub bucket: u8,
     pub tokens: u64,
 }
-
-#[event]
-pub struct PoolCreated {
-    pub launch: Pubkey,
-    pub pool_id: u64,
-    pub project_id: u64,
-    pub blockhash: [u8; 32],
-    pub slot: u64,
-}
