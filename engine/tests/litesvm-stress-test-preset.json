@@ -1,0 +1,22 @@
+{
+  "id": 99,
+  "hardCapLamports": 200000000000,
+  "minRaiseLamports": 10000000000,
+  "perWalletCap": 1500000000,
+  "tauLamports": 100000000,
+  "baseTotalAllocation": 1000000000000000000,
+  "baseSaleBasisPoints": 4814,
+  "teamAllocationBasisPoints": 1000,
+  "fundingDurationSeconds": 10,
+  "unlockTimeSec": 0,
+  "creatorPeriodUnlock": 100000000,
+  "creatorPeriodSec": 60,
+  "creatorMaxDeposit": 10000000000,
+  "poolCreationGracePeriodSec": 60,
+  "teamDurationSec": 300,
+  "teamPeriodSec": 60,
+  "contributorDurationSec": 300,
+  "contributorPeriodSec": 60,
+  "withdrawalLimit": 5,
+  "creationFee": 100000000
+}
