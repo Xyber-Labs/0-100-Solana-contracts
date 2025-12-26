@@ -327,6 +327,8 @@ export class TxBuilder {
     poolCreationGracePeriodSec: number;
     teamDurationSec: number;
     teamPeriodSec: number;
+    contributorDurationSec: number;
+    contributorPeriodSec: number;
     withdrawalLimit: number;
     creationFee: BN;
     signerAdmins: web3.PublicKey[];
@@ -354,6 +356,8 @@ export class TxBuilder {
       poolCreationGracePeriodSec: new BN(params.poolCreationGracePeriodSec),
       teamDurationSec: new BN(params.teamDurationSec),
       teamPeriodSec: new BN(params.teamPeriodSec),
+      contributorDurationSec: new BN(params.contributorDurationSec),
+      contributorPeriodSec: new BN(params.contributorPeriodSec),
       withdrawalLimit: params.withdrawalLimit,
       creationFee: params.creationFee,
     };

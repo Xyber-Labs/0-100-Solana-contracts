@@ -3751,6 +3751,14 @@ export type Engine = {
             "type": "i64"
           },
           {
+            "name": "contributorDurationSec",
+            "type": "i64"
+          },
+          {
+            "name": "contributorPeriodSec",
+            "type": "i64"
+          },
+          {
             "name": "withdrawalLimit",
             "type": "u8"
           },
@@ -3865,6 +3873,14 @@ export type Engine = {
           },
           {
             "name": "teamPeriodSec",
+            "type": "i64"
+          },
+          {
+            "name": "contributorDurationSec",
+            "type": "i64"
+          },
+          {
+            "name": "contributorPeriodSec",
             "type": "i64"
           },
           {

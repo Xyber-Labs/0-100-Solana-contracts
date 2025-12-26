@@ -26,6 +26,8 @@ export function parsePresetParams(p: any) {
     poolCreationGracePeriodSec: Number(p.poolCreationGracePeriodSec),
     teamDurationSec: Number(p.teamDurationSec),
     teamPeriodSec: Number(p.teamPeriodSec),
+    contributorDurationSec: Number(p.contributorDurationSec ?? 1),
+    contributorPeriodSec: Number(p.contributorPeriodSec ?? 1),
     withdrawalLimit: Number(p.withdrawalLimit),
     creationFee: new BN(String(p.creationFee)),
   };

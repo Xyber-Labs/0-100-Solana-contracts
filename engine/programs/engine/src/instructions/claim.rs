@@ -97,7 +97,8 @@ fn vesting_params(
                 let (duration, period) = preset.creator_vesting_params(deposit)?;
                 Ok(VestingParams { allocation, duration, period })
             } else {
-                Ok(VestingParams { allocation, duration: 1, period: 1 })
+                let (duration, period) = preset.contributor_vesting_params();
+                Ok(VestingParams { allocation, duration, period })
             }
         }
     }

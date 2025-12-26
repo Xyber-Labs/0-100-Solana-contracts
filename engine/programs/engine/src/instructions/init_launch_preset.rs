@@ -22,6 +22,8 @@ pub struct InitLaunchPresetParams {
     pub pool_creation_grace_period_sec: i64,
     pub team_duration_sec: i64,
     pub team_period_sec: i64,
+    pub contributor_duration_sec: i64,
+    pub contributor_period_sec: i64,
     pub withdrawal_limit: u8,
     pub creation_fee: u64,
 }
@@ -85,6 +87,8 @@ pub fn init_launch_preset(
     p.pool_creation_grace_period_sec = params.pool_creation_grace_period_sec;
     p.team_duration_sec = params.team_duration_sec;
     p.team_period_sec = params.team_period_sec;
+    p.contributor_duration_sec = params.contributor_duration_sec;
+    p.contributor_period_sec = params.contributor_period_sec;
     p.withdrawal_limit = params.withdrawal_limit;
     p.creation_fee = params.creation_fee;
 

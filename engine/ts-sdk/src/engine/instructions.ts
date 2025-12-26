@@ -416,6 +416,8 @@ const EngineSDK = {
         poolCreationGracePeriodSec: number;
         teamDurationSec: number;
         teamPeriodSec: number;
+        contributorDurationSec: number;
+        contributorPeriodSec: number;
         withdrawalLimit: number;
         creationFee: BN;
       };

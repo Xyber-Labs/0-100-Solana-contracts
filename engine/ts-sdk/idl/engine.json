@@ -3745,6 +3745,14 @@
             "type": "i64"
           },
           {
+            "name": "contributor_duration_sec",
+            "type": "i64"
+          },
+          {
+            "name": "contributor_period_sec",
+            "type": "i64"
+          },
+          {
             "name": "withdrawal_limit",
             "type": "u8"
           },
@@ -3859,6 +3867,14 @@
           },
           {
             "name": "team_period_sec",
+            "type": "i64"
+          },
+          {
+            "name": "contributor_duration_sec",
+            "type": "i64"
+          },
+          {
+            "name": "contributor_period_sec",
             "type": "i64"
           },
           {

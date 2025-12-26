@@ -362,6 +362,8 @@ pub struct LaunchPreset {
     pub pool_creation_grace_period_sec: i64,
     pub team_duration_sec: i64,
     pub team_period_sec: i64,
+    pub contributor_duration_sec: i64,
+    pub contributor_period_sec: i64,
     pub withdrawal_limit: u8,
     pub creation_fee: u64,
 }
@@ -379,6 +381,8 @@ impl LaunchPreset {
             && self.base_sale_basis_points + self.team_allocation_basis_points <= 10_000
             && self.team_period_sec > 0
             && self.team_duration_sec > 0
+            && self.contributor_period_sec > 0
+            && self.contributor_duration_sec > 0
     }
 
     pub fn sale_allocation(&self) -> u64 {
@@ -392,6 +396,10 @@ impl LaunchPreset {
 
     pub fn team_vesting_params(&self) -> (u64, i64, i64) {
         (self.team_allocation(), self.team_duration_sec, self.team_period_sec)
+    }
+
+    pub fn contributor_vesting_params(&self) -> (i64, i64) {
+        (self.contributor_duration_sec, self.contributor_period_sec)
     }
 
     pub fn creator_vesting_params(&self, deposit: u64) -> Result<(i64, i64)> {

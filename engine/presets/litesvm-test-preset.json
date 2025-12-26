@@ -10,11 +10,13 @@
   "fundingDurationSeconds": 3,
   "unlockTimeSec": 0,
   "creatorPeriodUnlock": 100000000,
-  "creatorPeriodSec": 10,
+  "creatorPeriodSec": 60,
   "creatorMaxDeposit": 8000000000,
   "poolCreationGracePeriodSec": 60,
   "teamDurationSec": 60,
-  "teamPeriodSec": 10,
+  "teamPeriodSec": 60,
+  "contributorDurationSec": 1,
+  "contributorPeriodSec": 1,
   "withdrawalLimit": 3,
   "creationFee": 100000000
 }
