@@ -264,7 +264,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
     console.log("   Launch PDA:", launchPda.toString());
 
-    const launchData = await sdk.fetchLaunch(launchPda);
+    const { data: launchData } = await sdk.fetchLaunch(launchPda);
     assert.ok(launchData, "Launch should exist");
   });
 
@@ -316,7 +316,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
 
-    const launchData = await sdk.fetchLaunch(launchPda);
+    const { data: launchData } = await sdk.fetchLaunch(launchPda);
     const totalSOL = launchData.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL;
     console.log(
       `Total raised: ${launchData.totalDeposited.toString()} lamports (${totalSOL} SOL including creator deposit)`
@@ -326,7 +326,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 6: Wait for funding period and finalize shard", async () => {
     console.log("=== Step 6: Wait for Funding Period ===");
 
-    const launchData = await sdk.fetchLaunch(launchPda);
+    const { data: launchData } = await sdk.fetchLaunch(launchPda);
     const fundingEndTime = launchData.fundingPeriodEnd.toNumber();
     const currentTime = Math.floor(Date.now() / 1000);
     const waitTime = fundingEndTime - currentTime + 2;
@@ -585,7 +585,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   it("Step 14: Harvest CLMM fees through income-dispatcher", async () => {
     console.log("=== Step 14: Harvest CLMM Fees ===");
-    launchStateData = await sdk.fetchLaunch(launchPda);
+    ({ data: launchStateData } = await sdk.fetchLaunch(launchPda));
     const escrowAuthority = sdk.getEscrowAuthorityPda(launchPda)[0];
 
     const isQuoteSmaller = Buffer.compare(WSOL_MINT.toBuffer(), baseMint.toBuffer()) < 0;

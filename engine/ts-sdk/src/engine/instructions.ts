@@ -488,15 +488,14 @@ const EngineSDK = {
     // =============================
 
     async function fetchEngineConfig() {
-      const [configPda] = txBuilder.getConfigPda();
-      return (program.account as any).engineConfig.fetch(configPda);
+      const [pda] = txBuilder.getConfigPda();
+      const data = await (program.account as any).engineConfig.fetch(pda);
+      return { data, pda };
     }
 
     async function fetchLaunch(launch: anchor.web3.PublicKey) {
       return txBuilder.fetchLaunch(launch);
     }
-
-
 
     async function fetchContribution(launch: anchor.web3.PublicKey, contributor: anchor.web3.PublicKey) {
       return txBuilder.fetchContribution(launch, contributor);
@@ -512,14 +511,14 @@ const EngineSDK = {
 
     async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
       const [launch] = getLaunchPdaByProjectId(projectId);
-      const launchState = await program.account.launchState.fetch(launch);
+      const { data: launchState } = await fetchLaunch(launch);
       return launchState.raydiumPoolState ?? null;
     }
 
     async function getNextProjectId(): Promise<BN> {
       try {
-        const counter: any = await fetchProjectCounter();
-        const last: BN = counter?.lastProjectId ?? new BN(0);
+        const { data: counter } = await fetchProjectCounter();
+        const last: BN = (counter as any)?.lastProjectId ?? new BN(0);
         return last.add(new BN(1));
       } catch (_) {
         return new BN(1);
@@ -603,7 +602,7 @@ const EngineSDK = {
     // Get project by launch PDA
     async function getProjectByLaunchPda(launchPda: anchor.web3.PublicKey) {
       try {
-        const launchData = await fetchLaunch(launchPda);
+        const { data: launchData } = await fetchLaunch(launchPda);
         return {
           projectId: launchData.projectId.toNumber(),
           launchPda,

@@ -207,7 +207,7 @@ describe("engine litesvm", () => {
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
     xyberMint = mint.publicKey;
 
-    const config = await sdk.fetchEngineConfig();
+    const { data: config } = await sdk.fetchEngineConfig();
     assert.ok(config, "EngineConfig should exist");
     assert.ok(config.xyberMint.equals(mint.publicKey));
     assert.ok(config.treasury.equals(treasuryPubkey));
@@ -223,7 +223,7 @@ describe("engine litesvm", () => {
     });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [admin.payer, adminBKeypair]);
 
-    const preset = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
     assert.ok(preset, "Preset should exist");
     assert.equal(preset.hardCapLamports.toNumber(), 450_000_000_000);
     assert.equal(preset.minRaiseLamports.toNumber(), 100_000_000_000);
@@ -249,7 +249,7 @@ describe("engine litesvm", () => {
     console.log("Init launch tx signature:", initTx);
 
     launchState = launchPda;
-    const state = await sdk.fetchLaunch(launchState);
+    const { data: state } = await sdk.fetchLaunch(launchState);
 
     assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
     assert.ok(state.creator.equals(admin.publicKey));
@@ -384,7 +384,7 @@ describe("engine litesvm", () => {
       sellerFeeBasisPoints: 0,
     });
 
-    const state = await sdk.fetchLaunch(launchPda);
+    const { data: state } = await sdk.fetchLaunch(launchPda);
     assert.equal(state.projectId.toNumber(), nextId.toNumber ? nextId.toNumber() : Number(nextId));
     assert.equal(state.hardCapLamports.toNumber(), params.hardCapLamports.toNumber());
     // minRaise and some fields should reflect updated preset values
@@ -417,7 +417,7 @@ describe("engine litesvm", () => {
 
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [depositor]);
 
-    const userContrib = await sdk.fetchContribution(launchState, depositor.publicKey);
+    const { data: userContrib } = await sdk.fetchContribution(launchState, depositor.publicKey);
     assert.equal(userContrib.ticketRanges.length, 1, "Should have 1 range");
     assert.equal(userContrib.ticketRanges[0].start.toNumber(), 0, "Range should start at 0");
     assert.equal(userContrib.ticketRanges[0].end.toNumber(), 100, "Range should end at 100");
@@ -428,7 +428,7 @@ describe("engine litesvm", () => {
     );
     assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
-    const lottery = await sdk.fetchLottery(launchState);
+    const { data: lottery } = await sdk.fetchLottery(launchState);
     assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
     assert.equal(lottery.bits.length, 2, "bits array should have 2 u64 elements for 100 bits");
   });
@@ -514,7 +514,7 @@ describe("engine litesvm", () => {
 
     assert.isAbove(Number(finalBalance), Number(initialBalance));
 
-    const state = await sdk.fetchLaunch(testLaunchState);
+    const { data: state } = await sdk.fetchLaunch(testLaunchState);
     assert.equal(state.totalDeposited.toNumber(), 0);
 
     const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
@@ -672,9 +672,9 @@ describe("engine litesvm", () => {
       await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
     }
 
-    const project1State = await sdk.fetchLaunch(project1Launch);
-    const project2State = await sdk.fetchLaunch(project2Launch);
-    const project3State = await sdk.fetchLaunch(project3Launch);
+    const { data: project1State } = await sdk.fetchLaunch(project1Launch);
+    const { data: project2State } = await sdk.fetchLaunch(project2Launch);
+    const { data: project3State } = await sdk.fetchLaunch(project3Launch);
 
     assert.equal(
       project2State.projectId.toNumber(),
@@ -758,7 +758,7 @@ describe("engine litesvm", () => {
     }
 
     // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
-    let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
+    let { data: launchAccount } = await sdk.fetchLaunch(existingLaunchPda);
     if (!launchAccount.selectionFinalized || !(launchAccount as any).claimsReady) {
       // 1) Init roster and shard 1
       await sdk.initRoster({ launch: existingLaunchPda });
@@ -799,7 +799,7 @@ describe("engine litesvm", () => {
       // claims are opened in preparePoolCreation now
 
       // Refresh state
-      launchAccount = await sdk.fetchLaunch(existingLaunchPda);
+      ({ data: launchAccount } = await sdk.fetchLaunch(existingLaunchPda));
       console.log(
         `Launch state - Selection finalized: ${launchAccount.selectionFinalized}`
       );
@@ -935,7 +935,7 @@ describe("engine litesvm", () => {
 
     const depositor = await createAndFundAccount(client, 20);
     const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
-    const stateAfterInit = await sdk.fetchLaunch(launchPda) as any;
+    const { data: stateAfterInit } = await sdk.fetchLaunch(launchPda) as any;
     const tauBn = new anchor.BN((stateAfterInit.tauLamports as anchor.BN).toString());
     const [userContribution] = sdk.getUserContributionPda(launchPda, depositor.publicKey);
     const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
@@ -959,7 +959,7 @@ describe("engine litesvm", () => {
     await sdk.setSeed({ launch: launchPda });
     await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1, signers: [] });
 
-    const state = await sdk.fetchLaunch(launchPda);
+    const { data: state } = await sdk.fetchLaunch(launchPda);
     const project = state.projectId.toNumber();
     const unlock = Number((state as any).unlockTimeSec);
     const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
@@ -1056,7 +1056,7 @@ describe("engine litesvm", () => {
     console.log("Launch with creator deposit initialized. Signature:", signature);
 
     // Check launch state
-    const launchState = await sdk.fetchLaunch(testLaunchState);
+    const { data: launchState } = await sdk.fetchLaunch(testLaunchState);
     const expectedTickets = Math.floor(creatorDepositAmount.toNumber() / TAU_LAMPORTS.toNumber());
     assert.equal(launchState.creatorReservedTickets, 0);
     assert.equal(launchState.creatorGrantPresent, creatorDepositAmount.toNumber() > 0);
@@ -1135,7 +1135,7 @@ describe("engine litesvm", () => {
       await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
     }
     let grant = await sdk.fetchCreatorGrant(launchPda);
-    let state = await sdk.fetchLaunch(launchPda);
+    let { data: state } = await sdk.fetchLaunch(launchPda);
     assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
     assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
 
@@ -1175,7 +1175,7 @@ describe("engine litesvm", () => {
       await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
     }
     grant = await sdk.fetchCreatorGrant(launchPda);
-    state = await sdk.fetchLaunch(launchPda);
+    ({ data: state } = await sdk.fetchLaunch(launchPda));
     assert.equal(grant.lockedLamports.toNumber(), MAX.toNumber());
     assert.equal(state.totalDeposited.toNumber(), MAX.toNumber());
 
@@ -1196,7 +1196,7 @@ describe("engine litesvm", () => {
       await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
     }
     grant = await sdk.fetchCreatorGrant(launchPda);
-    state = await sdk.fetchLaunch(launchPda);
+    ({ data: state } = await sdk.fetchLaunch(launchPda));
     assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
     assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
   });
@@ -1486,7 +1486,7 @@ describe("Full flow", () => {
       });
     }
 
-    let state = await sdk.fetchLaunch(testLaunchState);
+    let { data: state } = await sdk.fetchLaunch(testLaunchState);
     assert.isAtLeast(state.totalDeposited.toNumber(), testHardCap.toNumber());
     console.log(
       `Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
@@ -1507,11 +1507,11 @@ describe("Full flow", () => {
 
     console.log("=== Creating Pool (finalizes selection and opens claims) ===");
     {
-      const st = await sdk.fetchLaunch(testLaunchState) as any;
+      const { data: st } = await sdk.fetchLaunch(testLaunchState) as any;
       console.log("DEBUG roster_shards:", st.rosterShards, "finalized_up_to:", st.rosterFinalizedUpTo);
     }
     {
-      state = await sdk.fetchLaunch(testLaunchState);
+      ({ data: state } = await sdk.fetchLaunch(testLaunchState));
       const projectId = state.projectId.toNumber();
       const unlock = Number((state as any).unlockTimeSec);
       const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
@@ -1625,7 +1625,7 @@ describe("Full flow", () => {
       // Verify creator token balance
       const tokenAccountInfo = client.getAccount(creatorAta);
       const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
-      const latestState: any = await sdk.fetchLaunch(testLaunchState);
+      const { data: latestState }: any = await sdk.fetchLaunch(testLaunchState);
       const perVal: any = latestState.tokensPerTicket ?? state.tokensPerTicket;
       const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
       const ticketsClaimed = creatorGrantAfterClaim.claimedTickets;
@@ -1902,7 +1902,7 @@ describe("Full flow", () => {
       .signers([adminKeypair])
       .rpc();
 
-    const launchAfterDeposit = await sdk.fetchLaunch(testLaunchState);
+    const { data: launchAfterDeposit } = await sdk.fetchLaunch(testLaunchState);
     assert.isTrue(launchAfterDeposit.creatorGrantPresent);
     assert.equal(launchAfterDeposit.totalDeposited.toNumber(), postInitDeposit.toNumber());
 
@@ -1959,7 +1959,7 @@ describe("Full flow", () => {
     await sdk.setSeed({ launch: testLaunchState });
     await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
 
-    let state = await sdk.fetchLaunch(testLaunchState);
+    let { data: state } = await sdk.fetchLaunch(testLaunchState);
     const projectIdNumber = state.projectId.toNumber();
     const unlockTime = Number((state as any).unlockTimeSec);
     const computedN = BigInt(unlockTime > 0 ? unlockTime * 17 : 100);
@@ -1975,7 +1975,7 @@ describe("Full flow", () => {
     });
     await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
 
-    state = await sdk.fetchLaunch(testLaunchState);
+    ({ data: state } = await sdk.fetchLaunch(testLaunchState));
     assert.isAbove(state.creatorReservedTickets, 0);
 
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
@@ -2021,7 +2021,7 @@ describe("Full flow", () => {
     const expectedTickets = dailyLimit.toNumber() / testTau.toNumber();
     assert.equal(creatorGrantAfterClaim.claimedTickets, expectedTickets);
 
-    const latestState: any = await sdk.fetchLaunch(testLaunchState);
+    const { data: latestState }: any = await sdk.fetchLaunch(testLaunchState);
     const perVal: any = latestState.tokensPerTicket;
     const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
     const tokenAccountInfo = client.getAccount(creatorAta);

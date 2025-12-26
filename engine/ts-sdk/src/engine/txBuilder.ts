@@ -414,7 +414,7 @@ export class TxBuilder {
     const [selectionPda] = this.getPda(["selection", params.launch]);
     const [lottery] = this.getLotteryPda(params.launch);
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
@@ -456,7 +456,7 @@ export class TxBuilder {
     const [reallocFunds] = this.getReallocFundsPda();
     const [launchPreset] = this.getLaunchPresetPda(1); // TODO: get from launch state
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
@@ -501,7 +501,7 @@ export class TxBuilder {
     const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
     const [reallocFunds] = this.getReallocFundsPda();
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
@@ -543,7 +543,7 @@ export class TxBuilder {
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
     const [lottery] = this.getLotteryPda(params.launch);
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
@@ -582,7 +582,7 @@ export class TxBuilder {
     const [lottery] = this.getLotteryPda(params.launch);
     const [ticketsClaimed] = this.getTicketsClaimedPda(params.launch, params.bucket, params.participant);
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const participantAta = getAssociatedTokenAddressSync(params.baseMint, params.participant, true);
@@ -623,12 +623,14 @@ export class TxBuilder {
 
   async fetchContribution(launch: web3.PublicKey, contributor: web3.PublicKey) {
     const [pda] = this.getContributionPda(launch, contributor);
-    return this.program.account.contribution.fetch(pda);
+    const data = await this.program.account.contribution.fetch(pda);
+    return { data, pda };
   }
 
   async fetchLottery(launch: web3.PublicKey) {
     const [pda] = this.getLotteryPda(launch);
-    return this.program.account.lottery.fetch(pda);
+    const data = await this.program.account.lottery.fetch(pda);
+    return { data, pda };
   }
 
   // Legacy aliases for backwards compatibility
@@ -641,17 +643,20 @@ export class TxBuilder {
   }
 
   async fetchLaunch(launch: web3.PublicKey) {
-    return this.program.account.launchState.fetch(launch);
+    const data = await this.program.account.launchState.fetch(launch);
+    return { data, pda: launch };
   }
 
   async fetchProjectCounter() {
     const [pda] = this.getPda(["project_counter"]);
-    return this.program.account.projectCounter.fetch(pda);
+    const data = await this.program.account.projectCounter.fetch(pda);
+    return { data, pda };
   }
 
   async fetchLaunchPreset(id: number) {
     const [pda] = this.getLaunchPresetPda(id);
-    return this.program.account.launchPreset.fetch(pda);
+    const data = await this.program.account.launchPreset.fetch(pda);
+    return { data, pda };
   }
 
   async preparePoolCreationTx(params: {
@@ -666,7 +671,7 @@ export class TxBuilder {
     const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const ix = await this.program.methods
@@ -736,7 +741,7 @@ export class TxBuilder {
     const raydiumAmmConfig = this.getRaydiumAmmConfigPda()[0];
     const [lottery] = this.getLotteryPda(params.launch);
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const createClmmPoolIx = await (this.program.methods as any)
@@ -867,7 +872,7 @@ export class TxBuilder {
 
     const [lottery] = this.getLotteryPda(params.launch);
 
-    const launchState = await this.fetchLaunch(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
 
     const instruction = await this.program.methods
