@@ -157,9 +157,17 @@ impl Lottery {
             }
             active_tickets
         } else {
-            for i in 0..capacity {
-                let roll = Self::hash_roll(seed, i, active_tickets);
-                self.set_bit(roll, withdrawn).ok_or(ErrorCode::BitmapFull)?;
+            let mut set_count = 0u64;
+            let n = active_tickets as u16;
+            for batch_idx in 0..capacity.div_ceil(16) {
+                let rolls = Self::hash_roll_batch(seed, batch_idx);
+                for roll in rolls {
+                    if set_count >= capacity {
+                        break;
+                    }
+                    self.set_bit((roll % n) as u64, withdrawn).ok_or(ErrorCode::BitmapFull)?;
+                    set_count += 1;
+                }
             }
             capacity
         };
@@ -171,15 +179,29 @@ impl Lottery {
         Ok(winners)
     }
 
-    fn hash_roll(seed: &[u8; 32], i: u64, n: u64) -> u64 {
+    fn hash_roll_batch(seed: &[u8; 32], i: u64) -> [u16; 16] {
         let mut data = [0u8; 40];
         data[..32].copy_from_slice(seed);
         data[32..40].copy_from_slice(&i.to_le_bytes());
         let h = hash(&data);
-        let val = u64::from_le_bytes([
-            h.0[0], h.0[1], h.0[2], h.0[3], h.0[4], h.0[5], h.0[6], h.0[7],
-        ]);
-        val % n
+        [
+            u16::from_le_bytes([h.0[0], h.0[1]]),
+            u16::from_le_bytes([h.0[2], h.0[3]]),
+            u16::from_le_bytes([h.0[4], h.0[5]]),
+            u16::from_le_bytes([h.0[6], h.0[7]]),
+            u16::from_le_bytes([h.0[8], h.0[9]]),
+            u16::from_le_bytes([h.0[10], h.0[11]]),
+            u16::from_le_bytes([h.0[12], h.0[13]]),
+            u16::from_le_bytes([h.0[14], h.0[15]]),
+            u16::from_le_bytes([h.0[16], h.0[17]]),
+            u16::from_le_bytes([h.0[18], h.0[19]]),
+            u16::from_le_bytes([h.0[20], h.0[21]]),
+            u16::from_le_bytes([h.0[22], h.0[23]]),
+            u16::from_le_bytes([h.0[24], h.0[25]]),
+            u16::from_le_bytes([h.0[26], h.0[27]]),
+            u16::from_le_bytes([h.0[28], h.0[29]]),
+            u16::from_le_bytes([h.0[30], h.0[31]]),
+        ]
     }
 }
 
