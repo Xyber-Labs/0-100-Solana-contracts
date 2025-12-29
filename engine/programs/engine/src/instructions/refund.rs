@@ -6,8 +6,10 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::Refunded,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::lottery::Lottery,
+    utils::lottery::LotteryRaw,
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct Refund<'info> {
@@ -19,12 +21,9 @@ pub struct Refund<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery.is_finalized() || lottery.is_cancelled() @ EngineErrorCode::NotFinalized
-    )]
-    pub lottery: Account<'info, Lottery>,
+    /// CHECK: Raw lottery data, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
+    pub lottery: UncheckedAccount<'info>,
 
     #[account(
         mut,
@@ -43,14 +42,21 @@ pub struct Refund<'info> {
 pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let contribution = &mut ctx.accounts.contribution;
-    let lottery = &ctx.accounts.lottery;
+
+    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
+    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+
+    require!(
+        LotteryRaw::is_finalized(lottery) || LotteryRaw::is_cancelled(lottery),
+        EngineErrorCode::NotFinalized
+    );
 
     let total_tickets = contribution.total_tickets();
 
-    let refundable_total = if lottery.is_cancelled() {
+    let refundable_total = if LotteryRaw::is_cancelled(lottery) {
         total_tickets
     } else {
-        let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
+        let winners = LotteryRaw::count_winning_in_ranges(lottery, &contribution.ticket_ranges);
         checked_sub!(total_tickets, winners)?
     };
 

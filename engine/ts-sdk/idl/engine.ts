@@ -4060,7 +4060,13 @@ export type Engine = {
         "kind": "enum",
         "variants": [
           {
-            "name": "inProgress"
+            "name": "inProgress",
+            "fields": [
+              {
+                "name": "padding",
+                "type": "u64"
+              }
+            ]
           },
           {
             "name": "finalized",
@@ -4072,7 +4078,13 @@ export type Engine = {
             ]
           },
           {
-            "name": "cancelled"
+            "name": "cancelled",
+            "fields": [
+              {
+                "name": "padding",
+                "type": "u64"
+              }
+            ]
           }
         ]
       }

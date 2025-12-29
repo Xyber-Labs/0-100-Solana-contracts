@@ -6,8 +6,10 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
     state::{Contribution, LaunchPreset, LaunchState, TicketRange, WithdrawnRanges},
-    utils::{lottery::Lottery, realloc::realloc_with_payer},
+    utils::{lottery::LotteryRaw, realloc::realloc_raw},
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(amount: u64)]
@@ -25,13 +27,9 @@ pub struct Deposit<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
 
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery.is_in_progress() @ EngineErrorCode::AlreadyFinalized
-    )]
-    pub lottery: Account<'info, Lottery>,
+    /// CHECK: Raw lottery data, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
+    pub lottery: UncheckedAccount<'info>,
 
     #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
     pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
@@ -71,29 +69,49 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
 
-    let lottery = &mut ctx.accounts.lottery;
     let withdrawn_ranges = &mut ctx.accounts.withdrawn_ranges;
 
     let mut reused_ranges = withdrawn_ranges.take_tickets(new_tickets_count);
     let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
-    lottery.inactive = withdrawn_ranges.total_withdrawn();
 
-    let remaining = checked_sub!(new_tickets_count, reused_count)?;
-    if remaining > 0 {
-        let start =
-            lottery.allocate(remaining, false).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let lottery_info = ctx.accounts.lottery.to_account_info();
+    {
+        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
+        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
 
-        reused_ranges.push(TicketRange::new(start, checked_add!(start, remaining)?));
+        require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+
+        LotteryRaw::write_inactive(lottery, withdrawn_ranges.total_withdrawn());
+
+        let remaining = checked_sub!(new_tickets_count, reused_count)?;
+        if remaining > 0 {
+            let bits_allocated = LotteryRaw::read_bits_allocated(lottery);
+            let new_bits_allocated = bits_allocated.checked_add(remaining).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+            LotteryRaw::write_bits_allocated(lottery, new_bits_allocated);
+            let new_vec_len = LotteryRaw::required_words(new_bits_allocated) as u32;
+            LotteryRaw::write_vec_len(lottery, new_vec_len);
+            reused_ranges.push(TicketRange::new(bits_allocated, checked_add!(bits_allocated, remaining)?));
+        }
+    }
+
+    let bits_allocated = {
+        let lottery_data = lottery_info.try_borrow_data()?;
+        LotteryRaw::read_bits_allocated(&lottery_data[DISCRIMINATOR_LEN..])
+    };
+    let required_space = DISCRIMINATOR_LEN + LotteryRaw::required_space(bits_allocated);
+    realloc_raw(&lottery_info, &ctx.accounts.realloc_funds.to_account_info(), required_space)?;
+
+    if is_creator {
+        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
+        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+        for range in &reused_ranges {
+            LotteryRaw::set_range(lottery, range);
+        }
     }
 
     for range in reused_ranges {
-        if is_creator {
-            lottery.set_range(&range);
-        }
         contribution.ticket_ranges.push(range);
     }
-
-    realloc_with_payer(&ctx.accounts.lottery, &ctx.accounts.realloc_funds.to_account_info())?;
 
     let ix = solana_program::system_instruction::transfer(
         &ctx.accounts.contributor.key(),

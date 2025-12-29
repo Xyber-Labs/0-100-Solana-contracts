@@ -7,8 +7,10 @@ use crate::{
     constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
     LaunchState,
-    RAYDIUM_CLMM_PROGRAM_ID, SEED_ROOT, state::LaunchPreset, utils::{lottery::Lottery, clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange}},
+    RAYDIUM_CLMM_PROGRAM_ID, SEED_ROOT, state::LaunchPreset, utils::{lottery::LotteryRaw, clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange}},
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
@@ -18,8 +20,9 @@ pub struct GetLiquidityRange<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
+    /// CHECK: Raw lottery data, validated via seeds
     #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: Account<'info, Lottery>,
+    pub lottery: UncheckedAccount<'info>,
 
     /// CHECK:
     pub base_mint: Account<'info, Mint>,
@@ -43,9 +46,10 @@ pub struct GetLiquidityRange<'info> {
 }
 
 pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
-    let lottery = &ctx.accounts.lottery;
+    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
+    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
 
-    let total_deposited = checked_mul!(lottery.active_tickets() as u64, ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), ctx.accounts.launch_preset.tau_lamports)?;
 
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     let order = ClmmOrder::from_inputs(

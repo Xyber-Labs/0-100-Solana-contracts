@@ -6,8 +6,10 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
     state::{Contribution, LaunchPreset, LaunchState, WithdrawnRanges},
-    utils::{lottery::Lottery, realloc::realloc_with_payer},
+    utils::{lottery::LotteryRaw, realloc::realloc_with_payer},
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(amount: u64)]
@@ -29,13 +31,9 @@ pub struct Withdraw<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery.is_in_progress() @ EngineErrorCode::AlreadyFinalized
-    )]
-    pub lottery: Account<'info, Lottery>,
+    /// CHECK: Raw lottery data, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
+    pub lottery: UncheckedAccount<'info>,
 
     #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
     pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
@@ -55,7 +53,6 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
-    let lottery = &mut ctx.accounts.lottery;
 
     require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
 
@@ -66,10 +63,20 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     );
     let removed_ranges = contribution.remove_tickets(tickets_to_remove);
 
-    lottery.inactive += removed_ranges.iter().map(|r| r.count()).sum::<u64>();
-    for range in removed_ranges {
-        lottery.clear_range(&range);
-        ctx.accounts.withdrawn_ranges.push(range);
+    {
+        let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
+        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+
+        require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+
+        let inactive = LotteryRaw::read_inactive(lottery);
+        let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
+        LotteryRaw::write_inactive(lottery, inactive + added_inactive);
+
+        for range in removed_ranges {
+            LotteryRaw::clear_range(lottery, &range);
+            ctx.accounts.withdrawn_ranges.push(range);
+        }
     }
 
     realloc_with_payer(

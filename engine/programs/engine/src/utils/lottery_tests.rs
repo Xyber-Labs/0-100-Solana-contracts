@@ -22,7 +22,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b1010],
         };
         assert!(!lottery.get_bit(0));
@@ -37,7 +37,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0, 0b101],
         };
         assert!(!lottery.get_bit(63));
@@ -51,7 +51,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         assert_eq!(lottery.set_bit(5, &[]), Some(5));
@@ -63,7 +63,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         assert_eq!(lottery.set_bit(70, &[]), Some(70));
@@ -75,7 +75,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b111],
         };
         assert_eq!(lottery.set_bit(0, &[]), Some(3));
@@ -86,7 +86,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX, 0],
         };
         assert_eq!(lottery.set_bit(60, &[]), Some(64));
@@ -97,7 +97,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![!0b11],
         };
         assert_eq!(lottery.set_bit(60, &[]), Some(0));
@@ -108,7 +108,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b1, u64::MAX],
         };
         assert_eq!(lottery.set_bit(100, &[]), Some(1));
@@ -119,7 +119,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX],
         };
         assert_eq!(lottery.set_bit(0, &[]), None);
@@ -130,7 +130,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0],
         };
         assert_eq!(lottery.set_bit(100, &[]), None);
@@ -141,7 +141,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0],
         };
         let withdrawn = vec![TicketRange::new(5, 10)];
@@ -155,7 +155,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b1111],
         };
         let withdrawn = vec![TicketRange::new(4, 10)];
@@ -167,7 +167,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         assert_eq!(lottery.count_ones(&TicketRange::new(0, 128)), 0);
@@ -178,7 +178,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX],
         };
         assert_eq!(lottery.count_ones(&TicketRange::new(0, 64)), 64);
@@ -189,7 +189,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b11111],
         };
         assert_eq!(lottery.count_ones(&TicketRange::new(0, 10)), 5);
@@ -202,7 +202,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX, 0b1111],
         };
         assert_eq!(lottery.count_ones(&TicketRange::new(60, 70)), 8);
@@ -225,7 +225,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: u64::MAX - 5,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![],
         };
         assert_eq!(lottery.allocate(10, false), None);
@@ -266,7 +266,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0],
         };
         let winners = lottery.finalize(&seed, 100, &[], 64000).unwrap();
@@ -286,7 +286,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         let winners = lottery.finalize(&seed, 50, &[], 50000).unwrap();
@@ -307,7 +307,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 0,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![],
         };
         let _ = lottery.finalize(&seed, 50, &[], 0);
@@ -319,7 +319,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 100,
             inactive: 20,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         let withdrawn = vec![TicketRange::new(10, 30)];
@@ -337,7 +337,7 @@ mod tests {
         let mut lottery = Lottery {
             bits_allocated: 100,
             inactive: 20,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0; 2],
         };
         let withdrawn = vec![TicketRange::new(20, 40)];
@@ -360,7 +360,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0],
         };
         assert_eq!(lottery.count_winning_in_ranges(&[]), 0);
@@ -371,7 +371,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0],
         };
         let ranges = vec![TicketRange::new(0, 10), TicketRange::new(20, 25)];
@@ -383,7 +383,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX],
         };
         let ranges = vec![TicketRange::new(0, 10), TicketRange::new(20, 25)];
@@ -395,7 +395,7 @@ mod tests {
         let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
-            status: LotteryStatus::InProgress,
+            status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b11111111],
         };
         let ranges = vec![TicketRange::new(0, 10), TicketRange::new(20, 25)];

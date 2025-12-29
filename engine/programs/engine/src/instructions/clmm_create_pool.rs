@@ -13,8 +13,10 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{lottery::Lottery, clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{lottery::LotteryRaw, clmm::ClmmOrder, mint as mint_utils},
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct CreateClmmPool<'info> {
@@ -27,12 +29,9 @@ pub struct CreateClmmPool<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery.is_finalized() @ ErrorCode::NotFinalized
-    )]
-    pub lottery: Account<'info, Lottery>,
+    /// CHECK: Raw lottery data, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
+    pub lottery: UncheckedAccount<'info>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -100,9 +99,13 @@ pub struct CreateClmmPool<'info> {
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
     let preset = &ctx.accounts.launch_preset;
-    let lottery = &ctx.accounts.lottery;
 
-    let total_deposited = checked_mul!(lottery.active_tickets() as u64, preset.tau_lamports)?;
+    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
+    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+
+    require!(LotteryRaw::is_finalized(lottery), ErrorCode::NotFinalized);
+
+    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), preset.tau_lamports)?;
     require!(
         total_deposited >= preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet

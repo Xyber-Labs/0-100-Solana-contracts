@@ -10,8 +10,10 @@ use crate::{
     errors::ErrorCode,
     events::Claimed,
     state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
-    utils::lottery::Lottery,
+    utils::lottery::LotteryRaw,
 };
+
+const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(bucket: Bucket)]
@@ -24,12 +26,9 @@ pub struct Claim<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery.is_finalized() @ ErrorCode::NotFinalized
-    )]
-    pub lottery: Account<'info, Lottery>,
+    /// CHECK: Raw lottery data, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
+    pub lottery: UncheckedAccount<'info>,
 
     #[account(
         seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), participant.key().as_ref()],
@@ -79,7 +78,7 @@ fn vesting_params(
     bucket: Bucket,
     is_creator: bool,
     preset: &LaunchPreset,
-    lottery: &Lottery,
+    lottery: &[u8],
     contribution: &Contribution,
 ) -> Result<VestingParams> {
     match bucket {
@@ -89,10 +88,10 @@ fn vesting_params(
             Ok(VestingParams { allocation, duration, period })
         }
         Bucket::Sale => {
-            let allocation = lottery.sale_allocation(&contribution.ticket_ranges);
+            let allocation = LotteryRaw::sale_allocation(lottery, &contribution.ticket_ranges);
 
             if is_creator {
-                let winning_tickets = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
+                let winning_tickets = LotteryRaw::count_winning_in_ranges(lottery, &contribution.ticket_ranges);
                 let deposit = checked_mul!(winning_tickets, preset.tau_lamports)?;
                 let (duration, period) = preset.creator_vesting_params(deposit)?;
                 Ok(VestingParams { allocation, duration, period })
@@ -107,11 +106,15 @@ fn vesting_params(
 pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let lottery = &ctx.accounts.lottery;
     let tickets_claimed = &mut ctx.accounts.tickets_claimed;
     let participant = ctx.accounts.participant.key();
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
+
+    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
+    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+
+    require!(LotteryRaw::is_finalized(lottery), ErrorCode::NotFinalized);
 
     let now = Clock::get()?.unix_timestamp;
     let start = launch_state.claims_opened_at.expect("Expected be finalized");

@@ -4054,7 +4054,13 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "InProgress"
+            "name": "InProgress",
+            "fields": [
+              {
+                "name": "_padding",
+                "type": "u64"
+              }
+            ]
           },
           {
             "name": "Finalized",
@@ -4066,7 +4072,13 @@
             ]
           },
           {
-            "name": "Cancelled"
+            "name": "Cancelled",
+            "fields": [
+              {
+                "name": "_padding",
+                "type": "u64"
+              }
+            ]
           }
         ]
       }
