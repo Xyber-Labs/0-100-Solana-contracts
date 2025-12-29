@@ -11,8 +11,8 @@ pub struct InitEngineConfig<'info> {
     #[account(init, payer = payer, space = 8 + EngineConfig::INIT_SPACE, seeds = [SEED_ROOT, b"config"], bump)]
     pub engine_config: Account<'info, EngineConfig>,
 
-    /// CHECK: PDA for storing SOL to pay for realloc operations
-    #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
+    /// CHECK: PDA for storing SOL to pay for realloc operations (zero-data, program-owned)
+    #[account(init, payer = payer, space = 0, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,

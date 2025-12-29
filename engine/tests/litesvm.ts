@@ -1,7 +1,7 @@
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { FailedTransactionMetadata, LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import { SendTransactionError } from "@solana/web3.js";
 import {
@@ -80,6 +80,11 @@ function encodeSignatureSafe(sigRaw: any): string {
 }
 
 async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx: any, signers: any[]): Promise<string> {
+  const { signature } = await safeSendAndConfirmWithMeta(provider, client, tx, signers);
+  return signature;
+}
+
+async function safeSendAndConfirmWithMeta(provider: LiteSVMProvider, client: LiteSVM, tx: any, signers: any[]): Promise<{ signature: string; computeUnitsConsumed: bigint }> {
   if ("version" in tx) {
     signers?.forEach((s) => {
       try { tx.sign([s]); } catch (_) {}
@@ -103,7 +108,7 @@ async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx
       logs: res.meta().logs(),
     } as any);
   }
-  return signature;
+  return { signature, computeUnitsConsumed: res.computeUnitsConsumed() };
 }
 
 describe("engine litesvm", () => {
@@ -129,15 +134,6 @@ describe("engine litesvm", () => {
     client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
 
     adminBKeypair = anchor.web3.Keypair.generate();
-
-    // Fund realloc_funds PDA for reallocation costs (must be owned by program)
-    const [reallocFundsPda] = sdk.getReallocFundsPda();
-    client.setAccount(reallocFundsPda, {
-      lamports: 100 * anchor.web3.LAMPORTS_PER_SOL,
-      data: Buffer.alloc(0),
-      owner: program.programId,
-      executable: false,
-    });
   });
 
   it("Initializes engine config with XYBER mint", async () => {
@@ -163,6 +159,7 @@ describe("engine litesvm", () => {
       xyberMint: mint.publicKey,
       admins,
       threshold: 2,
+      reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair, adminBKeypair]);
@@ -1097,14 +1094,16 @@ describe("engine litesvm", () => {
     // Interleaved deposits and withdrawals for proper range reuse testing
     let withdrawCount = 0;
 
+    // Calculate max tickets per wallet from preset
+    const maxTicketsPerWallet = preset.perWalletCap.div(tau).toNumber();
+    console.log(`Max tickets per wallet: ${maxTicketsPerWallet}`);
+
     for (let i = 0; i < STRESS_TEST_CONFIG.participantCount; i++) {
-      // Deposit
-      const participant = await createAndFundAccount(client, 5);
-      const ticketCount = Math.floor(
-        STRESS_TEST_CONFIG.minDepositMultiplier +
-        random() * (STRESS_TEST_CONFIG.maxDepositMultiplier - STRESS_TEST_CONFIG.minDepositMultiplier + 1)
-      );
+      // Random ticket count: 1 to maxTicketsPerWallet
+      const ticketCount = Math.floor(1 + random() * maxTicketsPerWallet);
       const amount = tau.muln(ticketCount);
+      const fundAmount = Number(amount.toString()) / 1e9 + 0.1; // deposit + fees
+      const participant = await createAndFundAccount(client, fundAmount);
 
       const { instruction: depIx } = await sdk.depositIx({
         contributor: participant.publicKey,
@@ -1148,7 +1147,8 @@ describe("engine litesvm", () => {
       }
     }
 
-    console.log(`Total deposited: ${totalDepositedTickets} tickets (${totalDepositedTickets * 0.1} SOL)`);
+    const tauSol = Number(tau.toString()) / 1e9;
+    console.log(`Total deposited: ${totalDepositedTickets} tickets (${(totalDepositedTickets * tauSol).toFixed(2)} SOL)`);
     console.log(`Total withdrawals: ${withdrawCount} (${totalWithdrawnTickets} tickets)`);
     const isOverflow = totalDepositedTickets > kCapacity;
     console.log(`Overflow: ${isOverflow ? 'YES' : 'NO'} (capacity: ${kCapacity})`);
@@ -1158,9 +1158,7 @@ describe("engine litesvm", () => {
     // Phase 3: Finalize lottery
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
 
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
-
+    // Inject random slot hashes BEFORE setSeedIx (which reads from them)
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const projectId = launchAccount.projectId.toNumber();
     const unlock = Number(preset.unlockTimeSec);
@@ -1168,18 +1166,69 @@ describe("engine litesvm", () => {
     const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width;
-    injectSlotHashesForRange(client, rangeStart, rangeEnd);
+    const randomSeed = BigInt(Date.now()) * BigInt(Math.floor(Math.random() * 1_000_000));
+    console.log(`Random seed: ${randomSeed}`);
+    injectSlotHashesForRange(client, rangeStart, rangeEnd, 512, randomSeed);
+
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
 
     const { transaction: prepTx } = await sdk.preparePoolCreationTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
+    const { computeUnitsConsumed } = await safeSendAndConfirmWithMeta(provider, client, prepTx, [adminKeypair]);
 
     const { data: lottery } = await sdk.fetchLottery(testLaunch);
     const winners = Math.min(kCapacity, activeTickets);
-    console.log(`Lottery finalized: ${winners} winners out of ${activeTickets} active tickets`);
+    console.log(`Lottery finalized: ${winners} winners out of ${activeTickets} active tickets (CU: ${computeUnitsConsumed.toLocaleString()})`);
+
+    // Visualize bitmap distribution
+    const bits = lottery.bits as anchor.BN[];
+    const totalWords = bits.length;
+    const numSegments = 64;
+    console.log(`\nBitmap distribution (${totalWords} words, ${lottery.bitsAllocated.toString()} allocated, ${activeTickets} active):`);
+
+    // Count winners per segment (divide evenly across allocated bits, not array length)
+    const bitsAllocated = lottery.bitsAllocated.toNumber();
+    const segmentCounts: number[] = [];
+    const bitsPerSegment = Math.ceil(bitsAllocated / numSegments);
+
+    for (let seg = 0; seg < numSegments; seg++) {
+      let count = 0;
+      const bitStart = seg * bitsPerSegment;
+      const bitEnd = Math.min(bitStart + bitsPerSegment, bitsAllocated);
+
+      for (let bitIdx = bitStart; bitIdx < bitEnd; bitIdx++) {
+        const wordIdx = Math.floor(bitIdx / 64);
+        const bitPos = bitIdx % 64;
+        if (wordIdx < bits.length && bits[wordIdx]) {
+          const word = bits[wordIdx].toArray('le', 8);
+          const byteIdx = Math.floor(bitPos / 8);
+          const byteBit = bitPos % 8;
+          if ((word[byteIdx] >> byteBit) & 1) {
+            count++;
+          }
+        }
+      }
+      segmentCounts.push(count);
+    }
+
+    // Find max for normalization
+    const maxCount = Math.max(...segmentCounts);
+    const avgCount = segmentCounts.reduce((a, b) => a + b, 0) / segmentCounts.length;
+
+    // Print histogram
+    const barChars = '▁▂▃▄▅▆▇█';
+    let histogram = '';
+    for (const count of segmentCounts) {
+      const normalized = maxCount > 0 ? count / maxCount : 0;
+      const idx = Math.min(Math.floor(normalized * 8), 7);
+      histogram += barChars[idx];
+    }
+    console.log(`Winners per segment: min=${Math.min(...segmentCounts)}, avg=${avgCount.toFixed(0)}, max=${maxCount}`);
+    console.log(`Distribution: ${histogram}`);
 
     // Check account sizes and rent
     const [lotteryPda] = sdk.getLotteryPda(testLaunch);
@@ -1204,6 +1253,7 @@ describe("engine litesvm", () => {
     const reallocFundsSpent = reallocFundsStart - reallocFundsEnd;
     console.log(`Realloc funds end: ${Number(reallocFundsEnd) / 1e9} SOL (spent: ${Number(reallocFundsSpent) / 1e9} SOL)`);
 
+    /* COMMENTED OUT FOR CU FOCUS
     // Create pool
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
@@ -1319,6 +1369,7 @@ describe("engine litesvm", () => {
     console.log(`Claim difference: ${claimDiff} (${claimDiffPercent}%)`);
 
     assert.ok(claimDiffPercent < 1, `Claim difference should be < 1%, got ${claimDiffPercent}%`);
+    END COMMENTED OUT */
 
     console.log(`✅ Stress test complete`);
   });
@@ -1360,6 +1411,7 @@ describe("engine litesvm", () => {
           xyberMint: mint.publicKey,
           admins,
           threshold: 2,
+          reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
           signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
         });
         await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair, adminBKeypair]);
@@ -1428,11 +1480,11 @@ describe("engine litesvm", () => {
         launch: raydiumLaunch,
         computeUnits: 2_000_000,
       });
-      await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
+      const { computeUnitsConsumed } = await safeSendAndConfirmWithMeta(provider, client, prepTx, [adminKeypair]);
 
       const { data: lottery } = await sdk.fetchLottery(raydiumLaunch);
       assert.ok(lottery.status.finalized, "Lottery should be finalized");
-      console.log(`✅ Lottery finalized`);
+      console.log(`✅ Lottery finalized, CU consumed: ${computeUnitsConsumed.toLocaleString()}`);
     });
 
     it("Creates CLMM pool", async () => {

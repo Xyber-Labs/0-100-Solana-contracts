@@ -90,16 +90,18 @@ export function injectSlotHashesForRange(
   client: any,
   rangeStart: bigint,
   rangeEnd: bigint,
-  numHashes = 512
+  numHashes = 512,
+  randomSeed?: bigint
 ) {
   const sysvar = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
   const currentClock = client.getClock();
   const data = Buffer.alloc(8 + numHashes * 40);
   data.writeBigUInt64LE(BigInt(numHashes), 0);
+  const xorMask = randomSeed ?? BigInt(0);
   for (let i = 0; i < numHashes; i++) {
     const offset = 8 + i * 40;
     data.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-    const h = i === numHashes - 1 ? rangeStart : rangeEnd;
+    const h = i === numHashes - 1 ? rangeStart ^ xorMask : rangeEnd ^ xorMask;
     toUint256BE(h).copy(data, offset + 8);
   }
   client.setAccount(sysvar, {
