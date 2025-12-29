@@ -153,7 +153,20 @@ anchor run init-engine-config --provider.cluster localnet -- \
   --admin3-keypair ./keys/admin3.json
 ```
 
-### 5. Create Launch Preset
+### 5. Fund Realloc PDA
+
+Fund the realloc_funds PDA that pays for account reallocations during deposits/withdrawals:
+
+```bash
+anchor run fund-realloc --provider.cluster localnet -- \
+  --amount 5 \
+  --payer-keypair ./keys/admin1.json
+```
+
+**Note:** This creates a program-owned PDA account with SOL that will be used to pay for
+account reallocation costs. 5 SOL should be sufficient for most testing scenarios.
+
+### 6. Create Launch Preset
 
 Launch presets are reusable templates that store common launch parameters. Create a test preset for rapid local testing:
 
@@ -181,47 +194,29 @@ anchor run init-launch-from-preset --provider.cluster localnet -- \
   --creator-keypair ./keys/creator.json
 ```
 
-### Step 2: Initialize Roster and Shard
+### Step 2: Make Deposits
 
-Initialize roster and roster shard (required before deposits):
-
-```bash
-# Initialize roster
-anchor run init-roster --provider.cluster localnet -- --project-id 1
-
-```
-
-**Note:** The test preset has `rosterShardsTotal: 1`, so only shard 1 needs to be initialized. Shard IDs are 1-based.
-
-### Step 3: Make Deposits
-
-Make deposits to the launch:
+Make deposits to the launch. Lottery and contribution accounts are created automatically:
 
 ```bash
 # Deposit 1 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json --shard-id 1
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json
 
 # Deposit 2 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json --shard-id 1
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json
 
 # Deposit 3 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json --shard-id 1
+anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json
 ```
 
-**Note:** `--shard-id 1` is the default and can be omitted. Adjust amounts as needed.
+### Step 3: Wait for Funding Period
 
-### Step 4: Wait for Funding Period and Finalize Shard
+Wait for the funding period to end. The duration is set in the preset (`fundingDurationSeconds`).
 
-After the funding period ends (10 minutes for test preset), finalize the roster shard:
+For test preset with `fundingDurationSeconds: 5`, just wait a few seconds.
+For production presets with longer durations, wait accordingly.
 
-```bash
-# Wait for funding period to end (600 seconds from first deposit)
-# Then finalize:
-
-anchor run finalize-roster-shard --provider.cluster localnet -- --project-id 1 --shard-id 1
-```
-
-### Step 5: Set VRF Seed
+### Step 4: Set VRF Seed
 
 Set the VRF seed for randomness in winner selection:
 
@@ -229,15 +224,15 @@ Set the VRF seed for randomness in winner selection:
 anchor run set-seed --provider.cluster localnet -- --project-id 1
 ```
 
-### Step 6: Prepare Pool Creation
+### Step 5: Prepare Pool Creation
 
-Prepare pool creation by selecting blockhash and finalizing selection:
+Prepare pool creation by selecting blockhash and finalizing the lottery:
 
 ```bash
 anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
 ```
 
-### Step 7: Create CLMM Pool
+### Step 6: Create CLMM Pool
 
 Create the Raydium CLMM pool. This also generates the base mint:
 
@@ -245,7 +240,7 @@ Create the Raydium CLMM pool. This also generates the base mint:
 anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 ```
 
-### Step 8: Add Liquidity to CLMM Pool
+### Step 7: Add Liquidity to CLMM Pool
 
 Add liquidity to the created CLMM pool:
 
@@ -253,7 +248,7 @@ Add liquidity to the created CLMM pool:
 anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 ```
 
-### Step 9: Initialize Income Dispatcher
+### Step 8: Initialize Income Dispatcher
 
 Initialize the Income Dispatcher program. This must be done with the deployer keypair that matches the
 `DEPLOYER` constant hardcoded in the contract:

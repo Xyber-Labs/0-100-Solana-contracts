@@ -91,8 +91,7 @@ fn select_blockhash(
     let effective_end = funding_end
         .checked_add(pool_creation_grace_period_sec)
         .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let random_pool_creation_expired =
-        cfg!(feature = "anchor-test") || current_time >= effective_end;
+    let random_pool_creation_expired = current_time >= effective_end;
 
     let data = slot_hashes.try_borrow_data()?;
     let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());

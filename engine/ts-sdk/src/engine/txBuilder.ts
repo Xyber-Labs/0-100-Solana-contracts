@@ -384,9 +384,11 @@ export class TxBuilder {
     xyberMint: web3.PublicKey;
     admins: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
     threshold: number;
+    reallocFundLamports: BN;
     signerAdmins: web3.PublicKey[];
-  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey }> {
+  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey; reallocFunds: web3.PublicKey }> {
     const [engineConfig] = this.getConfigPda();
+    const [reallocFunds] = this.getReallocFundsPda();
     const method = this.getIxMethod("initEngineConfig", "init_engine_config");
     if (!method) throw new Error("initEngineConfig method not found in program IDL");
     const ix = await method({
@@ -394,10 +396,12 @@ export class TxBuilder {
       xyberMint: params.xyberMint,
       admins: params.admins,
       threshold: params.threshold,
+      reallocFundLamports: params.reallocFundLamports,
     })
       .accountsStrict({
         payer: params.payer,
         engineConfig,
+        reallocFunds,
         systemProgram: web3.SystemProgram.programId,
       })
       .remainingAccounts(
@@ -408,7 +412,7 @@ export class TxBuilder {
         }))
       )
       .instruction();
-    return { instruction: ix, engineConfig };
+    return { instruction: ix, engineConfig, reallocFunds };
   }
 
   async setSeedIx(params: { launch: web3.PublicKey; payer: web3.PublicKey }): Promise<{
@@ -983,12 +987,17 @@ export class TxBuilder {
     tickArrayUpperStartIndex: number;
   }> {
     const [ammConfig] = this.getRaydiumAmmConfigPda();
+    const [lottery] = this.getLotteryPda(params.launch);
+    const { data: launchState } = await this.fetchLaunch(params.launch);
+    const launchPreset = launchState.preset;
 
     try {
       const res = await (this.program.methods as any)
         .getLiquidityRange()
         .accountsStrict({
           launchState: params.launch,
+          launchPreset,
+          lottery,
           baseMint: params.baseMint,
           quoteMint: params.quoteMint,
           raydiumQuoteVault: params.raydiumQuoteVault,
@@ -1004,6 +1013,8 @@ export class TxBuilder {
         .getLiquidityRange()
         .accountsStrict({
           launchState: params.launch,
+          launchPreset,
+          lottery,
           baseMint: params.baseMint,
           quoteMint: params.quoteMint,
           raydiumQuoteVault: params.raydiumQuoteVault,

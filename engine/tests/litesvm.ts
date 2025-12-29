@@ -1323,4 +1323,192 @@ describe("engine litesvm", () => {
     console.log(`✅ Stress test complete`);
   });
 
+  describe("raydium clmm", () => {
+    let raydiumLaunch: anchor.web3.PublicKey;
+    let raydiumPreset: any;
+    let raydiumClmmCreate: any;
+    let raydiumContributor: anchor.web3.Keypair;
+    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+
+    before(async () => {
+      // Ensure adminBKeypair is initialized (may not be if running only raydium tests)
+      if (!adminBKeypair) {
+        adminBKeypair = anchor.web3.Keypair.generate();
+      }
+
+      // Ensure engine config exists (may already be initialized by other tests)
+      const { data: existingConfig } = await sdk.fetchEngineConfig().catch(() => ({ data: null }));
+      if (!existingConfig) {
+        const mint = anchor.web3.Keypair.generate();
+        const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
+        const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
+        const treasuryKeypair = anchor.web3.Keypair.generate();
+        client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
+
+        const tx = new anchor.web3.Transaction()
+          .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+          .add(createInitializeMintInstruction(mint.publicKey, 6, admin.publicKey, null))
+          .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
+          .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryKeypair.publicKey, mint: mint.publicKey }).ix)
+          .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000_000)));
+        await safeSendAndConfirm(provider, client, tx, [adminKeypair, mint]);
+
+        const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
+        const { instruction } = await (sdk as any).initEngineConfigIx({
+          payer: admin.publicKey,
+          treasury: treasuryKeypair.publicKey,
+          xyberMint: mint.publicKey,
+          admins,
+          threshold: 2,
+          signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+        });
+        await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair, adminBKeypair]);
+      }
+
+      const raydiumPresetPath = path.resolve(__dirname, "litesvm-raydium-test-preset.json");
+      const raydiumPresetRaw = JSON.parse(fs.readFileSync(raydiumPresetPath, "utf-8"));
+      raydiumPreset = parsePresetParams(raydiumPresetRaw);
+
+      const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
+        payer: admin.publicKey,
+        id: Number(raydiumPreset.id),
+        ...raydiumPreset,
+        signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+      });
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [adminKeypair, adminBKeypair]);
+    });
+
+    it("Creates launch and deposits for CLMM pool", async () => {
+      const nextId = await sdk.getNextProjectId();
+      const { instruction, launchState } = await (sdk as any).initLaunchFromPresetIx({
+        creator: admin.publicKey,
+        presetId: raydiumPreset.id,
+        projectId: nextId,
+        saleStartTimeTimestamp: 0,
+        name: "RaydiumTest",
+        symbol: "RYD",
+        uri: "https://example.com/raydium.json",
+      });
+      raydiumLaunch = launchState;
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+
+      const tau = raydiumPreset.tauLamports;
+      const minRaise = raydiumPreset.minRaiseLamports;
+      const depositAmount = minRaise;
+
+      raydiumContributor = await createAndFundAccount(client, 250);
+      const { instruction: depIx } = await sdk.depositIx({
+        contributor: raydiumContributor.publicKey,
+        launch: raydiumLaunch,
+        amount: depositAmount,
+      });
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [raydiumContributor]);
+
+      const tickets = depositAmount.div(tau).toNumber();
+      console.log(`✅ Launch created and ${tickets} tickets deposited`);
+    });
+
+    it("Finalizes lottery after funding period", async () => {
+      await advanceTime(client, { slots: BigInt(100), seconds: BigInt(raydiumPreset.fundingDurationSeconds + 10) });
+
+      const { instruction: seedIx } = await sdk.setSeedIx({ launch: raydiumLaunch, payer: admin.publicKey });
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+
+      const { data: launchAccount } = await sdk.fetchLaunch(raydiumLaunch);
+      const projectId = launchAccount.projectId.toNumber();
+      const unlock = Number(raydiumPreset.unlockTimeSec);
+      const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
+      const rangeStart = width * BigInt(projectId - 1);
+      const rangeEnd = rangeStart + width;
+      injectSlotHashesForRange(client, rangeStart, rangeEnd);
+
+      const { transaction: prepTx } = await sdk.preparePoolCreationTx({
+        payer: admin.publicKey,
+        launch: raydiumLaunch,
+        computeUnits: 2_000_000,
+      });
+      await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
+
+      const { data: lottery } = await sdk.fetchLottery(raydiumLaunch);
+      assert.ok(lottery.status.finalized, "Lottery should be finalized");
+      console.log(`✅ Lottery finalized`);
+    });
+
+    it("Creates CLMM pool", async () => {
+      const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
+
+      raydiumClmmCreate = await sdk.createClmmPoolTx({
+        payer: admin.publicKey,
+        launch: raydiumLaunch,
+        quoteMint: WSOL_MINT,
+        ammConfig,
+        clmmProgram: raydiumProgramId,
+        provider,
+      });
+      await safeSendAndConfirm(provider, client, raydiumClmmCreate.transaction, [adminKeypair, ...raydiumClmmCreate.signers]);
+
+      const poolAccount = client.getAccount(raydiumClmmCreate.poolState);
+      assert.ok(poolAccount, "Pool state should exist");
+      console.log(`✅ CLMM pool created: ${raydiumClmmCreate.poolState.toString()}`);
+    });
+
+    it("Gets liquidity range", async () => {
+      const range = await sdk.getLiquidityRange({
+        launch: raydiumLaunch,
+        baseMint: raydiumClmmCreate.baseMint,
+        quoteMint: WSOL_MINT,
+        raydiumQuoteVault: raydiumClmmCreate.quoteVault,
+        raydiumBaseVault: raydiumClmmCreate.baseVault,
+      });
+
+      assert.ok(typeof range.tickArrayLower === "number", "tickArrayLower should be number");
+      assert.ok(typeof range.tickArrayUpper === "number", "tickArrayUpper should be number");
+      assert.ok(range.tickArrayLower < range.tickArrayUpper, "lower should be less than upper");
+      console.log(`✅ Liquidity range: [${range.tickArrayLower}, ${range.tickArrayUpper}]`);
+    });
+
+    it("Adds liquidity to CLMM pool", async () => {
+      const liqResult = await sdk.addClmmLiquidityTx({
+        payer: admin.publicKey,
+        launch: raydiumLaunch,
+        baseMint: raydiumClmmCreate.baseMint,
+        provider,
+      });
+      await safeSendAndConfirm(provider, client, liqResult.transaction, [adminKeypair, ...liqResult.signers]);
+
+      const quoteVaultAccount = client.getAccount(liqResult.quoteVault);
+      assert.ok(quoteVaultAccount, "Quote vault should exist");
+
+      const baseVaultAccount = client.getAccount(liqResult.baseVault);
+      assert.ok(baseVaultAccount, "Base vault should exist");
+
+      console.log(`✅ Liquidity added to pool`);
+    });
+
+    it("Contributor claims tokens after liquidity", async () => {
+      await advanceTime(client, { slots: BigInt(10), seconds: BigInt(raydiumPreset.contributorDurationSec + 10) });
+
+      const { instruction: claimIx, participantAta } = await sdk.claimIx({
+        launch: raydiumLaunch,
+        baseMint: raydiumClmmCreate.baseMint,
+        participant: raydiumContributor.publicKey,
+        bucket: 0,
+      });
+
+      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
+        .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
+        .add(claimIx), [raydiumContributor]);
+
+      const ataInfo = client.getAccount(participantAta);
+      const unpacked = unpackAccount(participantAta, {
+        ...(ataInfo as any),
+        data: Buffer.from(ataInfo.data),
+      } as any);
+
+      assert.ok(unpacked.amount > BigInt(0), "Should have claimed tokens");
+      console.log(`✅ Contributor claimed ${unpacked.amount.toString()} tokens`);
+    });
+  });
+
 });

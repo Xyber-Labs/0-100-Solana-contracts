@@ -381,21 +381,23 @@ const EngineSDK = {
       xyberMint: anchor.web3.PublicKey;
       admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
       threshold: number;
+      reallocFundLamports: BN;
       adminKeypairs?: anchor.web3.Keypair[];
-    }): Promise<{ engineConfig: anchor.web3.PublicKey; signature: string }> {
-      const { instruction, engineConfig } = await txBuilder.initEngineConfigIx({
+    }): Promise<{ engineConfig: anchor.web3.PublicKey; reallocFunds: anchor.web3.PublicKey; signature: string }> {
+      const { instruction, engineConfig, reallocFunds } = await txBuilder.initEngineConfigIx({
         payer,
         treasury: args.treasury,
         xyberMint: args.xyberMint,
         admins: args.admins,
         threshold: args.threshold,
+        reallocFundLamports: args.reallocFundLamports,
         signerAdmins: (args.adminKeypairs ?? []).map((k) => k.publicKey),
       });
       const tx = new anchor.web3.Transaction().add(instruction);
       const signers = args.adminKeypairs ?? [];
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
       const signature = await provider.sendAndConfirm(tx, signers);
-      return { engineConfig, signature };
+      return { engineConfig, reallocFunds, signature };
     }
 
     async function initLaunchPreset(args: {

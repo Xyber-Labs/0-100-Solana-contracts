@@ -1,9 +1,9 @@
 {
   "id": 99,
-  "hardCapLamports": 200000000000,
-  "minRaiseLamports": 10000000000,
+  "hardCapLamports": 450000000000,
+  "minRaiseLamports": 1000000000,
   "perWalletCap": 1500000000,
-  "tauLamports": 100000000,
+  "tauLamports": 50000000,
   "baseTotalAllocation": 1000000000000000000,
   "baseSaleBasisPoints": 4814,
   "teamAllocationBasisPoints": 1000,
