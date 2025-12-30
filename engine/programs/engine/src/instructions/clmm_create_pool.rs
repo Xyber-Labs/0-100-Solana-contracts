@@ -101,11 +101,11 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let preset = &ctx.accounts.launch_preset;
 
     let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let lottery = LotteryRaw::new(&lottery_data[DISCRIMINATOR_LEN..]);
 
-    require!(LotteryRaw::is_finalized(lottery), ErrorCode::NotFinalized);
+    require!(lottery.is_finalized(), ErrorCode::NotFinalized);
 
-    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets(), preset.tau_lamports)?;
     require!(
         total_deposited >= preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet

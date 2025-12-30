@@ -65,16 +65,16 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
 
     {
         let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-        require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+        require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
 
-        let inactive = LotteryRaw::read_inactive(lottery);
+        let inactive = lottery.inactive();
         let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
-        LotteryRaw::write_inactive(lottery, inactive + added_inactive);
+        lottery.set_inactive(inactive + added_inactive);
 
         for range in removed_ranges {
-            LotteryRaw::clear_range(lottery, &range);
+            lottery.clear_range(&range);
             ctx.accounts.withdrawn_ranges.push(range);
         }
     }

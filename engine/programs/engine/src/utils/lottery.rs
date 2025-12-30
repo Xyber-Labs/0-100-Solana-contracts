@@ -206,9 +206,9 @@ impl Reallocatable for Lottery {
     }
 }
 
-pub struct LotteryRaw;
+pub struct LotteryRaw<T>(pub T);
 
-impl LotteryRaw {
+impl<T> LotteryRaw<T> {
     pub const BITS_PER_WORD: u64 = 64;
     const BITS_ALLOCATED_OFFSET: usize = 0;
     const INACTIVE_OFFSET: usize = 8;
@@ -216,195 +216,17 @@ impl LotteryRaw {
     const VEC_LEN_OFFSET: usize = 25;
     const BITS_DATA_OFFSET: usize = 29;
 
+    pub fn new(data: T) -> Self {
+        Self(data)
+    }
+
     #[inline]
     pub fn required_words(total_bits: u64) -> usize {
         total_bits.div_ceil(Self::BITS_PER_WORD) as usize
     }
 
-    #[inline]
-    pub fn read_bits_allocated(data: &[u8]) -> u64 {
-        u64::from_le_bytes(
-            data[Self::BITS_ALLOCATED_OFFSET..Self::BITS_ALLOCATED_OFFSET + 8].try_into().unwrap(),
-        )
-    }
-
-    #[inline]
-    pub fn write_bits_allocated(data: &mut [u8], value: u64) {
-        data[Self::BITS_ALLOCATED_OFFSET..Self::BITS_ALLOCATED_OFFSET + 8]
-            .copy_from_slice(&value.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn read_inactive(data: &[u8]) -> u64 {
-        u64::from_le_bytes(
-            data[Self::INACTIVE_OFFSET..Self::INACTIVE_OFFSET + 8].try_into().unwrap(),
-        )
-    }
-
-    #[inline]
-    pub fn write_inactive(data: &mut [u8], value: u64) {
-        data[Self::INACTIVE_OFFSET..Self::INACTIVE_OFFSET + 8]
-            .copy_from_slice(&value.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn active_tickets(data: &[u8]) -> u64 {
-        Self::read_bits_allocated(data) - Self::read_inactive(data)
-    }
-
-    #[inline]
-    pub fn read_status_tag(data: &[u8]) -> u8 {
-        data[Self::STATUS_OFFSET]
-    }
-
-    #[inline]
-    pub fn is_in_progress(data: &[u8]) -> bool {
-        Self::read_status_tag(data) == 0
-    }
-
-    #[inline]
-    pub fn is_finalized(data: &[u8]) -> bool {
-        Self::read_status_tag(data) == 1
-    }
-
-    #[inline]
-    pub fn is_cancelled(data: &[u8]) -> bool {
-        Self::read_status_tag(data) == 2
-    }
-
-    #[inline]
-    pub fn read_tokens_per_ticket(data: &[u8]) -> u64 {
-        u64::from_le_bytes(
-            data[Self::STATUS_OFFSET + 1..Self::STATUS_OFFSET + 9].try_into().unwrap(),
-        )
-    }
-
-    #[inline]
-    pub fn write_status_finalized(data: &mut [u8], tokens_per_ticket: u64) {
-        data[Self::STATUS_OFFSET] = 1;
-        data[Self::STATUS_OFFSET + 1..Self::STATUS_OFFSET + 9]
-            .copy_from_slice(&tokens_per_ticket.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn read_vec_len(data: &[u8]) -> u32 {
-        u32::from_le_bytes(data[Self::VEC_LEN_OFFSET..Self::VEC_LEN_OFFSET + 4].try_into().unwrap())
-    }
-
-    #[inline]
-    pub fn write_vec_len(data: &mut [u8], len: u32) {
-        data[Self::VEC_LEN_OFFSET..Self::VEC_LEN_OFFSET + 4].copy_from_slice(&len.to_le_bytes());
-    }
-
     pub fn required_space(bits_allocated: u64) -> usize {
         Self::BITS_DATA_OFFSET + Self::required_words(bits_allocated) * 8
-    }
-
-    #[inline]
-    pub fn get_bit(data: &[u8], index: u64) -> bool {
-        let word_idx = (index / Self::BITS_PER_WORD) as usize;
-        let bit_pos = index % Self::BITS_PER_WORD;
-        let vec_len = Self::read_vec_len(data) as usize;
-        if word_idx >= vec_len {
-            return false;
-        }
-        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
-        let word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
-        (word >> bit_pos) & 1 == 1
-    }
-
-    #[inline]
-    fn set_bit_direct(data: &mut [u8], index: u64) {
-        let word_idx = (index / Self::BITS_PER_WORD) as usize;
-        let bit_pos = index % Self::BITS_PER_WORD;
-        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
-        let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
-        word |= 1u64 << bit_pos;
-        data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
-    }
-
-    #[inline]
-    fn clear_bit_direct(data: &mut [u8], index: u64) {
-        let word_idx = (index / Self::BITS_PER_WORD) as usize;
-        let bit_pos = index % Self::BITS_PER_WORD;
-        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
-        let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
-        word &= !(1u64 << bit_pos);
-        data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
-    }
-
-    pub fn set_bit(data: &mut [u8], index: u64, _withdrawn: &[TicketRange]) -> Option<u64> {
-        let bits_allocated = Self::read_bits_allocated(data);
-        if index >= bits_allocated {
-            return None;
-        }
-        let vec_len = Self::read_vec_len(data) as usize;
-        let start_word = (index / Self::BITS_PER_WORD) as usize;
-        let start_bit = (index % Self::BITS_PER_WORD) as u32;
-
-        for word_idx in start_word..vec_len {
-            let off = Self::BITS_DATA_OFFSET + word_idx * 8;
-            let word = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
-            if word == u64::MAX {
-                continue;
-            }
-            let from = if word_idx == start_word { start_bit } else { 0 };
-            let mask = u64::MAX << from;
-            let avail = !word & mask;
-            if avail != 0 {
-                let bit_pos = avail.trailing_zeros();
-                data[off..off + 8].copy_from_slice(&(word | (1u64 << bit_pos)).to_le_bytes());
-                return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
-            }
-        }
-        for word_idx in 0..start_word {
-            let off = Self::BITS_DATA_OFFSET + word_idx * 8;
-            let word = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
-            if word == u64::MAX {
-                continue;
-            }
-            let avail = !word;
-            if avail != 0 {
-                let bit_pos = avail.trailing_zeros();
-                data[off..off + 8].copy_from_slice(&(word | (1u64 << bit_pos)).to_le_bytes());
-                return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
-            }
-        }
-        None
-    }
-
-    pub fn clear_range(data: &mut [u8], range: &TicketRange) {
-        let vec_len = Self::read_vec_len(data) as usize;
-        for i in range.start..range.end {
-            let word_idx = (i / Self::BITS_PER_WORD) as usize;
-            if word_idx < vec_len {
-                Self::clear_bit_direct(data, i);
-            }
-        }
-    }
-
-    pub fn set_range(data: &mut [u8], range: &TicketRange) {
-        let vec_len = Self::read_vec_len(data) as usize;
-        for i in range.start..range.end {
-            let word_idx = (i / Self::BITS_PER_WORD) as usize;
-            if word_idx < vec_len {
-                Self::set_bit_direct(data, i);
-            }
-        }
-    }
-
-    pub fn count_ones(data: &[u8], range: &TicketRange) -> u64 {
-        let mut result = 0u64;
-        for i in range.start..range.end {
-            if Self::get_bit(data, i) {
-                result += 1;
-            }
-        }
-        result
-    }
-
-    pub fn count_winning_in_ranges(data: &[u8], ranges: &[TicketRange]) -> u64 {
-        ranges.iter().map(|r| Self::count_ones(data, r)).sum()
     }
 
     fn hash_roll_batch(seed: &[u8; 32], i: u64) -> [u32; 8] {
@@ -423,22 +245,227 @@ impl LotteryRaw {
             u32::from_le_bytes([h.0[28], h.0[29], h.0[30], h.0[31]]),
         ]
     }
+}
+
+impl<T: AsRef<[u8]>> LotteryRaw<T> {
+    #[inline]
+    pub fn bits_allocated(&self) -> u64 {
+        let data = self.0.as_ref();
+        u64::from_le_bytes(
+            data[Self::BITS_ALLOCATED_OFFSET..Self::BITS_ALLOCATED_OFFSET + 8].try_into().unwrap(),
+        )
+    }
+
+    #[inline]
+    pub fn inactive(&self) -> u64 {
+        let data = self.0.as_ref();
+        u64::from_le_bytes(
+            data[Self::INACTIVE_OFFSET..Self::INACTIVE_OFFSET + 8].try_into().unwrap(),
+        )
+    }
+
+    #[inline]
+    pub fn active_tickets(&self) -> u64 {
+        self.bits_allocated() - self.inactive()
+    }
+
+    #[inline]
+    fn status_tag(&self) -> u8 {
+        self.0.as_ref()[Self::STATUS_OFFSET]
+    }
+
+    #[inline]
+    pub fn is_in_progress(&self) -> bool {
+        self.status_tag() == 0
+    }
+
+    #[inline]
+    pub fn is_finalized(&self) -> bool {
+        self.status_tag() == 1
+    }
+
+    #[inline]
+    pub fn is_cancelled(&self) -> bool {
+        self.status_tag() == 2
+    }
+
+    #[inline]
+    pub fn tokens_per_ticket(&self) -> u64 {
+        let data = self.0.as_ref();
+        u64::from_le_bytes(
+            data[Self::STATUS_OFFSET + 1..Self::STATUS_OFFSET + 9].try_into().unwrap(),
+        )
+    }
+
+    #[inline]
+    pub fn vec_len(&self) -> u32 {
+        let data = self.0.as_ref();
+        u32::from_le_bytes(data[Self::VEC_LEN_OFFSET..Self::VEC_LEN_OFFSET + 4].try_into().unwrap())
+    }
+
+    #[inline]
+    pub fn get_bit(&self, index: u64) -> bool {
+        let data = self.0.as_ref();
+        let word_idx = (index / Self::BITS_PER_WORD) as usize;
+        let bit_pos = index % Self::BITS_PER_WORD;
+        let vec_len = self.vec_len() as usize;
+        if word_idx >= vec_len {
+            return false;
+        }
+        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
+        let word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
+        (word >> bit_pos) & 1 == 1
+    }
+
+    pub fn count_ones(&self, range: &TicketRange) -> u64 {
+        let mut result = 0u64;
+        for i in range.start..range.end {
+            if self.get_bit(i) {
+                result += 1;
+            }
+        }
+        result
+    }
+
+    pub fn count_winning_in_ranges(&self, ranges: &[TicketRange]) -> u64 {
+        ranges.iter().map(|r| self.count_ones(r)).sum()
+    }
+
+    pub fn sale_allocation(&self, ranges: &[TicketRange]) -> u64 {
+        assert!(self.is_finalized(), "Expected be finalized");
+        self.count_winning_in_ranges(ranges) * self.tokens_per_ticket()
+    }
+}
+
+impl<T: AsMut<[u8]> + AsRef<[u8]>> LotteryRaw<T> {
+    #[inline]
+    pub fn set_bits_allocated(&mut self, value: u64) {
+        let data = self.0.as_mut();
+        data[Self::BITS_ALLOCATED_OFFSET..Self::BITS_ALLOCATED_OFFSET + 8]
+            .copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[inline]
+    pub fn set_inactive(&mut self, value: u64) {
+        let data = self.0.as_mut();
+        data[Self::INACTIVE_OFFSET..Self::INACTIVE_OFFSET + 8]
+            .copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[inline]
+    fn set_status_finalized(&mut self, tokens_per_ticket: u64) {
+        let data = self.0.as_mut();
+        data[Self::STATUS_OFFSET] = 1;
+        data[Self::STATUS_OFFSET + 1..Self::STATUS_OFFSET + 9]
+            .copy_from_slice(&tokens_per_ticket.to_le_bytes());
+    }
+
+    #[inline]
+    pub fn set_vec_len(&mut self, len: u32) {
+        let data = self.0.as_mut();
+        data[Self::VEC_LEN_OFFSET..Self::VEC_LEN_OFFSET + 4].copy_from_slice(&len.to_le_bytes());
+    }
+
+    #[inline]
+    fn set_bit_direct(&mut self, index: u64) {
+        let data = self.0.as_mut();
+        let word_idx = (index / Self::BITS_PER_WORD) as usize;
+        let bit_pos = index % Self::BITS_PER_WORD;
+        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
+        let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
+        word |= 1u64 << bit_pos;
+        data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
+    }
+
+    #[inline]
+    fn clear_bit_direct(&mut self, index: u64) {
+        let data = self.0.as_mut();
+        let word_idx = (index / Self::BITS_PER_WORD) as usize;
+        let bit_pos = index % Self::BITS_PER_WORD;
+        let word_offset = Self::BITS_DATA_OFFSET + word_idx * 8;
+        let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
+        word &= !(1u64 << bit_pos);
+        data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
+    }
+
+    pub fn set_bit(&mut self, index: u64) -> Option<u64> {
+        let bits_allocated = self.bits_allocated();
+        if index >= bits_allocated {
+            return None;
+        }
+        let vec_len = self.vec_len() as usize;
+        let start_word = (index / Self::BITS_PER_WORD) as usize;
+        let start_bit = (index % Self::BITS_PER_WORD) as u32;
+
+        for word_idx in start_word..vec_len {
+            let off = Self::BITS_DATA_OFFSET + word_idx * 8;
+            let data = self.0.as_mut();
+            let word = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
+            if word == u64::MAX {
+                continue;
+            }
+            let from = if word_idx == start_word { start_bit } else { 0 };
+            let mask = u64::MAX << from;
+            let avail = !word & mask;
+            if avail != 0 {
+                let bit_pos = avail.trailing_zeros();
+                data[off..off + 8].copy_from_slice(&(word | (1u64 << bit_pos)).to_le_bytes());
+                return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
+            }
+        }
+        for word_idx in 0..=start_word {
+            let off = Self::BITS_DATA_OFFSET + word_idx * 8;
+            let data = self.0.as_mut();
+            let word = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
+            if word == u64::MAX {
+                continue;
+            }
+            let to = if word_idx == start_word { start_bit } else { 64 };
+            let mask = if to == 0 { 0 } else { u64::MAX >> (64 - to) };
+            let avail = !word & mask;
+            if avail != 0 {
+                let bit_pos = avail.trailing_zeros();
+                data[off..off + 8].copy_from_slice(&(word | (1u64 << bit_pos)).to_le_bytes());
+                return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
+            }
+        }
+        None
+    }
+
+    pub fn clear_range(&mut self, range: &TicketRange) {
+        let vec_len = self.vec_len() as usize;
+        for i in range.start..range.end {
+            let word_idx = (i / Self::BITS_PER_WORD) as usize;
+            if word_idx < vec_len {
+                self.clear_bit_direct(i);
+            }
+        }
+    }
+
+    pub fn set_range(&mut self, range: &TicketRange) {
+        let vec_len = self.vec_len() as usize;
+        for i in range.start..range.end {
+            let word_idx = (i / Self::BITS_PER_WORD) as usize;
+            if word_idx < vec_len {
+                self.set_bit_direct(i);
+            }
+        }
+    }
 
     pub fn finalize(
-        data: &mut [u8],
+        &mut self,
         seed: &[u8; 32],
         capacity: u64,
-        withdrawn: &[TicketRange],
         total_tokens: u64,
     ) -> Result<u64> {
-        let bits_allocated = Self::read_bits_allocated(data);
+        let bits_allocated = self.bits_allocated();
         assert!(bits_allocated > 0);
 
-        let active_tickets = Self::active_tickets(data);
+        let active_tickets = self.active_tickets();
 
         let winners = if capacity >= active_tickets {
             for i in 0..bits_allocated {
-                Self::set_bit(data, i, withdrawn);
+                self.set_bit(i);
             }
             active_tickets
         } else {
@@ -450,7 +477,7 @@ impl LotteryRaw {
                     if set_count >= capacity {
                         break;
                     }
-                    Self::set_bit(data, (roll % n) as u64, withdrawn).ok_or(ErrorCode::BitmapFull)?;
+                    self.set_bit((roll % n) as u64).ok_or(ErrorCode::BitmapFull)?;
                     set_count += 1;
                 }
             }
@@ -458,15 +485,9 @@ impl LotteryRaw {
         };
 
         let tokens_per_ticket = total_tokens / winners;
-        Self::write_status_finalized(data, tokens_per_ticket);
+        self.set_status_finalized(tokens_per_ticket);
 
         Ok(winners)
-    }
-
-    pub fn sale_allocation(data: &[u8], ranges: &[TicketRange]) -> u64 {
-        assert!(Self::is_finalized(data), "Expected be finalized");
-        let tokens_per_ticket = Self::read_tokens_per_ticket(data);
-        Self::count_winning_in_ranges(data, ranges) * tokens_per_ticket
     }
 }
 
@@ -547,15 +568,16 @@ mod tests {
             bits: vec![0b1010],
         };
         let data = lottery_to_bytes(&lottery);
-        assert!(!LotteryRaw::get_bit(&data, 0));
-        assert!(LotteryRaw::get_bit(&data, 1));
-        assert!(!LotteryRaw::get_bit(&data, 2));
-        assert!(LotteryRaw::get_bit(&data, 3));
-        assert!(!LotteryRaw::get_bit(&data, 100));
-        assert_eq!(lottery.get_bit(0), LotteryRaw::get_bit(&data, 0));
-        assert_eq!(lottery.get_bit(1), LotteryRaw::get_bit(&data, 1));
-        assert_eq!(lottery.get_bit(2), LotteryRaw::get_bit(&data, 2));
-        assert_eq!(lottery.get_bit(3), LotteryRaw::get_bit(&data, 3));
+        let raw = LotteryRaw::new(&data);
+        assert!(!raw.get_bit(0));
+        assert!(raw.get_bit(1));
+        assert!(!raw.get_bit(2));
+        assert!(raw.get_bit(3));
+        assert!(!raw.get_bit(100));
+        assert_eq!(lottery.get_bit(0), raw.get_bit(0));
+        assert_eq!(lottery.get_bit(1), raw.get_bit(1));
+        assert_eq!(lottery.get_bit(2), raw.get_bit(2));
+        assert_eq!(lottery.get_bit(3), raw.get_bit(3));
     }
 
     #[test]
@@ -567,110 +589,94 @@ mod tests {
             bits: vec![0b0, 0b101],
         };
         let data = lottery_to_bytes(&lottery);
-        assert!(!LotteryRaw::get_bit(&data, 63));
-        assert!(LotteryRaw::get_bit(&data, 64));
-        assert!(!LotteryRaw::get_bit(&data, 65));
-        assert!(LotteryRaw::get_bit(&data, 66));
-        assert_eq!(lottery.get_bit(63), LotteryRaw::get_bit(&data, 63));
-        assert_eq!(lottery.get_bit(64), LotteryRaw::get_bit(&data, 64));
-        assert_eq!(lottery.get_bit(65), LotteryRaw::get_bit(&data, 65));
-        assert_eq!(lottery.get_bit(66), LotteryRaw::get_bit(&data, 66));
+        let raw = LotteryRaw::new(&data);
+        assert!(!raw.get_bit(63));
+        assert!(raw.get_bit(64));
+        assert!(!raw.get_bit(65));
+        assert!(raw.get_bit(66));
+        assert_eq!(lottery.get_bit(63), raw.get_bit(63));
+        assert_eq!(lottery.get_bit(64), raw.get_bit(64));
+        assert_eq!(lottery.get_bit(65), raw.get_bit(65));
+        assert_eq!(lottery.get_bit(66), raw.get_bit(66));
     }
 
     #[test]
     fn test_raw_set_bit_simple() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b0; 2],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 5, &[]), Some(5));
-        assert_eq!(lottery.set_bit(5, &[]), Some(5));
-        assert!(LotteryRaw::get_bit(&data, 5));
-        assert!(lottery.get_bit(5));
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(5), Some(5));
+        assert!(raw.get_bit(5));
     }
 
     #[test]
     fn test_raw_set_bit_collision() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b111],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 0, &[]), Some(3));
-        assert_eq!(lottery.set_bit(0, &[]), Some(3));
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(0), Some(3));
     }
 
     #[test]
     fn test_raw_set_bit_collision_cross_word() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX, 0b0],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 60, &[]), Some(64));
-        assert_eq!(lottery.set_bit(60, &[]), Some(64));
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(60), Some(64));
     }
 
     #[test]
     fn test_raw_set_bit_wraparound() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![!0b11],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 60, &[]), Some(0));
-        assert_eq!(lottery.set_bit(60, &[]), Some(0));
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(60), Some(0));
     }
 
     #[test]
     fn test_raw_set_bit_full() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![u64::MAX],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 0, &[]), None);
-        assert_eq!(lottery.set_bit(0, &[]), None);
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(0), None);
     }
 
     #[test]
     fn test_raw_set_bit_out_of_bounds() {
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b0],
         };
         let mut data = lottery_to_bytes(&lottery);
-        assert_eq!(LotteryRaw::set_bit(&mut data, 100, &[]), None);
-        assert_eq!(lottery.set_bit(100, &[]), None);
-    }
-
-    #[test]
-    fn test_raw_set_bit_skips_withdrawn() {
-        let mut lottery = Lottery {
-            bits_allocated: 64,
-            inactive: 0,
-            status: LotteryStatus::InProgress { _padding: 0 },
-            bits: vec![0b0],
-        };
-        let mut data = lottery_to_bytes(&lottery);
-        let withdrawn = vec![TicketRange::new(5, 10)];
-        assert_eq!(LotteryRaw::set_bit(&mut data, 5, &withdrawn), Some(10));
-        assert_eq!(lottery.set_bit(5, &withdrawn), Some(10));
-        assert!(!LotteryRaw::get_bit(&data, 5));
-        assert!(LotteryRaw::get_bit(&data, 10));
+        let mut raw = LotteryRaw::new(&mut data);
+        assert_eq!(raw.set_bit(100), None);
     }
 
     #[test]
@@ -682,9 +688,10 @@ mod tests {
             bits: vec![0b11111],
         };
         let data = lottery_to_bytes(&lottery);
+        let raw = LotteryRaw::new(&data);
         let range = TicketRange::new(0, 10);
-        assert_eq!(LotteryRaw::count_ones(&data, &range), 5);
-        assert_eq!(lottery.count_ones(&range), LotteryRaw::count_ones(&data, &range));
+        assert_eq!(raw.count_ones(&range), 5);
+        assert_eq!(lottery.count_ones(&range), raw.count_ones(&range));
     }
 
     #[test]
@@ -696,77 +703,72 @@ mod tests {
             bits: vec![u64::MAX, 0b1111],
         };
         let data = lottery_to_bytes(&lottery);
+        let raw = LotteryRaw::new(&data);
         let range = TicketRange::new(60, 70);
-        assert_eq!(LotteryRaw::count_ones(&data, &range), 8);
-        assert_eq!(lottery.count_ones(&range), LotteryRaw::count_ones(&data, &range));
+        assert_eq!(raw.count_ones(&range), 8);
+        assert_eq!(lottery.count_ones(&range), raw.count_ones(&range));
     }
 
     #[test]
     fn test_raw_finalize_no_overflow() {
         let seed = [1u8; 32];
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 64,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b0],
         };
         let mut data = lottery_to_bytes(&lottery);
-        let raw_winners = LotteryRaw::finalize(&mut data, &seed, 100, &[], 64000).unwrap();
-        let lottery_winners = lottery.finalize(&seed, 100, &[], 64000).unwrap();
+        let mut raw = LotteryRaw::new(&mut data);
+        let raw_winners = raw.finalize(&seed, 100, 64000).unwrap();
         assert_eq!(raw_winners, 64);
-        assert_eq!(lottery_winners, raw_winners);
-        assert_eq!(LotteryRaw::count_ones(&data, &TicketRange::new(0, 64)), 64);
-        assert!(LotteryRaw::is_finalized(&data));
-        assert_eq!(LotteryRaw::read_tokens_per_ticket(&data), 1000);
+        assert_eq!(raw.count_ones(&TicketRange::new(0, 64)), 64);
+        assert!(raw.is_finalized());
+        assert_eq!(raw.tokens_per_ticket(), 1000);
     }
 
     #[test]
     fn test_raw_finalize_overflow() {
         let seed = [2u8; 32];
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 128,
             inactive: 0,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b0; 2],
         };
         let mut data = lottery_to_bytes(&lottery);
-        let raw_winners = LotteryRaw::finalize(&mut data, &seed, 50, &[], 50000).unwrap();
-        let lottery_winners = lottery.finalize(&seed, 50, &[], 50000).unwrap();
+        let mut raw = LotteryRaw::new(&mut data);
+        let raw_winners = raw.finalize(&seed, 50, 50000).unwrap();
         assert_eq!(raw_winners, 50);
-        assert_eq!(lottery_winners, raw_winners);
-        assert_eq!(LotteryRaw::count_ones(&data, &TicketRange::new(0, 128)), 50);
-        assert!(LotteryRaw::is_finalized(&data));
-        assert_eq!(LotteryRaw::read_tokens_per_ticket(&data), 1000);
+        assert_eq!(raw.count_ones(&TicketRange::new(0, 128)), 50);
+        assert!(raw.is_finalized());
+        assert_eq!(raw.tokens_per_ticket(), 1000);
     }
 
     #[test]
-    fn test_raw_finalize_with_withdrawn() {
+    fn test_raw_finalize_with_inactive() {
         let seed = [4u8; 32];
-        let mut lottery = Lottery {
+        let lottery = Lottery {
             bits_allocated: 100,
             inactive: 20,
             status: LotteryStatus::InProgress { _padding: 0 },
             bits: vec![0b0; 2],
         };
         let mut data = lottery_to_bytes(&lottery);
-        let withdrawn = vec![TicketRange::new(10, 30)];
-        let raw_winners = LotteryRaw::finalize(&mut data, &seed, 50, &withdrawn, 50000).unwrap();
-        let lottery_winners = lottery.finalize(&seed, 50, &withdrawn, 50000).unwrap();
+        let mut raw = LotteryRaw::new(&mut data);
+        let raw_winners = raw.finalize(&seed, 50, 50000).unwrap();
         assert_eq!(raw_winners, 50);
-        assert_eq!(lottery_winners, raw_winners);
-        for i in 10..30 {
-            assert!(!LotteryRaw::get_bit(&data, i));
-        }
-        assert!(LotteryRaw::is_finalized(&data));
+        assert!(raw.is_finalized());
     }
 
     #[test]
     fn test_raw_sale_allocation() {
         let lottery = finalized_lottery(1000, vec![0b1111]);
         let data = lottery_to_bytes(&lottery);
+        let raw = LotteryRaw::new(&data);
         let ranges = vec![TicketRange::new(0, 4)];
-        assert_eq!(LotteryRaw::sale_allocation(&data, &ranges), 4 * 1000);
-        assert_eq!(lottery.sale_allocation(&ranges), LotteryRaw::sale_allocation(&data, &ranges));
+        assert_eq!(raw.sale_allocation(&ranges), 4 * 1000);
+        assert_eq!(lottery.sale_allocation(&ranges), raw.sale_allocation(&ranges));
     }
 
     #[test]
@@ -779,14 +781,15 @@ mod tests {
         };
         let mut data = lottery_to_bytes(&lottery);
         let range = TicketRange::new(10, 20);
-        LotteryRaw::clear_range(&mut data, &range);
+        LotteryRaw::new(&mut data).clear_range(&range);
         lottery.clear_range(&range);
+        let raw = LotteryRaw::new(&data);
         for i in 10..20 {
-            assert!(!LotteryRaw::get_bit(&data, i));
+            assert!(!raw.get_bit(i));
             assert!(!lottery.get_bit(i));
         }
-        assert!(LotteryRaw::get_bit(&data, 9));
-        assert!(LotteryRaw::get_bit(&data, 20));
+        assert!(raw.get_bit(9));
+        assert!(raw.get_bit(20));
     }
 
     #[test]
@@ -799,13 +802,14 @@ mod tests {
         };
         let mut data = lottery_to_bytes(&lottery);
         let range = TicketRange::new(10, 20);
-        LotteryRaw::set_range(&mut data, &range);
+        LotteryRaw::new(&mut data).set_range(&range);
         lottery.set_range(&range);
+        let raw = LotteryRaw::new(&data);
         for i in 10..20 {
-            assert!(LotteryRaw::get_bit(&data, i));
+            assert!(raw.get_bit(i));
             assert!(lottery.get_bit(i));
         }
-        assert!(!LotteryRaw::get_bit(&data, 9));
-        assert!(!LotteryRaw::get_bit(&data, 20));
+        assert!(!raw.get_bit(9));
+        assert!(!raw.get_bit(20));
     }
 }

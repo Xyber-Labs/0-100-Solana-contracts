@@ -43,20 +43,20 @@ pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let contribution = &mut ctx.accounts.contribution;
 
-    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
+    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
     require!(
-        LotteryRaw::is_finalized(lottery) || LotteryRaw::is_cancelled(lottery),
+        lottery.is_finalized() || lottery.is_cancelled(),
         EngineErrorCode::NotFinalized
     );
 
     let total_tickets = contribution.total_tickets();
 
-    let refundable_total = if LotteryRaw::is_cancelled(lottery) {
+    let refundable_total = if lottery.is_cancelled() {
         total_tickets
     } else {
-        let winners = LotteryRaw::count_winning_in_ranges(lottery, &contribution.ticket_ranges);
+        let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
         checked_sub!(total_tickets, winners)?
     };
 

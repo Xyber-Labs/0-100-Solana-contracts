@@ -74,11 +74,11 @@ struct VestingParams {
     period: i64,
 }
 
-fn vesting_params(
+fn vesting_params<T: AsRef<[u8]>>(
     bucket: Bucket,
     is_creator: bool,
     preset: &LaunchPreset,
-    lottery: &[u8],
+    lottery: &LotteryRaw<T>,
     contribution: &Contribution,
 ) -> Result<VestingParams> {
     match bucket {
@@ -88,10 +88,10 @@ fn vesting_params(
             Ok(VestingParams { allocation, duration, period })
         }
         Bucket::Sale => {
-            let allocation = LotteryRaw::sale_allocation(lottery, &contribution.ticket_ranges);
+            let allocation = lottery.sale_allocation(&contribution.ticket_ranges);
 
             if is_creator {
-                let winning_tickets = LotteryRaw::count_winning_in_ranges(lottery, &contribution.ticket_ranges);
+                let winning_tickets = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
                 let deposit = checked_mul!(winning_tickets, preset.tau_lamports)?;
                 let (duration, period) = preset.creator_vesting_params(deposit)?;
                 Ok(VestingParams { allocation, duration, period })
@@ -111,16 +111,16 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
 
-    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
+    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-    require!(LotteryRaw::is_finalized(lottery), ErrorCode::NotFinalized);
+    require!(lottery.is_finalized(), ErrorCode::NotFinalized);
 
     let now = Clock::get()?.unix_timestamp;
     let start = launch_state.claims_opened_at.expect("Expected be finalized");
 
     let VestingParams { allocation, duration, period } =
-        vesting_params(bucket, is_creator, launch_preset, lottery, contribution)?;
+        vesting_params(bucket, is_creator, launch_preset, &lottery, contribution)?;
 
     let elapsed_sec = (now - start).max(0).min(duration);
     let periods_passed = elapsed_sec / period;

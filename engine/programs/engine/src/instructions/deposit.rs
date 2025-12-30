@@ -77,35 +77,35 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let lottery_info = ctx.accounts.lottery.to_account_info();
     {
         let mut lottery_data = lottery_info.try_borrow_mut_data()?;
-        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-        require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+        require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
 
-        LotteryRaw::write_inactive(lottery, withdrawn_ranges.total_withdrawn());
+        lottery.set_inactive(withdrawn_ranges.total_withdrawn());
 
         let remaining = checked_sub!(new_tickets_count, reused_count)?;
         if remaining > 0 {
-            let bits_allocated = LotteryRaw::read_bits_allocated(lottery);
+            let bits_allocated = lottery.bits_allocated();
             let new_bits_allocated = bits_allocated.checked_add(remaining).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-            LotteryRaw::write_bits_allocated(lottery, new_bits_allocated);
-            let new_vec_len = LotteryRaw::required_words(new_bits_allocated) as u32;
-            LotteryRaw::write_vec_len(lottery, new_vec_len);
+            lottery.set_bits_allocated(new_bits_allocated);
+            let new_vec_len = LotteryRaw::<&[u8]>::required_words(new_bits_allocated) as u32;
+            lottery.set_vec_len(new_vec_len);
             reused_ranges.push(TicketRange::new(bits_allocated, checked_add!(bits_allocated, remaining)?));
         }
     }
 
     let bits_allocated = {
-        let lottery_data = lottery_info.try_borrow_data()?;
-        LotteryRaw::read_bits_allocated(&lottery_data[DISCRIMINATOR_LEN..])
+        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
+        LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]).bits_allocated()
     };
-    let required_space = DISCRIMINATOR_LEN + LotteryRaw::required_space(bits_allocated);
+    let required_space = DISCRIMINATOR_LEN + LotteryRaw::<&[u8]>::required_space(bits_allocated);
     realloc_raw(&lottery_info, &ctx.accounts.realloc_funds.to_account_info(), required_space)?;
 
     if is_creator {
         let mut lottery_data = lottery_info.try_borrow_mut_data()?;
-        let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
         for range in &reused_ranges {
-            LotteryRaw::set_range(lottery, range);
+            lottery.set_range(range);
         }
     }
 

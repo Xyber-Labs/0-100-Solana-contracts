@@ -34,17 +34,17 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
 
-    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
+    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-    require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+    require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
 
     require!(
         launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
         EngineErrorCode::FundingNotEnded
     );
 
-    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets(), launch_preset.tau_lamports)?;
     require!(
         total_deposited >= launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet

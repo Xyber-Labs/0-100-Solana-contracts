@@ -47,9 +47,9 @@ pub struct GetLiquidityRange<'info> {
 
 pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
     let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let lottery = LotteryRaw::new(&lottery_data[DISCRIMINATOR_LEN..]);
 
-    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
 
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     let order = ClmmOrder::from_inputs(

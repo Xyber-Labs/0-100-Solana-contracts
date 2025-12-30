@@ -42,16 +42,15 @@ pub struct CreatePool<'info> {
 pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let withdrawn = &ctx.accounts.withdrawn_ranges;
 
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
 
     let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-    let lottery = &mut lottery_data[DISCRIMINATOR_LEN..];
+    let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-    require!(LotteryRaw::is_in_progress(lottery), EngineErrorCode::AlreadyFinalized);
+    require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
 
-    let active_tickets = LotteryRaw::active_tickets(lottery);
+    let active_tickets = lottery.active_tickets();
     let total_deposited = checked_mul!(active_tickets, launch_preset.tau_lamports)?;
     require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
 
@@ -70,7 +69,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
-    LotteryRaw::finalize(lottery, &seed, k_capacity, &withdrawn.ranges, launch_preset.sale_allocation())?;
+    lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation())?;
 
     launch_state.claims_opened_at = Some(current_time);
 

@@ -115,12 +115,12 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    let lottery_data = ctx.accounts.lottery.try_borrow_data()?;
-    let lottery = &lottery_data[DISCRIMINATOR_LEN..];
+    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
+    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
 
-    require!(LotteryRaw::is_finalized(lottery), ErrorCode::NotFinalized);
+    require!(lottery.is_finalized(), ErrorCode::NotFinalized);
 
-    let total_deposited = checked_mul!(LotteryRaw::active_tickets(lottery), ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
     require!(
         total_deposited >= ctx.accounts.launch_preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet
