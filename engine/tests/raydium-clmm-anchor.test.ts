@@ -324,9 +324,9 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
 
     // Calculate total deposited from lottery data
-    const { data: lottery } = await sdk.fetchLottery(launchPda);
+    const { data: lottery } = await sdk.fetchLotteryControl(launchPda);
     const tauLamports = presetConfig.tauLamports;
-    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactive.toNumber();
+    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
     const totalDeposited = BigInt(activeTickets) * BigInt(tauLamports);
     const totalSOL = Number(totalDeposited) / anchor.web3.LAMPORTS_PER_SOL;
     console.log(

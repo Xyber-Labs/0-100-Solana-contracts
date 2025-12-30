@@ -10,10 +10,8 @@ use crate::{
     errors::ErrorCode,
     events::Claimed,
     state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
-    utils::lottery::LotteryRaw,
+    utils::lottery::{LotteryControl, LotteryRaw},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(bucket: Bucket)]
@@ -26,9 +24,16 @@ pub struct Claim<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
+
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
 
     #[account(
         seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), participant.key().as_ref()],
@@ -74,11 +79,11 @@ struct VestingParams {
     period: i64,
 }
 
-fn vesting_params<T: AsRef<[u8]>>(
+fn vesting_params<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
     bucket: Bucket,
     is_creator: bool,
     preset: &LaunchPreset,
-    lottery: &LotteryRaw<T>,
+    lottery: &LotteryRaw<C, W, I>,
     contribution: &Contribution,
 ) -> Result<VestingParams> {
     match bucket {
@@ -111,8 +116,15 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
 
-    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+    let lottery_control = &ctx.accounts.lottery_control;
+    let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
+    let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
+
+    let lottery = LotteryRaw::new(
+        &**lottery_control,
+        &winners_data[..],
+        &inactive_data[..],
+    );
 
     require!(lottery.is_finalized(), ErrorCode::NotFinalized);
 

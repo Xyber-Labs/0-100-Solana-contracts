@@ -39,7 +39,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -68,7 +68,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -374,7 +382,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -403,7 +411,110 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winnersBitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -963,7 +1074,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -992,7 +1103,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -1353,7 +1472,7 @@ export type Engine = {
           }
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1383,7 +1502,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -1394,7 +1521,7 @@ export type Engine = {
           }
         },
         {
-          "name": "withdrawnRanges",
+          "name": "winnersBitmap",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1420,13 +1547,67 @@ export type Engine = {
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -1567,7 +1748,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -1596,7 +1777,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2061,7 +2250,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2091,7 +2280,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2102,7 +2299,7 @@ export type Engine = {
           }
         },
         {
-          "name": "withdrawnRanges",
+          "name": "winnersBitmap",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2128,13 +2325,67 @@ export type Engine = {
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2282,7 +2533,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2312,7 +2563,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2323,7 +2582,8 @@ export type Engine = {
           }
         },
         {
-          "name": "withdrawnRanges",
+          "name": "winnersBitmap",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2348,13 +2608,66 @@ export type Engine = {
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2400,7 +2713,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -2429,7 +2742,110 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winnersBitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2574,7 +2990,7 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
+          "name": "lotteryControl",
           "pda": {
             "seeds": [
               {
@@ -2603,7 +3019,15 @@ export type Engine = {
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2702,90 +3126,6 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "lottery",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
-          "name": "withdrawnRanges",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  105,
-                  116,
-                  104,
-                  100,
-                  114,
-                  97,
-                  119,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launchState"
-              }
-            ]
-          }
-        },
-        {
           "name": "reallocFunds",
           "writable": true,
           "pda": {
@@ -2824,6 +3164,152 @@ export type Engine = {
                   100,
                   115
                 ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "lotteryControl",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winnersBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
               }
             ]
           }
@@ -2958,16 +3444,16 @@ export type Engine = {
       ]
     },
     {
-      "name": "lottery",
+      "name": "lotteryControl",
       "discriminator": [
-        162,
-        182,
-        26,
-        12,
-        164,
-        214,
-        112,
-        3
+        48,
+        249,
+        104,
+        98,
+        175,
+        40,
+        51,
+        86
       ]
     },
     {
@@ -3007,19 +3493,6 @@ export type Engine = {
         177,
         60,
         245
-      ]
-    },
-    {
-      "name": "withdrawnRanges",
-      "discriminator": [
-        47,
-        111,
-        181,
-        144,
-        152,
-        72,
-        94,
-        67
       ]
     }
   ],
@@ -4025,7 +4498,7 @@ export type Engine = {
       }
     },
     {
-      "name": "lottery",
+      "name": "lotteryControl",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4034,7 +4507,7 @@ export type Engine = {
             "type": "u64"
           },
           {
-            "name": "inactive",
+            "name": "inactiveCount",
             "type": "u64"
           },
           {
@@ -4046,9 +4519,13 @@ export type Engine = {
             }
           },
           {
-            "name": "bits",
+            "name": "withdrawnRanges",
             "type": {
-              "vec": "u64"
+              "vec": {
+                "defined": {
+                  "name": "ticketRange"
+                }
+              }
             }
           }
         ]
@@ -4060,13 +4537,7 @@ export type Engine = {
         "kind": "enum",
         "variants": [
           {
-            "name": "inProgress",
-            "fields": [
-              {
-                "name": "padding",
-                "type": "u64"
-              }
-            ]
+            "name": "funding"
           },
           {
             "name": "finalized",
@@ -4078,13 +4549,7 @@ export type Engine = {
             ]
           },
           {
-            "name": "cancelled",
-            "fields": [
-              {
-                "name": "padding",
-                "type": "u64"
-              }
-            ]
+            "name": "cancelled"
           }
         ]
       }
@@ -4262,24 +4727,6 @@ export type Engine = {
           {
             "name": "amount",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "withdrawnRanges",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "ranges",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "ticketRange"
-                }
-              }
-            }
           }
         ]
       }

@@ -8,11 +8,9 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::SelectionFinalized,
-    state::{LaunchPreset, LaunchState, WithdrawnRanges},
-    utils::{lottery::LotteryRaw, pool},
+    state::{LaunchPreset, LaunchState},
+    utils::{lottery::{LotteryControl, LotteryRaw}, pool},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -25,12 +23,16 @@ pub struct CreatePool<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(mut, seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
+    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
 
-    #[account(seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
@@ -42,15 +44,12 @@ pub struct CreatePool<'info> {
 pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
+    let lottery_control = &mut ctx.accounts.lottery_control;
 
     require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
+    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
-    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-    let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
-
-    require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
-
-    let active_tickets = lottery.active_tickets();
+    let active_tickets = lottery_control.active_tickets();
     let total_deposited = checked_mul!(active_tickets, launch_preset.tau_lamports)?;
     require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
 
@@ -69,6 +68,18 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
+
+    let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+    let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+    let mut winners_data = winners_info.try_borrow_mut_data()?;
+    let inactive_data = inactive_info.try_borrow_data()?;
+
+    let mut lottery = LotteryRaw::new(
+        &mut **lottery_control,
+        &mut winners_data[..],
+        &inactive_data[..],
+    );
+
     lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation())?;
 
     launch_state.claims_opened_at = Some(current_time);

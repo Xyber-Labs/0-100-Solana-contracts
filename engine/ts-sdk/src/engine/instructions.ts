@@ -108,13 +108,6 @@ const EngineSDK = {
       return txBuilder.getContributionPda(launch, contributor);
     }
 
-    function getLotteryPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getLotteryPda(launch);
-    }
-
-    function getWithdrawnRangesPda(launch: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-      return txBuilder.getWithdrawnRangesPda(launch);
-    }
 
     function getTicketsClaimedPda(
       launch: anchor.web3.PublicKey,
@@ -505,8 +498,8 @@ const EngineSDK = {
       return txBuilder.fetchContribution(launch, contributor);
     }
 
-    async function fetchLottery(launch: anchor.web3.PublicKey) {
-      return txBuilder.fetchLottery(launch);
+    async function fetchLotteryControl(launch: anchor.web3.PublicKey) {
+      return txBuilder.fetchLotteryControl(launch);
     }
 
     async function fetchProjectCounter() {
@@ -627,10 +620,12 @@ const EngineSDK = {
     function deriveAllPdasByProjectId(projectId: number | BN) {
       const [launch] = getLaunchPdaByProjectId(projectId);
       const [escrow] = getEscrowPda(launch);
-      const [lottery] = getLotteryPda(launch);
+      const [lotteryControl] = txBuilder.getLotteryControlPda(launch);
+      const [winnersBitmap] = txBuilder.getWinnersBitmapPda(launch);
+      const [inactiveBitmap] = txBuilder.getInactiveBitmapPda(launch);
       const [mintAuth] = getMintAuthPda(launch);
       const [projectCounter] = getProjectCounterPda();
-      return { launch, escrow, lottery, mintAuth, projectCounter };
+      return { launch, escrow, lotteryControl, winnersBitmap, inactiveBitmap, mintAuth, projectCounter };
     }
 
     // ---- Returned API ----
@@ -644,8 +639,9 @@ const EngineSDK = {
       getEscrowPda,
       getEscrowAuthorityPda,
       getContributionPda,
-      getLotteryPda,
-      getWithdrawnRangesPda,
+      getLotteryControlPda: txBuilder.getLotteryControlPda.bind(txBuilder),
+      getWinnersBitmapPda: txBuilder.getWinnersBitmapPda.bind(txBuilder),
+      getInactiveBitmapPda: txBuilder.getInactiveBitmapPda.bind(txBuilder),
       getTicketsClaimedPda,
       getUserContributionPda,
       getMintAuthPda,
@@ -695,7 +691,7 @@ const EngineSDK = {
       fetchEngineConfig,
       fetchLaunch,
       fetchContribution,
-      fetchLottery,
+      fetchLotteryControl,
       fetchProjectCounter,
       getRaydiumPoolByProjectId,
       getNextProjectId,

@@ -274,13 +274,12 @@ describe("engine litesvm", () => {
     );
     assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
-    const { data: lottery } = await sdk.fetchLottery(launchState);
+    const { data: lottery } = await sdk.fetchLotteryControl(launchState);
     assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
-    assert.equal(lottery.bits.length, 2, "bits array should have 2 u64 elements for 100 bits");
   });
 
   it("Allows withdrawals", async () => {
-    const { data: lotteryInitial } = await sdk.fetchLottery(launchState);
+    const { data: lotteryInitial } = await sdk.fetchLotteryControl(launchState);
     const initialBitsAllocated = lotteryInitial.bitsAllocated.toNumber();
     assert.equal(initialBitsAllocated, 100, "Initial bits_allocated from previous test");
 
@@ -300,7 +299,7 @@ describe("engine litesvm", () => {
     assert.equal(contribBefore.ticketRanges[0].start.toNumber(), 100, "Range start should be 100");
     assert.equal(contribBefore.ticketRanges[0].end.toNumber(), 150, "Range end should be 150");
 
-    const { data: lotteryAfterDeposit } = await sdk.fetchLottery(launchState);
+    const { data: lotteryAfterDeposit } = await sdk.fetchLotteryControl(launchState);
     assert.equal(lotteryAfterDeposit.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
 
     const balanceBefore = client.getBalance(depositor.publicKey);
@@ -321,14 +320,11 @@ describe("engine litesvm", () => {
     assert.equal(contribAfter.ticketRanges[0].start.toNumber(), 100, "Range start unchanged at 100");
     assert.equal(contribAfter.ticketRanges[0].end.toNumber(), 130, "Range end should be 130 after withdraw");
 
-    const { data: lotteryAfterWithdraw } = await sdk.fetchLottery(launchState);
+    const { data: lotteryAfterWithdraw } = await sdk.fetchLotteryControl(launchState);
     assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
-
-    const [withdrawnRangesPda] = sdk.getWithdrawnRangesPda(launchState);
-    const withdrawnRanges = await program.account.withdrawnRanges.fetch(withdrawnRangesPda);
-    assert.equal(withdrawnRanges.ranges.length, 1, "Should have exactly 1 withdrawn range");
-    assert.equal(withdrawnRanges.ranges[0].start.toNumber(), 130, "Withdrawn range start should be 130");
-    assert.equal(withdrawnRanges.ranges[0].end.toNumber(), 150, "Withdrawn range end should be 150");
+    assert.equal(lotteryAfterWithdraw.withdrawnRanges.length, 1, "Should have exactly 1 withdrawn range");
+    assert.equal(lotteryAfterWithdraw.withdrawnRanges[0].start.toNumber(), 130, "Withdrawn range start should be 130");
+    assert.equal(lotteryAfterWithdraw.withdrawnRanges[0].end.toNumber(), 150, "Withdrawn range end should be 150");
   });
 
   it("Project ID increments correctly", async () => {
@@ -474,8 +470,8 @@ describe("engine litesvm", () => {
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
 
-    let { data: lottery } = await sdk.fetchLottery(testLaunch);
-    assert.ok(lottery.status.inProgress, "Lottery should be in progress before preparePoolCreation");
+    let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
+    assert.ok(lottery.status.funding, "Lottery should be in progress before preparePoolCreation");
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
@@ -512,8 +508,8 @@ describe("engine litesvm", () => {
     );
 
 
-    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
-    assert.ok(lottery.status.inProgress, "Lottery should be in progress after preparePoolCreation");
+    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
+    assert.ok(lottery.status.funding, "Lottery should be in progress after preparePoolCreation");
 
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
@@ -541,7 +537,7 @@ describe("engine litesvm", () => {
     });
     await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
 
-    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
+    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
     assert.ok(lottery.status.finalized, "Lottery should be finalized after preparePoolCreation");
 
     const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
@@ -591,8 +587,8 @@ describe("engine litesvm", () => {
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
 
     // Verify lottery is still in progress
-    let { data: lottery } = await sdk.fetchLottery(testLaunch);
-    assert.ok(lottery.status.inProgress, "Lottery should be in progress before preparePoolCreation");
+    let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
+    assert.ok(lottery.status.funding, "Lottery should be in progress before preparePoolCreation");
 
     // Get launch state for blockhash range calculation
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
@@ -633,8 +629,8 @@ describe("engine litesvm", () => {
     );
 
     // Verify lottery still in progress after failed attempt
-    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
-    assert.ok(lottery.status.inProgress, "Lottery should still be in progress after failed preparePoolCreation");
+    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
+    assert.ok(lottery.status.funding, "Lottery should still be in progress after failed preparePoolCreation");
 
     // Advance time beyond grace period
     const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
@@ -650,7 +646,7 @@ describe("engine litesvm", () => {
     await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
 
     // Verify lottery is now finalized
-    ({ data: lottery } = await sdk.fetchLottery(testLaunch));
+    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
     assert.ok(lottery.status.finalized, "Lottery should be finalized after grace period expired");
 
     // Verify claims_opened_at is set
@@ -725,7 +721,7 @@ describe("engine litesvm", () => {
     });
     await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
 
-    const { data: lottery } = await sdk.fetchLottery(testLaunch);
+    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
     assert.ok(lottery.status.finalized, "Lottery should be finalized");
 
     // Verify k_capacity >= totalTickets (all tickets win)
@@ -1168,13 +1164,15 @@ describe("engine litesvm", () => {
     });
     const { computeUnitsConsumed } = await safeSendAndConfirmWithMeta(provider, client, prepTx, [adminKeypair]);
 
-    const { data: lottery } = await sdk.fetchLottery(testLaunch);
+    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
     const winners = Math.min(kCapacity, activeTickets);
     console.log(`Lottery finalized: ${winners} winners out of ${activeTickets} active tickets (CU: ${computeUnitsConsumed.toLocaleString()})`);
 
-    // Visualize bitmap distribution
-    const bits = lottery.bits as anchor.BN[];
-    const totalWords = bits.length;
+    // Visualize bitmap distribution - read from winners_bitmap account
+    const [winnersBitmapPda] = sdk.getWinnersBitmapPda(testLaunch);
+    const winnersBitmapInfo = client.getAccount(winnersBitmapPda);
+    const bitmapData = winnersBitmapInfo?.data ?? new Uint8Array(0);
+    const totalWords = Math.ceil(bitmapData.length / 8);
     const numSegments = 64;
     console.log(`\nBitmap distribution (${totalWords} words, ${lottery.bitsAllocated.toString()} allocated, ${activeTickets} active):`);
 
@@ -1189,15 +1187,10 @@ describe("engine litesvm", () => {
       const bitEnd = Math.min(bitStart + bitsPerSegment, bitsAllocated);
 
       for (let bitIdx = bitStart; bitIdx < bitEnd; bitIdx++) {
-        const wordIdx = Math.floor(bitIdx / 64);
-        const bitPos = bitIdx % 64;
-        if (wordIdx < bits.length && bits[wordIdx]) {
-          const word = bits[wordIdx].toArray('le', 8);
-          const byteIdx = Math.floor(bitPos / 8);
-          const byteBit = bitPos % 8;
-          if ((word[byteIdx] >> byteBit) & 1) {
-            count++;
-          }
+        const byteIdx = Math.floor(bitIdx / 8);
+        const byteBit = bitIdx % 8;
+        if (byteIdx < bitmapData.length && (bitmapData[byteIdx] >> byteBit) & 1) {
+          count++;
         }
       }
       segmentCounts.push(count);
@@ -1219,29 +1212,30 @@ describe("engine litesvm", () => {
     console.log(`Distribution: ${histogram}`);
 
     // Check account sizes and rent
-    const [lotteryPda] = sdk.getLotteryPda(testLaunch);
-    const lotteryAccountInfo = client.getAccount(lotteryPda);
+    const [lotteryControlPda] = sdk.getLotteryControlPda(testLaunch);
+    const lotteryAccountInfo = client.getAccount(lotteryControlPda);
     const lotteryRent = lotteryAccountInfo?.lamports ?? BigInt(0);
     const lotterySize = lotteryAccountInfo?.data.length ?? 0;
-    console.log(`Lottery account: ${lotterySize} bytes, ${Number(lotteryRent) / 1e9} SOL rent`);
+    const rangesCount = lottery.withdrawnRanges.length;
+    console.log(`LotteryControl account: ${lotterySize} bytes, ${rangesCount} withdrawn ranges, ${Number(lotteryRent) / 1e9} SOL rent`);
 
-    // Check withdrawn ranges efficiency
-    const [withdrawnRangesPda] = sdk.getWithdrawnRangesPda(testLaunch);
-    const withdrawnRangesAccountInfo = client.getAccount(withdrawnRangesPda);
-    const withdrawnRangesRent = withdrawnRangesAccountInfo?.lamports ?? BigInt(0);
-    const withdrawnRangesSize = withdrawnRangesAccountInfo?.data.length ?? 0;
-    const withdrawnRangesData = await program.account.withdrawnRanges.fetch(withdrawnRangesPda);
-    const rangesCount = withdrawnRangesData.ranges.length;
-    console.log(`Withdrawn ranges: ${rangesCount}, account: ${withdrawnRangesSize} bytes, ${Number(withdrawnRangesRent) / 1e9} SOL rent`);
+    const winnersBitmapRent = winnersBitmapInfo?.lamports ?? BigInt(0);
+    const winnersBitmapSize = winnersBitmapInfo?.data.length ?? 0;
+    console.log(`Winners bitmap: ${winnersBitmapSize} bytes, ${Number(winnersBitmapRent) / 1e9} SOL rent`);
 
-    const totalRent = Number(lotteryRent) + Number(withdrawnRangesRent);
-    console.log(`Total rent on lottery+ranges: ${totalRent / 1e9} SOL`);
+    const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(testLaunch);
+    const inactiveBitmapInfo = client.getAccount(inactiveBitmapPda);
+    const inactiveBitmapRent = inactiveBitmapInfo?.lamports ?? BigInt(0);
+    const inactiveBitmapSize = inactiveBitmapInfo?.data.length ?? 0;
+    console.log(`Inactive bitmap: ${inactiveBitmapSize} bytes, ${Number(inactiveBitmapRent) / 1e9} SOL rent`);
+
+    const totalRent = Number(lotteryRent) + Number(winnersBitmapRent) + Number(inactiveBitmapRent);
+    console.log(`Total rent on lottery accounts: ${totalRent / 1e9} SOL`);
 
     const reallocFundsEnd = client.getBalance(reallocFundsPda);
     const reallocFundsSpent = reallocFundsStart - reallocFundsEnd;
     console.log(`Realloc funds end: ${Number(reallocFundsEnd) / 1e9} SOL (spent: ${Number(reallocFundsSpent) / 1e9} SOL)`);
 
-    /* COMMENTED OUT FOR CU FOCUS
     // Create pool
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
@@ -1343,8 +1337,7 @@ describe("engine litesvm", () => {
     console.log(`Refunds successful: ${refundSuccessCount}`);
     console.log(`Total claimed tokens: ${totalClaimedTokens}`);
     console.log(`Total refunded: ${Number(totalRefundedLamports) / 1e9} SOL`);
-    console.log(`Lottery account: ${lotterySize} bytes (${Number(lotteryRent) / 1e9} SOL)`);
-    console.log(`Withdrawn ranges: ${rangesCount} in ${withdrawnRangesSize} bytes (${Number(withdrawnRangesRent) / 1e9} SOL)`);
+    console.log(`LotteryControl account: ${lotterySize} bytes, ${rangesCount} withdrawn ranges (${Number(lotteryRent) / 1e9} SOL)`);
     console.log(`Realloc funds spent: ${Number(reallocFundsSpent) / 1e9} SOL`);
 
     // Verify total claimed is approximately sale_allocation (accounting for rounding)
@@ -1357,198 +1350,9 @@ describe("engine litesvm", () => {
     console.log(`Claim difference: ${claimDiff} (${claimDiffPercent}%)`);
 
     assert.ok(claimDiffPercent < 1, `Claim difference should be < 1%, got ${claimDiffPercent}%`);
-    END COMMENTED OUT */
+
 
     console.log(`✅ Stress test complete`);
-  });
-
-  describe("raydium clmm", () => {
-    let raydiumLaunch: anchor.web3.PublicKey;
-    let raydiumPreset: any;
-    let raydiumClmmCreate: any;
-    let raydiumContributor: anchor.web3.Keypair;
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
-
-    before(async () => {
-      // Ensure adminBKeypair is initialized (may not be if running only raydium tests)
-      if (!adminBKeypair) {
-        adminBKeypair = anchor.web3.Keypair.generate();
-      }
-
-      // Ensure engine config exists (may already be initialized by other tests)
-      const { data: existingConfig } = await sdk.fetchEngineConfig().catch(() => ({ data: null }));
-      if (!existingConfig) {
-        const mint = anchor.web3.Keypair.generate();
-        const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-        const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
-        const treasuryKeypair = anchor.web3.Keypair.generate();
-        client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
-
-        const tx = new anchor.web3.Transaction()
-          .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-          .add(createInitializeMintInstruction(mint.publicKey, 6, admin.publicKey, null))
-          .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
-          .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryKeypair.publicKey, mint: mint.publicKey }).ix)
-          .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000_000)));
-        await safeSendAndConfirm(provider, client, tx, [adminKeypair, mint]);
-
-        const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
-        const { instruction } = await (sdk as any).initEngineConfigIx({
-          payer: admin.publicKey,
-          treasury: treasuryKeypair.publicKey,
-          xyberMint: mint.publicKey,
-          admins,
-          threshold: 2,
-          reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
-          signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-        });
-        await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair, adminBKeypair]);
-      }
-
-      const raydiumPresetPath = path.resolve(__dirname, "litesvm-raydium-test-preset.json");
-      const raydiumPresetRaw = JSON.parse(fs.readFileSync(raydiumPresetPath, "utf-8"));
-      raydiumPreset = parsePresetParams(raydiumPresetRaw);
-
-      const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
-        payer: admin.publicKey,
-        id: Number(raydiumPreset.id),
-        ...raydiumPreset,
-        signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-      });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [adminKeypair, adminBKeypair]);
-    });
-
-    it("Creates launch and deposits for CLMM pool", async () => {
-      const nextId = await sdk.getNextProjectId();
-      const { instruction, launchState } = await (sdk as any).initLaunchFromPresetIx({
-        creator: admin.publicKey,
-        presetId: raydiumPreset.id,
-        projectId: nextId,
-        saleStartTimeTimestamp: 0,
-        name: "RaydiumTest",
-        symbol: "RYD",
-        uri: "https://example.com/raydium.json",
-      });
-      raydiumLaunch = launchState;
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
-
-      const tau = raydiumPreset.tauLamports;
-      const minRaise = raydiumPreset.minRaiseLamports;
-      const depositAmount = minRaise;
-
-      raydiumContributor = await createAndFundAccount(client, 250);
-      const { instruction: depIx } = await sdk.depositIx({
-        contributor: raydiumContributor.publicKey,
-        launch: raydiumLaunch,
-        amount: depositAmount,
-      });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [raydiumContributor]);
-
-      const tickets = depositAmount.div(tau).toNumber();
-      console.log(`✅ Launch created and ${tickets} tickets deposited`);
-    });
-
-    it("Finalizes lottery after funding period", async () => {
-      await advanceTime(client, { slots: BigInt(100), seconds: BigInt(raydiumPreset.fundingDurationSeconds + 10) });
-
-      const { instruction: seedIx } = await sdk.setSeedIx({ launch: raydiumLaunch, payer: admin.publicKey });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
-
-      const { data: launchAccount } = await sdk.fetchLaunch(raydiumLaunch);
-      const projectId = launchAccount.projectId.toNumber();
-      const unlock = Number(raydiumPreset.unlockTimeSec);
-      const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-      const rangeStart = width * BigInt(projectId - 1);
-      const rangeEnd = rangeStart + width;
-      injectSlotHashesForRange(client, rangeStart, rangeEnd);
-
-      const { transaction: prepTx } = await sdk.preparePoolCreationTx({
-        payer: admin.publicKey,
-        launch: raydiumLaunch,
-        computeUnits: 2_000_000,
-      });
-      const { computeUnitsConsumed } = await safeSendAndConfirmWithMeta(provider, client, prepTx, [adminKeypair]);
-
-      const { data: lottery } = await sdk.fetchLottery(raydiumLaunch);
-      assert.ok(lottery.status.finalized, "Lottery should be finalized");
-      console.log(`✅ Lottery finalized, CU consumed: ${computeUnitsConsumed.toLocaleString()}`);
-    });
-
-    it("Creates CLMM pool", async () => {
-      const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
-
-      raydiumClmmCreate = await sdk.createClmmPoolTx({
-        payer: admin.publicKey,
-        launch: raydiumLaunch,
-        quoteMint: WSOL_MINT,
-        ammConfig,
-        clmmProgram: raydiumProgramId,
-        provider,
-      });
-      await safeSendAndConfirm(provider, client, raydiumClmmCreate.transaction, [adminKeypair, ...raydiumClmmCreate.signers]);
-
-      const poolAccount = client.getAccount(raydiumClmmCreate.poolState);
-      assert.ok(poolAccount, "Pool state should exist");
-      console.log(`✅ CLMM pool created: ${raydiumClmmCreate.poolState.toString()}`);
-    });
-
-    it("Gets liquidity range", async () => {
-      const range = await sdk.getLiquidityRange({
-        launch: raydiumLaunch,
-        baseMint: raydiumClmmCreate.baseMint,
-        quoteMint: WSOL_MINT,
-        raydiumQuoteVault: raydiumClmmCreate.quoteVault,
-        raydiumBaseVault: raydiumClmmCreate.baseVault,
-      });
-
-      assert.ok(typeof range.tickArrayLower === "number", "tickArrayLower should be number");
-      assert.ok(typeof range.tickArrayUpper === "number", "tickArrayUpper should be number");
-      assert.ok(range.tickArrayLower < range.tickArrayUpper, "lower should be less than upper");
-      console.log(`✅ Liquidity range: [${range.tickArrayLower}, ${range.tickArrayUpper}]`);
-    });
-
-    it("Adds liquidity to CLMM pool", async () => {
-      const liqResult = await sdk.addClmmLiquidityTx({
-        payer: admin.publicKey,
-        launch: raydiumLaunch,
-        baseMint: raydiumClmmCreate.baseMint,
-        provider,
-      });
-      await safeSendAndConfirm(provider, client, liqResult.transaction, [adminKeypair, ...liqResult.signers]);
-
-      const quoteVaultAccount = client.getAccount(liqResult.quoteVault);
-      assert.ok(quoteVaultAccount, "Quote vault should exist");
-
-      const baseVaultAccount = client.getAccount(liqResult.baseVault);
-      assert.ok(baseVaultAccount, "Base vault should exist");
-
-      console.log(`✅ Liquidity added to pool`);
-    });
-
-    it("Contributor claims tokens after liquidity", async () => {
-      await advanceTime(client, { slots: BigInt(10), seconds: BigInt(raydiumPreset.contributorDurationSec + 10) });
-
-      const { instruction: claimIx, participantAta } = await sdk.claimIx({
-        launch: raydiumLaunch,
-        baseMint: raydiumClmmCreate.baseMint,
-        participant: raydiumContributor.publicKey,
-        bucket: 0,
-      });
-
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-        .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-        .add(claimIx), [raydiumContributor]);
-
-      const ataInfo = client.getAccount(participantAta);
-      const unpacked = unpackAccount(participantAta, {
-        ...(ataInfo as any),
-        data: Buffer.from(ataInfo.data),
-      } as any);
-
-      assert.ok(unpacked.amount > BigInt(0), "Should have claimed tokens");
-      console.log(`✅ Contributor claimed ${unpacked.amount.toString()} tokens`);
-    });
   });
 
 });

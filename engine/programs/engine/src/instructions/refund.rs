@@ -6,10 +6,8 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::Refunded,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::lottery::LotteryRaw,
+    utils::lottery::{LotteryControl, LotteryRaw},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct Refund<'info> {
@@ -21,9 +19,16 @@ pub struct Refund<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
+
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
 
     #[account(
         mut,
@@ -42,20 +47,27 @@ pub struct Refund<'info> {
 pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let contribution = &mut ctx.accounts.contribution;
-
-    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+    let lottery_control = &ctx.accounts.lottery_control;
 
     require!(
-        lottery.is_finalized() || lottery.is_cancelled(),
+        lottery_control.is_finalized() || lottery_control.is_cancelled(),
         EngineErrorCode::NotFinalized
     );
 
     let total_tickets = contribution.total_tickets();
 
-    let refundable_total = if lottery.is_cancelled() {
+    let refundable_total = if lottery_control.is_cancelled() {
         total_tickets
     } else {
+        let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
+        let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
+
+        let lottery = LotteryRaw::new(
+            &**lottery_control,
+            &winners_data[..],
+            &inactive_data[..],
+        );
+
         let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
         checked_sub!(total_tickets, winners)?
     };

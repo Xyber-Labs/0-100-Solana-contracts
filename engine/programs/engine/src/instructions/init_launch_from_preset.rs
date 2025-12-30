@@ -11,8 +11,8 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::LaunchInitialized,
-    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig, WithdrawnRanges},
-    utils::lottery::Lottery,
+    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
+    utils::lottery::LotteryControl,
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -67,19 +67,29 @@ pub struct InitLaunchFromPreset<'info> {
     #[account(
         init,
         payer = creator,
-        space = 8 + Lottery::INIT_SPACE,
-        seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()],
+        space = 8 + LotteryControl::INIT_SPACE,
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
         bump
     )]
-    pub lottery: Box<Account<'info, Lottery>>,
+    pub lottery_control: Box<Account<'info, LotteryControl>>,
+    /// CHECK: Raw winners bitmap, initialized as zero-sized, reallocated on deposit
     #[account(
         init,
         payer = creator,
-        space = 8 + WithdrawnRanges::INIT_SPACE,
-        seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()],
+        space = 0,
+        seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()],
         bump
     )]
-    pub withdrawn_ranges: Box<Account<'info, WithdrawnRanges>>,
+    pub winners_bitmap: UncheckedAccount<'info>,
+    /// CHECK: Raw inactive bitmap, initialized as zero-sized, reallocated on deposit
+    #[account(
+        init,
+        payer = creator,
+        space = 0,
+        seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()],
+        bump
+    )]
+    pub inactive_bitmap: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }

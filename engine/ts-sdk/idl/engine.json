@@ -33,7 +33,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -62,7 +62,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -368,7 +376,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -397,7 +405,110 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winners_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -957,7 +1068,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -986,7 +1097,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -1347,7 +1466,7 @@
           }
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1377,7 +1496,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -1388,7 +1515,7 @@
           }
         },
         {
-          "name": "withdrawn_ranges",
+          "name": "winners_bitmap",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1414,13 +1541,67 @@
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -1561,7 +1742,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -1590,7 +1771,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2055,7 +2244,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2085,7 +2274,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2096,7 +2293,7 @@
           }
         },
         {
-          "name": "withdrawn_ranges",
+          "name": "winners_bitmap",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2122,13 +2319,67 @@
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2276,7 +2527,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "writable": true,
           "pda": {
             "seeds": [
@@ -2306,7 +2557,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2317,7 +2576,8 @@
           }
         },
         {
-          "name": "withdrawn_ranges",
+          "name": "winners_bitmap",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -2342,13 +2602,66 @@
                 "value": [
                   119,
                   105,
-                  116,
-                  104,
-                  100,
+                  110,
+                  110,
+                  101,
                   114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
                   97,
-                  119,
-                  110
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2394,7 +2707,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -2423,7 +2736,110 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winners_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
                 ]
               },
               {
@@ -2568,7 +2984,7 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
+          "name": "lottery_control",
           "pda": {
             "seeds": [
               {
@@ -2597,7 +3013,15 @@
                   116,
                   101,
                   114,
-                  121
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
                 ]
               },
               {
@@ -2696,90 +3120,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "withdrawn_ranges",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  105,
-                  116,
-                  104,
-                  100,
-                  114,
-                  97,
-                  119,
-                  110
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "realloc_funds",
           "writable": true,
           "pda": {
@@ -2818,6 +3158,152 @@
                   100,
                   115
                 ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "lottery_control",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winners_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
               }
             ]
           }
@@ -2952,16 +3438,16 @@
       ]
     },
     {
-      "name": "Lottery",
+      "name": "LotteryControl",
       "discriminator": [
-        162,
-        182,
-        26,
-        12,
-        164,
-        214,
-        112,
-        3
+        48,
+        249,
+        104,
+        98,
+        175,
+        40,
+        51,
+        86
       ]
     },
     {
@@ -3001,19 +3487,6 @@
         177,
         60,
         245
-      ]
-    },
-    {
-      "name": "WithdrawnRanges",
-      "discriminator": [
-        47,
-        111,
-        181,
-        144,
-        152,
-        72,
-        94,
-        67
       ]
     }
   ],
@@ -4019,7 +4492,7 @@
       }
     },
     {
-      "name": "Lottery",
+      "name": "LotteryControl",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4028,7 +4501,7 @@
             "type": "u64"
           },
           {
-            "name": "inactive",
+            "name": "inactive_count",
             "type": "u64"
           },
           {
@@ -4040,9 +4513,13 @@
             }
           },
           {
-            "name": "bits",
+            "name": "withdrawn_ranges",
             "type": {
-              "vec": "u64"
+              "vec": {
+                "defined": {
+                  "name": "TicketRange"
+                }
+              }
             }
           }
         ]
@@ -4054,13 +4531,7 @@
         "kind": "enum",
         "variants": [
           {
-            "name": "InProgress",
-            "fields": [
-              {
-                "name": "_padding",
-                "type": "u64"
-              }
-            ]
+            "name": "Funding"
           },
           {
             "name": "Finalized",
@@ -4072,13 +4543,7 @@
             ]
           },
           {
-            "name": "Cancelled",
-            "fields": [
-              {
-                "name": "_padding",
-                "type": "u64"
-              }
-            ]
+            "name": "Cancelled"
           }
         ]
       }
@@ -4256,24 +4721,6 @@
           {
             "name": "amount",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "WithdrawnRanges",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "ranges",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "TicketRange"
-                }
-              }
-            }
           }
         ]
       }

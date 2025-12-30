@@ -12,10 +12,8 @@ use crate::{
     errors::ErrorCode,
     SEED_ROOT,
     state::{LaunchPreset, LaunchState},
-    utils::{lottery::LotteryRaw, clmm::{ClmmOrder, get_liquidity_range_impl}},
+    utils::{lottery::LotteryControl, clmm::{ClmmOrder, get_liquidity_range_impl}},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 pub struct AddClmmLiquidity<'info> {
@@ -28,9 +26,8 @@ pub struct AddClmmLiquidity<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
+    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
 
     #[account(
         constraint = launch_state.base_mint == Some(base_mint.key()),
@@ -115,18 +112,16 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-    let lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+    let lottery_control = &ctx.accounts.lottery_control;
 
-    require!(lottery.is_finalized(), ErrorCode::NotFinalized);
+    require!(lottery_control.is_finalized(), ErrorCode::NotFinalized);
 
-    let total_deposited = checked_mul!(lottery.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(lottery_control.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
     require!(
         total_deposited >= ctx.accounts.launch_preset.min_raise_lamports,
         ErrorCode::MinRaiseNotMet
     );
 
-    drop(lottery_data);
     add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())
 }

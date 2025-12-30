@@ -5,11 +5,9 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{Contribution, LaunchPreset, LaunchState, TicketRange, WithdrawnRanges},
-    utils::{lottery::LotteryRaw, realloc::realloc_raw},
+    state::{Contribution, LaunchPreset, LaunchState, TicketRange},
+    utils::{lottery::{LotteryControl, LotteryRaw}, realloc::realloc_raw},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(amount: u64)]
@@ -27,12 +25,16 @@ pub struct Deposit<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(mut, seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
+    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
@@ -51,7 +53,6 @@ pub struct Deposit<'info> {
 }
 
 pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-    let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
 
@@ -60,50 +61,75 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let current_tickets = contribution.total_tickets();
     let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
-    let is_creator = ctx.accounts.contributor.key() == launch_state.creator;
-    let creator_cap = launch_preset.creator_max_deposit;
-    let contributor_cap = launch_preset.per_wallet_cap;
-    let cap = if is_creator { creator_cap } else { contributor_cap };
+    let is_creator = ctx.accounts.contributor.key() == ctx.accounts.launch_state.creator;
+    let cap = if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
 
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
     let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
 
-    let withdrawn_ranges = &mut ctx.accounts.withdrawn_ranges;
+    let lottery_control = &mut ctx.accounts.lottery_control;
+    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
-    let mut reused_ranges = withdrawn_ranges.take_tickets(new_tickets_count);
+    let mut reused_ranges = lottery_control.take_tickets(new_tickets_count);
     let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
 
-    let lottery_info = ctx.accounts.lottery.to_account_info();
-    {
-        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
-        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+    if reused_count > 0 {
+        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
+        let winners_data = winners_info.try_borrow_data()?;
 
-        require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
+        let mut lottery = LotteryRaw::new(
+            &mut **lottery_control,
+            &winners_data[..],
+            &mut inactive_data[..],
+        );
 
-        lottery.set_inactive(withdrawn_ranges.total_withdrawn());
-
-        let remaining = checked_sub!(new_tickets_count, reused_count)?;
-        if remaining > 0 {
-            let bits_allocated = lottery.bits_allocated();
-            let new_bits_allocated = bits_allocated.checked_add(remaining).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-            lottery.set_bits_allocated(new_bits_allocated);
-            let new_vec_len = LotteryRaw::<&[u8]>::required_words(new_bits_allocated) as u32;
-            lottery.set_vec_len(new_vec_len);
-            reused_ranges.push(TicketRange::new(bits_allocated, checked_add!(bits_allocated, remaining)?));
+        for range in &reused_ranges {
+            for i in range.start..range.end {
+                lottery.clear_inactive_bit(i);
+            }
         }
+        lottery.remove_inactive(reused_count);
     }
 
-    let bits_allocated = {
-        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
-        LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]).bits_allocated()
-    };
-    let required_space = DISCRIMINATOR_LEN + LotteryRaw::<&[u8]>::required_space(bits_allocated);
-    realloc_raw(&lottery_info, &ctx.accounts.realloc_funds.to_account_info(), required_space)?;
+    let remaining = checked_sub!(new_tickets_count, reused_count)?;
+    if remaining > 0 {
+        let bits_allocated = lottery_control.bits_allocated;
+        let new_bits_allocated = bits_allocated
+            .checked_add(remaining)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        lottery_control.bits_allocated = new_bits_allocated;
+        reused_ranges.push(TicketRange::new(bits_allocated, checked_add!(bits_allocated, remaining)?));
+    }
+
+    let bits_allocated = lottery_control.bits_allocated;
+    let required_bitmap_space = LotteryRaw::<&LotteryControl, &[u8], &[u8]>::required_bitmap_space(bits_allocated);
+
+    realloc_raw(
+        &ctx.accounts.winners_bitmap.to_account_info(),
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
+    realloc_raw(
+        &ctx.accounts.inactive_bitmap.to_account_info(),
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
 
     if is_creator {
-        let mut lottery_data = lottery_info.try_borrow_mut_data()?;
-        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+        let mut winners_data = winners_info.try_borrow_mut_data()?;
+        let inactive_data = inactive_info.try_borrow_data()?;
+
+        let mut lottery = LotteryRaw::new(
+            &mut **lottery_control,
+            &mut winners_data[..],
+            &inactive_data[..],
+        );
+
         for range in &reused_ranges {
             lottery.set_range(range);
         }
@@ -128,7 +154,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     )?;
 
     emit!(DepositMade {
-        launch: launch_state.key(),
+        launch: ctx.accounts.launch_state.key(),
         contributor: ctx.accounts.contributor.key(),
         amount,
     });

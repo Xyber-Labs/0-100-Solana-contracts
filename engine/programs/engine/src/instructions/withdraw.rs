@@ -5,11 +5,9 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
-    state::{Contribution, LaunchPreset, LaunchState, WithdrawnRanges},
-    utils::{lottery::LotteryRaw, realloc::realloc_with_payer},
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::{lottery::{LotteryControl, LotteryRaw}, realloc::realloc_raw},
 };
-
-const DISCRIMINATOR_LEN: usize = 8;
 
 #[derive(Accounts)]
 #[instruction(amount: u64)]
@@ -31,16 +29,20 @@ pub struct Withdraw<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    /// CHECK: Raw lottery data, validated via seeds
-    #[account(mut, seeds = [SEED_ROOT, b"lottery", launch_state.key().as_ref()], bump)]
-    pub lottery: UncheckedAccount<'info>,
-
-    #[account(mut, seeds = [SEED_ROOT, b"withdrawn", launch_state.key().as_ref()], bump)]
-    pub withdrawn_ranges: Account<'info, WithdrawnRanges>,
-
     /// CHECK: Platform account for paying reallocation
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
+
+    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    pub lottery_control: Account<'info, LotteryControl>,
+
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -53,8 +55,10 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
+    let lottery_control = &mut ctx.accounts.lottery_control;
 
     require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
+    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
     let tickets_to_remove = checked_div!(amount, launch_preset.tau_lamports)?;
     require!(
@@ -64,24 +68,37 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let removed_ranges = contribution.remove_tickets(tickets_to_remove);
 
     {
-        let mut lottery_data = ctx.accounts.lottery.try_borrow_mut_data()?;
-        let mut lottery = LotteryRaw::new(&mut lottery_data[DISCRIMINATOR_LEN..]);
+        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+        let mut winners_data = winners_info.try_borrow_mut_data()?;
+        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
 
-        require!(lottery.is_in_progress(), EngineErrorCode::AlreadyFinalized);
+        let mut lottery = LotteryRaw::new(
+            &mut **lottery_control,
+            &mut winners_data[..],
+            &mut inactive_data[..],
+        );
 
-        let inactive = lottery.inactive();
         let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
-        lottery.set_inactive(inactive + added_inactive);
+        lottery.add_inactive(added_inactive);
 
-        for range in removed_ranges {
-            lottery.clear_range(&range);
-            ctx.accounts.withdrawn_ranges.push(range);
+        for range in &removed_ranges {
+            lottery.clear_range(range);
+            for i in range.start..range.end {
+                lottery.set_inactive_bit(i);
+            }
         }
     }
 
-    realloc_with_payer(
-        &ctx.accounts.withdrawn_ranges,
+    for range in removed_ranges {
+        lottery_control.push_withdrawn(range);
+    }
+
+    let required_space = lottery_control.required_space();
+    realloc_raw(
+        &ctx.accounts.lottery_control.to_account_info(),
         &ctx.accounts.realloc_funds.to_account_info(),
+        required_space,
     )?;
 
     contribution.withdraw_count = checked_add!(contribution.withdraw_count, 1)?;

@@ -198,16 +198,20 @@ export class TxBuilder {
     return this.getPda(["token_metadata", launch]);
   }
 
-  getLotteryPda(launch: web3.PublicKey): [web3.PublicKey, number] {
-    return this.getPda(["lottery", launch]);
+  getLotteryControlPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["lottery_control", launch]);
+  }
+
+  getWinnersBitmapPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["winners_bitmap", launch]);
+  }
+
+  getInactiveBitmapPda(launch: web3.PublicKey): [web3.PublicKey, number] {
+    return this.getPda(["inactive_bitmap", launch]);
   }
 
   getContributionPda(launch: web3.PublicKey, contributor: web3.PublicKey): [web3.PublicKey, number] {
     return this.getPda(["contributor", launch, contributor]);
-  }
-
-  getWithdrawnRangesPda(launch: web3.PublicKey): [web3.PublicKey, number] {
-    return this.getPda(["withdrawn", launch]);
   }
 
   getReallocFundsPda(): [web3.PublicKey, number] {
@@ -238,8 +242,9 @@ export class TxBuilder {
     projectCounter: web3.PublicKey;
     tokenMetadataConfig: web3.PublicKey;
     launchPreset: web3.PublicKey;
-    lottery: web3.PublicKey;
-    withdrawnRanges: web3.PublicKey;
+    lotteryControl: web3.PublicKey;
+    winnersBitmap: web3.PublicKey;
+    inactiveBitmap: web3.PublicKey;
   }> {
     const projectIdLe = (() => {
       if (BN.isBN(params.projectId as any)) {
@@ -256,8 +261,9 @@ export class TxBuilder {
     const [tokenMetadataConfig] = this.getTokenMetadataConfigPda(launchState);
     const [engineConfig] = this.getPda(["config"]);
     const [launchPreset] = this.getLaunchPresetPda(params.presetId);
-    const [lottery] = this.getLotteryPda(launchState);
-    const [withdrawnRanges] = this.getWithdrawnRangesPda(launchState);
+    const [lotteryControl] = this.getLotteryControlPda(launchState);
+    const [winnersBitmap] = this.getWinnersBitmapPda(launchState);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(launchState);
 
     // Fetch config to get xyberMint and treasury owner
     const cfg: any = await (this.program.account as any).engineConfig.fetch(engineConfig);
@@ -290,8 +296,9 @@ export class TxBuilder {
         creatorXyberAta,
         treasuryXyberAta,
         launchPreset,
-        lottery,
-        withdrawnRanges,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
@@ -304,8 +311,9 @@ export class TxBuilder {
       projectCounter,
       tokenMetadataConfig,
       launchPreset,
-      lottery,
-      withdrawnRanges,
+      lotteryControl,
+      winnersBitmap,
+      inactiveBitmap,
     };
   }
 
@@ -420,7 +428,7 @@ export class TxBuilder {
     selectionPda: web3.PublicKey;
   }> {
     const [selectionPda] = this.getPda(["selection", params.launch]);
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -431,7 +439,7 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
+        lotteryControl,
         slotHashes: web3.SYSVAR_SLOT_HASHES_PUBKEY,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -459,10 +467,10 @@ export class TxBuilder {
   }> {
     const [contribution] = this.getContributionPda(params.launch, params.contributor);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [lottery] = this.getLotteryPda(params.launch);
-    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
     const [reallocFunds] = this.getReallocFundsPda();
-    const [launchPreset] = this.getLaunchPresetPda(1); // TODO: get from launch state
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -474,8 +482,9 @@ export class TxBuilder {
         launchState: params.launch,
         launchPreset: presetAddress,
         reallocFunds,
-        lottery,
-        withdrawnRanges,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         contribution,
         escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
@@ -505,8 +514,9 @@ export class TxBuilder {
   }> {
     const [contribution] = this.getContributionPda(params.launch, params.contributor);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [lottery] = this.getLotteryPda(params.launch);
-    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
     const [reallocFunds] = this.getReallocFundsPda();
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
@@ -519,9 +529,10 @@ export class TxBuilder {
         contribution,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
-        withdrawnRanges,
         reallocFunds,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -549,7 +560,9 @@ export class TxBuilder {
   }> {
     const [contribution] = this.getContributionPda(params.launch, params.contributor);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -560,7 +573,9 @@ export class TxBuilder {
         contributor: params.contributor,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         contribution,
         escrowAuthority,
         systemProgram: web3.SystemProgram.programId,
@@ -587,7 +602,9 @@ export class TxBuilder {
   }): Promise<{ instruction: web3.TransactionInstruction; participantAta: web3.PublicKey }> {
     const [contribution] = this.getContributionPda(params.launch, params.participant);
     const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
     const [ticketsClaimed] = this.getTicketsClaimedPda(params.launch, params.bucket, params.participant);
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
@@ -602,7 +619,9 @@ export class TxBuilder {
         participant: params.participant,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         contribution,
         ticketsClaimed,
         baseMint: params.baseMint,
@@ -635,9 +654,9 @@ export class TxBuilder {
     return { data, pda };
   }
 
-  async fetchLottery(launch: web3.PublicKey) {
-    const [pda] = this.getLotteryPda(launch);
-    const data = await this.program.account.lottery.fetch(pda);
+  async fetchLotteryControl(launch: web3.PublicKey) {
+    const [pda] = this.getLotteryControlPda(launch);
+    const data = await this.program.account.lotteryControl.fetch(pda);
     return { data, pda };
   }
 
@@ -675,8 +694,9 @@ export class TxBuilder {
   }): Promise<{
     transaction: web3.Transaction;
   }> {
-    const [lottery] = this.getLotteryPda(params.launch);
-    const [withdrawnRanges] = this.getWithdrawnRangesPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
     const SLOT_HASHES_SYSVAR = new web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
@@ -688,8 +708,9 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
-        withdrawnRanges,
+        lotteryControl,
+        winnersBitmap,
+        inactiveBitmap,
         slotHashes: SLOT_HASHES_SYSVAR,
         systemProgram: web3.SystemProgram.programId,
       })
@@ -747,7 +768,7 @@ export class TxBuilder {
 
 
     const raydiumAmmConfig = this.getRaydiumAmmConfigPda()[0];
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -758,7 +779,7 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
+        lotteryControl,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
         baseMint: baseMint,
@@ -878,7 +899,7 @@ export class TxBuilder {
     const [tickArrayLower] = this.getRaydiumTickArrayPda(raydiumPoolPda, tickArrayLowerStartIndex);
     const [tickArrayUpper] = this.getRaydiumTickArrayPda(raydiumPoolPda, tickArrayUpperStartIndex);
 
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -889,7 +910,7 @@ export class TxBuilder {
         payer: params.payer,
         launchState: params.launch,
         launchPreset: presetAddress,
-        lottery,
+        lotteryControl,
         baseMint: params.baseMint,
         escrowAuthority: escrowAuthority,
         baseEscrowAta: baseTokenAta,
@@ -987,7 +1008,7 @@ export class TxBuilder {
     tickArrayUpperStartIndex: number;
   }> {
     const [ammConfig] = this.getRaydiumAmmConfigPda();
-    const [lottery] = this.getLotteryPda(params.launch);
+    const [lotteryControl] = this.getLotteryControlPda(params.launch);
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const launchPreset = launchState.preset;
 
@@ -997,7 +1018,7 @@ export class TxBuilder {
         .accountsStrict({
           launchState: params.launch,
           launchPreset,
-          lottery,
+          lotteryControl,
           baseMint: params.baseMint,
           quoteMint: params.quoteMint,
           raydiumQuoteVault: params.raydiumQuoteVault,
@@ -1014,7 +1035,7 @@ export class TxBuilder {
         .accountsStrict({
           launchState: params.launch,
           launchPreset,
-          lottery,
+          lotteryControl,
           baseMint: params.baseMint,
           quoteMint: params.quoteMint,
           raydiumQuoteVault: params.raydiumQuoteVault,
