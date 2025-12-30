@@ -322,9 +322,7 @@ describe("engine litesvm", () => {
 
     const { data: lotteryAfterWithdraw } = await sdk.fetchLotteryControl(launchState);
     assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
-    assert.equal(lotteryAfterWithdraw.withdrawnRanges.length, 1, "Should have exactly 1 withdrawn range");
-    assert.equal(lotteryAfterWithdraw.withdrawnRanges[0].start.toNumber(), 130, "Withdrawn range start should be 130");
-    assert.equal(lotteryAfterWithdraw.withdrawnRanges[0].end.toNumber(), 150, "Withdrawn range end should be 150");
+    assert.equal(lotteryAfterWithdraw.inactiveCount.toNumber(), 20, "inactive_count should be 20 after withdrawing 20 tickets");
   });
 
   it("Project ID increments correctly", async () => {
@@ -1216,8 +1214,8 @@ describe("engine litesvm", () => {
     const lotteryAccountInfo = client.getAccount(lotteryControlPda);
     const lotteryRent = lotteryAccountInfo?.lamports ?? BigInt(0);
     const lotterySize = lotteryAccountInfo?.data.length ?? 0;
-    const rangesCount = lottery.withdrawnRanges.length;
-    console.log(`LotteryControl account: ${lotterySize} bytes, ${rangesCount} withdrawn ranges, ${Number(lotteryRent) / 1e9} SOL rent`);
+    const inactiveCount = lottery.inactiveCount.toNumber();
+    console.log(`LotteryControl account: ${lotterySize} bytes, ${inactiveCount} inactive tickets, ${Number(lotteryRent) / 1e9} SOL rent`);
 
     const winnersBitmapRent = winnersBitmapInfo?.lamports ?? BigInt(0);
     const winnersBitmapSize = winnersBitmapInfo?.data.length ?? 0;
@@ -1337,7 +1335,7 @@ describe("engine litesvm", () => {
     console.log(`Refunds successful: ${refundSuccessCount}`);
     console.log(`Total claimed tokens: ${totalClaimedTokens}`);
     console.log(`Total refunded: ${Number(totalRefundedLamports) / 1e9} SOL`);
-    console.log(`LotteryControl account: ${lotterySize} bytes, ${rangesCount} withdrawn ranges (${Number(lotteryRent) / 1e9} SOL)`);
+    console.log(`LotteryControl account: ${lotterySize} bytes (${Number(lotteryRent) / 1e9} SOL)`);
     console.log(`Realloc funds spent: ${Number(reallocFundsSpent) / 1e9} SOL`);
 
     // Verify total claimed is approximately sale_allocation (accounting for rounding)

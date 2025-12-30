@@ -18,8 +18,6 @@ pub struct LotteryControl {
     pub bits_allocated: u64,
     pub inactive_count: u64,
     pub status: LotteryStatus,
-    #[max_len(0)]
-    pub withdrawn_ranges: Vec<TicketRange>,
 }
 
 impl AsRef<LotteryControl> for LotteryControl {
@@ -49,40 +47,6 @@ impl LotteryControl {
 
     pub fn active_tickets(&self) -> u64 {
         self.bits_allocated - self.inactive_count
-    }
-
-    pub fn push_withdrawn(&mut self, range: TicketRange) {
-        self.withdrawn_ranges.push(range);
-    }
-
-    pub fn total_withdrawn(&self) -> u64 {
-        self.withdrawn_ranges.iter().map(|r| r.count()).sum()
-    }
-
-    pub fn take_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {
-        let mut taken = Vec::new();
-        while count > 0 && !self.withdrawn_ranges.is_empty() {
-            let last_idx = self.withdrawn_ranges.len() - 1;
-            let range = &mut self.withdrawn_ranges[last_idx];
-            let take = count.min(range.count());
-            if let Some(tail) = range.split_tail(take) {
-                taken.push(tail);
-                count -= take;
-            }
-            if range.count() == 0 {
-                self.withdrawn_ranges.pop();
-            }
-        }
-        taken
-    }
-
-    pub fn required_space(&self) -> usize {
-        let elements_space = self
-            .withdrawn_ranges
-            .len()
-            .checked_mul(TicketRange::INIT_SPACE)
-            .expect("overflow in required_space");
-        8 + Self::INIT_SPACE + elements_space
     }
 }
 
@@ -300,6 +264,60 @@ impl<C, W, I: AsMut<[u8]>> LotteryRaw<C, W, I> {
     }
 }
 
+impl<
+        C: AsMut<LotteryControl> + AsRef<LotteryControl>,
+        W: AsRef<[u8]>,
+        I: AsMut<[u8]> + AsRef<[u8]>,
+    > LotteryRaw<C, W, I>
+{
+    pub fn take_tickets(&mut self, count: u64) -> Vec<TicketRange> {
+        let mut taken = Vec::new();
+        if self.control.as_ref().inactive_count == 0 || count == 0 {
+            return taken;
+        }
+
+        let bits_allocated = self.control.as_ref().bits_allocated;
+        let vec_len = self.vec_len() as usize;
+        let mut collected = 0u64;
+        let mut current: Option<TicketRange> = None;
+
+        'outer: for word_idx in 0..vec_len {
+            let mut word = read_word(self.inactive_bitmap.as_ref(), word_idx);
+
+            while word != 0 && collected < count {
+                let bit = word.trailing_zeros() as u64;
+                let idx = word_idx as u64 * Self::BITS_PER_WORD + bit;
+                if idx >= bits_allocated {
+                    break 'outer;
+                }
+                word &= !(1u64 << bit);
+                let off = word_idx * 8;
+                self.inactive_bitmap.as_mut()[off..off + 8].copy_from_slice(&word.to_le_bytes());
+                match &mut current {
+                    None => current = Some(TicketRange::new(idx, idx + 1)),
+                    Some(r) if idx == r.end => r.end = idx + 1,
+                    Some(r) => {
+                        taken.push(*r);
+                        current = Some(TicketRange::new(idx, idx + 1));
+                    }
+                }
+                collected += 1;
+            }
+
+            if collected >= count {
+                break;
+            }
+        }
+
+        if let Some(r) = current {
+            taken.push(r);
+        }
+
+        self.control.as_mut().inactive_count -= collected;
+        taken
+    }
+}
+
 fn read_word(bitmap: &[u8], word_idx: usize) -> u64 {
     let off = word_idx * 8;
     u64::from_le_bytes(bitmap[off..off + 8].try_into().expect("Bitmap word access out of bounds"))
@@ -394,7 +412,6 @@ mod tests {
             bits_allocated,
             inactive_count,
             status: LotteryStatus::default(),
-            withdrawn_ranges: vec![],
         }
     }
 
@@ -553,7 +570,6 @@ mod tests {
             status: LotteryStatus::Finalized {
                 tokens_per_ticket: 1000,
             },
-            withdrawn_ranges: vec![],
         };
         let winners = make_bitmap(&[0b1111]);
         let inactive = empty_bitmap(1);
@@ -569,7 +585,6 @@ mod tests {
             status: LotteryStatus::Finalized {
                 tokens_per_ticket: 500,
             },
-            withdrawn_ranges: vec![],
         };
         let winners = make_bitmap(&[0b1010]);
         let inactive = empty_bitmap(1);

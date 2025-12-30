@@ -71,10 +71,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let lottery_control = &mut ctx.accounts.lottery_control;
     require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
-    let mut reused_ranges = lottery_control.take_tickets(new_tickets_count);
-    let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
-
-    if reused_count > 0 {
+    let mut reused_ranges = {
         let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
         let winners_info = ctx.accounts.winners_bitmap.to_account_info();
         let mut inactive_data = inactive_info.try_borrow_mut_data()?;
@@ -86,13 +83,9 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
             &mut inactive_data[..],
         );
 
-        for range in &reused_ranges {
-            for i in range.start..range.end {
-                lottery.clear_inactive_bit(i);
-            }
-        }
-        lottery.remove_inactive(reused_count);
-    }
+        lottery.take_tickets(new_tickets_count)
+    };
+    let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
 
     let remaining = checked_sub!(new_tickets_count, reused_count)?;
     if remaining > 0 {

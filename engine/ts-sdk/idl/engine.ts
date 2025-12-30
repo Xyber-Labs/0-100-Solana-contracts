@@ -3126,49 +3126,6 @@ export type Engine = {
           "name": "launchPreset"
         },
         {
-          "name": "reallocFunds",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  101,
-                  97,
-                  108,
-                  108,
-                  111,
-                  99,
-                  95,
-                  102,
-                  117,
-                  110,
-                  100,
-                  115
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "lotteryControl",
           "writable": true,
           "pda": {
@@ -4515,16 +4472,6 @@ export type Engine = {
             "type": {
               "defined": {
                 "name": "lotteryStatus"
-              }
-            }
-          },
-          {
-            "name": "withdrawnRanges",
-            "type": {
-              "vec": {
-                "defined": {
-                  "name": "ticketRange"
-                }
               }
             }
           }

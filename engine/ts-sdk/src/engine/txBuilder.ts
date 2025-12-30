@@ -517,7 +517,6 @@ export class TxBuilder {
     const [lotteryControl] = this.getLotteryControlPda(params.launch);
     const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
     const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
-    const [reallocFunds] = this.getReallocFundsPda();
 
     const { data: launchState } = await this.fetchLaunch(params.launch);
     const presetAddress = launchState.preset;
@@ -529,7 +528,6 @@ export class TxBuilder {
         contribution,
         launchState: params.launch,
         launchPreset: presetAddress,
-        reallocFunds,
         lotteryControl,
         winnersBitmap,
         inactiveBitmap,

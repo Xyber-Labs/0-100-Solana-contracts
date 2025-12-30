@@ -6,7 +6,7 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::{lottery::{LotteryControl, LotteryRaw}, realloc::realloc_raw},
+    utils::lottery::{LotteryControl, LotteryRaw},
 };
 
 #[derive(Accounts)]
@@ -28,10 +28,6 @@ pub struct Withdraw<'info> {
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    /// CHECK: Platform account for paying reallocation
-    #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
-    pub realloc_funds: UncheckedAccount<'info>,
 
     #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
     pub lottery_control: Account<'info, LotteryControl>,
@@ -89,17 +85,6 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
             }
         }
     }
-
-    for range in removed_ranges {
-        lottery_control.push_withdrawn(range);
-    }
-
-    let required_space = lottery_control.required_space();
-    realloc_raw(
-        &ctx.accounts.lottery_control.to_account_info(),
-        &ctx.accounts.realloc_funds.to_account_info(),
-        required_space,
-    )?;
 
     contribution.withdraw_count = checked_add!(contribution.withdraw_count, 1)?;
 

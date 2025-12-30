@@ -135,9 +135,6 @@ jobs:
       - name: Install deps
         run: yarn install --frozen-lockfile
 
-      - name: Run litesvm basic tests
-        run: anchor run litesvm-basic
-
       - name: Restore Raydium programs cache
         id: raydium-restore
         uses: actions/cache/restore@v4
@@ -156,9 +153,6 @@ jobs:
           path: engine/tests/resources
           key: raydium-programs-${{ runner.os }}-v1
 
-      - name: Run litesvm raydium tests
-        run: anchor run litesvm-raydium
-
-      - name: Run complete flow  tests
-        run: anchor run litesvm-full
+      - name: Run litesvm tests
+        run: anchor run litesvm
 
