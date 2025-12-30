@@ -5,8 +5,11 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{Contribution, LaunchPreset, LaunchState, TicketRange},
-    utils::{lottery::{LotteryControl, LotteryRaw}, realloc::realloc_raw},
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::{
+        lottery::{LotteryControl, LotteryRaw},
+        realloc::realloc_raw,
+    },
 };
 
 #[derive(Accounts)]
@@ -18,7 +21,10 @@ pub struct Deposit<'info> {
     #[account(mut, constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds) @ EngineErrorCode::FundingInactive)]
     pub launch_state: Account<'info, LaunchState>,
 
-    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    #[account(
+        address = launch_state.preset @ EngineErrorCode::MalformedPreset,
+        constraint = amount > 0 && amount % launch_preset.tau_lamports == 0 @ EngineErrorCode::BadAmount
+    )]
     pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK: Platform account for paying reallocation
@@ -61,78 +67,60 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
 
-    require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
-
     let current_tickets = contribution.total_tickets();
     let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
     let is_creator = ctx.accounts.contributor.key() == ctx.accounts.launch_state.creator;
-    let cap = if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
+    let cap =
+        if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
 
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
-    let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
     let lottery_control = &mut ctx.accounts.lottery_control;
+    let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+    let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
 
-    let mut reused_ranges = {
-        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
-        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
-        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
-        let winners_data = winners_info.try_borrow_data()?;
-
-        let mut lottery = LotteryRaw::new(
-            &mut **lottery_control,
-            &winners_data[..],
-            &mut inactive_data[..],
-        );
-
-        lottery.take_tickets(new_tickets_count)
-    };
-    let reused_count: u64 = reused_ranges.iter().map(|r| r.count()).sum();
-
-    let remaining = checked_sub!(new_tickets_count, reused_count)?;
-    if remaining > 0 {
-        let bits_allocated = lottery_control.bits_allocated;
-        let new_bits_allocated = bits_allocated
-            .checked_add(remaining)
-            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        lottery_control.bits_allocated = new_bits_allocated;
-        reused_ranges.push(TicketRange::new(bits_allocated, checked_add!(bits_allocated, remaining)?));
-    }
-
-    let bits_allocated = lottery_control.bits_allocated;
-    let required_bitmap_space = LotteryRaw::<&LotteryControl, &[u8], &[u8]>::required_bitmap_space(bits_allocated);
-
-    realloc_raw(
-        &ctx.accounts.winners_bitmap.to_account_info(),
-        &ctx.accounts.realloc_funds.to_account_info(),
-        required_bitmap_space,
-    )?;
-    realloc_raw(
-        &ctx.accounts.inactive_bitmap.to_account_info(),
-        &ctx.accounts.realloc_funds.to_account_info(),
-        required_bitmap_space,
-    )?;
-
-    if is_creator {
-        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
-        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+    let (mut reused_ranges, remaining, future_bits_allocated) = {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
-        let inactive_data = inactive_info.try_borrow_data()?;
+        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
+        let mut lottery =
+            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &mut inactive_data[..]);
 
-        let mut lottery = LotteryRaw::new(
-            &mut **lottery_control,
-            &mut winners_data[..],
-            &inactive_data[..],
-        );
+        let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
+        let reused = lottery.take_tickets(new_tickets_count);
+        let reused_count: u64 = reused.iter().map(|r| r.count()).sum();
+        let remaining = checked_sub!(new_tickets_count, reused_count)?;
+        let future_bits = checked_add!(lottery.bits_allocated(), remaining)?;
+        (reused, remaining, future_bits)
+    };
 
-        for range in &reused_ranges {
-            lottery.set_range(range);
+    let required_bitmap_space =
+        LotteryRaw::<&LotteryControl, &[u8], &[u8]>::required_bitmap_space(future_bits_allocated);
+
+    realloc_raw(
+        &winners_info,
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
+    realloc_raw(
+        &inactive_info,
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
+
+    {
+        let mut winners_data = winners_info.try_borrow_mut_data()?;
+        let mut lottery =
+            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &[] as &[u8]);
+
+        if remaining > 0 {
+            reused_ranges.push(lottery.allocate_tickets(remaining));
         }
-    }
 
-    for range in reused_ranges {
-        contribution.ticket_ranges.push(range);
+        for range in reused_ranges {
+            lottery.set_range(range, is_creator);
+            contribution.ticket_ranges.push(range);
+        }
     }
 
     let ix = solana_program::system_instruction::transfer(

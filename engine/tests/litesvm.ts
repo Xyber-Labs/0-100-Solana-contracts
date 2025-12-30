@@ -79,27 +79,26 @@ function encodeSignatureSafe(sigRaw: any): string {
   throw new TypeError("Unsupported signature type for encoding");
 }
 
-async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx: any, signers: any[]): Promise<string> {
-  const { signature } = await safeSendAndConfirmWithMeta(provider, client, tx, signers);
-  return signature;
-}
-
-async function safeSendAndConfirmWithMeta(provider: LiteSVMProvider, client: LiteSVM, tx: any, signers: any[]): Promise<{ signature: string; computeUnitsConsumed: bigint }> {
-  if ("version" in tx) {
-    signers?.forEach((s) => {
-      try { tx.sign([s]); } catch (_) {}
-    });
+function sendTxWithMeta(
+  client: LiteSVM,
+  feePayer: anchor.web3.PublicKey,
+  signers: anchor.web3.Keypair[],
+  instructions: anchor.web3.TransactionInstruction | anchor.web3.TransactionInstruction[] | anchor.web3.Transaction,
+): { signature: string; computeUnitsConsumed: bigint } {
+  let tx: anchor.web3.Transaction;
+  if (instructions instanceof anchor.web3.Transaction) {
+    tx = instructions;
+  } else if (Array.isArray(instructions)) {
+    tx = new anchor.web3.Transaction().add(...instructions);
   } else {
-    tx.feePayer = tx.feePayer ?? provider.wallet.publicKey;
-    tx.recentBlockhash = client.latestBlockhash();
-    signers?.forEach((s) => {
-      try { tx.partialSign(s); } catch (_) {}
-    });
+    tx = new anchor.web3.Transaction().add(instructions);
   }
-  await provider.wallet.signTransaction(tx as any);
-  const sigRaw = "version" in tx ? tx.signatures?.[0] : tx.signature;
+  tx.feePayer = feePayer;
+  tx.recentBlockhash = client.latestBlockhash();
+  signers.forEach((s) => tx.partialSign(s));
+  const sigRaw = tx.signature;
   const signature = encodeSignatureSafe(sigRaw);
-  const res = client.sendTransaction(tx as any);
+  const res = client.sendTransaction(tx);
   if (res instanceof FailedTransactionMetadata) {
     throw new SendTransactionError({
       action: "send",
@@ -109,6 +108,15 @@ async function safeSendAndConfirmWithMeta(provider: LiteSVMProvider, client: Lit
     } as any);
   }
   return { signature, computeUnitsConsumed: res.computeUnitsConsumed() };
+}
+
+function sendTx(
+  client: LiteSVM,
+  feePayer: anchor.web3.PublicKey,
+  signers: anchor.web3.Keypair[],
+  instructions: anchor.web3.TransactionInstruction | anchor.web3.TransactionInstruction[] | anchor.web3.Transaction,
+): string {
+  return sendTxWithMeta(client, feePayer, signers, instructions).signature;
 }
 
 describe("engine litesvm", () => {
@@ -134,9 +142,8 @@ describe("engine litesvm", () => {
     client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
 
     adminBKeypair = anchor.web3.Keypair.generate();
-  });
 
-  it("Initializes engine config with XYBER mint", async () => {
+    // Initialize XYBER mint and engine config
     const mint = anchor.web3.Keypair.generate();
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
     const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
@@ -144,16 +151,16 @@ describe("engine litesvm", () => {
     client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
     treasuryPubkey = treasuryKeypair.publicKey;
 
-    const tx = new anchor.web3.Transaction()
+    const initMintTx = new anchor.web3.Transaction()
       .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
       .add(createInitializeMintInstruction(mint.publicKey, 6, admin.publicKey, null))
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
       .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
       .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000_000)));
-    await safeSendAndConfirm(provider, client, tx, [adminKeypair, mint]);
+    sendTx(client, admin.publicKey, [adminKeypair, mint], initMintTx);
 
     const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
-    const { instruction } = await (sdk as any).initEngineConfigIx({
+    const { instruction: initConfigIx } = await (sdk as any).initEngineConfigIx({
       payer: admin.publicKey,
       treasury: treasuryPubkey,
       xyberMint: mint.publicKey,
@@ -162,12 +169,14 @@ describe("engine litesvm", () => {
       reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair, adminBKeypair]);
+    sendTx(client, admin.publicKey, [adminKeypair, adminBKeypair], initConfigIx);
     xyberMint = mint.publicKey;
+  });
 
+  it("Initializes engine config with XYBER mint", async () => {
     const { data: config } = await sdk.fetchEngineConfig();
     assert.ok(config, "EngineConfig should exist");
-    assert.ok(config.xyberMint.equals(mint.publicKey));
+    assert.ok(config.xyberMint.equals(xyberMint));
     assert.ok(config.treasury.equals(treasuryPubkey));
     assert.equal(config.threshold, 2);
   });
@@ -179,7 +188,7 @@ describe("engine litesvm", () => {
       ...presetParams,
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(presetIx), [adminKeypair, adminBKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], presetIx);
 
     const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
     assert.ok(preset, "Preset should exist");
@@ -203,7 +212,7 @@ describe("engine litesvm", () => {
       uri: "https://example.com/metadata.json",
     });
 
-    const initTx = await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    const initTx = sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
     console.log("Init launch tx signature:", initTx);
 
     launchState = launchPda;
@@ -232,7 +241,7 @@ describe("engine litesvm", () => {
         .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, wrongMint))
         .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasuryPubkey, wrongMint))
         .add(createMintToInstruction(wrongMint, creatorAta, admin.publicKey, BigInt(fee.toString())));
-      await safeSendAndConfirm(provider, client, tx, [adminKeypair, wrongMintKp]);
+      sendTx(client, adminKeypair.publicKey, [adminKeypair, wrongMintKp], tx);
     }
 
     const { instruction } = await (sdk as any).initLaunchFromPresetIx({
@@ -246,7 +255,7 @@ describe("engine litesvm", () => {
       xyberMint: wrongMint,
     });
     await doAndCheckError(
-      safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]),
+      (async () => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction))(),
       "InvalidMint"
     );
   });
@@ -261,7 +270,7 @@ describe("engine litesvm", () => {
       amount: depositAmount,
     });
 
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [depositor]);
+    sendTx(client, depositor.publicKey, [depositor], instruction);
 
     const { data: userContrib } = await sdk.fetchContribution(launchState, depositor.publicKey);
     assert.equal(userContrib.ticketRanges.length, 1, "Should have 1 range");
@@ -292,7 +301,7 @@ describe("engine litesvm", () => {
       contributor: depositor.publicKey,
       amount: depositAmount,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depositIx), [depositor]);
+    sendTx(client, depositor.publicKey, [depositor], depositIx);
 
     const { data: contribBefore } = await sdk.fetchContribution(launchState, depositor.publicKey);
     assert.equal(contribBefore.ticketRanges.length, 1, "Should have 1 range after deposit");
@@ -309,11 +318,12 @@ describe("engine litesvm", () => {
       contributor: depositor.publicKey,
       amount: withdrawAmount,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(withdrawIx), [depositor]);
+    sendTx(client, depositor.publicKey, [depositor], withdrawIx);
 
     const balanceAfter = client.getBalance(depositor.publicKey);
     const balanceDiff = Number(balanceAfter) - Number(balanceBefore);
-    assert.equal(balanceDiff, 2 * anchor.web3.LAMPORTS_PER_SOL, "Should receive exactly 2 SOL back");
+    const txFee = 5000; // LiteSVM transaction fee
+    assert.equal(balanceDiff + txFee, 2 * anchor.web3.LAMPORTS_PER_SOL, "Should receive exactly 2 SOL back minus tx fee");
 
     const { data: contribAfter } = await sdk.fetchContribution(launchState, depositor.publicKey);
     assert.equal(contribAfter.ticketRanges.length, 1, "Should still have 1 range");
@@ -342,7 +352,7 @@ describe("engine litesvm", () => {
       symbol: "P1",
       uri: "https://example.com/p1.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix1), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix1);
 
     const projectId2 = await sdk.getNextProjectId();
     assert.equal(projectId2.toNumber(), projectId1.toNumber() + 1, "Project 2 ID should be project1 + 1");
@@ -356,7 +366,7 @@ describe("engine litesvm", () => {
       symbol: "P2",
       uri: "https://example.com/p2.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix2), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix2);
 
     const projectId3 = await sdk.getNextProjectId();
     assert.equal(projectId3.toNumber(), projectId2.toNumber() + 1, "Project 3 ID should be project2 + 1");
@@ -370,7 +380,7 @@ describe("engine litesvm", () => {
       symbol: "P3",
       uri: "https://example.com/p3.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(ix3), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix3);
 
     const { data: state1 } = await sdk.fetchLaunch(launch1);
     const { data: state2 } = await sdk.fetchLaunch(launch2);
@@ -397,7 +407,7 @@ describe("engine litesvm", () => {
       launch: launchState,
       amount: deposit1,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx1), [depositor]);
+    sendTx(client, depositor.publicKey, [depositor], depIx1);
 
     const { data: contrib1 } = await sdk.fetchContribution(launchState, depositor.publicKey);
     const totalTickets1 = contrib1.ticketRanges.reduce((sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()), 0);
@@ -411,7 +421,7 @@ describe("engine litesvm", () => {
           launch: launchState,
           amount: deposit2,
         });
-        await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx2), [depositor]);
+        sendTx(client, depositor.publicKey, [depositor], depIx2);
       })(),
       "PerWalletCapExceeded"
     );
@@ -422,7 +432,7 @@ describe("engine litesvm", () => {
       launch: launchState,
       amount: deposit3,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx3), [depositor]);
+    sendTx(client, depositor.publicKey, [depositor], depIx3);
 
     const { data: contribFinal } = await sdk.fetchContribution(launchState, depositor.publicKey);
     const totalTicketsFinal = contribFinal.ticketRanges.reduce((sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()), 0);
@@ -443,7 +453,7 @@ describe("engine litesvm", () => {
       symbol: "BHT",
       uri: "https://example.com/bht.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
 
     const minRaise = new anchor.BN(presetData.minRaiseLamports);
     const perWallet = new anchor.BN(presetData.perWalletCap);
@@ -459,14 +469,14 @@ describe("engine litesvm", () => {
         launch: testLaunch,
         amount,
       });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [depositor]);
+      sendTx(client, depositor.publicKey, [depositor], depIx);
       totalDeposited = totalDeposited.add(amount);
     }
 
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
     assert.ok(lottery.status.funding, "Lottery should be in progress before preparePoolCreation");
@@ -500,7 +510,7 @@ describe("engine litesvm", () => {
     await doAndCheckError(
       (async () => {
         const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
-        await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
+        sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
     );
@@ -533,7 +543,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
     assert.ok(lottery.status.finalized, "Lottery should be finalized after preparePoolCreation");
@@ -556,7 +566,7 @@ describe("engine litesvm", () => {
       symbol: "GPT",
       uri: "https://example.com/gpt.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
 
     // Deposit enough to meet min_raise
     const minRaise = new anchor.BN(presetData.minRaiseLamports);
@@ -573,7 +583,7 @@ describe("engine litesvm", () => {
         launch: testLaunch,
         amount,
       });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [depositor]);
+      sendTx(client, depositor.publicKey, [depositor], depIx);
       totalDeposited = totalDeposited.add(amount);
     }
 
@@ -582,7 +592,7 @@ describe("engine litesvm", () => {
 
     // Set VRF seed
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     // Verify lottery is still in progress
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
@@ -621,7 +631,7 @@ describe("engine litesvm", () => {
     await doAndCheckError(
       (async () => {
         const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
-        await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
+        sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
     );
@@ -641,7 +651,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
     // Verify lottery is now finalized
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
@@ -664,7 +674,7 @@ describe("engine litesvm", () => {
       symbol: "SFT",
       uri: "https://example.com/sft.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
     console.log("✅ Step 1: Launch created");
 
     // === Step 2: Deposits ===
@@ -679,7 +689,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       amount: creatorDepositAmount,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(creatorDepIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], creatorDepIx);
 
     // Contributor deposits to meet min_raise
     const minRaise = preset.minRaiseLamports;
@@ -692,7 +702,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       amount: contributorDepositAmount,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(contribDepIx), [contributor]);
+    sendTx(client, contributor.publicKey, [contributor], contribDepIx);
 
     const totalTickets = creatorTickets + contributorTickets;
     console.log(`✅ Step 2: Deposits complete (creator: ${creatorTickets} tickets, contributor: ${contributorTickets} tickets, total: ${totalTickets})`);
@@ -701,7 +711,7 @@ describe("engine litesvm", () => {
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
 
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const projectId = launchAccount.projectId.toNumber();
@@ -717,7 +727,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], prepTx);
 
     const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
     assert.ok(lottery.status.finalized, "Lottery should be finalized");
@@ -748,7 +758,7 @@ describe("engine litesvm", () => {
       clmmProgram: raydiumProgramId,
       provider,
     });
-    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [adminKeypair, ...clmmCreate.signers]);
+    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
     console.log(`✅ Step 4: CLMM pool created`);
 
     // === Step 5: Contributor claims Sale bucket ===
@@ -764,9 +774,10 @@ describe("engine litesvm", () => {
       participant: contributor.publicKey,
       bucket: 0, // Sale
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-      .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-      .add(claimContribIx), [contributor]);
+    sendTx(client, contributor.publicKey, [contributor], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimContribIx,
+    ]);
 
     const contribAtaInfo = client.getAccount(contribAta);
     const unpacked = unpackAccount(contribAta, {
@@ -794,9 +805,10 @@ describe("engine litesvm", () => {
       participant: admin.publicKey,
       bucket: 1, // Team
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-      .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-      .add(claimTeamIx), [adminKeypair]);
+    sendTx(client, admin.publicKey, [adminKeypair], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimTeamIx,
+    ]);
 
     const teamAtaInfo = client.getAccount(creatorAta);
     const teamTokens = unpackAccount(creatorAta, {
@@ -825,9 +837,10 @@ describe("engine litesvm", () => {
       participant: admin.publicKey,
       bucket: 0, // Sale
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-      .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-      .add(claimCreatorSaleIx), [adminKeypair]);
+    sendTx(client, admin.publicKey, [adminKeypair], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimCreatorSaleIx,
+    ]);
 
     const creatorAtaAfterSale = client.getAccount(creatorAta);
     const creatorTotalTokens = unpackAccount(creatorAta, {
@@ -840,11 +853,12 @@ describe("engine litesvm", () => {
 
     // === Step 8: Verify no refund available (all tickets won) ===
     // When k_capacity >= active_tickets, all tickets win, so refund = 0
+    const refundIx = (await sdk.refundTx({ launch: testLaunch, contributor: contributor.publicKey })).transaction.instructions[0];
     await doAndCheckError(
-      safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-        .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-        .add((await sdk.refundTx({ launch: testLaunch, contributor: contributor.publicKey })).transaction.instructions[0]),
-        [contributor]),
+      (async () => sendTx(client, contributor.publicKey, [contributor], [
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+        refundIx,
+      ]))(),
       "AlreadyRefunded"
     );
     console.log(`✅ Step 8: Refund correctly rejected (all tickets won)`);
@@ -868,7 +882,7 @@ describe("engine litesvm", () => {
       ...vestingPresetParams,
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(vestingPresetIx), [adminKeypair, adminBKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], vestingPresetIx);
 
     const { data: preset } = await sdk.fetchLaunchPreset(Number(vestingPresetData.id));
     const tau = preset.tauLamports;
@@ -884,7 +898,7 @@ describe("engine litesvm", () => {
       symbol: "VPT",
       uri: "https://example.com/vpt.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
 
     // Contributor deposits 15 tickets (1.5 SOL - max within perWalletCap)
     const contributorTickets = 15;
@@ -895,12 +909,12 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       amount: depositAmount,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [contributor]);
+    sendTx(client, contributor.publicKey, [contributor], depIx);
 
     // Finalize lottery
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const projectId = launchAccount.projectId.toNumber();
@@ -916,7 +930,7 @@ describe("engine litesvm", () => {
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, prepTx, [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], prepTx);
 
     // Create pool
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
@@ -929,7 +943,7 @@ describe("engine litesvm", () => {
       clmmProgram: raydiumProgramId,
       provider,
     });
-    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [adminKeypair, ...clmmCreate.signers]);
+    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
 
     // Calculate expected values
     // Vesting: contributorDurationSec=300, contributorPeriodSec=60 => 5 periods
@@ -956,9 +970,10 @@ describe("engine litesvm", () => {
       participant: contributor.publicKey,
       bucket: 0,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-      .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-      .add(claim1Ix), [contributor]);
+    sendTx(client, contributor.publicKey, [contributor], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claim1Ix,
+    ]);
 
     let ataInfo = client.getAccount(contribAta);
     let currentBalance = BigInt(unpackAccount(contribAta, {
@@ -977,9 +992,10 @@ describe("engine litesvm", () => {
       participant: contributor.publicKey,
       bucket: 0,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-      .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-      .add(claim2Ix), [contributor]);
+    sendTx(client, contributor.publicKey, [contributor], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claim2Ix,
+    ]);
 
     ataInfo = client.getAccount(contribAta);
     currentBalance = BigInt(unpackAccount(contribAta, {
@@ -991,15 +1007,17 @@ describe("engine litesvm", () => {
 
     // After vesting ends, claim should fail
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorPeriodSec) });
+    const finalClaimIx = (await sdk.claimIx({
+      launch: testLaunch,
+      baseMint: clmmCreate.baseMint,
+      participant: contributor.publicKey,
+      bucket: 0,
+    })).instruction;
     await doAndCheckError(
-      safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-        .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }))
-        .add((await sdk.claimIx({
-          launch: testLaunch,
-          baseMint: clmmCreate.baseMint,
-          participant: contributor.publicKey,
-          bucket: 0,
-        })).instruction), [contributor]),
+      (async () => sendTx(client, contributor.publicKey, [contributor], [
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+        finalClaimIx,
+      ]))(),
       "NothingToClaim"
     );
     console.log(`After vesting: claim correctly rejected`);
@@ -1025,7 +1043,7 @@ describe("engine litesvm", () => {
       ...stressPresetParams,
       signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(stressPresetIx), [adminKeypair, adminBKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], stressPresetIx);
 
     const { data: preset } = await sdk.fetchLaunchPreset(Number(stressPresetData.id));
     const tau = preset.tauLamports;
@@ -1046,7 +1064,7 @@ describe("engine litesvm", () => {
       symbol: "STR",
       uri: "https://example.com/stress.json",
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
 
     // Track all participants
     interface Participant {
@@ -1092,7 +1110,7 @@ describe("engine litesvm", () => {
         launch: testLaunch,
         amount,
       });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(depIx), [participant]);
+      sendTx(client, participant.publicKey, [participant], depIx);
 
       participants.push({
         keypair: participant,
@@ -1115,7 +1133,7 @@ describe("engine litesvm", () => {
             launch: testLaunch,
             amount: withdrawAmount,
           });
-          await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(withdrawIx), [p.keypair]);
+          sendTx(client, p.keypair.publicKey, [p.keypair], withdrawIx);
 
           p.withdrawnTickets += withdrawTickets;
           p.activeTickets -= withdrawTickets;
@@ -1153,14 +1171,14 @@ describe("engine litesvm", () => {
     injectSlotHashesForRange(client, rangeStart, rangeEnd, 512, randomSeed);
 
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     const { transaction: prepTx } = await sdk.preparePoolCreationTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    const { computeUnitsConsumed } = await safeSendAndConfirmWithMeta(provider, client, prepTx, [adminKeypair]);
+    const { computeUnitsConsumed } = sendTxWithMeta(client, admin.publicKey, [adminKeypair], prepTx);
 
     const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
     const winners = Math.min(kCapacity, activeTickets);
@@ -1245,7 +1263,7 @@ describe("engine litesvm", () => {
       clmmProgram: raydiumProgramId,
       provider,
     });
-    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [adminKeypair, ...clmmCreate.signers]);
+    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
 
     // Phase 4: Advance time for full vesting
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorDurationSec + 60) });
@@ -1274,9 +1292,10 @@ describe("engine litesvm", () => {
             participant: p.keypair.publicKey,
             bucket: 0,
           });
-          await safeSendAndConfirm(provider, client, new anchor.web3.Transaction()
-            .add(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }))
-            .add(claimIx), [p.keypair]);
+          sendTx(client, p.keypair.publicKey, [p.keypair], [
+            anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+            claimIx,
+          ]);
 
           const ataInfo = client.getAccount(participantAta);
           if (ataInfo) {
@@ -1303,7 +1322,7 @@ describe("engine litesvm", () => {
           contributor: p.keypair.publicKey,
         });
         refundTx.instructions.unshift(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }));
-        await safeSendAndConfirm(provider, client, refundTx, [p.keypair]);
+        sendTx(client, p.keypair.publicKey, [p.keypair], refundTx);
 
         const balanceAfter = client.getBalance(p.keypair.publicKey);
         const refunded = balanceAfter - balanceBefore;

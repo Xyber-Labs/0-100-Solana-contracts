@@ -110,7 +110,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Setup: Airdrop SOL to wallets ===");
 
     const airdropPromises = [
-      provider.connection.requestAirdrop(admin1Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(admin1Keypair.publicKey, 25 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
@@ -178,23 +178,11 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
           admins: [admin1Keypair.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey],
           threshold: 2,
           adminKeypairs: [admin1Keypair, admin2Keypair],
+          reallocFundLamports: new BN(20 * anchor.web3.LAMPORTS_PER_SOL),
         });
-        console.log("✅ Engine config initialized");
+        console.log("✅ Engine config initialized with 20 SOL for realloc funds");
       } else {
         console.log("⏭️  Engine config already exists, skipping");
-      }
-
-      // Fund realloc_funds PDA for reallocation costs
-      const [reallocFundsPda] = sdk.getReallocFundsPda();
-      const reallocFundsBalance = await provider.connection.getBalance(reallocFundsPda);
-      if (reallocFundsBalance < 5 * anchor.web3.LAMPORTS_PER_SOL) {
-        const transferIx = anchor.web3.SystemProgram.transfer({
-          fromPubkey: admin1Keypair.publicKey,
-          toPubkey: reallocFundsPda,
-          lamports: 5 * anchor.web3.LAMPORTS_PER_SOL,
-        });
-        await provider.sendAndConfirm(new anchor.web3.Transaction().add(transferIx), [admin1Keypair]);
-        console.log("✅ Realloc funds PDA funded with 5 SOL");
       }
 
   });
@@ -322,6 +310,29 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
+
+    // Creator deposit (required for team vesting claim)
+    const CREATOR_DEPOSIT_SOL = 8;
+
+    // Debug: check realloc_funds balance and bitmap sizes before creator deposit
+    const [reallocFundsPda] = sdk.getReallocFundsPda();
+    const reallocBalance = await provider.connection.getBalance(reallocFundsPda);
+    console.log(`Realloc funds balance before creator deposit: ${reallocBalance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+    const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
+    const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(launchPda);
+    const winnersBitmapInfo = await provider.connection.getAccountInfo(winnersBitmapPda);
+    const inactiveBitmapInfo = await provider.connection.getAccountInfo(inactiveBitmapPda);
+    console.log(`Winners bitmap: ${winnersBitmapInfo ? winnersBitmapInfo.data.length + ' bytes, owner=' + winnersBitmapInfo.owner.toBase58() : 'not exists'}`);
+    console.log(`Inactive bitmap: ${inactiveBitmapInfo ? inactiveBitmapInfo.data.length + ' bytes, owner=' + inactiveBitmapInfo.owner.toBase58() : 'not exists'}`);
+
+    const { signature: creatorDepSig } = await sdk.deposit({
+      launch: launchPda,
+      amountLamports: new BN(CREATOR_DEPOSIT_SOL * anchor.web3.LAMPORTS_PER_SOL),
+      contributorKeypair: creatorKeypair,
+    });
+    console.log(`✅ Deposit 4 (creator: ${CREATOR_DEPOSIT_SOL} SOL)`);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, creatorDepSig));
 
     // Calculate total deposited from lottery data
     const { data: lottery } = await sdk.fetchLotteryControl(launchPda);
@@ -1299,6 +1310,91 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     assert.ok(availableAfter.eqn(0), "All XYBER should be claimed");
     console.log("✅ XYBER from BuyBack claimed to platform wallet");
+  });
+
+  it("Step 25: Creator team vesting - verify sequential growth", async () => {
+    console.log("=== Step 25: Creator Team Vesting Verification ===");
+
+    const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
+    const teamAllocation = new BN(preset.baseTotalAllocation.toString())
+      .mul(new BN(preset.teamAllocationBasisPoints))
+      .div(new BN(10000));
+    const teamPeriods = preset.teamDurationSec / preset.teamPeriodSec;
+
+    console.log(`Team allocation: ${teamAllocation.toString()}`);
+    console.log(`Team periods: ${teamPeriods}`);
+    console.log(`Period duration: ${preset.teamPeriodSec} sec`);
+
+    const creatorAta = getAssociatedTokenAddressSync(baseMint, creatorKeypair.publicKey, true);
+
+    // Check if there's already a balance from previous claims
+    let initialBalance = new BN(0);
+    try {
+      const ataInfo = await getAccount(provider.connection, creatorAta);
+      initialBalance = new BN(ataInfo.amount.toString());
+      console.log(`Initial creator balance: ${initialBalance.toString()}`);
+    } catch {
+      console.log("Creator ATA does not exist yet");
+    }
+
+    // Try immediate claim - should fail with NothingToClaim if no time passed
+    console.log("\n--- Immediate claim attempt ---");
+    try {
+      await sdk.claim({
+        launch: launchPda,
+        baseMint: baseMint,
+        participantKeypair: creatorKeypair,
+        bucket: 1, // Team bucket
+      });
+      console.log("Immediate claim succeeded (some time has passed)");
+    } catch (e: any) {
+      if (e.message?.includes("NothingToClaim")) {
+        console.log("✅ Immediate claim correctly rejected (NothingToClaim)");
+      } else {
+        throw e;
+      }
+    }
+
+    // Claim at each period and verify growth
+    let previousBalance = initialBalance;
+    const periodInterval = preset.teamPeriodSec * 1000;
+    const tolerance = new BN(1); // Allow 1 lamport tolerance for rounding
+
+    // Only test first 3 periods to keep test time reasonable for CI
+    const periodsToTest = Math.min(3, teamPeriods);
+
+    for (let period = 1; period <= periodsToTest; period++) {
+      console.log(`\n--- Period ${period}/${periodsToTest} (of ${teamPeriods} total) ---`);
+
+      await new Promise(resolve => setTimeout(resolve, periodInterval));
+
+      await sdk.claim({
+        launch: launchPda,
+        baseMint: baseMint,
+        participantKeypair: creatorKeypair,
+        bucket: 1,
+      });
+
+      const ataInfo = await getAccount(provider.connection, creatorAta);
+      const currentBalance = new BN(ataInfo.amount.toString());
+      const teamBalanceOnly = currentBalance.sub(initialBalance);
+      const expectedTeamBalance = teamAllocation.mul(new BN(period)).div(new BN(teamPeriods));
+
+      console.log(`  Expected team tokens: ${expectedTeamBalance.toString()}`);
+      console.log(`  Actual team tokens:   ${teamBalanceOnly.toString()}`);
+      console.log(`  Growth this period:   +${currentBalance.sub(previousBalance).toString()}`);
+
+      // Verify balance grew from previous period
+      assert.ok(
+        currentBalance.gt(previousBalance),
+        `Period ${period}: Balance should grow from ${previousBalance.toString()} to ${currentBalance.toString()}`
+      );
+
+      previousBalance = currentBalance;
+      console.log(`✅ Period ${period} verified - tokens growing`);
+    }
+
+    console.log(`\n✅ Creator team vesting verified - tokens grow sequentially each period`);
   });
 
 });

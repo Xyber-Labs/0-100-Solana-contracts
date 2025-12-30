@@ -106,22 +106,16 @@ impl<C, W, I> LotteryRaw<C, W, I> {
     }
 
     #[inline]
-    fn set_bitmap_bit(data: &mut [u8], index: u64) {
+    fn write_bitmap_bit(data: &mut [u8], index: u64, value: bool) {
         let word_idx = (index / Self::BITS_PER_WORD) as usize;
         let bit_pos = index % Self::BITS_PER_WORD;
         let word_offset = word_idx * 8;
         let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
-        word |= 1u64 << bit_pos;
-        data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
-    }
-
-    #[inline]
-    fn clear_bitmap_bit(data: &mut [u8], index: u64) {
-        let word_idx = (index / Self::BITS_PER_WORD) as usize;
-        let bit_pos = index % Self::BITS_PER_WORD;
-        let word_offset = word_idx * 8;
-        let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
-        word &= !(1u64 << bit_pos);
+        if value {
+            word |= 1u64 << bit_pos;
+        } else {
+            word &= !(1u64 << bit_pos);
+        }
         data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
     }
 }
@@ -231,36 +225,45 @@ impl<C: AsMut<LotteryControl>, W, I> LotteryRaw<C, W, I> {
 impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
     #[inline]
     pub fn set_winner_bit(&mut self, index: u64) {
-        Self::set_bitmap_bit(self.winners_bitmap.as_mut(), index);
+        Self::write_bitmap_bit(self.winners_bitmap.as_mut(), index, true);
     }
 
     #[inline]
     pub fn clear_winner_bit(&mut self, index: u64) {
-        Self::clear_bitmap_bit(self.winners_bitmap.as_mut(), index);
+        Self::write_bitmap_bit(self.winners_bitmap.as_mut(), index, false);
     }
 
-    pub fn set_range(&mut self, range: &TicketRange) {
+    pub fn set_range(&mut self, range: TicketRange, value: bool) {
         for i in range.start..range.end {
-            Self::set_bitmap_bit(self.winners_bitmap.as_mut(), i);
+            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, value);
         }
     }
 
     pub fn clear_range(&mut self, range: &TicketRange) {
         for i in range.start..range.end {
-            Self::clear_bitmap_bit(self.winners_bitmap.as_mut(), i);
+            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, false);
         }
+    }
+}
+
+impl<C: AsMut<LotteryControl> + AsRef<LotteryControl>, W, I> LotteryRaw<C, W, I> {
+    pub fn allocate_tickets(&mut self, count: u64) -> TicketRange {
+        let start = self.control.as_ref().bits_allocated;
+        let end = start + count;
+        self.control.as_mut().bits_allocated = end;
+        TicketRange::new(start, end)
     }
 }
 
 impl<C, W, I: AsMut<[u8]>> LotteryRaw<C, W, I> {
     #[inline]
     pub fn set_inactive_bit(&mut self, index: u64) {
-        Self::set_bitmap_bit(self.inactive_bitmap.as_mut(), index);
+        Self::write_bitmap_bit(self.inactive_bitmap.as_mut(), index, true);
     }
 
     #[inline]
     pub fn clear_inactive_bit(&mut self, index: u64) {
-        Self::clear_bitmap_bit(self.inactive_bitmap.as_mut(), index);
+        Self::write_bitmap_bit(self.inactive_bitmap.as_mut(), index, false);
     }
 }
 
@@ -626,7 +629,7 @@ mod tests {
         let mut inactive = empty_bitmap(1);
         {
             let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &mut inactive[..]);
-            raw.set_range(&TicketRange::new(10, 20));
+            raw.set_range(TicketRange::new(10, 20), true);
         }
         let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
         for i in 10..20 {
@@ -634,6 +637,21 @@ mod tests {
         }
         assert!(!raw.get_winner_bit(9));
         assert!(!raw.get_winner_bit(20));
+    }
+
+    #[test]
+    fn test_set_range_false() {
+        let mut ctrl = ctrl(64, 0);
+        let mut winners = empty_bitmap(1);
+        let mut inactive = empty_bitmap(1);
+        {
+            let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &mut inactive[..]);
+            raw.set_range(TicketRange::new(10, 20), false);
+        }
+        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        for i in 10..20 {
+            assert!(!raw.get_winner_bit(i));
+        }
     }
 
     #[test]
