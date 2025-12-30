@@ -9,14 +9,15 @@ import {
   getOrCreateAssociatedTokenAccount,
   mintTo
 } from "@solana/spl-token";
-import { Decimal } from "decimal.js";
+import { PoolUtils, Raydium, TxVersion } from "@raydium-io/raydium-sdk-v2";
 
 import { EngineSDK } from "../ts-sdk/src/engine";
-import { IncomeDispatcherSDK, Role } from "../ts-sdk/src/income-dispatcher";
-import { PoolUtils, Raydium, TxVersion } from "@raydium-io/raydium-sdk-v2";
 
 import * as utils from "./utils";
 import { loadKeypair } from "./utils";
+import { IncomeDispatcherSDK } from "@xyber-labs/0-100-sdk";
+import { Role } from "@xyber-labs/0-100-sdk/dist/src/income-dispatcher";
+import Decimal from "decimal.js";
 
 describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const provider = anchor.AnchorProvider.env();
@@ -67,10 +68,10 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   let xyberPoolTickArray2: anchor.web3.PublicKey;
   let xyberPoolBitmapExtension: anchor.web3.PublicKey;
 
-  const PRESET_ID = 0;
+  const presetConfig = JSON.parse(fs.readFileSync("presets/raydium-clmm-anchor-test-preset.json", "utf8"));
+  const PRESET_ID = Number(presetConfig.id);
   const PROJECT_ID = 1;
   let projectId = PROJECT_ID;
-  let presetConfig: any;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
   const BUYER2_AMOUNT = parseInt(process.env.BUYER2_AMOUNT || "150");
@@ -187,10 +188,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       const [reallocFundsPda] = sdk.getReallocFundsPda();
       const reallocFundsBalance = await provider.connection.getBalance(reallocFundsPda);
       if (reallocFundsBalance < 5 * anchor.web3.LAMPORTS_PER_SOL) {
-        await sdk.fundRealloc({
-          amount: new BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-          signers: [admin1Keypair],
+        const transferIx = anchor.web3.SystemProgram.transfer({
+          fromPubkey: admin1Keypair.publicKey,
+          toPubkey: reallocFundsPda,
+          lamports: 5 * anchor.web3.LAMPORTS_PER_SOL,
         });
+        await provider.sendAndConfirm(new anchor.web3.Transaction().add(transferIx), [admin1Keypair]);
         console.log("✅ Realloc funds PDA funded with 5 SOL");
       }
 
@@ -200,15 +203,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 1: Initialize Launch Preset ===");
 
     const [presetPda] = sdk.getLaunchPresetPda(PRESET_ID);
-    const presetInfo = await provider.connection.getAccountInfo(presetPda);
-
-    const presetPath = "presets/test-preset.json";
-    presetConfig = JSON.parse(fs.readFileSync(presetPath, "utf8"));
-
-    if (presetInfo) {
-      console.log("⏭️  Preset already exists, skipping");
-      return;
-    }
 
     const validParams = utils.parsePresetParams(presetConfig);
 
@@ -251,7 +245,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       params: validParams,
       adminKeypairs: [admin1Keypair, admin2Keypair],
     });
-    console.log("✅ Launch preset initialized successfully from", presetPath);
+    console.log("✅ Launch preset initialized successfully from presets/raydium-clmm-anchor-test-preset.json");
   });
 
   it("Step 2: Setup income-dispatcher program", async () => {
@@ -1041,8 +1035,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const poolKeys = data.poolKeys;
     console.log("Pool info loaded via RPC");
 
-    const solAmount = new BN(7 * anchor.web3.LAMPORTS_PER_SOL);
-    const xyberAmount = new BN(500_000_000_000); // 500K XYBER (6 decimals)
+    const solAmount = new BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const xyberAmount = new BN(100_000_000_000); // 100K XYBER (6 decimals)
 
     console.log("Adding liquidity: SOL =", solAmount.toString(), ", XYBER =", xyberAmount.toString());
     console.log("Pool mintA:", poolInfo.mintA.address, "mintB:", poolInfo.mintB.address);

@@ -439,7 +439,6 @@ describe("engine litesvm", () => {
   it("Blockhash verification in preparePoolCreation", async () => {
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    // Create a fresh launch for this test
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
       creator: admin.publicKey,
@@ -452,7 +451,6 @@ describe("engine litesvm", () => {
     });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [adminKeypair]);
 
-    // Deposit enough to meet min_raise (100 SOL in preset, tau = 0.1 SOL = 1000 tickets)
     const minRaise = new anchor.BN(presetData.minRaiseLamports);
     const perWallet = new anchor.BN(presetData.perWalletCap);
     let totalDeposited = new anchor.BN(0);
@@ -471,23 +469,18 @@ describe("engine litesvm", () => {
       totalDeposited = totalDeposited.add(amount);
     }
 
-    // Advance time beyond funding period
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
-    // Set VRF seed
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
     await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(seedIx), [adminKeypair]);
 
-    // Verify lottery is still in progress (not yet finalized)
     let { data: lottery } = await sdk.fetchLottery(testLaunch);
     assert.ok(lottery.status.inProgress, "Lottery should be in progress before preparePoolCreation");
 
-    // Get launch state for blockhash range calculation
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
     const currentClock = client.getClock();
 
-    // Compute project's personal blockhash range
     const projectId = launchAccount.projectId.toNumber();
     const unlock = Number(presetAccount.unlockTimeSec);
     const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
@@ -495,7 +488,6 @@ describe("engine litesvm", () => {
     const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width;
 
-    // Write INVALID SlotHashes (all hashes outside project's range)
     const numHashes = 512;
     const slotHashesDataInvalid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataInvalid.writeBigUInt64LE(BigInt(numHashes), 0);
@@ -523,7 +515,6 @@ describe("engine litesvm", () => {
     ({ data: lottery } = await sdk.fetchLottery(testLaunch));
     assert.ok(lottery.status.inProgress, "Lottery should be in progress after preparePoolCreation");
 
-    // Write VALID SlotHashes (one hash inside project's range)
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
     for (let i = 0; i < numHashes; i++) {
@@ -543,7 +534,6 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    // Now preparePoolCreation should succeed
     const { transaction } = await sdk.preparePoolCreationTx({
       payer: admin.publicKey,
       launch: testLaunch,
@@ -551,11 +541,9 @@ describe("engine litesvm", () => {
     });
     await safeSendAndConfirm(provider, client, transaction, [adminKeypair]);
 
-    // Verify lottery is now finalized
     ({ data: lottery } = await sdk.fetchLottery(testLaunch));
     assert.ok(lottery.status.finalized, "Lottery should be finalized after preparePoolCreation");
 
-    // Verify claims_opened_at is set
     const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
     assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
   });

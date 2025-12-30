@@ -1,6 +1,6 @@
 {
-  "participantCount": 15000,
-  "withdrawProbability": 0.10,
+  "participantCount": 20000,
+  "withdrawProbability": 0.20,
   "minDepositMultiplier": 50,
   "maxDepositMultiplier": 200
 }
