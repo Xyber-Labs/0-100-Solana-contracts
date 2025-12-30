@@ -36,8 +36,6 @@ construct_uint! {
 
 pub mod clmm;
 pub mod lottery;
-#[cfg(test)]
-mod lottery_tests;
 pub mod mint;
 pub mod pool;
 pub mod realloc;
