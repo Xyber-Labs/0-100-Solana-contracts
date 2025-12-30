@@ -29,7 +29,12 @@ pub struct Withdraw<'info> {
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+    )]
     pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
@@ -54,7 +59,6 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let lottery_control = &mut ctx.accounts.lottery_control;
 
     require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
-    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
     let tickets_to_remove = checked_div!(amount, launch_preset.tau_lamports)?;
     require!(

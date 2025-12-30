@@ -28,7 +28,11 @@ pub struct CreateClmmPool<'info> {
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    #[account(
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery_control.is_finalized() @ ErrorCode::NotFinalized
+    )]
     pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
@@ -98,8 +102,6 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
     let preset = &ctx.accounts.launch_preset;
     let lottery_control = &ctx.accounts.lottery_control;
-
-    require!(lottery_control.is_finalized(), ErrorCode::NotFinalized);
 
     let total_deposited = checked_mul!(lottery_control.active_tickets(), preset.tau_lamports)?;
     require!(

@@ -15,11 +15,15 @@ use anchor_lang::{
 pub struct SetSeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(mut, constraint = launch_state.vrf_seed.is_none() @ EngineErrorCode::SeedAlreadySet)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    #[account(
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+    )]
     pub lottery_control: Account<'info, LotteryControl>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
@@ -32,8 +36,6 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let lottery_control = &ctx.accounts.lottery_control;
 
-    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
-
     require!(
         launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
         EngineErrorCode::FundingNotEnded
@@ -44,8 +46,6 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         total_deposited >= launch_preset.min_raise_lamports,
         EngineErrorCode::MinRaiseNotMet
     );
-
-    require!(launch_state.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
 
     let slot_hashes = &ctx.accounts.slot_hashes;
     let data = slot_hashes.try_borrow_data()?;

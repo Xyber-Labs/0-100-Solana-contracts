@@ -25,7 +25,12 @@ pub struct Deposit<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+    )]
     pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
@@ -67,9 +72,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
     let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
-
     let lottery_control = &mut ctx.accounts.lottery_control;
-    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
     let mut reused_ranges = {
         let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();

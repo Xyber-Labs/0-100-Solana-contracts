@@ -17,13 +17,18 @@ pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(mut, constraint = launch_state.vrf_seed.is_some() @ EngineErrorCode::SeedMissing)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
+        bump,
+        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+    )]
     pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
@@ -45,9 +50,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let lottery_control = &mut ctx.accounts.lottery_control;
-
-    require!(launch_state.vrf_seed.is_some(), EngineErrorCode::SeedMissing);
-    require!(lottery_control.is_funding(), EngineErrorCode::AlreadyFinalized);
 
     let active_tickets = lottery_control.active_tickets();
     let total_deposited = checked_mul!(active_tickets, launch_preset.tau_lamports)?;
