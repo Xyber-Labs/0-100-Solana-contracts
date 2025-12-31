@@ -234,6 +234,7 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
     }
 
     pub fn set_range(&mut self, range: TicketRange, value: bool) {
+        msg!("Range: {:?}", range);
         for i in range.start..range.end {
             Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, value);
         }

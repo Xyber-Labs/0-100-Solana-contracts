@@ -47,7 +47,7 @@ const EngineSDK = {
     ): Promise<string> {
       try {
         if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-        return await (provider as any).sendAndConfirm(tx, signers);
+        return await (provider as any).sendAndConfirm(tx, signers, { skipPreflight: true });
       } catch (e: any) {
         const msg = String(e?.message || "");
         const m = msg.match(/Check signature\s+([A-Za-z0-9]+)\s+/);
@@ -185,17 +185,16 @@ const EngineSDK = {
       amountLamports: BN;
       contributorKeypair: anchor.web3.Keypair;
     }): Promise<{ contributionPda: anchor.web3.PublicKey; signature: string }> {
-      const { instruction, contribution } = await txBuilder.depositIx({
+      const { transaction, contribution } = await txBuilder.depositTx({
         launch: args.launch,
         contributor: args.contributorKeypair.publicKey,
         amount: args.amountLamports,
       });
 
-      const tx = new anchor.web3.Transaction().add(instruction);
       if (!provider.sendAndConfirm) {
         throw new Error("Provider does not support sendAndConfirm");
       }
-      const signature = await provider.sendAndConfirm(tx, [args.contributorKeypair]);
+      const signature = await provider.sendAndConfirm(transaction, [args.contributorKeypair], { skipPreflight: true });
       return { contributionPda: contribution, signature };
     }
 

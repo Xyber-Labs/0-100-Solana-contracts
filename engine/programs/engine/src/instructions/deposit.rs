@@ -5,7 +5,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::DepositMade,
-    state::{Contribution, LaunchPreset, LaunchState},
+    state::{Contribution, LaunchPreset, LaunchState, TicketRange},
     utils::{
         lottery::{LotteryControl, LotteryRaw},
         realloc::realloc_raw,
@@ -47,14 +47,13 @@ pub struct Deposit<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
     pub inactive_bitmap: UncheckedAccount<'info>,
 
+    /// CHECK: Initialized manually, validated via seeds
     #[account(
-        init_if_needed,
-        payer = contributor,
-        space = 8 + Contribution::INIT_SPACE,
+        mut,
         seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()],
         bump
     )]
-    pub contribution: Account<'info, Contribution>,
+    pub contribution: UncheckedAccount<'info>,
 
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -65,12 +64,65 @@ pub struct Deposit<'info> {
 
 pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
-    let contribution = &mut ctx.accounts.contribution;
+    let contribution_info = ctx.accounts.contribution.to_account_info();
+    let launch_key = ctx.accounts.launch_state.key();
+    let contributor_key = ctx.accounts.contributor.key();
+
+    let mut contribution = if contribution_info.data_is_empty() {
+        let initial_space = 8 + Contribution::INIT_SPACE;
+        let rent = Rent::get()?;
+        let lamports = rent.minimum_balance(initial_space);
+
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"contributor",
+            launch_key.as_ref(),
+            contributor_key.as_ref(),
+        ];
+        let (_, bump) = Pubkey::find_program_address(seeds, ctx.program_id);
+        let bump_slice = &[bump];
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            SEED_ROOT,
+            b"contributor",
+            launch_key.as_ref(),
+            contributor_key.as_ref(),
+            bump_slice,
+        ]];
+
+        solana_program::program::invoke_signed(
+            &solana_program::system_instruction::create_account(
+                &contributor_key,
+                &contribution_info.key(),
+                lamports,
+                initial_space as u64,
+                ctx.program_id,
+            ),
+            &[
+                ctx.accounts.contributor.to_account_info(),
+                contribution_info.clone(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+            signer_seeds,
+        )?;
+
+        let mut data = contribution_info.try_borrow_mut_data()?;
+        data[..8].copy_from_slice(&Contribution::DISCRIMINATOR);
+        drop(data);
+
+        Contribution::default()
+    } else {
+        let data = contribution_info.try_borrow_data()?;
+        require!(
+            data[..8] == *Contribution::DISCRIMINATOR,
+            EngineErrorCode::InvalidAccountDiscriminator
+        );
+        Contribution::try_deserialize(&mut &data[..])?
+    };
 
     let current_tickets = contribution.total_tickets();
     let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, amount)?;
-    let is_creator = ctx.accounts.contributor.key() == ctx.accounts.launch_state.creator;
+    let is_creator = contributor_key == ctx.accounts.launch_state.creator;
     let cap =
         if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
 
@@ -108,7 +160,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         required_bitmap_space,
     )?;
 
-    {
+    let new_ranges: Vec<TicketRange> = {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
         let mut lottery =
             LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &[] as &[u8]);
@@ -117,19 +169,53 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
             reused_ranges.push(lottery.allocate_tickets(remaining));
         }
 
-        for range in reused_ranges {
-            lottery.set_range(range, is_creator);
-            contribution.ticket_ranges.push(range);
+        for range in &reused_ranges {
+            lottery.set_range(*range, is_creator);
         }
+        reused_ranges
+    };
+
+    for range in new_ranges {
+        contribution.ticket_ranges.push(range);
     }
 
-    let ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.contributor.key(),
-        &ctx.accounts.escrow_authority.key(),
-        amount,
-    );
+    let required_contribution_space = 8 + contribution.required_space();
+    let current_space = contribution_info.data_len();
+    if required_contribution_space > current_space {
+        let rent = Rent::get()?;
+        let new_min_balance = rent.minimum_balance(required_contribution_space);
+        let current_lamports = contribution_info.lamports();
+        let diff = new_min_balance
+            .checked_sub(current_lamports)
+            .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+        solana_program::program::invoke(
+            &solana_program::system_instruction::transfer(
+                &contributor_key,
+                &contribution_info.key(),
+                diff,
+            ),
+            &[
+                ctx.accounts.contributor.to_account_info(),
+                contribution_info.clone(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        contribution_info.realloc(required_contribution_space, false)?;
+    }
+
+    {
+        let mut data = contribution_info.try_borrow_mut_data()?;
+        contribution.try_serialize(&mut &mut data[..])?;
+    }
+
     solana_program::program::invoke(
-        &ix,
+        &solana_program::system_instruction::transfer(
+            &contributor_key,
+            &ctx.accounts.escrow_authority.key(),
+            amount,
+        ),
         &[
             ctx.accounts.contributor.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
@@ -138,8 +224,8 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     )?;
 
     emit!(DepositMade {
-        launch: ctx.accounts.launch_state.key(),
-        contributor: ctx.accounts.contributor.key(),
+        launch: launch_key,
+        contributor: contributor_key,
         amount,
     });
 

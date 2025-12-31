@@ -112,15 +112,19 @@ pub struct EscrowAccount {
 }
 
 #[account]
-#[derive(InitSpace)]
+#[derive(InitSpace, Default)]
 pub struct Contribution {
     pub tickets_refunded: u64,
     pub withdraw_count: u8,
-    #[max_len(10)]
+    #[max_len(0)]
     pub ticket_ranges: Vec<TicketRange>,
 }
 
 impl Contribution {
+    pub fn required_space(&self) -> usize {
+        8 + 1 + 4 + self.ticket_ranges.len() * TicketRange::INIT_SPACE
+    }
+
     pub fn total_tickets(&self) -> u64 {
         self.ticket_ranges.iter().map(|r| r.count()).sum()
     }
@@ -179,7 +183,6 @@ mod tests {
         assert_eq!(removed, vec![TicketRange::new(20, 23), TicketRange::new(0, 10),]);
         assert!(uc.ticket_ranges.is_empty());
     }
-
 }
 
 #[account]

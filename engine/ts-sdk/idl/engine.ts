@@ -3936,6 +3936,11 @@ export type Engine = {
       "code": 6077,
       "name": "invalidVestingParams",
       "msg": "Invalid vesting parameters"
+    },
+    {
+      "code": 6078,
+      "name": "invalidAccountDiscriminator",
+      "msg": "Invalid account discriminator"
     }
   ],
   "types": [

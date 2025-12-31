@@ -866,171 +866,12 @@ describe("engine litesvm", () => {
     console.log("✅ SUCCESS FLOW COMPLETE");
   });
 
-  // NOTE: Skipped due to litesvm limitation - consecutive claims for same participant
-  // fail with error 6 (blockhash issue). The vesting logic works correctly as proven
-  // by the success flow test which claims across different buckets.
-  it.skip("Vesting progress: minute-by-minute claim growth", async () => {
-    // === Setup: Create launch with contributor vesting over 5 periods ===
-    const vestingPresetPath = path.resolve(__dirname, "litesvm-vesting-test-preset.json");
-    const vestingPresetData = JSON.parse(fs.readFileSync(vestingPresetPath, "utf8"));
-    const vestingPresetParams = parsePresetParams(vestingPresetData);
-
-    // Initialize vesting test preset
-    const { instruction: vestingPresetIx } = await (sdk as any).initLaunchPresetIx({
-      payer: admin.publicKey,
-      id: Number(vestingPresetData.id),
-      ...vestingPresetParams,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-    });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], vestingPresetIx);
-
-    const { data: preset } = await sdk.fetchLaunchPreset(Number(vestingPresetData.id));
-    const tau = preset.tauLamports;
-
-    // Create launch
-    const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
-      creator: admin.publicKey,
-      presetId: Number(vestingPresetData.id),
-      projectId: nextId,
-      saleStartTimeTimestamp: 0,
-      name: "VestingProgressTest",
-      symbol: "VPT",
-      uri: "https://example.com/vpt.json",
-    });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
-
-    // Contributor deposits 15 tickets (1.5 SOL - max within perWalletCap)
-    const contributorTickets = 15;
-    const depositAmount = tau.muln(contributorTickets);
-    const contributor = await createAndFundAccount(client, 50);
-    const { instruction: depIx } = await sdk.depositIx({
-      contributor: contributor.publicKey,
-      launch: testLaunch,
-      amount: depositAmount,
-    });
-    sendTx(client, contributor.publicKey, [contributor], depIx);
-
-    // Finalize lottery
-    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
-
-    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
-    const projectId = launchAccount.projectId.toNumber();
-    const unlock = Number(preset.unlockTimeSec);
-    const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
-    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-    const rangeStart = width * BigInt(projectId - 1);
-    const rangeEnd = rangeStart + width;
-    injectSlotHashesForRange(client, rangeStart, rangeEnd);
-
-    const { transaction: prepTx } = await sdk.preparePoolCreationTx({
-      payer: admin.publicKey,
-      launch: testLaunch,
-      computeUnits: 2_000_000,
-    });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair], prepTx);
-
-    // Create pool
-    const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
-    const clmmCreate = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
-      launch: testLaunch,
-      quoteMint: WSOL_MINT,
-      ammConfig,
-      clmmProgram: raydiumProgramId,
-      provider,
-    });
-    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
-
-    // Calculate expected values
-    // Vesting: contributorDurationSec=300, contributorPeriodSec=60 => 5 periods
-    const baseTotalAllocationBigInt = BigInt("1000000000000000000");
-    const saleAllocationBigInt = baseTotalAllocationBigInt * BigInt(preset.baseSaleBasisPoints) / BigInt(10000);
-    const tokensPerTicket = saleAllocationBigInt / BigInt(contributorTickets);
-    const totalAllocation = tokensPerTicket * BigInt(contributorTickets);
-    const periodsCount = preset.contributorDurationSec / preset.contributorPeriodSec; // 5
-
-    console.log(`\n=== Vesting Progress Test ===`);
-    console.log(`Total allocation: ${totalAllocation}`);
-    console.log(`Periods: ${periodsCount}, Period duration: ${preset.contributorPeriodSec}s`);
-
-    const contribAta = getAssociatedTokenAddressSync(clmmCreate.baseMint, contributor.publicKey, true);
-
-    // Test vesting at different time points
-    // Period 1: partial claim (1/5 of allocation)
-    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorPeriodSec) });
-
-    const expectedAfterP1 = totalAllocation / BigInt(periodsCount);
-    const { instruction: claim1Ix } = await sdk.claimIx({
-      launch: testLaunch,
-      baseMint: clmmCreate.baseMint,
-      participant: contributor.publicKey,
-      bucket: 0,
-    });
-    sendTx(client, contributor.publicKey, [contributor], [
-      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
-      claim1Ix,
-    ]);
-
-    let ataInfo = client.getAccount(contribAta);
-    let currentBalance = BigInt(unpackAccount(contribAta, {
-      ...(ataInfo as any),
-      data: Buffer.from(ataInfo.data),
-    } as any).amount);
-    console.log(`Period 1: claimed ${currentBalance}, expected ${expectedAfterP1}`);
-    assert.equal(currentBalance.toString(), expectedAfterP1.toString(), "Period 1: should have 1/5 of allocation");
-
-    // Advance to end of vesting (remaining 4 periods)
-    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorPeriodSec * 4) });
-
-    const { instruction: claim2Ix } = await sdk.claimIx({
-      launch: testLaunch,
-      baseMint: clmmCreate.baseMint,
-      participant: contributor.publicKey,
-      bucket: 0,
-    });
-    sendTx(client, contributor.publicKey, [contributor], [
-      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
-      claim2Ix,
-    ]);
-
-    ataInfo = client.getAccount(contribAta);
-    currentBalance = BigInt(unpackAccount(contribAta, {
-      ...(ataInfo as any),
-      data: Buffer.from(ataInfo.data),
-    } as any).amount);
-    console.log(`After full vesting: claimed ${currentBalance}, expected ${totalAllocation}`);
-    assert.equal(currentBalance.toString(), totalAllocation.toString(), "Should have full allocation after vesting ends");
-
-    // After vesting ends, claim should fail
-    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorPeriodSec) });
-    const finalClaimIx = (await sdk.claimIx({
-      launch: testLaunch,
-      baseMint: clmmCreate.baseMint,
-      participant: contributor.publicKey,
-      bucket: 0,
-    })).instruction;
-    await doAndCheckError(
-      (async () => sendTx(client, contributor.publicKey, [contributor], [
-        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
-        finalClaimIx,
-      ]))(),
-      "NothingToClaim"
-    );
-    console.log(`After vesting: claim correctly rejected`);
-
-    console.log(`✅ Vesting progress test complete: ${currentBalance} tokens claimed over ${periodsCount} periods`);
-  });
-
   // Stress test configuration loaded from JSON
   const stressConfigPath = path.resolve(__dirname, "stress-test-config.json");
   const STRESS_TEST_CONFIG = JSON.parse(fs.readFileSync(stressConfigPath, "utf8"));
 
   it("Stress test: overflow with withdrawals and full verification", async () => {
-    console.log(`\n=== Stress Test: ${STRESS_TEST_CONFIG.participantCount} participants ===`);
+    console.log(`=== Stress Test: ${STRESS_TEST_CONFIG.participantCount} participants ===`);
 
     // Load and initialize stress preset
     const stressPresetPath = path.resolve(__dirname, "litesvm-stress-test-preset.json");
@@ -1101,8 +942,8 @@ describe("engine litesvm", () => {
     for (let i = 0; i < STRESS_TEST_CONFIG.participantCount; i++) {
       // Random ticket count: 1 to maxTicketsPerWallet
       const ticketCount = Math.floor(1 + random() * maxTicketsPerWallet);
-      const amount = tau.muln(ticketCount);
-      const fundAmount = Number(amount.toString()) / 1e9 + 0.1; // deposit + fees
+      const amount = tau.mul(ticketCount);
+      const fundAmount = Number(amount.toString()) / 1e9 + 2; // deposit + rent + fees + buffer
       const participant = await createAndFundAccount(client, fundAmount);
 
       const { instruction: depIx } = await sdk.depositIx({

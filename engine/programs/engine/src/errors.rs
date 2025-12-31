@@ -169,4 +169,7 @@ pub enum ErrorCode {
 
     #[msg("Invalid vesting parameters")]
     InvalidVestingParams,
+
+    #[msg("Invalid account discriminator")]
+    InvalidAccountDiscriminator,
 }
