@@ -4376,6 +4376,13 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp (seconds) when the launch was created"
+            ],
+            "type": "i64"
+          },
+          {
             "name": "project_id",
             "type": "u64"
           },
