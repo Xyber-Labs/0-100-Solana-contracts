@@ -58,6 +58,10 @@ impl TicketRange {
 #[account]
 #[derive(InitSpace)]
 pub struct LaunchState {
+    /// Unix timestamp (seconds) when the launch was created
+    pub created_at: i64,
+
+    // Project identification
     pub project_id: u64,
     pub creator: Pubkey,
     pub preset: Pubkey,
