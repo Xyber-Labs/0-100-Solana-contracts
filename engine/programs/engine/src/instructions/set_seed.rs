@@ -1,14 +1,15 @@
+use anchor_lang::{
+    prelude::*,
+    solana_program::{keccak, sysvar},
+};
+
 use crate::{
-    checked_mul,
+    checked_add, checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::SeedSet,
     state::{LaunchPreset, LaunchState},
     utils::lottery::LotteryControl,
-};
-use anchor_lang::{
-    prelude::*,
-    solana_program::{keccak, sysvar},
 };
 
 #[derive(Accounts)]
@@ -41,11 +42,9 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         EngineErrorCode::FundingNotEnded
     );
 
-    let total_deposited = checked_mul!(lottery_control.active_tickets(), launch_preset.tau_lamports)?;
-    require!(
-        total_deposited >= launch_preset.min_raise_lamports,
-        EngineErrorCode::MinRaiseNotMet
-    );
+    let total_deposited =
+        checked_mul!(lottery_control.active_tickets(), launch_preset.tau_lamports)?;
+    require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
 
     let slot_hashes = &ctx.accounts.slot_hashes;
     let data = slot_hashes.try_borrow_data()?;
@@ -56,14 +55,13 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
 
     let num_hashes_u64 = num_hashes;
-    let one = 1_u64;
-    let forty = 40_u64;
+    const ONE: u64 = 1_u64;
+    const FORTY: u64 = 40_u64;
 
     let num_hashes_minus_1 =
-        num_hashes_u64.checked_sub(one).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
-    let offset = num_hashes_minus_1
-        .checked_mul(forty)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+        num_hashes_u64.checked_sub(ONE).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+
+    let offset = checked_mul!(num_hashes_minus_1, FORTY)?;
 
     let last_hash_pos = 8u64
         .checked_add(offset)
@@ -72,8 +70,7 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
 
     let start = last_hash_pos as usize;
-    let end =
-        last_hash_pos.checked_add(32).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
+    let end = checked_add!(last_hash_pos, 32)? as usize;
 
     let seed: [u8; 32] =
         data[start..end].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;

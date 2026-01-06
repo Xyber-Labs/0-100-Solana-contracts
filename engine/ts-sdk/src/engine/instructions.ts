@@ -177,7 +177,7 @@ const EngineSDK = {
 
     // processBatch deprecated in on-chain program; keep for compatibility but will fail
     async function processBatch(_: any): Promise<{ signature: string }> {
-      throw new Error("processBatch deprecated; use finalizeRosterShard + preparePoolCreation");
+      throw new Error("processBatch deprecated; use setSeed + preparePoolCreation");
     }
 
     async function deposit(args: {
