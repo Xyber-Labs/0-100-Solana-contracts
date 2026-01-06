@@ -683,7 +683,7 @@ describe("engine litesvm", () => {
 
     // Creator deposits 10 tickets (1 SOL with tau=0.1 SOL)
     const creatorTickets = 10;
-    const creatorDepositAmount = tau.muln(creatorTickets);
+    const creatorDepositAmount = new BN(tau.toString()).muln(creatorTickets);
     const { instruction: creatorDepIx } = await sdk.depositIx({
       contributor: admin.publicKey,
       launch: testLaunch,
@@ -893,6 +893,7 @@ describe("engine litesvm", () => {
 
     console.log(`Hard cap: ${hardCap.div(new anchor.BN(1e9)).toString()} SOL (${kCapacity} tickets)`);
     console.log(`Per wallet: ${preset.perWalletCap.div(new anchor.BN(1e9)).toString()} SOL`);
+    console.log(`Tau: ${tau.toString()} lamports (${tau.toNumber() / 1e9} SOL)`);
 
     // Create launch
     const nextId = await sdk.getNextProjectId();
@@ -913,6 +914,10 @@ describe("engine litesvm", () => {
       depositedTickets: number;
       withdrawnTickets: number;
       activeTickets: number;
+      fundedLamports: bigint;
+      txCount: number;
+      refundedLamports: bigint;
+      claimedTokens: bigint;
     }
     const participants: Participant[] = [];
     let totalDepositedTickets = 0;
@@ -942,8 +947,8 @@ describe("engine litesvm", () => {
     for (let i = 0; i < STRESS_TEST_CONFIG.participantCount; i++) {
       // Random ticket count: 1 to maxTicketsPerWallet
       const ticketCount = Math.floor(1 + random() * maxTicketsPerWallet);
-      const amount = tau.mul(ticketCount);
-      const fundAmount = Number(amount.toString()) / 1e9 + 2; // deposit + rent + fees + buffer
+      const amount = new BN(tau.toString()).muln(ticketCount);
+      const fundAmount = Number(amount.toString()) / 1e9 + 0.1; // deposit + rent + fees + buffer
       const participant = await createAndFundAccount(client, fundAmount);
 
       const { instruction: depIx } = await sdk.depositIx({
@@ -951,13 +956,22 @@ describe("engine litesvm", () => {
         launch: testLaunch,
         amount,
       });
-      sendTx(client, participant.publicKey, [participant], depIx);
+      try {
+        sendTx(client, participant.publicKey, [participant], depIx);
+      } catch (e: any) {
+        console.log(`\n❌ Deposit FAILED at i=${i}, tickets=${ticketCount}, amount=${Number(amount.toString())/1e9} SOL`);
+        throw e;
+      }
 
       participants.push({
         keypair: participant,
         depositedTickets: ticketCount,
         withdrawnTickets: 0,
         activeTickets: ticketCount,
+        fundedLamports: BigInt(Math.floor(fundAmount * 1e9)),
+        txCount: 1,
+        refundedLamports: BigInt(0),
+        claimedTokens: BigInt(0),
       });
       totalDepositedTickets += ticketCount;
 
@@ -967,7 +981,7 @@ describe("engine litesvm", () => {
         const p = participants[pIdx];
         if (p.activeTickets > 1) {
           const withdrawTickets = Math.floor(random() * (p.activeTickets - 1)) + 1;
-          const withdrawAmount = tau.muln(withdrawTickets);
+          const withdrawAmount = new BN(tau.toString()).muln(withdrawTickets);
 
           const { instruction: withdrawIx } = await sdk.withdrawIx({
             contributor: p.keypair.publicKey,
@@ -978,6 +992,7 @@ describe("engine litesvm", () => {
 
           p.withdrawnTickets += withdrawTickets;
           p.activeTickets -= withdrawTickets;
+          p.txCount++;
           totalWithdrawnTickets += withdrawTickets;
           withdrawCount++;
         }
@@ -1137,6 +1152,7 @@ describe("engine litesvm", () => {
             anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
             claimIx,
           ]);
+          p.txCount++;
 
           const ataInfo = client.getAccount(participantAta);
           if (ataInfo) {
@@ -1144,6 +1160,7 @@ describe("engine litesvm", () => {
               ...(ataInfo as any),
               data: Buffer.from(ataInfo.data),
             } as any).amount);
+            p.claimedTokens = balance;
             totalClaimedTokens += balance;
             claimSuccessCount++;
           }
@@ -1164,10 +1181,12 @@ describe("engine litesvm", () => {
         });
         refundTx.instructions.unshift(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }));
         sendTx(client, p.keypair.publicKey, [p.keypair], refundTx);
+        p.txCount++;
 
         const balanceAfter = client.getBalance(p.keypair.publicKey);
         const refunded = balanceAfter - balanceBefore;
         if (refunded > BigInt(0)) {
+          p.refundedLamports = refunded;
           totalRefundedLamports += refunded;
           refundSuccessCount++;
         }
@@ -1183,6 +1202,103 @@ describe("engine litesvm", () => {
       }
     }
 
+    // Fee verification for all participants
+    // Fee = contribution rent + tx fees + ATA rent (if claimed)
+    // Formula: fees = funded - finalBalance - withdrawn*tau - refunded - winningValue
+    // where winningValue = winningTickets * tau (locked for tokens, not "lost")
+    // We compute winningTickets from refund: losingTickets ≈ refunded / tau
+    console.log(`\nVerifying fees paid by participants...`);
+    const tauLamports = BigInt(tau.toString());
+    let totalFeesPaid = BigInt(0);
+    let maxFee = BigInt(0);
+    let minFee = BigInt(Number.MAX_SAFE_INTEGER);
+    let feeErrors: string[] = [];
+
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+      const finalBalance = client.getBalance(p.keypair.publicKey);
+
+      // Money flows:
+      // OUT: deposit (activeTickets * tau) + fees
+      // IN: withdrawn (W * tau) + refund (losingTickets * tau - txfee)
+      // finalBalance = funded - activeTickets*tau - fees + W*tau + refund
+      // fees = funded - finalBalance - activeTickets*tau + W*tau + refund
+      //      = funded - finalBalance - (activeTickets - W)*tau + refund
+      //      but activeTickets = deposited - withdrawn, so activeTickets - W is wrong
+      //
+      // Simpler: total_out = funded - finalBalance
+      //          total_in_from_protocol = withdrawn*tau + refund
+      //          net_to_escrow = deposited*tau - withdrawn*tau = activeTickets*tau
+      //          refund = losingTickets*tau (approx, minus tx fee)
+      //          winning_value = activeTickets*tau - losingTickets*tau = winningTickets*tau
+      //          fees = total_out - winning_value = funded - finalBalance - winningTickets*tau
+
+      const activeTickets = BigInt(p.activeTickets);
+
+      // Approximate losing tickets from refund (refund includes -txfee, so round up)
+      const losingTickets = p.refundedLamports > BigInt(0)
+        ? (p.refundedLamports + tauLamports - BigInt(1)) / tauLamports
+        : BigInt(0);
+      const winningTickets = activeTickets > losingTickets ? activeTickets - losingTickets : BigInt(0);
+      const winningValue = winningTickets * tauLamports;
+
+      // fees = funded - finalBalance - winningValue
+      const totalOut = p.fundedLamports - finalBalance;
+      const feesPaid = totalOut - winningValue;
+      totalFeesPaid += feesPaid;
+
+      if (feesPaid > maxFee) maxFee = feesPaid;
+      if (feesPaid < minFee) minFee = feesPaid;
+
+      // Expected fee: contribution rent (~0.00115 SOL) + tx fees (~5000 per tx)
+      //              + ATA rent if claimed (~0.002 SOL) + TicketsClaimed rent (~0.001 SOL)
+      const contributionRent = BigInt(1_150_000);
+      const txFees = BigInt(p.txCount * 5000);
+      const ataRent = p.claimedTokens > BigInt(0) ? BigInt(2_039_280) : BigInt(0);
+      const ticketsClaimedRent = p.claimedTokens > BigInt(0) ? BigInt(1_002_240) : BigInt(0); // 8 + 8 = 16 bytes account
+      const expectedFee = contributionRent + txFees + ataRent + ticketsClaimedRent;
+
+      // Allow some tolerance for rounding
+      const tolerance = BigInt(50_000); // 0.00005 SOL
+      const diff = feesPaid - expectedFee;
+      if (feesPaid < expectedFee - tolerance || feesPaid > expectedFee + tolerance) {
+        feeErrors.push({
+          idx: i,
+          paid: feesPaid,
+          expected: expectedFee,
+          diff,
+          txs: p.txCount,
+          won: winningTickets,
+          claimed: p.claimedTokens > BigInt(0),
+          active: p.activeTickets,
+          refunded: p.refundedLamports,
+        });
+      }
+    }
+
+    const avgFee = totalFeesPaid / BigInt(participants.length);
+    console.log(`Fee stats (SOL): min=${(Number(minFee)/1e9).toFixed(6)}, avg=${(Number(avgFee)/1e9).toFixed(6)}, max=${(Number(maxFee)/1e9).toFixed(6)}`);
+    console.log(`Total fees paid: ${Number(totalFeesPaid)/1e9} SOL`);
+
+    if (feeErrors.length > 0) {
+      console.log(`Fee anomalies (${feeErrors.length}):`);
+      // Group by diff to understand pattern
+      const diffGroups = new Map<string, number>();
+      for (const e of feeErrors) {
+        const key = `${(Number(e.diff)/1e6).toFixed(1)}m`;
+        diffGroups.set(key, (diffGroups.get(key) || 0) + 1);
+      }
+      console.log(`  Diff distribution:`, Object.fromEntries(diffGroups));
+
+      // Show first 5 details
+      feeErrors.slice(0, 5).forEach(e => {
+        console.log(`  P${e.idx}: paid=${(Number(e.paid)/1e9).toFixed(6)} exp=${(Number(e.expected)/1e9).toFixed(6)} diff=${(Number(e.diff)/1e9).toFixed(6)} SOL`);
+        console.log(`         txs=${e.txs}, active=${e.active}, won=${e.won}, claimed=${e.claimed}, refund=${(Number(e.refunded)/1e9).toFixed(4)}`);
+      });
+    } else {
+      console.log(`✅ All participant fees within expected range`);
+    }
+
     // Summary
     console.log(`\n=== Stress Test Results ===`);
     console.log(`Participants: ${participants.length}`);
@@ -1195,6 +1311,7 @@ describe("engine litesvm", () => {
     console.log(`Refunds successful: ${refundSuccessCount}`);
     console.log(`Total claimed tokens: ${totalClaimedTokens}`);
     console.log(`Total refunded: ${Number(totalRefundedLamports) / 1e9} SOL`);
+    console.log(`Total fees: ${Number(totalFeesPaid) / 1e9} SOL (avg ${Number(avgFee) / 1e9} SOL per participant)`);
     console.log(`LotteryControl account: ${lotterySize} bytes (${Number(lotteryRent) / 1e9} SOL)`);
     console.log(`Realloc funds spent: ${Number(reallocFundsSpent) / 1e9} SOL`);
 

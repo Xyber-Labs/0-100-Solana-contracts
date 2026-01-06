@@ -278,50 +278,66 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it(`Step 5: Make deposits (${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL total)`, async () => {
     console.log(`=== Step 5: Make Deposits (${BUYER1_AMOUNT} + ${BUYER2_AMOUNT} + ${BUYER3_AMOUNT} = ${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL) ===`);
 
+    const logBalances = async (label: string, contributor: anchor.web3.Keypair) => {
+      const [contributionPda] = sdk.getContributionPda(launchPda, contributor.publicKey);
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [reallocFundsPda] = sdk.getReallocFundsPda();
+      const contributorBal = await provider.connection.getBalance(contributor.publicKey);
+      const contributionBal = await provider.connection.getBalance(contributionPda);
+      const escrowBal = await provider.connection.getBalance(escrowAuthority);
+      const reallocBal = await provider.connection.getBalance(reallocFundsPda);
+      console.log(`[${label}] contributor=${(contributorBal/1e9).toFixed(4)} contribution=${(contributionBal/1e9).toFixed(6)} escrow=${(escrowBal/1e9).toFixed(4)} realloc=${(reallocBal/1e9).toFixed(4)}`);
+      return { contributorBal, contributionBal, escrowBal, reallocBal };
+    };
+
+    console.log("\n--- Deposit 1 (buyer1) ---");
+    const b1 = await logBalances("BEFORE", buyer1Keypair);
     const { signature: dep1Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER1_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       contributorKeypair: buyer1Keypair,
     });
+    const a1 = await logBalances("AFTER", buyer1Keypair);
+    console.log(`Spent: ${((b1.contributorBal - a1.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER1_AMOUNT})`);
     console.log(`✅ Deposit 1 (buyer1: ${BUYER1_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep1Sig));
 
+    console.log("\n--- Deposit 2 (buyer2) ---");
+    const b2 = await logBalances("BEFORE", buyer2Keypair);
     const { signature: dep2Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER2_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       contributorKeypair: buyer2Keypair,
     });
+    const a2 = await logBalances("AFTER", buyer2Keypair);
+    console.log(`Spent: ${((b2.contributorBal - a2.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER2_AMOUNT})`);
     console.log(`✅ Deposit 2 (buyer2: ${BUYER2_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep2Sig));
 
+    console.log("\n--- Deposit 3 (buyer3) ---");
+    const b3 = await logBalances("BEFORE", buyer3Keypair);
     const { signature: dep3Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER3_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
       contributorKeypair: buyer3Keypair,
     });
+    const a3 = await logBalances("AFTER", buyer3Keypair);
+    console.log(`Spent: ${((b3.contributorBal - a3.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER3_AMOUNT})`);
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
 
     // Creator deposit (required for team vesting claim)
     const CREATOR_DEPOSIT_SOL = 8;
 
-    // Debug: check realloc_funds balance and bitmap sizes before creator deposit
-    const [reallocFundsPda] = sdk.getReallocFundsPda();
-    const reallocBalance = await provider.connection.getBalance(reallocFundsPda);
-    console.log(`Realloc funds balance before creator deposit: ${reallocBalance / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
-    const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(launchPda);
-    const winnersBitmapInfo = await provider.connection.getAccountInfo(winnersBitmapPda);
-    const inactiveBitmapInfo = await provider.connection.getAccountInfo(inactiveBitmapPda);
-    console.log(`Winners bitmap: ${winnersBitmapInfo ? winnersBitmapInfo.data.length + ' bytes, owner=' + winnersBitmapInfo.owner.toBase58() : 'not exists'}`);
-    console.log(`Inactive bitmap: ${inactiveBitmapInfo ? inactiveBitmapInfo.data.length + ' bytes, owner=' + inactiveBitmapInfo.owner.toBase58() : 'not exists'}`);
-
+    console.log("\n--- Deposit 4 (creator) ---");
+    const b4 = await logBalances("BEFORE", creatorKeypair);
     const { signature: creatorDepSig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(CREATOR_DEPOSIT_SOL * anchor.web3.LAMPORTS_PER_SOL),
       contributorKeypair: creatorKeypair,
     });
+    const a4 = await logBalances("AFTER", creatorKeypair);
+    console.log(`Spent: ${((b4.contributorBal - a4.contributorBal)/1e9).toFixed(6)} SOL (deposit=${CREATOR_DEPOSIT_SOL})`);
     console.log(`✅ Deposit 4 (creator: ${CREATOR_DEPOSIT_SOL} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, creatorDepSig));
 
