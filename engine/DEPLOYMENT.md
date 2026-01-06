@@ -64,7 +64,7 @@ Both should exist and be owned by the Raydium CLMM program.
 For localnet/devnet deployment (uses devnet Raydium addresses):
 
 ```bash
-anchor build -- --features devnet,anchor-test
+anchor build -- --features devnet
 ```
 
 ```bash
