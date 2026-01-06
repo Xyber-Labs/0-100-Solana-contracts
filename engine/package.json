@@ -5,11 +5,7 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "build": "anchor build -- --features devnet && cp target/types/engine.ts target/idl/engine.json ts-sdk/idl/ && cd ts-sdk && yarn install -f && yarn build",
     "dump:raydium": "bash tests/dump-raydium.sh",
-    "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
-    "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",
-    "test:litesvm:raydium": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm'",
-    "test:litesvm:full": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'Full flow'",
-    "test:litesvm:vesting": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'Creator team vesting'"
+    "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
