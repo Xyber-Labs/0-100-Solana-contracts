@@ -18,7 +18,7 @@ pub struct SetSeed<'info> {
     pub payer: Signer<'info>,
     #[account(mut,
         constraint = launch_state.vrf_seed.is_none() @ EngineErrorCode::SeedAlreadySet,
-        constraint = launch_state.is_funding_ended(launch_preset.funding_duration_seconds) @ EngineErrorCode::FundingNotEnded
+        constraint = launch_state.is_funding_ended(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingNotEnded
     )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
@@ -32,6 +32,7 @@ pub struct SetSeed<'info> {
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 

@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+use anchor_lang::prelude::*;
 
 use crate::utils::realloc::Reallocatable;
 
@@ -98,16 +98,14 @@ impl LaunchState {
         self.funding_start.checked_add(funding_duration_seconds)
     }
 
-    pub fn is_funding_active(&self, funding_duration_seconds: i64) -> bool {
-        let now = Clock::get().map(|c| c.unix_timestamp).unwrap_or(0);
+    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
         let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
-        now >= self.funding_start && now < end
+        now_ts >= self.funding_start && now_ts < end
     }
 
-    pub fn is_funding_ended(&self, funding_duration_seconds: i64) -> bool {
-        let now = Clock::get().map(|c| c.unix_timestamp).unwrap_or(0);
+    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
         let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
-        now >= end
+        now_ts >= end
     }
 }
 

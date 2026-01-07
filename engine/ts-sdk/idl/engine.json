@@ -1711,6 +1711,10 @@
           }
         },
         {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -3085,6 +3089,10 @@
           "address": "SysvarS1otHashes111111111111111111111111111"
         },
         {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
@@ -3363,6 +3371,10 @@
               }
             ]
           }
+        },
+        {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
         },
         {
           "name": "system_program",

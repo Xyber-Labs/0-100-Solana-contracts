@@ -23,7 +23,7 @@ pub struct Withdraw<'info> {
     )]
     pub contribution: Account<'info, Contribution>,
 
-    #[account(mut, constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds) @ EngineErrorCode::FundingInactive)]
+    #[account(mut, constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
@@ -49,6 +49,7 @@ pub struct Withdraw<'info> {
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 

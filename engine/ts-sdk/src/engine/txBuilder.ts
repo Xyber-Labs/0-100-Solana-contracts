@@ -446,6 +446,7 @@ export class TxBuilder {
         launchPreset: presetAddress,
         lotteryControl,
         slotHashes: web3.SYSVAR_SLOT_HASHES_PUBKEY,
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
@@ -492,6 +493,7 @@ export class TxBuilder {
         inactiveBitmap,
         contribution,
         escrowAuthority,
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
@@ -537,6 +539,7 @@ export class TxBuilder {
         winnersBitmap,
         inactiveBitmap,
         escrowAuthority,
+        clock: web3.SYSVAR_CLOCK_PUBKEY,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();

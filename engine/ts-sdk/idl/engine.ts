@@ -1717,6 +1717,10 @@ export type Engine = {
           }
         },
         {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -3091,6 +3095,10 @@ export type Engine = {
           "address": "SysvarS1otHashes111111111111111111111111111"
         },
         {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
+        },
+        {
           "name": "systemProgram",
           "address": "11111111111111111111111111111111"
         }
@@ -3369,6 +3377,10 @@ export type Engine = {
               }
             ]
           }
+        },
+        {
+          "name": "clock",
+          "address": "SysvarC1ock11111111111111111111111111111111"
         },
         {
           "name": "systemProgram",
