@@ -73,10 +73,17 @@ pub mod engine {
         instructions::withdraw(ctx, amount)
     }
 
+    /// Refunds SOL to participants for non-winning lottery tickets.
+    /// Requires lottery to be finalized and claims to be open.
+    /// Delegates to `instructions::refund`.
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         instructions::refund(ctx)
     }
 
+    /// Claims tokens from a specified bucket after lottery finalization.
+    /// `bucket` specifies which allocation to claim: `Sale` for lottery winners
+    /// or `Team` for team allocation. Requires claims to be open.
+    /// Delegates to `instructions::claim`.
     pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
         instructions::claim(ctx, bucket)
     }
