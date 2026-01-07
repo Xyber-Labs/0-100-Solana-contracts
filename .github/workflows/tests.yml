@@ -34,9 +34,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
-          toolchain: nightly
+          toolchain: 1.84.0
           components: clippy
 
       - name: Restore Solana CLI cache

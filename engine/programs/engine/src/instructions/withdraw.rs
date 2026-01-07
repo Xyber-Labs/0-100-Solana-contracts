@@ -59,7 +59,7 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let lottery_control = &mut ctx.accounts.lottery_control;
 
     require!(
-        amount > 0 && amount.is_multiple_of(launch_preset.tau_lamports),
+        amount > 0 && amount % launch_preset.tau_lamports == 0,
         EngineErrorCode::BadAmount
     );
     let tickets_to_remove = amount / launch_preset.tau_lamports;
