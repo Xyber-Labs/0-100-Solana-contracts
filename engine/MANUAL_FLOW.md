@@ -70,14 +70,14 @@ anchor build -- --features devnet
 ```bash
 # Deploy Engine program
 anchor deploy --provider.cluster localnet --program-name engine --program-keypair keys/deploy-keypair.json
-sleep 2
+sleep 5
 anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(solana address -k keys/deploy-keypair.json)
 ```
 
 ```bash
 # Deploy Income Dispatcher program
 anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/dispatcher.json
-sleep 2
+sleep 5
 anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/dispatcher.json)
 ```
 
@@ -86,11 +86,11 @@ anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatc
 Before initializing the engine configuration, ensure all wallets have sufficient SOL:
 
 ```bash
-solana airdrop 10 $(solana address -k keys/admin1.json) --url localhost
-solana airdrop 10 $(solana address -k keys/admin2.json) --url localhost
-solana airdrop 10 $(solana address -k keys/admin3.json) --url localhost
-solana airdrop 10 $(solana address -k keys/deployer.json) --url localhost
-solana airdrop 10 $(solana address -k keys/platform.json) --url localhost
+solana airdrop 100 $(solana address -k keys/admin1.json) --url localhost
+solana airdrop 100 $(solana address -k keys/admin2.json) --url localhost
+solana airdrop 100 $(solana address -k keys/admin3.json) --url localhost
+solana airdrop 100 $(solana address -k keys/deployer.json) --url localhost
+solana airdrop 100 $(solana address -k keys/platform.json) --url localhost
 solana airdrop 9000 $(solana address -k keys/backend.json) --url localhost
 solana airdrop 10000 $(solana address -k keys/creator.json) --url localhost
 solana airdrop 10000 $(solana address -k keys/buyer1.json) --url localhost
@@ -145,26 +145,26 @@ Initialize the global engine configuration with multisig admin setup:
 ```bash
 anchor run init-engine-config --provider.cluster localnet -- \
   --treasury $(solana address -k keys/treasure.json) \
-  --creation-fee 1000000000 \
   --xyber-mint $(solana address -k keys/xyber-mint.json) \
   --threshold 2 \
+  --realloc-fund-lamports 3000000000 \
   --admin1-keypair ./keys/admin1.json \
   --admin2-keypair ./keys/admin2.json \
   --admin3-keypair ./keys/admin3.json
 ```
 
-### 5. Fund Realloc PDA
+### 5. Fund Realloc PDA (Optional)
 
-Fund the realloc_funds PDA that pays for account reallocations during deposits/withdrawals:
+The realloc_funds PDA is initially funded during `init-engine-config` via `--realloc-fund-lamports`.
+To add more SOL later:
 
 ```bash
-anchor run fund-realloc --provider.cluster localnet -- \
-  --amount 5 \
-  --payer-keypair ./keys/admin1.json
+solana transfer \
+  $(solana find-program-derived-address $(solana address -k keys/deploy-keypair.json) string:root-0-100-1 string:realloc_funds) \
+  5 \
+  --url localhost \
+  --fee-payer keys/admin1.json
 ```
-
-**Note:** This creates a program-owned PDA account with SOL that will be used to pay for
-account reallocation costs. 5 SOL should be sufficient for most testing scenarios.
 
 ### 6. Create Launch Preset
 
@@ -221,7 +221,7 @@ For production presets with longer durations, wait accordingly.
 Set the VRF seed for randomness in winner selection:
 
 ```bash
-anchor run set-seed --provider.cluster localnet -- --project-id 1
+anchor run set-seed --provider.cluster localnet -- --project-id 3
 ```
 
 ### Step 5: Prepare Pool Creation
@@ -229,7 +229,7 @@ anchor run set-seed --provider.cluster localnet -- --project-id 1
 Prepare pool creation by selecting blockhash and finalizing the lottery:
 
 ```bash
-anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
+anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 3
 ```
 
 ### Step 6: Create CLMM Pool
@@ -237,7 +237,7 @@ anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
 Create the Raydium CLMM pool. This also generates the base mint:
 
 ```bash
-anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
+anchor run create-clmm-pool --provider.cluster localnet -- --project-id 3
 ```
 
 ### Step 7: Add Liquidity to CLMM Pool
@@ -245,7 +245,7 @@ anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 Add liquidity to the created CLMM pool:
 
 ```bash
-anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
+anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 3
 ```
 
 ### Step 8: Initialize Income Dispatcher

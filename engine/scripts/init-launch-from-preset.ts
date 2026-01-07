@@ -55,11 +55,13 @@ async function main() {
     console.log("Launch PDA:", result.launchPda.toBase58());
 
     const launchAccount = await sdk.fetchLaunch(result.launchPda);
+    const presetAccount = await sdk.fetchLaunchPreset(presetId);
+    const fundingEnd = launchAccount.data.fundingStart.toNumber() + presetAccount.data.fundingDurationSeconds.toNumber();
     console.log("Launch state created:");
-    console.log("  Project ID:", launchAccount.projectId.toString());
-    console.log("  Creator:", launchAccount.creator.toBase58());
-    console.log("  Hard cap:", launchAccount.hardCapLamports.toString());
-    console.log("  Funding period end:", new Date(launchAccount.fundingPeriodEnd.toNumber() * 1000).toISOString());
+    console.log("  Project ID:", launchAccount.data.projectId.toString());
+    console.log("  Creator:", launchAccount.data.creator.toBase58());
+    console.log("  Hard cap:", presetAccount.data.hardCapLamports.toString());
+    console.log("  Funding period end:", new Date(fundingEnd * 1000).toISOString());
   });
 }
 

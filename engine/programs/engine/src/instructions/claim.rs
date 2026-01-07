@@ -19,6 +19,7 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
+    #[account(constraint = launch_state.claims_opened_at.is_some() @ ErrorCode::ClaimsNotOpen)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
@@ -94,7 +95,11 @@ fn vesting_params<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
         Bucket::Team => {
             require!(is_creator, ErrorCode::Unauthorized);
             let (allocation, duration, period) = preset.team_vesting_params();
-            Ok(VestingParams { allocation, duration, period })
+            Ok(VestingParams {
+                allocation,
+                duration,
+                period,
+            })
         }
         Bucket::Sale => {
             let allocation = lottery.sale_allocation(&contribution.ticket_ranges);
@@ -103,10 +108,18 @@ fn vesting_params<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
                 let winning_tickets = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
                 let deposit = checked_mul!(winning_tickets, preset.tau_lamports)?;
                 let (duration, period) = preset.creator_vesting_params(deposit)?;
-                Ok(VestingParams { allocation, duration, period })
+                Ok(VestingParams {
+                    allocation,
+                    duration,
+                    period,
+                })
             } else {
                 let (duration, period) = preset.contributor_vesting_params();
-                Ok(VestingParams { allocation, duration, period })
+                Ok(VestingParams {
+                    allocation,
+                    duration,
+                    period,
+                })
             }
         }
     }
@@ -124,17 +137,16 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
     let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
-    let lottery = LotteryRaw::new(
-        &**lottery_control,
-        &winners_data[..],
-        &inactive_data[..],
-    );
+    let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
 
     let now = Clock::get()?.unix_timestamp;
     let start = launch_state.claims_opened_at.expect("Expected be finalized");
 
-    let VestingParams { allocation, duration, period } =
-        vesting_params(bucket, is_creator, launch_preset, &lottery, contribution)?;
+    let VestingParams {
+        allocation,
+        duration,
+        period,
+    } = vesting_params(bucket, is_creator, launch_preset, &lottery, contribution)?;
 
     let elapsed_sec = (now - start).max(0).min(duration);
     let periods_passed = elapsed_sec / period;

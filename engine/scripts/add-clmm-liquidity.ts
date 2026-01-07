@@ -28,7 +28,7 @@ async function main() {
 
     const launchState = await sdk.fetchLaunch(launchPda);
 
-    if (!launchState.baseMint) {
+    if (!launchState.data.baseMint) {
       console.error("❌ Pool not created yet. Run create-clmm-pool first.");
       process.exit(1);
     }

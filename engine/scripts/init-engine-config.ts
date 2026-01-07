@@ -9,9 +9,9 @@ async function main() {
 
   program
     .requiredOption("--treasury <pubkey>", "Treasury address")
-    .requiredOption("--creation-fee <lamports>", "Creation fee in lamports")
     .requiredOption("--xyber-mint <pubkey>", "XYBER token mint address")
     .requiredOption("--threshold <number>", "Admin signature threshold (2 or 3)")
+    .requiredOption("--realloc-fund-lamports <lamports>", "Realloc fund lamports")
     .requiredOption("--admin1-keypair <path>", "Path to first admin keypair file")
     .requiredOption("--admin2-keypair <path>", "Path to second admin keypair file")
     .requiredOption("--admin3-keypair <path>", "Path to third admin keypair file")
@@ -20,8 +20,8 @@ async function main() {
   const opts = program.opts();
 
   const treasury = new anchor.web3.PublicKey(opts.treasury);
-  const creationFee = new BN(opts.creationFee);
   const xyberMint = new anchor.web3.PublicKey(opts.xyberMint);
+  const reallocFundLamports = new BN(opts.reallocFundLamports);
   const threshold = parseInt(opts.threshold);
 
   const admin1Keypair = loadKeypair(opts.admin1Keypair);
@@ -37,8 +37,8 @@ async function main() {
   await runWithSdk(async ({ provider, sdk }) => {
     console.log("Initializing engine config:");
     console.log("  Treasury:", treasury.toBase58());
-    console.log("  Creation fee:", creationFee.toString());
     console.log("  XYBER mint:", xyberMint.toBase58());
+    console.log("  Realloc fund lamports:", reallocFundLamports.toString());
     console.log("  Admin 1:", admin1.toBase58());
     console.log("  Admin 2:", admin2.toBase58());
     console.log("  Admin 3:", admin3.toBase58());
@@ -51,10 +51,10 @@ async function main() {
 
     const result = await sdk.initEngineConfig({
       treasury,
-      creationFee,
       xyberMint,
       admins: [admin1, admin2, admin3],
       threshold,
+      reallocFundLamports,
       adminKeypairs,
     });
 
