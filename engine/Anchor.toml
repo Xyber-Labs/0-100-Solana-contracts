@@ -47,7 +47,6 @@ test = "sleep 3 && anchor idl init --provider.cluster localnet --filepath target
 litesvm = "yarn test:litesvm"
 pre-deploy-setup = "ts-node scripts/pre-deploy-setup.ts"
 init-engine-config = "ts-node scripts/init-engine-config.ts"
-fund-realloc = "ts-node scripts/fund-realloc.ts"
 init-launch-preset = "ts-node scripts/init-launch-preset.ts"
 init-launch-from-preset = "ts-node scripts/init-launch-from-preset.ts"
 deposit = "ts-node scripts/deposit.ts"
