@@ -48,7 +48,10 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let data = slot_hashes.try_borrow_data()?;
 
     let num_hashes = u64::from_le_bytes(
-        data[0..8].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
+        data.get(0..8)
+            .ok_or(crate::errors::ErrorCode::InvalidSlotHashesData)?
+            .try_into()
+            .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
     );
     require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
 
@@ -70,8 +73,13 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let start = last_hash_pos as usize;
     let end = checked_add!(last_hash_pos, 32)? as usize;
 
-    let seed: [u8; 32] =
-        data[start..end].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
+    let slice = data
+        .get(start..end)
+        .ok_or(crate::errors::ErrorCode::InvalidSlotHashesData)?;
+
+    let seed: [u8; 32] = slice
+        .try_into()
+        .map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
 
     launch_state.vrf_seed = Some(seed);
 
