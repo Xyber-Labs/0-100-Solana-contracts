@@ -1,5 +1,7 @@
 use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
 
+use crate::utils::realloc::Reallocatable;
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
 pub enum VestingType {
     Contributor,
@@ -124,11 +126,13 @@ pub struct Contribution {
     pub ticket_ranges: Vec<TicketRange>,
 }
 
-impl Contribution {
-    pub fn required_space(&self) -> usize {
-        8 + 1 + 4 + self.ticket_ranges.len() * TicketRange::INIT_SPACE
+impl Reallocatable for Contribution {
+    fn required_space(&self) -> usize {
+        Contribution::INIT_SPACE + self.ticket_ranges.len() * TicketRange::INIT_SPACE
     }
+}
 
+impl Contribution {
     pub fn total_tickets(&self) -> u64 {
         self.ticket_ranges.iter().map(|r| r.count()).sum()
     }

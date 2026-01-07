@@ -8,7 +8,7 @@ use crate::{
     state::{Contribution, LaunchPreset, LaunchState, TicketRange},
     utils::{
         lottery::{LotteryControl, LotteryRaw},
-        realloc::realloc_raw,
+        realloc::{realloc_raw, Reallocatable},
     },
 };
 
