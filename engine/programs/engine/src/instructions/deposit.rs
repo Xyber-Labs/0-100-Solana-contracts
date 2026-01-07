@@ -73,20 +73,12 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let rent = Rent::get()?;
         let lamports = rent.minimum_balance(initial_space);
 
-        let seeds: &[&[u8]] = &[
-            SEED_ROOT,
-            b"contributor",
-            launch_key.as_ref(),
-            contributor_key.as_ref(),
-        ];
-        let (_, bump) = Pubkey::find_program_address(seeds, ctx.program_id);
-        let bump_slice = &[bump];
         let signer_seeds: &[&[&[u8]]] = &[&[
             SEED_ROOT,
             b"contributor",
             launch_key.as_ref(),
             contributor_key.as_ref(),
-            bump_slice,
+            &[ctx.bumps.contribution],
         ]];
 
         solana_program::program::invoke_signed(
