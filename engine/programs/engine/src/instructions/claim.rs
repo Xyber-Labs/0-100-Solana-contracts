@@ -55,7 +55,7 @@ pub struct Claim<'info> {
     )]
     pub tickets_claimed: Account<'info, TicketsClaimed>,
 
-    #[account(address = launch_state.base_mint.unwrap() @ ErrorCode::InvalidMint)]
+    #[account(constraint = launch_state.base_mint == Some(base_mint.key()) @ ErrorCode::InvalidMint)]
     pub base_mint: Account<'info, Mint>,
 
     /// CHECK: PDA owning the escrow ATA for base_mint

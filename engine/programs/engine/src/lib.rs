@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![feature(unsigned_is_multiple_of)]
 
 use anchor_lang::prelude::*;
 
