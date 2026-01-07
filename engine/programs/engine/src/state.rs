@@ -30,6 +30,7 @@ pub struct TicketRange {
 
 impl TicketRange {
     pub fn new(start: u64, end: u64) -> Self {
+        assert!(start <= end, "TicketRange: start must be <= end");
         Self { start, end }
     }
 
