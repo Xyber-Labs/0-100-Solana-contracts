@@ -250,7 +250,7 @@ pub struct LaunchPreset {
 impl LaunchPreset {
     pub fn is_valid(&self) -> bool {
         self.tau_lamports > 0
-            && self.hard_cap_lamports % self.tau_lamports == 0
+            && self.hard_cap_lamports.is_multiple_of(self.tau_lamports)
             && self.per_wallet_cap >= self.tau_lamports
             && self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE
             && self.min_raise_lamports <= self.hard_cap_lamports
