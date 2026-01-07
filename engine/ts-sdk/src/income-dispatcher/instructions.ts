@@ -2,9 +2,12 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
+import EngineIDLJson from "../../idl/engine.json";
 import { TxBuilder, Role, RoleType } from "./txBuilder";
+import { getConstant } from "../utils";
 
 const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+const ENGINE_SEED_ROOT = Buffer.from(getConstant("SEED_ROOT", EngineIDLJson as any));
 const TOKEN_PROGRAM_ID = new anchor.web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM_ID = new anchor.web3.PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM_ID = new anchor.web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -348,7 +351,7 @@ const IncomeDispatcherSDK = {
       const xyberVault = getAssociatedTokenAddressSync(args.xyberMint, authority, true);
 
       const engineConfigPda = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("root-0-100-1"), Buffer.from("config")],
+        [ENGINE_SEED_ROOT, Buffer.from("config")],
         args.engineProgramId
       )[0];
 
