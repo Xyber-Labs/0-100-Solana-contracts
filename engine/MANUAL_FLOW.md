@@ -160,7 +160,7 @@ To add more SOL later:
 
 ```bash
 solana transfer \
-  $(solana find-program-derived-address $(solana address -k keys/deploy-keypair.json) string:root-0-100-1 string:realloc_funds) \
+  $(solana find-program-derived-address DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 string:root-0-100-1 string:realloc_funds) \
   5 \
   --url localhost \
   --fee-payer keys/admin1.json
