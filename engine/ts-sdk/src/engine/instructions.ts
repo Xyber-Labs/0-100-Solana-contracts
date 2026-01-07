@@ -604,10 +604,22 @@ const EngineSDK = {
       ranges: Array<{ start: BN; end: BN }>,
       winnersData: Buffer
     ): number {
+      // Development-time assertions to catch bugs early
+      if (process.env.NODE_ENV !== 'production') {
+        console.assert(Array.isArray(ranges), 'ranges must be an array');
+        console.assert(winnersData instanceof Buffer, 'winnersData must be a Buffer');
+      }
+
       let count = 0;
       for (const range of ranges) {
         const start = range.start.toNumber();
         const end = range.end.toNumber();
+
+        // Assert critical assumption: valid range bounds
+        if (process.env.NODE_ENV !== 'production') {
+          console.assert(start < end, `Invalid range: start=${start} >= end=${end}`);
+        }
+
         for (let i = start; i < end; i++) {
           const byteIndex = Math.floor(i / 8);
           const bitIndex = i % 8;
