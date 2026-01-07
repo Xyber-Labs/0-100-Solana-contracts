@@ -68,7 +68,7 @@ pub fn init_launch_preset(
             signed = signed.saturating_add(1);
         }
     }
-    require!((signed as u8) >= cfg.threshold, crate::errors::ErrorCode::NotEnoughAdminSigners);
+    require!(signed >= cfg.threshold, crate::errors::ErrorCode::NotEnoughAdminSigners);
 
     let p = &mut ctx.accounts.launch_preset;
     p.id = id;

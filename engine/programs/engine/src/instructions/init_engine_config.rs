@@ -51,7 +51,7 @@ pub fn init_engine_config(
             signed = signed.saturating_add(1);
         }
     }
-    require!((signed as u8) >= params.threshold, EngineErrorCode::NotEnoughAdminSigners);
+    require!(signed >= params.threshold, EngineErrorCode::NotEnoughAdminSigners);
 
     let cfg = &mut ctx.accounts.engine_config;
     cfg.treasury = params.treasury;

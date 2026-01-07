@@ -11,7 +11,9 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::LaunchInitialized,
-    state::{Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
+    state::{
+        Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
+    },
     utils::lottery::LotteryControl,
 };
 
@@ -121,16 +123,8 @@ pub fn init_launch_from_preset(
         let treasury_xyber_ata = &ctx.accounts.treasury_xyber_ata;
 
         require!(creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
-        if cfg!(not(test)) {
-            require!(
-                creator_xyber_ata.mint == treasury_xyber_ata.mint,
-                EngineErrorCode::InvalidMint
-            );
-            require!(
-                creator_xyber_ata.mint == engine_config.xyber_mint,
-                EngineErrorCode::InvalidMint
-            );
-        }
+        require!(creator_xyber_ata.mint == treasury_xyber_ata.mint, EngineErrorCode::InvalidMint);
+        require!(creator_xyber_ata.mint == engine_config.xyber_mint, EngineErrorCode::InvalidMint);
         require!(creator_xyber_ata.owner == creator.key(), EngineErrorCode::InvalidOwner);
         require!(treasury_xyber_ata.owner == engine_config.treasury, EngineErrorCode::InvalidOwner);
 
@@ -156,12 +150,7 @@ pub fn init_launch_from_preset(
     state.project_id = project_id;
     state.creator = creator.key();
     state.preset = ctx.accounts.launch_preset.key();
-    state.base_mint = None;
     state.funding_start = start;
-    state.vrf_seed = None;
-    state.claims_opened_at = None;
-    state.raydium_pool_state = None;
-    state.raydium_position_nft_mint = None;
 
     let pending_key = make_pending_key(&creator.key(), project_id);
     let launch_key = state.key();

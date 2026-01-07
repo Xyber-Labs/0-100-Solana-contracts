@@ -260,8 +260,8 @@ fn distribute_income<'info>(
     )?;
 
     for income in distribution.incomes {
-        let base_amount = income.base_token as u64;
-        let quote_amount = income.quote_token as u64;
+        let base_amount = income.base_token;
+        let quote_amount = income.quote_token;
 
         match income.recipient {
             Treasure => {
@@ -322,7 +322,7 @@ fn init_if_needed<'a, T: Space + Discriminator + Default + AnchorSerialize>(
     )?;
 
     let mut data = account.try_borrow_mut_data()?;
-    data[..8].copy_from_slice(&T::DISCRIMINATOR);
+    data[..8].copy_from_slice(T::DISCRIMINATOR);
     let default_value = T::default();
     let serialized = default_value.try_to_vec()?;
     data[8..8 + serialized.len()].copy_from_slice(&serialized);

@@ -106,7 +106,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         )?;
 
         let mut data = contribution_info.try_borrow_mut_data()?;
-        data[..8].copy_from_slice(&Contribution::DISCRIMINATOR);
+        data[..8].copy_from_slice(Contribution::DISCRIMINATOR);
         drop(data);
 
         Contribution::default()

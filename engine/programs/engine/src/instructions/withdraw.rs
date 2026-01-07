@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*, solana_program};
 
 use crate::{
-    checked_add, checked_div,
+    checked_add,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::Withdrawn,
@@ -58,9 +58,12 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let contribution = &mut ctx.accounts.contribution;
     let lottery_control = &mut ctx.accounts.lottery_control;
 
-    require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
+    require!(
+        amount > 0 && amount.is_multiple_of(launch_preset.tau_lamports),
+        EngineErrorCode::BadAmount
+    );
+    let tickets_to_remove = amount / launch_preset.tau_lamports;
 
-    let tickets_to_remove = checked_div!(amount, launch_preset.tau_lamports)?;
     require!(
         contribution.total_tickets() >= tickets_to_remove,
         EngineErrorCode::InsufficientDeposit
@@ -73,11 +76,8 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
         let mut inactive_data = inactive_info.try_borrow_mut_data()?;
 
-        let mut lottery = LotteryRaw::new(
-            &mut **lottery_control,
-            &mut winners_data[..],
-            &mut inactive_data[..],
-        );
+        let mut lottery =
+            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &mut inactive_data[..]);
 
         let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
         lottery.add_inactive(added_inactive);
