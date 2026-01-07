@@ -194,7 +194,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
             ],
         )?;
 
-        contribution_info.realloc(required_contribution_space, false)?;
+        contribution_info.realloc(required_contribution_space, true)?;
     }
 
     {
