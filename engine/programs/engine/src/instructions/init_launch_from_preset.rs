@@ -11,7 +11,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::LaunchInitialized,
-    state::{EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
+    state::{Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig},
     utils::lottery::LotteryControl,
 };
 
@@ -90,6 +90,14 @@ pub struct InitLaunchFromPreset<'info> {
         bump
     )]
     pub inactive_bitmap: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + Contribution::INIT_SPACE,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), creator.key().as_ref()],
+        bump
+    )]
+    pub creator_contribution: Box<Account<'info, Contribution>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }

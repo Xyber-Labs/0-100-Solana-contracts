@@ -45,35 +45,26 @@ const EngineSDK = {
       tx: anchor.web3.Transaction,
       signers: anchor.web3.Signer[] = []
     ): Promise<string> {
-      try {
-        if (!(provider as any).sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-        return await (provider as any).sendAndConfirm(tx, signers, { skipPreflight: true });
-      } catch (e: any) {
-        const msg = String(e?.message || "");
-        const m = msg.match(/Check signature\s+([A-Za-z0-9]+)\s+/);
-        const sig = m?.[1];
-        if (sig) {
-          const conn = program.provider.connection;
-          const started = Date.now();
-          while (Date.now() - started < 30000) {
-            try {
-              const st = await conn.getSignatureStatuses([sig]);
-              const v = st?.value?.[0];
-              if (
-                v &&
-                (v.confirmationStatus === "confirmed" ||
-                  v.confirmationStatus === "finalized" ||
-                  (typeof v.confirmations === "number" && v.confirmations > 0) ||
-                  v.err === null)
-              ) {
-                return sig;
-              }
-            } catch {}
-            await new Promise((r) => setTimeout(r, 500));
-          }
-        }
-        throw e;
+      const conn = program.provider.connection;
+
+      if (!tx.feePayer && signers.length > 0) {
+        tx.feePayer = signers[0].publicKey;
       }
+
+      if (!tx.recentBlockhash) {
+        const { blockhash } = await conn.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+      }
+
+      if (signers.length > 0) {
+        tx.sign(...signers);
+      }
+
+      const rawTx = tx.serialize();
+      const signature = await conn.sendRawTransaction(rawTx, { skipPreflight: true });
+
+      await conn.confirmTransaction(signature, "confirmed");
+      return signature;
     }
 
     // -------------- PDA helpers --------------
@@ -191,10 +182,7 @@ const EngineSDK = {
         amount: args.amountLamports,
       });
 
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(transaction, [args.contributorKeypair], { skipPreflight: true });
+      const signature = await sendAndMaybeConfirm(transaction, [args.contributorKeypair]);
       return { contributionPda: contribution, signature };
     }
 
@@ -220,10 +208,7 @@ const EngineSDK = {
         launch: args.launch,
         contributor: args.contributorKeypair.publicKey,
       });
-      if (!provider.sendAndConfirm) {
-        throw new Error("Provider does not support sendAndConfirm");
-      }
-      const signature = await provider.sendAndConfirm(transaction, [args.contributorKeypair]);
+      const signature = await sendAndMaybeConfirm(transaction, [args.contributorKeypair]);
       return { signature };
     }
 
@@ -615,6 +600,92 @@ const EngineSDK = {
     //        HIGH-LEVEL flows
     // =============================
 
+    function countWinningInRanges(
+      ranges: Array<{ start: BN; end: BN }>,
+      winnersData: Buffer
+    ): number {
+      let count = 0;
+      for (const range of ranges) {
+        const start = range.start.toNumber();
+        const end = range.end.toNumber();
+        for (let i = start; i < end; i++) {
+          const byteIndex = Math.floor(i / 8);
+          const bitIndex = i % 8;
+          if (byteIndex < winnersData.length) {
+            if ((winnersData[byteIndex] & (1 << bitIndex)) !== 0) {
+              count++;
+            }
+          }
+        }
+      }
+      return count;
+    }
+
+    function extractTokensPerTicket(status: any): BN {
+      if (status.finalized) {
+        return status.finalized.tokensPerTicket;
+      }
+      return new BN(0);
+    }
+
+    async function getVestingConfig(params: {
+      launch: anchor.web3.PublicKey;
+      participant: anchor.web3.PublicKey;
+      bucket: number;
+    }): Promise<{
+      allocation: BN;
+      durationSec: BN;
+      periodSec: BN;
+      claimed: BN;
+    }> {
+      const { data: launchState } = await txBuilder.fetchLaunch(params.launch);
+      const { data: preset } = await txBuilder.fetchLaunchPresetByAddress(launchState.preset);
+      const isCreator = params.participant.equals(launchState.creator);
+      const claimed = await txBuilder.fetchTicketsClaimed(params.launch, params.bucket, params.participant);
+
+      if (params.bucket === 1) {
+        if (!isCreator) {
+          throw new Error("Only creator can access Team bucket");
+        }
+        const teamAllocation = new BN(preset.baseTotalAllocation)
+          .mul(new BN(preset.teamAllocationBasisPoints))
+          .div(new BN(10_000));
+        return {
+          allocation: teamAllocation,
+          durationSec: preset.teamDurationSec,
+          periodSec: preset.teamPeriodSec,
+          claimed,
+        };
+      }
+
+      const { data: contribution } = await txBuilder.fetchContribution(params.launch, params.participant);
+      const { data: lotteryControl } = await txBuilder.fetchLotteryControl(params.launch);
+      const winnersData = await txBuilder.fetchWinnersBitmap(params.launch);
+
+      const tokensPerTicket = extractTokensPerTicket(lotteryControl.status);
+      const winningTickets = countWinningInRanges(contribution.ticketRanges, winnersData);
+      const allocation = new BN(winningTickets).mul(new BN(tokensPerTicket));
+
+      if (isCreator) {
+        const deposit = new BN(winningTickets).mul(preset.tauLamports);
+        const periods = BN.max(deposit.div(preset.creatorPeriodUnlock), new BN(1));
+        const duration = periods.mul(preset.creatorPeriodSec);
+        return {
+          allocation,
+          durationSec: duration,
+          periodSec: preset.creatorPeriodSec,
+          claimed,
+        };
+      }
+
+      return {
+        allocation,
+        durationSec: preset.contributorDurationSec,
+        periodSec: preset.contributorPeriodSec,
+        claimed,
+      };
+    }
+
     /** Returns all PDAs for a given projectId. Convenient for initialization. */
     function deriveAllPdasByProjectId(projectId: number | BN) {
       const [launch] = getLaunchPdaByProjectId(projectId);
@@ -719,6 +790,12 @@ const EngineSDK = {
 
       // Additional fetch helpers
       fetchLaunchPreset: txBuilder.fetchLaunchPreset.bind(txBuilder),
+      fetchLaunchPresetByAddress: txBuilder.fetchLaunchPresetByAddress.bind(txBuilder),
+      fetchTicketsClaimed: txBuilder.fetchTicketsClaimed.bind(txBuilder),
+      fetchWinnersBitmap: txBuilder.fetchWinnersBitmap.bind(txBuilder),
+
+      // Vesting helpers
+      getVestingConfig,
     };
   },
 };

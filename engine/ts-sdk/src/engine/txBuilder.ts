@@ -245,6 +245,7 @@ export class TxBuilder {
     lotteryControl: web3.PublicKey;
     winnersBitmap: web3.PublicKey;
     inactiveBitmap: web3.PublicKey;
+    creatorContribution: web3.PublicKey;
   }> {
     const projectIdLe = (() => {
       if (BN.isBN(params.projectId as any)) {
@@ -279,6 +280,8 @@ export class TxBuilder {
       isMutable: typeof params.isMutable === "boolean" ? params.isMutable : true,
       sellerFeeBasisPoints: typeof params.sellerFeeBasisPoints === "number" ? params.sellerFeeBasisPoints : 0,
     };
+    const [creatorContribution] = this.getContributionPda(launchState, params.creator);
+
     const instruction = await (this.program.methods as any)
       .initLaunchFromPreset(
         new BN(params.presetId),
@@ -299,6 +302,7 @@ export class TxBuilder {
         lotteryControl,
         winnersBitmap,
         inactiveBitmap,
+        creatorContribution,
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
@@ -314,6 +318,7 @@ export class TxBuilder {
       lotteryControl,
       winnersBitmap,
       inactiveBitmap,
+      creatorContribution,
     };
   }
 
@@ -643,6 +648,7 @@ export class TxBuilder {
   }): Promise<{ transaction: web3.Transaction; participantAta: web3.PublicKey }> {
     const { instruction, participantAta } = await this.claimIx(params);
     const transaction = new web3.Transaction().add(instruction);
+    transaction.feePayer = params.participant;
     return { transaction, participantAta };
   }
 
@@ -682,6 +688,30 @@ export class TxBuilder {
     const [pda] = this.getLaunchPresetPda(id);
     const data = await this.program.account.launchPreset.fetch(pda);
     return { data, pda };
+  }
+
+  async fetchLaunchPresetByAddress(address: web3.PublicKey) {
+    const data = await this.program.account.launchPreset.fetch(address);
+    return { data, pda: address };
+  }
+
+  async fetchTicketsClaimed(launch: web3.PublicKey, bucket: number, participant: web3.PublicKey): Promise<BN> {
+    const [pda] = this.getTicketsClaimedPda(launch, bucket, participant);
+    try {
+      const data = await this.program.account.ticketsClaimed.fetch(pda);
+      return data.value;
+    } catch {
+      return new BN(0);
+    }
+  }
+
+  async fetchWinnersBitmap(launch: web3.PublicKey): Promise<Buffer> {
+    const [pda] = this.getWinnersBitmapPda(launch);
+    const info = await this.program.provider.connection.getAccountInfo(pda);
+    if (!info) {
+      throw new Error("Winners bitmap not found");
+    }
+    return info.data.slice(8);
   }
 
   async preparePoolCreationTx(params: {

@@ -77,7 +77,7 @@ anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(
 ```bash
 # Deploy Income Dispatcher program
 anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/dispatcher.json
-sleep 5
+sleep 2
 anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/dispatcher.json)
 ```
 
@@ -97,7 +97,7 @@ solana airdrop 10000 $(solana address -k keys/buyer1.json) --url localhost
 solana airdrop 10000 $(solana address -k keys/buyer2.json) --url localhost
 solana airdrop 10000 $(solana address -k keys/buyer3.json) --url localhost
 solana airdrop 10000 $(solana address -k keys/buyer4.json) --url localhost
-solana airdrop 10 $(solana address -k keys/treasure.json) --url localhost
+solana airdrop 100 $(solana address -k keys/treasure.json) --url localhost
 ```
 
 **Note:** Adjust amounts based on your testing needs. These amounts match the test suite.
@@ -221,7 +221,7 @@ For production presets with longer durations, wait accordingly.
 Set the VRF seed for randomness in winner selection:
 
 ```bash
-anchor run set-seed --provider.cluster localnet -- --project-id 3
+anchor run set-seed --provider.cluster localnet -- --project-id 1
 ```
 
 ### Step 5: Prepare Pool Creation
@@ -229,7 +229,7 @@ anchor run set-seed --provider.cluster localnet -- --project-id 3
 Prepare pool creation by selecting blockhash and finalizing the lottery:
 
 ```bash
-anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 3
+anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
 ```
 
 ### Step 6: Create CLMM Pool
@@ -237,7 +237,7 @@ anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 3
 Create the Raydium CLMM pool. This also generates the base mint:
 
 ```bash
-anchor run create-clmm-pool --provider.cluster localnet -- --project-id 3
+anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 ```
 
 ### Step 7: Add Liquidity to CLMM Pool
@@ -245,7 +245,7 @@ anchor run create-clmm-pool --provider.cluster localnet -- --project-id 3
 Add liquidity to the created CLMM pool:
 
 ```bash
-anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 3
+anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 ```
 
 ### Step 8: Initialize Income Dispatcher
@@ -266,3 +266,61 @@ anchor run dispatcher-init --provider.cluster localnet -- \
 
 **Note:** The Income Dispatcher can only be initialized once. After initialization, the deployer becomes
 the admin and can reinitialize to update wallets.
+
+### Step 9: Check Vesting Info
+
+After claims are opened, participants can check their vesting status:
+
+```bash
+# Check Sale bucket vesting for a buyer
+anchor run vesting --provider.cluster localnet -- info \
+  --project-id 1 \
+  --participant ./keys/buyer1.json
+```
+
+```bash
+# Check Team bucket vesting for creator
+anchor run vesting --provider.cluster localnet -- info \
+  --project-id 1 \
+  --participant ./keys/creator.json \
+  --bucket 1
+```
+
+### Step 10: Claim Vested Tokens
+
+Participants can claim their vested tokens as they unlock:
+
+```bash
+# Buyer claims from Sale bucket
+anchor run vesting --provider.cluster localnet -- claim \
+  --project-id 1 \
+  --participant-keypair ./keys/buyer1.json
+```
+
+```bash
+# Creator claims from Team bucket
+anchor run vesting --provider.cluster localnet -- claim \
+  --project-id 1 \
+  --participant-keypair ./keys/creator.json \
+  --bucket 1
+```
+
+```bash
+# Creator can also claim from Sale bucket (if participated)
+anchor run vesting --provider.cluster localnet -- claim \
+  --project-id 1 \
+  --participant-keypair ./keys/creator.json \
+  --bucket 0
+```
+
+### Step 11: Refund (for losing tickets or cancelled launches)
+
+After the lottery is finalized, participants can claim refunds for losing tickets.
+If the launch is cancelled (min raise not met), full refund is available.
+
+```bash
+# Check refund info
+anchor run refund --provider.cluster localnet -- info \
+  --project-id 1 \
+  --participant ./keys/buyer1.json
+```
