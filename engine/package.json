@@ -19,7 +19,7 @@
     "bs58": "^6.0.0",
     "commander": "^14.0.1",
     "decimal.js": "^10.6.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.6.13"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
