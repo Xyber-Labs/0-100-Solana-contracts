@@ -16,7 +16,10 @@ use crate::{
 pub struct SetSeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut, constraint = launch_state.vrf_seed.is_none() @ EngineErrorCode::SeedAlreadySet)]
+    #[account(mut,
+        constraint = launch_state.vrf_seed.is_none() @ EngineErrorCode::SeedAlreadySet,
+        constraint = launch_state.is_funding_ended(launch_preset.funding_duration_seconds) @ EngineErrorCode::FundingNotEnded
+    )]
     pub launch_state: Account<'info, LaunchState>,
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
@@ -36,11 +39,6 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let lottery_control = &ctx.accounts.lottery_control;
-
-    require!(
-        launch_state.is_funding_ended(launch_preset.funding_duration_seconds),
-        EngineErrorCode::FundingNotEnded
-    );
 
     let total_deposited =
         checked_mul!(lottery_control.active_tickets(), launch_preset.tau_lamports)?;
