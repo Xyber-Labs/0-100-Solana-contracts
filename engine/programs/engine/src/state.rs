@@ -165,6 +165,7 @@ impl LaunchState {
     }
 
     pub fn active_tickets(&self) -> u64 {
+        assert!(self.bits_allocated >= self.inactive_count);
         self.bits_allocated - self.inactive_count
     }
 
