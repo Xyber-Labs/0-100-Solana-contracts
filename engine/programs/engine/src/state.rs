@@ -395,6 +395,8 @@ impl LaunchPreset {
             && self.min_raise_lamports % self.tau_lamports == 0
             && self.creator_period_sec > 0
             && self.creator_period_unlock > 0
+            && self.creator_max_deposit >= self.tau_lamports
+            && self.creator_max_deposit % self.tau_lamports == 0
             && self.funding_duration_seconds > 0
             && self.funding_duration_seconds <= 60 * 60 * 24 * 7
             && self.base_sale_basis_points + self.team_allocation_basis_points <= 10_000
