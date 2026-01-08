@@ -410,8 +410,10 @@ impl LaunchPreset {
             && self.base_sale_basis_points + self.team_allocation_basis_points <= 10_000
             && self.team_period_sec > 0
             && self.team_duration_sec > 0
+            && self.team_duration_sec % self.team_period_sec == 0
             && self.contributor_period_sec > 0
             && self.contributor_duration_sec > 0
+            && self.contributor_duration_sec % self.contributor_period_sec == 0
     }
 
     pub fn sale_allocation(&self) -> u64 {
