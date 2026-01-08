@@ -56,8 +56,16 @@ program
       const durationSec = vestingConfig.durationSec.toNumber();
       const periodSec = vestingConfig.periodSec.toNumber();
 
-      const periodsPassed = Math.min(Math.floor(elapsed / periodSec), Math.floor(durationSec / periodSec));
+      if (periodSec <= 0) {
+        throw new Error(`Invalid periodSec: ${periodSec}. Must be greater than zero.`);
+      }
+
       const periodsTotal = Math.floor(durationSec / periodSec);
+      if (periodsTotal <= 0) {
+        throw new Error(`Invalid periodsTotal: ${periodsTotal}. durationSec (${durationSec}) must be >= periodSec (${periodSec}).`);
+      }
+
+      const periodsPassed = Math.min(Math.floor(elapsed / periodSec), periodsTotal);
 
       const availableToClaimBN = vestingConfig.allocation
         .mul(new BN(periodsPassed))
