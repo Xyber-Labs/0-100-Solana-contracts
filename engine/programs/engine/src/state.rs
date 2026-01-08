@@ -247,11 +247,16 @@ pub struct LaunchPreset {
 impl LaunchPreset {
     pub fn is_valid(&self) -> bool {
         self.tau_lamports > 0
+            && self.base_total_allocation > 0
             && self.hard_cap_lamports % self.tau_lamports == 0
             && self.per_wallet_cap >= self.tau_lamports
+            && self.per_wallet_cap <= self.hard_cap_lamports
+            && self.per_wallet_cap % self.tau_lamports == 0
             && self.min_raise_lamports >= crate::utils::clmm::AMMV3_CREATION_RESERVE
             && self.min_raise_lamports <= self.hard_cap_lamports
+            && self.min_raise_lamports % self.tau_lamports == 0
             && self.creator_period_sec > 0
+            && self.creator_period_unlock > 0
             && self.funding_duration_seconds > 0
             && self.funding_duration_seconds <= 60 * 60 * 24 * 7
             && self.base_sale_basis_points + self.team_allocation_basis_points <= 10_000
