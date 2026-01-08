@@ -64,4 +64,6 @@ pub enum ErrorCode {
     BitmapFull,
     #[msg("Invalid account discriminator")]
     InvalidAccountDiscriminator,
+    #[msg("Invalid params")]
+    InvalidParams,
 }

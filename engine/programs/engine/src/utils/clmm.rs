@@ -7,7 +7,7 @@ use raydium_amm_v3::{
     states::TickArrayState,
 };
 
-use crate::{errors::ErrorCode, state::LaunchPreset};
+use crate::{errors::ErrorCode, MYRIAD, state::LaunchPreset};
 
 pub(crate) struct ClmmOrder<'info> {
     pub(crate) token_mint_0: AccountInfo<'info>,
@@ -26,7 +26,6 @@ pub(crate) struct ClmmOrder<'info> {
     pub(crate) quote_supply: u64,
 }
 
-const MYRIAD: u128 = 10000;
 const PRICE_GROWING_RATE: f64 = 1.15f64;
 pub(crate) const AMMV3_CREATION_RESERVE: u64 = 152_500_000;
 

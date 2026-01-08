@@ -10,6 +10,7 @@ use anchor_spl::token::{self, Token, TokenAccount};
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
+    MYRIAD,
     state::{
         Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
     },
@@ -124,6 +125,7 @@ pub fn init_launch(
     let creator = &ctx.accounts.creator;
 
     require!(p.is_valid(), EngineErrorCode::MalformedPreset);
+    require!(meta.seller_fee_basis_points <= MYRIAD as u16, EngineErrorCode::InvalidParams);
 
     let fee = p.creation_fee;
     if fee > 0 {

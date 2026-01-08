@@ -45,13 +45,7 @@ pub mod engine {
         sale_start_time_timestamp: i64,
         meta: TokenMetadataInput,
     ) -> Result<()> {
-        instructions::init_launch(
-            ctx,
-            preset_id,
-            project_id,
-            sale_start_time_timestamp,
-            meta,
-        )
+        instructions::init_launch(ctx, preset_id, project_id, sale_start_time_timestamp, meta)
     }
 
     pub fn init_launch_preset(
@@ -114,3 +108,5 @@ pub mod engine {
         instructions::claim_clmm_fees(ctx)
     }
 }
+
+const MYRIAD: u128 = 10000;
