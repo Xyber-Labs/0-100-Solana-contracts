@@ -311,7 +311,7 @@ mod tests {
                 TicketRange::new(30, 38),
             ],
         };
-        assert_eq!(uc.total_tickets(), 23);
+        assert_eq!(uc.total_tickets(), Ok(23));
 
         let removed = uc.remove_tickets(3);
         assert_eq!(removed, vec![TicketRange::new(35, 38)]);
