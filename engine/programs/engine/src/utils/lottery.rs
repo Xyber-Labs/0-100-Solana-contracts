@@ -11,6 +11,7 @@ pub enum LotteryStatus {
     },
     Finalized {
         tokens_per_ticket: u64,
+        claims_opened_at: i64,
     },
     Cancelled,
 }
@@ -178,8 +179,16 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
         match self.control.as_ref().status {
             LotteryStatus::Funding => 0,
             LotteryStatus::Seeded { .. } => 0,
-            LotteryStatus::Finalized { tokens_per_ticket } => tokens_per_ticket,
+            LotteryStatus::Finalized { tokens_per_ticket, .. } => tokens_per_ticket,
             LotteryStatus::Cancelled => 0,
+        }
+    }
+
+    #[inline]
+    pub fn claims_opened_at(&self) -> Option<i64> {
+        match self.control.as_ref().status {
+            LotteryStatus::Finalized { claims_opened_at, .. } => Some(claims_opened_at),
+            _ => None,
         }
     }
 
@@ -240,8 +249,8 @@ impl<C: AsMut<LotteryControl>, W, I> LotteryRaw<C, W, I> {
     }
 
     #[inline]
-    fn set_status_finalized(&mut self, tokens_per_ticket: u64) {
-        self.control.as_mut().status = LotteryStatus::Finalized { tokens_per_ticket };
+    fn set_status_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
+        self.control.as_mut().status = LotteryStatus::Finalized { tokens_per_ticket, claims_opened_at };
     }
 }
 
@@ -381,7 +390,7 @@ impl<
         None
     }
 
-    pub fn finalize(&mut self, seed: &[u8; 32], capacity: u64, total_tokens: u64) -> Result<u64> {
+    pub fn finalize(&mut self, seed: &[u8; 32], capacity: u64, total_tokens: u64, claims_opened_at: i64) -> Result<u64> {
         let bits_allocated = self.bits_allocated();
         assert!(bits_allocated > 0);
 
@@ -412,7 +421,7 @@ impl<
         };
 
         let tokens_per_ticket = total_tokens / winners;
-        self.set_status_finalized(tokens_per_ticket);
+        self.set_status_finalized(tokens_per_ticket, claims_opened_at);
 
         Ok(winners)
     }
@@ -556,7 +565,7 @@ mod tests {
         let mut winners = empty_bitmap(1);
         let inactive = empty_bitmap(1);
         let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
-        let winners_count = raw.finalize(&seed, 100, 64000).unwrap();
+        let winners_count = raw.finalize(&seed, 100, 64000, 1000).unwrap();
         assert_eq!(winners_count, 64);
         assert_eq!(raw.count_ones(&TicketRange::new(0, 64)), 64);
         assert!(raw.is_finalized());
@@ -570,7 +579,7 @@ mod tests {
         let mut winners = empty_bitmap(2);
         let inactive = empty_bitmap(2);
         let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
-        let winners_count = raw.finalize(&seed, 50, 50000).unwrap();
+        let winners_count = raw.finalize(&seed, 50, 50000, 1000).unwrap();
         assert_eq!(winners_count, 50);
         assert_eq!(raw.count_ones(&TicketRange::new(0, 128)), 50);
         assert!(raw.is_finalized());
@@ -584,7 +593,7 @@ mod tests {
         let mut winners = empty_bitmap(2);
         let inactive = make_bitmap(&[0xFFFFF, 0]);
         let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
-        let winners_count = raw.finalize(&seed, 50, 50000).unwrap();
+        let winners_count = raw.finalize(&seed, 50, 50000, 1000).unwrap();
         assert_eq!(winners_count, 50);
         assert!(raw.is_finalized());
     }
@@ -596,6 +605,7 @@ mod tests {
             inactive_count: 0,
             status: LotteryStatus::Finalized {
                 tokens_per_ticket: 1000,
+                claims_opened_at: 1000,
             },
         };
         let winners = make_bitmap(&[0b1111]);
@@ -611,6 +621,7 @@ mod tests {
             inactive_count: 0,
             status: LotteryStatus::Finalized {
                 tokens_per_ticket: 500,
+                claims_opened_at: 1000,
             },
         };
         let winners = make_bitmap(&[0b1010]);

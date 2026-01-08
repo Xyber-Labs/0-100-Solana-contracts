@@ -2132,12 +2132,6 @@ export type IncomeDispatcher = {
             "type": "i64"
           },
           {
-            "name": "claimsOpenedAt",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
             "name": "raydiumPoolState",
             "type": {
               "option": "pubkey"

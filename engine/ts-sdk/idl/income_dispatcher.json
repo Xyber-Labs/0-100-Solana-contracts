@@ -2126,12 +2126,6 @@
             "type": "i64"
           },
           {
-            "name": "claims_opened_at",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
             "name": "raydium_pool_state",
             "type": {
               "option": "pubkey"

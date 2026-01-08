@@ -73,8 +73,6 @@ pub struct LaunchState {
 
     pub funding_start: i64,
 
-    pub claims_opened_at: Option<i64>,
-
     pub raydium_pool_state: Option<Pubkey>,
     pub raydium_position_nft_mint: Option<Pubkey>,
 }

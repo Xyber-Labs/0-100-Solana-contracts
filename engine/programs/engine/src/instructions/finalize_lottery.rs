@@ -82,9 +82,7 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
         &inactive_data[..],
     );
 
-    lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation())?;
-
-    launch_state.claims_opened_at = Some(current_time);
+    lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation(), current_time)?;
 
     emit!(Finalized {
         launch: launch_state.key(),

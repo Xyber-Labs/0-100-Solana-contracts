@@ -3787,6 +3787,11 @@ export type Engine = {
       "code": 6030,
       "name": "invalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
+    },
+    {
+      "code": 6031,
+      "name": "invalidParams",
+      "msg": "Invalid params"
     }
   ],
   "types": [
@@ -4293,12 +4298,6 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "claimsOpenedAt",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
             "name": "raydiumPoolState",
             "type": {
               "option": "pubkey"
@@ -4389,6 +4388,10 @@ export type Engine = {
               {
                 "name": "tokensPerTicket",
                 "type": "u64"
+              },
+              {
+                "name": "claimsOpenedAt",
+                "type": "i64"
               }
             ]
           },

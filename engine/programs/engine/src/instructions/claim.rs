@@ -26,7 +26,6 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
-    #[account(constraint = launch_state.claims_opened_at.is_some() @ ErrorCode::ClaimsNotOpen)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
@@ -100,7 +99,7 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
 
     let now = Clock::get()?.unix_timestamp;
-    let start = launch_state.claims_opened_at.expect("Expected be finalized");
+    let start = lottery.claims_opened_at().expect("Expected be finalized");
 
     let VestingParams {
         allocation,

@@ -3781,6 +3781,11 @@
       "code": 6030,
       "name": "InvalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidParams",
+      "msg": "Invalid params"
     }
   ],
   "types": [
@@ -4287,12 +4292,6 @@
             "type": "i64"
           },
           {
-            "name": "claims_opened_at",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
             "name": "raydium_pool_state",
             "type": {
               "option": "pubkey"
@@ -4383,6 +4382,10 @@
               {
                 "name": "tokens_per_ticket",
                 "type": "u64"
+              },
+              {
+                "name": "claims_opened_at",
+                "type": "i64"
               }
             ]
           },
