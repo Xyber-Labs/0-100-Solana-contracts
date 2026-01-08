@@ -1,6 +1,12 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::ErrorCode, utils::realloc::Reallocatable, utils::lottery::{LaunchPhase, PoolStatus}};
+use crate::{
+    errors::ErrorCode,
+    utils::{
+        lottery::{LaunchPhase, PoolStatus},
+        realloc::Reallocatable,
+    },
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
 pub enum VestingType {
@@ -130,7 +136,9 @@ impl LaunchState {
 
     pub fn funding_ended_at(&self) -> Option<i64> {
         match self.phase {
-            LaunchPhase::Seeded { funding_ended_at, .. } => Some(funding_ended_at),
+            LaunchPhase::Seeded {
+                funding_ended_at, ..
+            } => Some(funding_ended_at),
             _ => None,
         }
     }
@@ -190,10 +198,13 @@ impl LaunchState {
 
     pub fn position_nft_mint(&self) -> Option<Pubkey> {
         match &self.phase {
-            LaunchPhase::Finalized { pool, .. } => match pool {
-                PoolStatus::LiquidityAdded { position_nft_mint, .. } => Some(*position_nft_mint),
-                _ => None,
-            },
+            LaunchPhase::Finalized {
+                pool:
+                    PoolStatus::LiquidityAdded {
+                        position_nft_mint, ..
+                    },
+                ..
+            } => Some(*position_nft_mint),
             _ => None,
         }
     }
@@ -220,13 +231,20 @@ impl LaunchState {
 
     pub fn set_pool_created(&mut self, base_mint: Pubkey, pool_state: Pubkey) {
         if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
-            *pool = PoolStatus::Created { base_mint, pool_state };
+            *pool = PoolStatus::Created {
+                base_mint,
+                pool_state,
+            };
         }
     }
 
     pub fn set_liquidity_added(&mut self, position_nft_mint: Pubkey) {
         if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
-            if let PoolStatus::Created { base_mint, pool_state } = *pool {
+            if let PoolStatus::Created {
+                base_mint,
+                pool_state,
+            } = *pool
+            {
                 *pool = PoolStatus::LiquidityAdded {
                     base_mint,
                     pool_state,
