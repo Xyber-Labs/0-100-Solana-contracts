@@ -85,6 +85,71 @@ pub struct Claim<'info> {
     pub system_program: Program<'info, System>,
 }
 
+pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
+    let launch_state = &ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
+    let tickets_claimed = &mut ctx.accounts.tickets_claimed;
+    let participant = ctx.accounts.participant.key();
+    let contribution = &ctx.accounts.contribution;
+    let is_creator = participant == launch_state.creator;
+
+    let lottery_control = &ctx.accounts.lottery_control;
+    let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
+    let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
+
+    let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
+
+    let now = Clock::get()?.unix_timestamp;
+    let start = launch_state.claims_opened_at.expect("Expected be finalized");
+
+    let VestingParams {
+        allocation,
+        duration,
+        period,
+    } = vesting_params(bucket, is_creator, launch_preset, &lottery, contribution)?;
+
+    let elapsed_sec = (now - start).max(0).min(duration);
+    let periods_passed = elapsed_sec / period;
+    let periods_count = duration / period;
+
+    let available_to_claim =
+        u64::try_from(allocation as u128 * periods_passed as u128 / periods_count as u128)
+            .map_err(|_| ErrorCode::ArithmeticOverflow)?;
+
+    let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)?;
+    require!(to_claim > 0, ErrorCode::NothingToClaim);
+
+    let seeds: &[&[u8]] = &[
+        SEED_ROOT,
+        b"escrow_authority",
+        &launch_state.key().to_bytes(),
+        &[ctx.bumps.escrow_authority],
+    ];
+    let signer_seeds = &[seeds];
+
+    let cpi_accounts = Transfer {
+        from: ctx.accounts.base_escrow_ata.to_account_info(),
+        to: ctx.accounts.participant_ata.to_account_info(),
+        authority: ctx.accounts.escrow_authority.to_account_info(),
+    };
+    let cpi_ctx = CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        cpi_accounts,
+        signer_seeds,
+    );
+    token::transfer(cpi_ctx, to_claim)?;
+    tickets_claimed.value = available_to_claim;
+
+    emit!(Claimed {
+        launch: launch_state.key(),
+        participant,
+        bucket: bucket as u8,
+        tokens: to_claim,
+    });
+
+    Ok(())
+}
+
 struct VestingParams {
     allocation: u64,
     duration: i64,
@@ -130,70 +195,4 @@ fn vesting_params<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
             }
         }
     }
-}
-
-pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
-    let launch_state = &ctx.accounts.launch_state;
-    let launch_preset = &ctx.accounts.launch_preset;
-    let tickets_claimed = &mut ctx.accounts.tickets_claimed;
-    let participant = ctx.accounts.participant.key();
-    let contribution = &ctx.accounts.contribution;
-    let is_creator = participant == launch_state.creator;
-
-    let lottery_control = &ctx.accounts.lottery_control;
-    let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
-    let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
-
-    let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
-
-    let now = Clock::get()?.unix_timestamp;
-    let start = launch_state.claims_opened_at.expect("Expected be finalized");
-
-    let VestingParams {
-        allocation,
-        duration,
-        period,
-    } = vesting_params(bucket, is_creator, launch_preset, &lottery, contribution)?;
-
-    let elapsed_sec = (now - start).max(0).min(duration);
-    let periods_passed = elapsed_sec / period;
-    let periods_count = duration / period;
-
-    let available_to_claim = (allocation as u128)
-        .checked_mul(periods_passed as u128)
-        .and_then(|mul| mul.checked_div(periods_count as u128))
-        .ok_or(ErrorCode::ArithmeticOverflow)? as u64;
-    let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)?;
-
-    require!(to_claim > 0, ErrorCode::NothingToClaim);
-
-    let seeds: &[&[u8]] = &[
-        SEED_ROOT,
-        b"escrow_authority",
-        &launch_state.key().to_bytes(),
-        &[ctx.bumps.escrow_authority],
-    ];
-    let signer_seeds = &[seeds];
-
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.base_escrow_ata.to_account_info(),
-        to: ctx.accounts.participant_ata.to_account_info(),
-        authority: ctx.accounts.escrow_authority.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signer_seeds,
-    );
-    token::transfer(cpi_ctx, to_claim)?;
-    tickets_claimed.value = available_to_claim;
-
-    emit!(Claimed {
-        launch: launch_state.key(),
-        participant,
-        bucket: bucket as u8,
-        tokens: to_claim,
-    });
-
-    Ok(())
 }
