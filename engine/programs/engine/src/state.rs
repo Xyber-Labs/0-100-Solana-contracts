@@ -271,9 +271,9 @@ impl Reallocatable for Contribution {
 
 impl Contribution {
     pub fn total_tickets(&self) -> Result<u64> {
-        let count: u64 = 0;
+        let mut count: u64 = 0;
         for range in &self.ticket_ranges {
-            checked_add!(count, range.count())?;
+            count = checked_add!(count, range.count())?;
         }
         Ok(count)
     }
