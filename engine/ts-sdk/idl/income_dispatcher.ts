@@ -1868,46 +1868,41 @@ export type IncomeDispatcher = {
     },
     {
       "code": 6004,
-      "name": "recipientNotFound",
-      "msg": "Recipient not found in distribution"
-    },
-    {
-      "code": 6005,
       "name": "invalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "invalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "invalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "invalidCalculator",
       "msg": "Invalid calculator"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "notAllowed",
       "msg": "Not allowed"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "serializationError",
       "msg": "Serialization error"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "invalidParameter",
       "msg": "Invalid parameter"
     }
@@ -2135,17 +2130,6 @@ export type IncomeDispatcher = {
           {
             "name": "fundingStart",
             "type": "i64"
-          },
-          {
-            "name": "vrfSeed",
-            "type": {
-              "option": {
-                "array": [
-                  "u8",
-                  32
-                ]
-              }
-            }
           },
           {
             "name": "claimsOpenedAt",

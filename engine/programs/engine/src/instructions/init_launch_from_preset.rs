@@ -151,6 +151,7 @@ pub fn init_launch_from_preset(
     state.creator = creator.key();
     state.preset = ctx.accounts.launch_preset.key();
     state.funding_start = start;
+    state.created_at = now;
 
     let pending_key = make_pending_key(&creator.key(), project_id);
     let launch_key = state.key();

@@ -222,7 +222,6 @@ describe("engine litesvm", () => {
     assert.ok(state.creator.equals(admin.publicKey));
     assert.ok(state.preset, "Preset should be set");
     assert.isNull(state.baseMint);
-    assert.isNull(state.vrfSeed);
   });
 
   it("Rejects initLaunch with wrong XYBER mint", async () => {
@@ -479,7 +478,7 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.funding, "Lottery should be in progress before preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should be seeded before preparePoolCreation");
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
@@ -517,7 +516,7 @@ describe("engine litesvm", () => {
 
 
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.funding, "Lottery should be in progress after preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed preparePoolCreation");
 
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
@@ -596,7 +595,7 @@ describe("engine litesvm", () => {
 
     // Verify lottery is still in progress
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.funding, "Lottery should be in progress before preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should be seeded before preparePoolCreation");
 
     // Get launch state for blockhash range calculation
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
@@ -636,9 +635,9 @@ describe("engine litesvm", () => {
       "NoValidBlockhash"
     );
 
-    // Verify lottery still in progress after failed attempt
+    // Verify lottery still seeded after failed attempt
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.funding, "Lottery should still be in progress after failed preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed preparePoolCreation");
 
     // Advance time beyond grace period
     const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
@@ -1328,6 +1327,78 @@ describe("engine litesvm", () => {
 
 
     console.log(`✅ Stress test complete`);
+  });
+
+  it("Cancel flow: min_raise not met → full refund", async () => {
+    // === Step 1: Create launch ===
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+      creator: admin.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "CancelTest",
+      symbol: "CNL",
+      uri: "https://example.com/cnl.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+    console.log("✅ Step 1: Launch created");
+
+    // === Step 2: Small deposit (below min_raise) ===
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const tau = preset.tauLamports;
+    const minRaise = preset.minRaiseLamports;
+
+    // Deposit only 10% of min_raise
+    const depositAmount = minRaise.divn(10);
+    const depositTickets = depositAmount.div(tau).toNumber();
+
+    const contributor = await createAndFundAccount(client, 250);
+    const balanceBefore = client.getBalance(contributor.publicKey);
+
+    const { instruction: depositIx } = await sdk.depositIx({
+      contributor: contributor.publicKey,
+      launch: testLaunch,
+      amount: depositAmount,
+    });
+    sendTx(client, contributor.publicKey, [contributor], depositIx);
+    console.log(`✅ Step 2: Deposited ${depositTickets} tickets (${Number(depositAmount) / 1e9} SOL, min_raise: ${Number(minRaise) / 1e9} SOL)`);
+
+    // === Step 3: Wait for funding to end ===
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
+
+    // === Step 4: Call setSeed - should cancel due to min_raise not met ===
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
+
+    // Verify lottery is cancelled (setSeed cancels when min_raise not met)
+    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
+    assert.ok(lottery.status.cancelled, "Lottery should be cancelled when min_raise not met");
+    console.log("✅ Step 3: Lottery cancelled via setSeed (min_raise not met)");
+
+    // === Step 5: Full refund ===
+    const { transaction: refundTx } = await sdk.refundTx({
+      launch: testLaunch,
+      contributor: contributor.publicKey,
+    });
+    sendTx(client, contributor.publicKey, [contributor], refundTx);
+
+    const balanceAfter = client.getBalance(contributor.publicKey);
+    const refunded = balanceAfter - balanceBefore;
+
+    // Should get back full deposit minus tx fees and contribution rent
+    // Allow for tx fees (~10k each) + contribution account rent (~1.1M lamports)
+    const feeAllowance = BigInt(1_500_000); // ~0.0015 SOL
+    const actualLoss = balanceBefore - balanceAfter;
+
+    console.log(`Balance before: ${Number(balanceBefore) / 1e9} SOL`);
+    console.log(`Balance after: ${Number(balanceAfter) / 1e9} SOL`);
+    console.log(`Actual loss: ${Number(actualLoss) / 1e9} SOL (fees + rent)`);
+
+    // Loss should be only tx fees + rent, not the deposit
+    assert.ok(actualLoss < feeAllowance, `Should only lose fees+rent, but lost ${Number(actualLoss) / 1e9} SOL`);
+
+    console.log("✅ Step 4: Full refund received (cancelled launch)");
   });
 
 });

@@ -12,7 +12,10 @@ use crate::{
     errors::ErrorCode,
     SEED_ROOT,
     state::{LaunchPreset, LaunchState},
-    utils::{lottery::LotteryControl, clmm::{ClmmOrder, get_liquidity_range_impl}},
+    utils::{
+        clmm::{ClmmOrder, get_liquidity_range_impl},
+        lottery::LotteryControl,
+    },
 };
 
 #[derive(Accounts)]
@@ -118,11 +121,8 @@ pub fn add_clmm_liquidity<'info>(
 ) -> Result<()> {
     let lottery_control = &ctx.accounts.lottery_control;
 
-    let total_deposited = checked_mul!(lottery_control.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
-    require!(
-        total_deposited >= ctx.accounts.launch_preset.min_raise_lamports,
-        ErrorCode::MinRaiseNotMet
-    );
+    let total_deposited =
+        checked_mul!(lottery_control.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
 
     add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())

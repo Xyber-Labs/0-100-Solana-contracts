@@ -359,6 +359,12 @@ export type Engine = {
     },
     {
       "name": "claim",
+      "docs": [
+        "Claims tokens from a specified bucket after lottery finalization.",
+        "`bucket` specifies which allocation to claim: `Sale` for lottery winners",
+        "or `Team` for team allocation. Requires claims to be open.",
+        "Delegates to `instructions::claim`."
+      ],
       "discriminator": [
         62,
         198,
@@ -2743,6 +2749,11 @@ export type Engine = {
     },
     {
       "name": "refund",
+      "docs": [
+        "Refunds SOL to participants for non-winning lottery tickets.",
+        "Requires lottery to be finalized and claims to be open.",
+        "Delegates to `instructions::refund`."
+      ],
       "discriminator": [
         2,
         96,
@@ -3044,6 +3055,7 @@ export type Engine = {
         },
         {
           "name": "lotteryControl",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -3542,6 +3554,19 @@ export type Engine = {
       ]
     },
     {
+      "name": "launchCancelled",
+      "discriminator": [
+        210,
+        90,
+        18,
+        45,
+        176,
+        239,
+        185,
+        155
+      ]
+    },
+    {
       "name": "launchInitialized",
       "discriminator": [
         60,
@@ -3615,391 +3640,161 @@ export type Engine = {
     },
     {
       "code": 6001,
-      "name": "minRaiseMet",
-      "msg": "Minimum raise met, refund not available"
-    },
-    {
-      "code": 6002,
       "name": "fundingInactive",
       "msg": "Funding is not active"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "fundingNotEnded",
       "msg": "Funding has not ended yet"
     },
     {
-      "code": 6004,
-      "name": "invalidFundingDuration",
-      "msg": "Invalid funding duration (must be 0-5, where 0 = 10 seconds for testing)"
-    },
-    {
-      "code": 6005,
-      "name": "invalidStartTime",
-      "msg": "Invalid start time"
-    },
-    {
-      "code": 6006,
+      "code": 6003,
       "name": "claimsNotOpen",
       "msg": "Claims are not open"
     },
     {
-      "code": 6007,
+      "code": 6004,
       "name": "unauthorized",
       "msg": "unauthorized"
     },
     {
-      "code": 6008,
+      "code": 6005,
       "name": "badAmount",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6009,
+      "code": 6006,
       "name": "depositCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6010,
+      "code": 6007,
       "name": "insufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6011,
+      "code": 6008,
       "name": "limitExceeded",
       "msg": "Limit exceeded"
     },
     {
-      "code": 6012,
+      "code": 6009,
       "name": "seedAlreadySet",
       "msg": "Seed already set"
     },
     {
-      "code": 6013,
+      "code": 6010,
       "name": "seedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6014,
+      "code": 6011,
       "name": "alreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6015,
+      "code": 6012,
       "name": "notFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6016,
-      "name": "thresholdMissing",
-      "msg": "Threshold missing"
-    },
-    {
-      "code": 6017,
-      "name": "tokensPerTicketMissing",
-      "msg": "Tokens per ticket missing"
-    },
-    {
-      "code": 6018,
-      "name": "invalidTau",
-      "msg": "Invalid tau"
-    },
-    {
-      "code": 6019,
-      "name": "invalidK",
-      "msg": "Invalid K"
-    },
-    {
-      "code": 6020,
+      "code": 6013,
       "name": "invalidDivisor",
       "msg": "Divisor must be greater than zero"
     },
     {
-      "code": 6021,
-      "name": "heapNotFull",
-      "msg": "Heap not full"
-    },
-    {
-      "code": 6022,
-      "name": "userNotFoundInRoster",
-      "msg": "User not found in roster"
-    },
-    {
-      "code": 6023,
-      "name": "tOutOfRange",
-      "msg": "t out of range"
-    },
-    {
-      "code": 6024,
-      "name": "mappingError",
-      "msg": "Mapping error"
-    },
-    {
-      "code": 6025,
+      "code": 6014,
       "name": "alreadyRefunded",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6026,
-      "name": "alreadyClaimedTokens",
-      "msg": "Already claimed tokens"
-    },
-    {
-      "code": 6027,
+      "code": 6015,
       "name": "noRecentBlockhashes",
       "msg": "No recent blockhashes found in SlotHashes sysvar"
     },
     {
-      "code": 6028,
+      "code": 6016,
       "name": "poolAlreadyCreated",
       "msg": "Pool already created"
     },
     {
-      "code": 6029,
+      "code": 6017,
       "name": "noValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
     },
     {
-      "code": 6030,
-      "name": "invalidNumPartitions",
-      "msg": "Invalid N value for hash range calculation (must be between MIN_N and MAX_N)"
-    },
-    {
-      "code": 6031,
+      "code": 6018,
       "name": "invalidSlotHashesData",
       "msg": "Invalid slot hashes data"
     },
     {
-      "code": 6032,
-      "name": "rosterFull",
-      "msg": "Roster is full"
-    },
-    {
-      "code": 6033,
-      "name": "heapCapacityExceeded",
-      "msg": "Heap capacity exceeded"
-    },
-    {
-      "code": 6034,
-      "name": "mintAlreadyExists",
-      "msg": "Mint already exists"
-    },
-    {
-      "code": 6035,
+      "code": 6019,
       "name": "arithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6036,
-      "name": "u64ConversionOverflow",
-      "msg": "u64 to u32 conversion overflow"
-    },
-    {
-      "code": 6037,
-      "name": "reservedExceedsCapacity",
-      "msg": "Creator reserved tickets exceed capacity"
-    },
-    {
-      "code": 6038,
+      "code": 6020,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6039,
-      "name": "invalidCreatorDeposit",
-      "msg": "Creator initial deposit must be multiple of tau"
-    },
-    {
-      "code": 6040,
-      "name": "creatorRefundAlreadyClaimed",
-      "msg": "Creator refund already claimed"
-    },
-    {
-      "code": 6041,
+      "code": 6021,
       "name": "invalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6042,
+      "code": 6022,
       "name": "invalidOwner",
       "msg": "Invalid owner for ATA"
     },
     {
-      "code": 6043,
+      "code": 6023,
       "name": "invalidAuthority",
       "msg": "Invalid authority"
     },
     {
-      "code": 6044,
-      "name": "invalidHardCap",
-      "msg": "Hard cap must be > 0"
-    },
-    {
-      "code": 6045,
-      "name": "invalidMinRaise",
-      "msg": "Min raise must be > 0"
-    },
-    {
-      "code": 6046,
-      "name": "hardCapNotDivisibleByTau",
-      "msg": "Hard cap must be divisible by tau"
-    },
-    {
-      "code": 6047,
-      "name": "perWalletCapTooSmall",
-      "msg": "Per-wallet cap must be >= tau"
-    },
-    {
-      "code": 6048,
+      "code": 6024,
       "name": "malformedPreset",
       "msg": "Malformed preset"
     },
     {
-      "code": 6049,
-      "name": "invalidClaimLockPeriod",
-      "msg": "Creator claim lock period must be > 0"
-    },
-    {
-      "code": 6050,
-      "name": "invalidCreatorDailyLimit",
-      "msg": "Creator daily lamports limit must be >= tau"
-    },
-    {
-      "code": 6051,
-      "name": "notSupported",
-      "msg": "Operation not supported in current version"
-    },
-    {
-      "code": 6052,
-      "name": "rosterShardFull",
-      "msg": "Roster shard is full"
-    },
-    {
-      "code": 6053,
-      "name": "invalidFinalizeOrder",
-      "msg": "Roster finalization order violated"
-    },
-    {
-      "code": 6054,
-      "name": "shardNotFinalized",
-      "msg": "Roster shard not finalized"
-    },
-    {
-      "code": 6055,
-      "name": "shardsNotFullyFinalized",
-      "msg": "Claims cannot be opened before all shards finalized"
-    },
-    {
-      "code": 6056,
-      "name": "shardIdOutOfRange",
-      "msg": "Roster shard id is out of allowed range"
-    },
-    {
-      "code": 6057,
-      "name": "noTokensToClaim",
-      "msg": "User has no tokens to claim"
-    },
-    {
-      "code": 6058,
-      "name": "noDistributionRules",
-      "msg": "No distribution rules found for market cap"
-    },
-    {
-      "code": 6059,
-      "name": "recipientNotFound",
-      "msg": "Recipient not found in distribution"
-    },
-    {
-      "code": 6060,
-      "name": "invalidShareSum",
-      "msg": "Sum of shares in tier must equal 10000 basis points"
-    },
-    {
-      "code": 6061,
-      "name": "invalidBaseDecimals",
-      "msg": "Base token decimals must be less than 18"
-    },
-    {
-      "code": 6062,
-      "name": "poolNotCreated",
-      "msg": "Pool not created yet"
-    },
-    {
-      "code": 6063,
-      "name": "teamVestingMissing",
-      "msg": "Team vesting account is missing"
-    },
-    {
-      "code": 6064,
-      "name": "teamVestingNotStarted",
-      "msg": "Team vesting is not started yet"
-    },
-    {
-      "code": 6065,
-      "name": "teamClaimsNotOpen",
-      "msg": "Team claims are not open yet"
-    },
-    {
-      "code": 6066,
-      "name": "teamClaimTooFrequent",
-      "msg": "Claim is too frequent"
-    },
-    {
-      "code": 6067,
+      "code": 6025,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6068,
+      "code": 6026,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6069,
+      "code": 6027,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6070,
+      "code": 6028,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6071,
+      "code": 6029,
       "name": "invalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6072,
+      "code": 6030,
       "name": "priceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6073,
-      "name": "invalidInitOrder",
-      "msg": "Roster initialization order violated"
-    },
-    {
-      "code": 6074,
-      "name": "shardNotSealed",
-      "msg": "Roster shard not fully sealed"
-    },
-    {
-      "code": 6075,
+      "code": 6031,
       "name": "bitmapFull",
       "msg": "Bitmap is full"
     },
     {
-      "code": 6076,
-      "name": "missingContribution",
-      "msg": "Missing contribution account for sale claim"
-    },
-    {
-      "code": 6077,
-      "name": "invalidVestingParams",
-      "msg": "Invalid vesting parameters"
-    },
-    {
-      "code": 6078,
+      "code": 6032,
       "name": "invalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
     }
@@ -4313,6 +4108,26 @@ export type Engine = {
       }
     },
     {
+      "name": "launchCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "totalDeposited",
+            "type": "u64"
+          },
+          {
+            "name": "minRaise",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "launchInitialized",
       "type": {
         "kind": "struct",
@@ -4472,17 +4287,6 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "vrfSeed",
-            "type": {
-              "option": {
-                "array": [
-                  "u8",
-                  32
-                ]
-              }
-            }
-          },
-          {
             "name": "claimsOpenedAt",
             "type": {
               "option": "i64"
@@ -4558,6 +4362,20 @@ export type Engine = {
         "variants": [
           {
             "name": "funding"
+          },
+          {
+            "name": "seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              }
+            ]
           },
           {
             "name": "finalized",

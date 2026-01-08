@@ -4,7 +4,6 @@ use anchor_lang::{
 };
 
 use crate::{
-    checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     events::SelectionFinalized,
@@ -17,7 +16,7 @@ pub struct CreatePool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.vrf_seed.is_some() @ EngineErrorCode::SeedMissing)]
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
@@ -27,7 +26,7 @@ pub struct CreatePool<'info> {
         mut,
         seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
         bump,
-        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+        constraint = lottery_control.is_seeded() @ EngineErrorCode::SeedMissing
     )]
     pub lottery_control: Account<'info, LotteryControl>,
 
@@ -51,10 +50,6 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let lottery_control = &mut ctx.accounts.lottery_control;
 
-    let active_tickets = lottery_control.active_tickets();
-    let total_deposited = checked_mul!(active_tickets, launch_preset.tau_lamports)?;
-    require!(total_deposited >= launch_preset.min_raise_lamports, EngineErrorCode::MinRaiseNotMet);
-
     let current_time = Clock::get()?.unix_timestamp;
     let funding_end = launch_state
         .funding_end(launch_preset.funding_duration_seconds)
@@ -68,7 +63,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
         launch_preset.unlock_time_sec,
     )?;
 
-    let seed = launch_state.vrf_seed.ok_or(EngineErrorCode::SeedMissing)?;
+    let seed = lottery_control.get_seed().ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
 
     let winners_info = ctx.accounts.winners_bitmap.to_account_info();
@@ -88,7 +83,7 @@ pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
 
     emit!(SelectionFinalized {
         launch: launch_state.key(),
-        k_capacity: launch_preset.k_capacity()?,
+        k_capacity,
     });
 
     Ok(())
@@ -135,3 +130,4 @@ fn select_blockhash(
     }
     err!(EngineErrorCode::NoValidBlockhash)
 }
+

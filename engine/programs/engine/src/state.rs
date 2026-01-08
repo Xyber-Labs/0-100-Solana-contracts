@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::utils::realloc::Reallocatable;
+use crate::{errors::ErrorCode, utils::realloc::Reallocatable};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
 pub enum VestingType {
@@ -72,8 +72,6 @@ pub struct LaunchState {
     pub base_mint: Option<Pubkey>,
 
     pub funding_start: i64,
-
-    pub vrf_seed: Option<[u8; 32]>,
 
     pub claims_opened_at: Option<i64>,
 
@@ -294,22 +292,18 @@ impl LaunchPreset {
     pub fn tokens_per_ticket(&self, active_tickets: u64) -> Result<u64> {
         let k_capacity = self.k_capacity()?;
 
-        let sale_allocation_u128 = (self.base_total_allocation as u128)
-            .checked_mul(self.base_sale_basis_points as u128)
-            .and_then(|v| v.checked_div(10_000u128))
-            .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+        let sale_allocation = self.base_total_allocation
+            .checked_mul(self.base_sale_basis_points)
+            .and_then(|v| v.checked_div(10_000))
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
         let divisor = active_tickets.min(k_capacity);
-        require!(divisor > 0, crate::errors::ErrorCode::InvalidDivisor);
+        require!(divisor > 0, ErrorCode::InvalidDivisor);
 
-        let tokens_per_ticket_u128 = sale_allocation_u128
-            .checked_div(divisor as u128)
-            .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
-        require!(
-            tokens_per_ticket_u128 <= u64::MAX as u128,
-            crate::errors::ErrorCode::U64ConversionOverflow
-        );
+        let tokens_per_ticket = sale_allocation
+            .checked_div(divisor)
+            .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-        Ok(tokens_per_ticket_u128 as u64)
+        Ok(tokens_per_ticket)
     }
 }

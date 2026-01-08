@@ -1862,46 +1862,41 @@
     },
     {
       "code": 6004,
-      "name": "RecipientNotFound",
-      "msg": "Recipient not found in distribution"
-    },
-    {
-      "code": 6005,
       "name": "InvalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "InvalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "InvalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "InvalidCalculator",
       "msg": "Invalid calculator"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "NotAllowed",
       "msg": "Not allowed"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "SerializationError",
       "msg": "Serialization error"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "InvalidParameter",
       "msg": "Invalid parameter"
     }
@@ -2129,17 +2124,6 @@
           {
             "name": "funding_start",
             "type": "i64"
-          },
-          {
-            "name": "vrf_seed",
-            "type": {
-              "option": {
-                "array": [
-                  "u8",
-                  32
-                ]
-              }
-            }
           },
           {
             "name": "claims_opened_at",

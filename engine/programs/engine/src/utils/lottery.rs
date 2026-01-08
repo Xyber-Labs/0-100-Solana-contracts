@@ -6,6 +6,9 @@ use crate::{errors::ErrorCode, state::TicketRange};
 pub enum LotteryStatus {
     #[default]
     Funding,
+    Seeded {
+        seed: [u8; 32],
+    },
     Finalized {
         tokens_per_ticket: u64,
     },
@@ -37,12 +40,31 @@ impl LotteryControl {
         matches!(self.status, LotteryStatus::Funding)
     }
 
+    pub fn is_seeded(&self) -> bool {
+        matches!(self.status, LotteryStatus::Seeded { .. })
+    }
+
     pub fn is_finalized(&self) -> bool {
         matches!(self.status, LotteryStatus::Finalized { .. })
     }
 
     pub fn is_cancelled(&self) -> bool {
         matches!(self.status, LotteryStatus::Cancelled)
+    }
+
+    pub fn set_seeded(&mut self, seed: [u8; 32]) {
+        self.status = LotteryStatus::Seeded { seed };
+    }
+
+    pub fn set_cancelled(&mut self) {
+        self.status = LotteryStatus::Cancelled;
+    }
+
+    pub fn get_seed(&self) -> Option<[u8; 32]> {
+        match self.status {
+            LotteryStatus::Seeded { seed } => Some(seed),
+            _ => None,
+        }
     }
 
     pub fn active_tickets(&self) -> u64 {
@@ -138,23 +160,24 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
 
     #[inline]
     pub fn is_funding(&self) -> bool {
-        matches!(self.control.as_ref().status, LotteryStatus::Funding)
+        self.control.as_ref().is_funding()
     }
 
     #[inline]
     pub fn is_finalized(&self) -> bool {
-        matches!(self.control.as_ref().status, LotteryStatus::Finalized { .. })
+        self.control.as_ref().is_finalized()
     }
 
     #[inline]
     pub fn is_cancelled(&self) -> bool {
-        matches!(self.control.as_ref().status, LotteryStatus::Cancelled)
+        self.control.as_ref().is_cancelled()
     }
 
     #[inline]
     pub fn tokens_per_ticket(&self) -> u64 {
         match self.control.as_ref().status {
             LotteryStatus::Funding => 0,
+            LotteryStatus::Seeded { .. } => 0,
             LotteryStatus::Finalized { tokens_per_ticket } => tokens_per_ticket,
             LotteryStatus::Cancelled => 0,
         }

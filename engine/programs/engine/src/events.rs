@@ -31,6 +31,13 @@ pub struct SeedSet {
 }
 
 #[event]
+pub struct LaunchCancelled {
+    pub launch: Pubkey,
+    pub total_deposited: u64,
+    pub min_raise: u64,
+}
+
+#[event]
 pub struct SelectionFinalized {
     pub launch: Pubkey,
     pub k_capacity: u64,

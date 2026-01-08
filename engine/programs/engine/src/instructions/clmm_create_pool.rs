@@ -13,8 +13,7 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig},
-    utils::{lottery::LotteryControl, clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{clmm::ClmmOrder, lottery::LotteryControl, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -104,10 +103,6 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let lottery_control = &ctx.accounts.lottery_control;
 
     let total_deposited = checked_mul!(lottery_control.active_tickets(), preset.tau_lamports)?;
-    require!(
-        total_deposited >= preset.min_raise_lamports,
-        ErrorCode::MinRaiseNotMet
-    );
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
