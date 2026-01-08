@@ -38,14 +38,14 @@ pub mod engine {
         instructions::finalize_lottery(ctx)
     }
 
-    pub fn init_launch_from_preset(
-        ctx: Context<InitLaunchFromPreset>,
+    pub fn init_launch(
+        ctx: Context<InitLaunch>,
         preset_id: u8,
         project_id: u64,
         sale_start_time_timestamp: i64,
         meta: TokenMetadataInput,
     ) -> Result<()> {
-        instructions::init_launch_from_preset(
+        instructions::init_launch(
             ctx,
             preset_id,
             project_id,

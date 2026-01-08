@@ -2197,16 +2197,16 @@ export type Engine = {
       ]
     },
     {
-      "name": "initLaunchFromPreset",
+      "name": "initLaunch",
       "discriminator": [
-        134,
-        182,
-        130,
-        54,
-        214,
-        93,
-        249,
-        175
+        75,
+        162,
+        31,
+        198,
+        192,
+        109,
+        36,
+        169
       ],
       "accounts": [
         {
@@ -3554,19 +3554,6 @@ export type Engine = {
       ]
     },
     {
-      "name": "created",
-      "discriminator": [
-        65,
-        254,
-        68,
-        245,
-        102,
-        148,
-        244,
-        76
-      ]
-    },
-    {
       "name": "deposited",
       "discriminator": [
         111,
@@ -3590,6 +3577,19 @@ export type Engine = {
         152,
         247,
         252
+      ]
+    },
+    {
+      "name": "initialized",
+      "discriminator": [
+        208,
+        213,
+        115,
+        98,
+        115,
+        82,
+        201,
+        209
       ]
     },
     {
@@ -3952,43 +3952,6 @@ export type Engine = {
       }
     },
     {
-      "name": "created",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "projectId",
-            "type": "u64"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "presetId",
-            "type": "u8"
-          },
-          {
-            "name": "fundingStart",
-            "type": "i64"
-          },
-          {
-            "name": "pendingKey",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "deposited",
       "type": {
         "kind": "struct",
@@ -4166,6 +4129,43 @@ export type Engine = {
           {
             "name": "creationFee",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "initialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "projectId",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "presetId",
+            "type": "u8"
+          },
+          {
+            "name": "fundingStart",
+            "type": "i64"
+          },
+          {
+            "name": "pendingKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

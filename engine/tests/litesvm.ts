@@ -202,7 +202,7 @@ describe("engine litesvm", () => {
   it("Initializes the launch state correctly", async () => {
     const nextId = await sdk.getNextProjectId();
 
-    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
@@ -243,7 +243,7 @@ describe("engine litesvm", () => {
       sendTx(client, adminKeypair.publicKey, [adminKeypair, wrongMintKp], tx);
     }
 
-    const { instruction } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
@@ -342,7 +342,7 @@ describe("engine litesvm", () => {
     const projectId1 = await sdk.getNextProjectId();
     assert.equal(projectId1.toNumber(), lastIdBefore + 1, "Next project ID should be lastId + 1");
 
-    const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId1,
@@ -356,7 +356,7 @@ describe("engine litesvm", () => {
     const projectId2 = await sdk.getNextProjectId();
     assert.equal(projectId2.toNumber(), projectId1.toNumber() + 1, "Project 2 ID should be project1 + 1");
 
-    const { instruction: ix2, launchState: launch2 } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction: ix2, launchState: launch2 } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId2,
@@ -370,7 +370,7 @@ describe("engine litesvm", () => {
     const projectId3 = await sdk.getNextProjectId();
     assert.equal(projectId3.toNumber(), projectId2.toNumber() + 1, "Project 3 ID should be project2 + 1");
 
-    const { instruction: ix3, launchState: launch3 } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction: ix3, launchState: launch3 } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId3,
@@ -443,7 +443,7 @@ describe("engine litesvm", () => {
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
@@ -556,7 +556,7 @@ describe("engine litesvm", () => {
 
     // Create a fresh launch for this test
     const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
@@ -664,7 +664,7 @@ describe("engine litesvm", () => {
   it("Success flow: deposit → lottery → pool → claim → refund", async () => {
     // === Step 1: Create launch ===
     const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
@@ -896,7 +896,7 @@ describe("engine litesvm", () => {
 
     // Create launch
     const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(stressPresetData.id),
       projectId: nextId,
@@ -1332,7 +1332,7 @@ describe("engine litesvm", () => {
   it("Cancel flow: min_raise not met → full refund", async () => {
     // === Step 1: Create launch ===
     const nextId = await sdk.getNextProjectId();
-    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchFromPresetIx({
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
       creator: admin.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,

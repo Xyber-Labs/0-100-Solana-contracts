@@ -185,7 +185,7 @@ anchor run init-launch-preset --provider.cluster localnet -- \
 Create a new launch using the preset:
 
 ```bash
-anchor run init-launch-from-preset --provider.cluster localnet -- \
+anchor run init-launch --provider.cluster localnet -- \
   --preset-id 0 \
   --project-id 1 \
   --name TestToken \

@@ -223,7 +223,7 @@ export class TxBuilder {
     return this.getPda(["tickets_claimed", launch, bucketByte, participant]);
   }
 
-  async initLaunchFromPresetIx(params: {
+  async initLaunchIx(params: {
     creator: web3.PublicKey;
     presetId: number;
     projectId: BN | number;
@@ -283,7 +283,7 @@ export class TxBuilder {
     const [creatorContribution] = this.getContributionPda(launchState, params.creator);
 
     const instruction = await (this.program.methods as any)
-      .initLaunchFromPreset(
+      .initLaunch(
         new BN(params.presetId),
         BN.isBN(params.projectId as any) ? params.projectId : new BN(params.projectId),
         new BN(params.saleStartTimeTimestamp),

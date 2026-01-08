@@ -2191,16 +2191,16 @@
       ]
     },
     {
-      "name": "init_launch_from_preset",
+      "name": "init_launch",
       "discriminator": [
-        134,
-        182,
-        130,
-        54,
-        214,
-        93,
-        249,
-        175
+        75,
+        162,
+        31,
+        198,
+        192,
+        109,
+        36,
+        169
       ],
       "accounts": [
         {
@@ -3548,19 +3548,6 @@
       ]
     },
     {
-      "name": "Created",
-      "discriminator": [
-        65,
-        254,
-        68,
-        245,
-        102,
-        148,
-        244,
-        76
-      ]
-    },
-    {
       "name": "Deposited",
       "discriminator": [
         111,
@@ -3584,6 +3571,19 @@
         152,
         247,
         252
+      ]
+    },
+    {
+      "name": "Initialized",
+      "discriminator": [
+        208,
+        213,
+        115,
+        98,
+        115,
+        82,
+        201,
+        209
       ]
     },
     {
@@ -3946,43 +3946,6 @@
       }
     },
     {
-      "name": "Created",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "project_id",
-            "type": "u64"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "preset_id",
-            "type": "u8"
-          },
-          {
-            "name": "funding_start",
-            "type": "i64"
-          },
-          {
-            "name": "pending_key",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "Deposited",
       "type": {
         "kind": "struct",
@@ -4160,6 +4123,43 @@
           {
             "name": "creation_fee",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Initialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "project_id",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "preset_id",
+            "type": "u8"
+          },
+          {
+            "name": "funding_start",
+            "type": "i64"
+          },
+          {
+            "name": "pending_key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

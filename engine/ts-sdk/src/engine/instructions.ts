@@ -414,7 +414,7 @@ const EngineSDK = {
       return { launchPreset, signature };
     }
 
-    async function initLaunchFromPreset(args: {
+    async function initLaunch(args: {
       presetId: number;
       projectId?: BN | number;
       /** Absolute unix timestamp (seconds) when the sale starts. If omitted/0, starts immediately. */
@@ -428,7 +428,7 @@ const EngineSDK = {
     }): Promise<{ launchPda: anchor.web3.PublicKey; signature: string }> {
       const creatorPubkey = args.creator?.publicKey ?? payer;
       const projectId = args.projectId ?? (await getNextProjectId());
-      const { instruction, launchState } = await txBuilder.initLaunchFromPresetIx({
+      const { instruction, launchState } = await txBuilder.initLaunchIx({
         creator: creatorPubkey,
         presetId: args.presetId,
         projectId,
@@ -748,7 +748,7 @@ const EngineSDK = {
       getLiquidityRange,
       getSqrtPriceLowerX64ForPool,
       estimateQuoteForBase,
-      initLaunchFromPreset,
+      initLaunch,
       initLaunchPreset,
 
       // Tx/Ix builders
@@ -798,7 +798,7 @@ const EngineSDK = {
 
       // Preset Ix builders
       initLaunchPresetIx: txBuilder.initLaunchPresetIx.bind(txBuilder),
-      initLaunchFromPresetIx: txBuilder.initLaunchFromPresetIx.bind(txBuilder),
+      initLaunchIx: txBuilder.initLaunchIx.bind(txBuilder),
 
       // Additional fetch helpers
       fetchLaunchPreset: txBuilder.fetchLaunchPreset.bind(txBuilder),

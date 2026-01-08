@@ -259,7 +259,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 3: Initialize launch from preset", async () => {
     console.log("=== Step 3: Initialize Launch from Preset ===");
 
-    const { launchPda: launch, signature } = await sdk.initLaunchFromPreset({
+    const { launchPda: launch, signature } = await sdk.initLaunch({
       presetId: PRESET_ID,
       projectId: PROJECT_ID,
       name: "TestToken",
