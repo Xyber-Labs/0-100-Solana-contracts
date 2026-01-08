@@ -101,6 +101,7 @@ impl<C, W, I> LotteryRaw<C, W, I> {
         let word_idx = (index / Self::BITS_PER_WORD) as usize;
         let bit_pos = index % Self::BITS_PER_WORD;
         let word_offset = word_idx * 8;
+        assert!(word_offset + 8 <= data.len(), "write_bitmap_bit: index out of bounds");
         let mut word = u64::from_le_bytes(data[word_offset..word_offset + 8].try_into().unwrap());
         if value {
             word |= 1u64 << bit_pos;

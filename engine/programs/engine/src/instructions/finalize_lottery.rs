@@ -21,11 +21,7 @@ pub struct FinalizeLottery<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(
-        mut,
-        constraint = launch_state.is_seeded() @ EngineErrorCode::SeedMissing,
-        constraint = !launch_state.is_finalized() @ EngineErrorCode::AlreadyFinalized
-    )]
+    #[account(mut, constraint = launch_state.is_seeded() @ EngineErrorCode::SeedMissing)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
