@@ -2,18 +2,26 @@ use anchor_lang::{prelude::*, solana_program::keccak::hash};
 
 use crate::{errors::ErrorCode, state::TicketRange};
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug)]
 pub enum LotteryStatus {
-    #[default]
-    Funding,
+    Funding {
+        started_at: i64,
+    },
     Seeded {
         seed: [u8; 32],
+        funding_ended_at: i64,
     },
     Finalized {
         tokens_per_ticket: u64,
         claims_opened_at: i64,
     },
     Cancelled,
+}
+
+impl Default for LotteryStatus {
+    fn default() -> Self {
+        LotteryStatus::Funding { started_at: 0 }
+    }
 }
 
 #[account]
@@ -38,7 +46,7 @@ impl AsMut<LotteryControl> for LotteryControl {
 
 impl LotteryControl {
     pub fn is_funding(&self) -> bool {
-        matches!(self.status, LotteryStatus::Funding)
+        matches!(self.status, LotteryStatus::Funding { .. })
     }
 
     pub fn is_seeded(&self) -> bool {
@@ -53,8 +61,15 @@ impl LotteryControl {
         matches!(self.status, LotteryStatus::Cancelled)
     }
 
-    pub fn set_seeded(&mut self, seed: [u8; 32]) {
-        self.status = LotteryStatus::Seeded { seed };
+    pub fn set_funding(&mut self, started_at: i64) {
+        self.status = LotteryStatus::Funding { started_at };
+    }
+
+    pub fn set_seeded(&mut self, seed: [u8; 32], funding_ended_at: i64) {
+        self.status = LotteryStatus::Seeded {
+            seed,
+            funding_ended_at,
+        };
     }
 
     pub fn set_cancelled(&mut self) {
@@ -63,8 +78,44 @@ impl LotteryControl {
 
     pub fn get_seed(&self) -> Option<[u8; 32]> {
         match self.status {
-            LotteryStatus::Seeded { seed } => Some(seed),
+            LotteryStatus::Seeded { seed, .. } => Some(seed),
             _ => None,
+        }
+    }
+
+    pub fn funding_started_at(&self) -> Option<i64> {
+        match self.status {
+            LotteryStatus::Funding { started_at } => Some(started_at),
+            _ => None,
+        }
+    }
+
+    pub fn funding_ended_at(&self) -> Option<i64> {
+        match self.status {
+            LotteryStatus::Seeded {
+                funding_ended_at, ..
+            } => Some(funding_ended_at),
+            _ => None,
+        }
+    }
+
+    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+        match self.status {
+            LotteryStatus::Funding { started_at } => {
+                let end = started_at.saturating_add(funding_duration_seconds);
+                now_ts >= started_at && now_ts < end
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+        match self.status {
+            LotteryStatus::Funding { started_at } => {
+                let end = started_at.saturating_add(funding_duration_seconds);
+                now_ts >= end
+            }
+            _ => true,
         }
     }
 
@@ -177,9 +228,11 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
     #[inline]
     pub fn tokens_per_ticket(&self) -> u64 {
         match self.control.as_ref().status {
-            LotteryStatus::Funding => 0,
+            LotteryStatus::Funding { .. } => 0,
             LotteryStatus::Seeded { .. } => 0,
-            LotteryStatus::Finalized { tokens_per_ticket, .. } => tokens_per_ticket,
+            LotteryStatus::Finalized {
+                tokens_per_ticket, ..
+            } => tokens_per_ticket,
             LotteryStatus::Cancelled => 0,
         }
     }
@@ -187,7 +240,9 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
     #[inline]
     pub fn claims_opened_at(&self) -> Option<i64> {
         match self.control.as_ref().status {
-            LotteryStatus::Finalized { claims_opened_at, .. } => Some(claims_opened_at),
+            LotteryStatus::Finalized {
+                claims_opened_at, ..
+            } => Some(claims_opened_at),
             _ => None,
         }
     }
@@ -250,7 +305,10 @@ impl<C: AsMut<LotteryControl>, W, I> LotteryRaw<C, W, I> {
 
     #[inline]
     fn set_status_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
-        self.control.as_mut().status = LotteryStatus::Finalized { tokens_per_ticket, claims_opened_at };
+        self.control.as_mut().status = LotteryStatus::Finalized {
+            tokens_per_ticket,
+            claims_opened_at,
+        };
     }
 }
 
@@ -390,7 +448,13 @@ impl<
         None
     }
 
-    pub fn finalize(&mut self, seed: &[u8; 32], capacity: u64, total_tokens: u64, claims_opened_at: i64) -> Result<u64> {
+    pub fn finalize(
+        &mut self,
+        seed: &[u8; 32],
+        capacity: u64,
+        total_tokens: u64,
+        claims_opened_at: i64,
+    ) -> Result<u64> {
         let bits_allocated = self.bits_allocated();
         assert!(bits_allocated > 0);
 

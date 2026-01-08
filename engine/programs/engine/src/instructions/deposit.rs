@@ -24,7 +24,7 @@ pub struct Deposit<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive)]
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -41,7 +41,7 @@ pub struct Deposit<'info> {
         mut,
         seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
         bump,
-        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+        constraint = lottery_control.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
     )]
     pub lottery_control: Account<'info, LotteryControl>,
 

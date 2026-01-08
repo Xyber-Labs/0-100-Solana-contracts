@@ -5,7 +5,7 @@ use anchor_spl::{
     token::{self, MintTo},
 };
 
-use crate::{errors::ErrorCode, LaunchState, SEED_ROOT, state::TokenMetadataConfig};
+use crate::{errors::ErrorCode, SEED_ROOT, state::TokenMetadataConfig};
 
 pub fn create_ata_for_authority<'info>(
     associated_token_program: &AccountInfo<'info>,
@@ -37,12 +37,13 @@ pub fn mint_to_escrow_for_launch<'info>(
     escrow_authority: &AccountInfo<'info>,
     launch_key: &Pubkey,
     amount: u64,
+    escrow_authority_bump: u8,
 ) -> Result<()> {
     let seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"escrow_authority",
         &launch_key.to_bytes(),
-        &[LaunchState::mint_auth_bump_for(launch_key)],
+        &[escrow_authority_bump],
     ];
     let signer_seeds = &[seeds];
     let mint_accounts = MintTo {
@@ -74,6 +75,7 @@ pub fn ensure_token_metadata_for_launch<'info>(
     rent: &AccountInfo<'info>,
     token_metadata_config: &TokenMetadataConfig,
     launch_key: &Pubkey,
+    escrow_authority_bump: u8,
 ) -> Result<()> {
     let expected = derive_metadata_pda(&token_metadata_program.key(), &mint.key());
     require_keys_eq!(metadata_account.key(), expected, ErrorCode::InvalidOwner);
@@ -93,7 +95,7 @@ pub fn ensure_token_metadata_for_launch<'info>(
             SEED_ROOT,
             b"escrow_authority",
             &launch_key.to_bytes(),
-            &[LaunchState::mint_auth_bump_for(launch_key)],
+            &[escrow_authority_bump],
         ];
         let signer_seeds = &[seeds];
 

@@ -111,6 +111,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.escrow_authority.to_account_info(),
         &state.key(),
         preset.base_total_allocation,
+        ctx.bumps.escrow_authority,
     )?;
 
     mint_utils::ensure_token_metadata_for_launch(
@@ -123,6 +124,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.rent.to_account_info(),
         &ctx.accounts.token_metadata_config,
         &state.key(),
+        ctx.bumps.escrow_authority,
     )?;
     state.base_mint = Some(ctx.accounts.base_mint.key());
     state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());

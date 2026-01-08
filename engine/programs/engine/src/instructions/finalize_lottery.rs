@@ -56,9 +56,9 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let lottery_control = &mut ctx.accounts.lottery_control;
 
     let current_time = Clock::get()?.unix_timestamp;
-    let funding_end = launch_state
-        .funding_end(launch_preset.funding_duration_seconds)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+    let funding_end = lottery_control
+        .funding_ended_at()
+        .ok_or(EngineErrorCode::InvalidState)?;
     select_blockhash(
         &ctx.accounts.slot_hashes.to_account_info(),
         current_time,

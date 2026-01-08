@@ -28,9 +28,7 @@ pub struct Cancelled {
 pub struct SetSeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut,
-        constraint = launch_state.is_funding_ended(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingNotEnded
-    )]
+    #[account(mut)]
     pub launch_state: Account<'info, LaunchState>,
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
@@ -38,7 +36,8 @@ pub struct SetSeed<'info> {
         mut,
         seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
         bump,
-        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized
+        constraint = lottery_control.is_funding() @ EngineErrorCode::AlreadyFinalized,
+        constraint = lottery_control.is_funding_ended(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingNotEnded
     )]
     pub lottery_control: Account<'info, LotteryControl>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
@@ -104,7 +103,12 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         .try_into()
         .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
 
-    lottery_control.set_seeded(seed);
+    let funding_started_at = lottery_control
+        .funding_started_at()
+        .ok_or(EngineErrorCode::InvalidState)?;
+    let funding_ended_at = checked_add!(funding_started_at, launch_preset.funding_duration_seconds)?;
+
+    lottery_control.set_seeded(seed, funding_ended_at);
 
     let seed_hash = keccak::hash(&seed);
 

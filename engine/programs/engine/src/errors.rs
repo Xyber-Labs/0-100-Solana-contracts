@@ -66,4 +66,6 @@ pub enum ErrorCode {
     InvalidAccountDiscriminator,
     #[msg("Invalid params")]
     InvalidParams,
+    #[msg("Invalid state")]
+    InvalidState,
 }

@@ -70,39 +70,9 @@ pub struct LaunchState {
     pub preset: Pubkey,
 
     pub base_mint: Option<Pubkey>,
-
-    pub funding_start: i64,
-
     pub raydium_pool_state: Option<Pubkey>,
+
     pub raydium_position_nft_mint: Option<Pubkey>,
-}
-
-impl LaunchState {
-    pub fn mint_auth_bump_for(launch_key: &Pubkey) -> u8 {
-        let (_, bump) = Pubkey::find_program_address(
-            &[
-                crate::constants::SEED_ROOT,
-                b"escrow_authority",
-                launch_key.as_ref(),
-            ],
-            &crate::ID,
-        );
-        bump
-    }
-
-    pub fn funding_end(&self, funding_duration_seconds: i64) -> Option<i64> {
-        self.funding_start.checked_add(funding_duration_seconds)
-    }
-
-    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
-        let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
-        now_ts >= self.funding_start && now_ts < end
-    }
-
-    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
-        let end = self.funding_end(funding_duration_seconds).unwrap_or(i64::MAX);
-        now_ts >= end
-    }
 }
 
 #[account]
@@ -295,7 +265,8 @@ impl LaunchPreset {
     pub fn tokens_per_ticket(&self, active_tickets: u64) -> Result<u64> {
         let k_capacity = self.k_capacity()?;
 
-        let sale_allocation = self.base_total_allocation
+        let sale_allocation = self
+            .base_total_allocation
             .checked_mul(self.base_sale_basis_points)
             .and_then(|v| v.checked_div(10_000))
             .ok_or(ErrorCode::ArithmeticOverflow)?;
@@ -303,9 +274,8 @@ impl LaunchPreset {
         let divisor = active_tickets.min(k_capacity);
         require!(divisor > 0, ErrorCode::InvalidDivisor);
 
-        let tokens_per_ticket = sale_allocation
-            .checked_div(divisor)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        let tokens_per_ticket =
+            sale_allocation.checked_div(divisor).ok_or(ErrorCode::ArithmeticOverflow)?;
 
         Ok(tokens_per_ticket)
     }

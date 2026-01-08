@@ -156,8 +156,9 @@ pub fn init_launch(
     state.project_id = project_id;
     state.creator = creator.key();
     state.preset = ctx.accounts.launch_preset.key();
-    state.funding_start = start;
     state.created_at = now;
+
+    ctx.accounts.lottery_control.set_funding(start);
 
     let pending_key = make_pending_key(&creator.key(), project_id);
     let launch_key = state.key();
