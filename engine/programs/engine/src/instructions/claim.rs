@@ -8,10 +8,17 @@ use crate::{
     checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode,
-    events::Claimed,
     state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
     utils::lottery::{LotteryControl, LotteryRaw},
 };
+
+#[event]
+pub struct Claimed {
+    pub launch: Pubkey,
+    pub participant: Pubkey,
+    pub bucket: u8,
+    pub tokens: u64,
+}
 
 #[derive(Accounts)]
 #[instruction(bucket: Bucket)]

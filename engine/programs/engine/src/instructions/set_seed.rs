@@ -7,10 +7,22 @@ use crate::{
     checked_add, checked_mul,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::{LaunchCancelled, SeedSet},
     state::{LaunchPreset, LaunchState},
     utils::lottery::LotteryControl,
 };
+
+#[event]
+pub struct Seeded {
+    pub launch: Pubkey,
+    pub seed_hash: [u8; 32],
+}
+
+#[event]
+pub struct Cancelled {
+    pub launch: Pubkey,
+    pub total_deposited: u64,
+    pub min_raise: u64,
+}
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
@@ -47,7 +59,7 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     if total_deposited < launch_preset.min_raise_lamports {
         lottery_control.set_cancelled();
 
-        emit!(LaunchCancelled {
+        emit!(Cancelled {
             launch: launch_state.key(),
             total_deposited,
             min_raise: launch_preset.min_raise_lamports,
@@ -96,7 +108,7 @@ pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
 
     let seed_hash = keccak::hash(&seed);
 
-    emit!(SeedSet {
+    emit!(Seeded {
         launch: launch_state.key(),
         seed_hash: seed_hash.0,
     });

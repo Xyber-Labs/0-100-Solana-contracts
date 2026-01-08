@@ -4,10 +4,16 @@ use crate::{
     checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::Refunded,
     state::{Contribution, LaunchPreset, LaunchState},
     utils::lottery::{LotteryControl, LotteryRaw},
 };
+
+#[event]
+pub struct Refunded {
+    pub launch: Pubkey,
+    pub contributor: Pubkey,
+    pub lamports: u64,
+}
 
 #[derive(Accounts)]
 pub struct Refund<'info> {
@@ -61,11 +67,7 @@ pub fn refund(ctx: Context<Refund>) -> Result<()> {
         let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
         let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
-        let lottery = LotteryRaw::new(
-            &**lottery_control,
-            &winners_data[..],
-            &inactive_data[..],
-        );
+        let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
 
         let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
         checked_sub!(total_tickets, winners)?
@@ -76,7 +78,7 @@ pub fn refund(ctx: Context<Refund>) -> Result<()> {
     contribution.tickets_refunded = refundable_total;
 
     let tau_lamports = ctx.accounts.launch_preset.tau_lamports;
-    let refund_amount = checked_mul!(refundable, tau_lamports)?;
+    let lamports = checked_mul!(refundable, tau_lamports)?;
 
     let launch_key = launch_state.key();
     let seeds = [
@@ -96,13 +98,13 @@ pub fn refund(ctx: Context<Refund>) -> Result<()> {
             },
             signer,
         ),
-        refund_amount,
+        lamports,
     )?;
 
     emit!(Refunded {
         launch: launch_state.key(),
         contributor: ctx.accounts.contributor.key(),
-        refunded_lamports: refund_amount,
+        lamports,
     });
 
     Ok(())

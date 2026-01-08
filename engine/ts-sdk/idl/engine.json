@@ -3522,6 +3522,19 @@
   ],
   "events": [
     {
+      "name": "Cancelled",
+      "discriminator": [
+        136,
+        23,
+        42,
+        65,
+        143,
+        233,
+        234,
+        46
+      ]
+    },
+    {
       "name": "Claimed",
       "discriminator": [
         217,
@@ -3535,42 +3548,42 @@
       ]
     },
     {
-      "name": "DepositMade",
+      "name": "Created",
       "discriminator": [
-        210,
-        201,
-        130,
-        183,
+        65,
+        254,
+        68,
+        245,
+        102,
+        148,
         244,
-        203,
-        155,
-        199
+        76
       ]
     },
     {
-      "name": "LaunchCancelled",
+      "name": "Deposited",
       "discriminator": [
-        210,
-        90,
-        18,
+        111,
+        141,
+        26,
         45,
-        176,
-        239,
-        185,
-        155
+        161,
+        35,
+        100,
+        57
       ]
     },
     {
-      "name": "LaunchInitialized",
+      "name": "Finalized",
       "discriminator": [
-        60,
-        143,
-        196,
-        55,
-        214,
-        166,
-        10,
-        63
+        4,
+        77,
+        242,
+        80,
+        20,
+        152,
+        247,
+        252
       ]
     },
     {
@@ -3587,29 +3600,16 @@
       ]
     },
     {
-      "name": "SeedSet",
+      "name": "Seeded",
       "discriminator": [
-        9,
-        179,
-        143,
-        172,
-        250,
-        146,
-        42,
-        6
-      ]
-    },
-    {
-      "name": "SelectionFinalized",
-      "discriminator": [
-        111,
-        84,
-        253,
-        234,
-        76,
-        136,
-        103,
-        185
+        95,
+        55,
+        75,
+        113,
+        178,
+        157,
+        251,
+        224
       ]
     },
     {
@@ -3876,6 +3876,26 @@
       }
     },
     {
+      "name": "Cancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_deposited",
+            "type": "u64"
+          },
+          {
+            "name": "min_raise",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Claimed",
       "type": {
         "kind": "struct",
@@ -3926,7 +3946,44 @@
       }
     },
     {
-      "name": "DepositMade",
+      "name": "Created",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "project_id",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "preset_id",
+            "type": "u8"
+          },
+          {
+            "name": "funding_start",
+            "type": "i64"
+          },
+          {
+            "name": "pending_key",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Deposited",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3939,7 +3996,7 @@
             "type": "pubkey"
           },
           {
-            "name": "amount",
+            "name": "lamports",
             "type": "u64"
           }
         ]
@@ -3970,6 +4027,22 @@
           {
             "name": "threshold",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Finalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "k_capacity",
+            "type": "u64"
           }
         ]
       }
@@ -4087,63 +4160,6 @@
           {
             "name": "creation_fee",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "LaunchCancelled",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "LaunchInitialized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "project_id",
-            "type": "u64"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "preset_id",
-            "type": "u8"
-          },
-          {
-            "name": "funding_start",
-            "type": "i64"
-          },
-          {
-            "name": "pending_key",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }
@@ -4402,14 +4418,14 @@
             "type": "pubkey"
           },
           {
-            "name": "refunded_lamports",
+            "name": "lamports",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "SeedSet",
+      "name": "Seeded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4425,22 +4441,6 @@
                 32
               ]
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "SelectionFinalized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "k_capacity",
-            "type": "u64"
           }
         ]
       }

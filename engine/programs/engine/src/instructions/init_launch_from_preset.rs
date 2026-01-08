@@ -10,12 +10,21 @@ use anchor_spl::token::{self, Token, TokenAccount};
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::LaunchInitialized,
     state::{
         Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
     },
     utils::lottery::LotteryControl,
 };
+
+#[event]
+pub struct Created {
+    pub launch: Pubkey,
+    pub project_id: u64,
+    pub creator: Pubkey,
+    pub preset_id: u8,
+    pub funding_start: i64,
+    pub pending_key: [u8; 32],
+}
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct TokenMetadataInput {
@@ -151,7 +160,7 @@ pub fn init_launch_from_preset(
     let pending_key = make_pending_key(&creator.key(), project_id);
     let launch_key = state.key();
 
-    emit!(LaunchInitialized {
+    emit!(Created {
         launch: launch_key,
         project_id,
         creator: creator.key(),

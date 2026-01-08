@@ -6,10 +6,15 @@ use anchor_lang::{
 use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::SelectionFinalized,
     state::{LaunchPreset, LaunchState},
     utils::{lottery::{LotteryControl, LotteryRaw}, pool},
 };
+
+#[event]
+pub struct Finalized {
+    pub launch: Pubkey,
+    pub k_capacity: u64,
+}
 
 #[derive(Accounts)]
 pub struct FinalizeLottery<'info> {
@@ -81,7 +86,7 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
 
     launch_state.claims_opened_at = Some(current_time);
 
-    emit!(SelectionFinalized {
+    emit!(Finalized {
         launch: launch_state.key(),
         k_capacity,
     });

@@ -4,10 +4,16 @@ use crate::{
     checked_add,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::Withdrawn,
     state::{Contribution, LaunchPreset, LaunchState},
     utils::lottery::{LotteryControl, LotteryRaw},
 };
+
+#[event]
+pub struct Withdrawn {
+    pub launch: Pubkey,
+    pub contributor: Pubkey,
+    pub amount: u64,
+}
 
 #[derive(Accounts)]
 #[instruction(amount: u64)]

@@ -4,7 +4,6 @@ use crate::{
     checked_add, checked_div, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::DepositMade,
     state::{Contribution, LaunchPreset, LaunchState, TicketRange},
     utils::{
         lottery::{LotteryControl, LotteryRaw},
@@ -12,8 +11,15 @@ use crate::{
     },
 };
 
+#[event]
+pub struct Deposited {
+    pub launch: Pubkey,
+    pub contributor: Pubkey,
+    pub lamports: u64,
+}
+
 #[derive(Accounts)]
-#[instruction(amount: u64)]
+#[instruction(lamports: u64)]
 pub struct Deposit<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
@@ -23,7 +29,7 @@ pub struct Deposit<'info> {
 
     #[account(
         address = launch_state.preset @ EngineErrorCode::MalformedPreset,
-        constraint = amount > 0 && amount % launch_preset.tau_lamports == 0 @ EngineErrorCode::BadAmount
+        constraint = lamports > 0 && lamports % launch_preset.tau_lamports == 0 @ EngineErrorCode::BadAmount
     )]
     pub launch_preset: Account<'info, LaunchPreset>,
 
@@ -63,7 +69,7 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution_info = ctx.accounts.contribution.to_account_info();
     let launch_key = ctx.accounts.launch_state.key();
@@ -114,7 +120,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
 
     let current_tickets = contribution.total_tickets();
     let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
-    let new_deposit = checked_add!(current_deposit, amount)?;
+    let new_deposit = checked_add!(current_deposit, lamports)?;
     let is_creator = contributor_key == ctx.accounts.launch_state.creator;
     let cap =
         if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
@@ -131,7 +137,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         let mut lottery =
             LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &mut inactive_data[..]);
 
-        let new_tickets_count = checked_div!(amount, launch_preset.tau_lamports)?;
+        let new_tickets_count = checked_div!(lamports, launch_preset.tau_lamports)?;
         let reused = lottery.take_tickets(new_tickets_count);
         let reused_count: u64 = reused.iter().map(|r| r.count()).sum();
         let remaining = checked_sub!(new_tickets_count, reused_count)?;
@@ -207,7 +213,7 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         &solana_program::system_instruction::transfer(
             &contributor_key,
             &ctx.accounts.escrow_authority.key(),
-            amount,
+            lamports,
         ),
         &[
             ctx.accounts.contributor.to_account_info(),
@@ -216,10 +222,10 @@ pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         ],
     )?;
 
-    emit!(DepositMade {
+    emit!(Deposited {
         launch: launch_key,
         contributor: contributor_key,
-        amount,
+        lamports,
     });
 
     Ok(())

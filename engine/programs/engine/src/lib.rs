@@ -10,7 +10,6 @@ use crate::{instructions::*, utils::clmm::LiquidityRange};
 
 pub mod constants;
 pub mod errors;
-mod events;
 mod instructions;
 pub mod state;
 pub mod utils;

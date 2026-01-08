@@ -3528,6 +3528,19 @@ export type Engine = {
   ],
   "events": [
     {
+      "name": "cancelled",
+      "discriminator": [
+        136,
+        23,
+        42,
+        65,
+        143,
+        233,
+        234,
+        46
+      ]
+    },
+    {
       "name": "claimed",
       "discriminator": [
         217,
@@ -3541,42 +3554,42 @@ export type Engine = {
       ]
     },
     {
-      "name": "depositMade",
+      "name": "created",
       "discriminator": [
-        210,
-        201,
-        130,
-        183,
+        65,
+        254,
+        68,
+        245,
+        102,
+        148,
         244,
-        203,
-        155,
-        199
+        76
       ]
     },
     {
-      "name": "launchCancelled",
+      "name": "deposited",
       "discriminator": [
-        210,
-        90,
-        18,
+        111,
+        141,
+        26,
         45,
-        176,
-        239,
-        185,
-        155
+        161,
+        35,
+        100,
+        57
       ]
     },
     {
-      "name": "launchInitialized",
+      "name": "finalized",
       "discriminator": [
-        60,
-        143,
-        196,
-        55,
-        214,
-        166,
-        10,
-        63
+        4,
+        77,
+        242,
+        80,
+        20,
+        152,
+        247,
+        252
       ]
     },
     {
@@ -3593,29 +3606,16 @@ export type Engine = {
       ]
     },
     {
-      "name": "seedSet",
+      "name": "seeded",
       "discriminator": [
-        9,
-        179,
-        143,
-        172,
-        250,
-        146,
-        42,
-        6
-      ]
-    },
-    {
-      "name": "selectionFinalized",
-      "discriminator": [
-        111,
-        84,
-        253,
-        234,
-        76,
-        136,
-        103,
-        185
+        95,
+        55,
+        75,
+        113,
+        178,
+        157,
+        251,
+        224
       ]
     },
     {
@@ -3882,6 +3882,26 @@ export type Engine = {
       }
     },
     {
+      "name": "cancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "totalDeposited",
+            "type": "u64"
+          },
+          {
+            "name": "minRaise",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "claimed",
       "type": {
         "kind": "struct",
@@ -3932,7 +3952,44 @@ export type Engine = {
       }
     },
     {
-      "name": "depositMade",
+      "name": "created",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "projectId",
+            "type": "u64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "presetId",
+            "type": "u8"
+          },
+          {
+            "name": "fundingStart",
+            "type": "i64"
+          },
+          {
+            "name": "pendingKey",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "deposited",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3945,7 +4002,7 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "amount",
+            "name": "lamports",
             "type": "u64"
           }
         ]
@@ -3976,6 +4033,22 @@ export type Engine = {
           {
             "name": "threshold",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "finalized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "kCapacity",
+            "type": "u64"
           }
         ]
       }
@@ -4093,63 +4166,6 @@ export type Engine = {
           {
             "name": "creationFee",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "launchCancelled",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "totalDeposited",
-            "type": "u64"
-          },
-          {
-            "name": "minRaise",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "launchInitialized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "projectId",
-            "type": "u64"
-          },
-          {
-            "name": "creator",
-            "type": "pubkey"
-          },
-          {
-            "name": "presetId",
-            "type": "u8"
-          },
-          {
-            "name": "fundingStart",
-            "type": "i64"
-          },
-          {
-            "name": "pendingKey",
-            "type": {
-              "array": [
-                "u8",
-                32
-              ]
-            }
           }
         ]
       }
@@ -4408,14 +4424,14 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "refundedLamports",
+            "name": "lamports",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "seedSet",
+      "name": "seeded",
       "type": {
         "kind": "struct",
         "fields": [
@@ -4431,22 +4447,6 @@ export type Engine = {
                 32
               ]
             }
-          }
-        ]
-      }
-    },
-    {
-      "name": "selectionFinalized",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "launch",
-            "type": "pubkey"
-          },
-          {
-            "name": "kCapacity",
-            "type": "u64"
           }
         ]
       }
