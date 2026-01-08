@@ -125,7 +125,7 @@ pub fn init_launch(
     let creator = &ctx.accounts.creator;
 
     require!(p.is_valid(), EngineErrorCode::MalformedPreset);
-    require!(meta.seller_fee_basis_points <= MYRIAD as u16, EngineErrorCode::InvalidParams);
+    validate_meta(&meta)?;
 
     let fee = p.creation_fee;
     if fee > 0 {
@@ -179,6 +179,14 @@ pub fn init_launch(
     token_meta.is_mutable = meta.is_mutable;
     token_meta.seller_fee_basis_points = meta.seller_fee_basis_points;
 
+    Ok(())
+}
+
+fn validate_meta(meta: &TokenMetadataInput) -> Result<()> {
+    require!(meta.seller_fee_basis_points <= MYRIAD as u16, EngineErrorCode::InvalidParams);
+    require!(meta.name.len() <= 32, EngineErrorCode::InvalidParams);
+    require!(meta.symbol.len() <= 10, EngineErrorCode::InvalidParams);
+    require!(meta.uri.len() <= 200, EngineErrorCode::InvalidParams);
     Ok(())
 }
 
