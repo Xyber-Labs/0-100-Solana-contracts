@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::{
     constants::SEED_ROOT,
+    errors::ErrorCode,
     state::{EngineConfig, LaunchPreset},
 };
 
@@ -55,11 +56,8 @@ pub fn init_launch_preset(
     params: InitLaunchPresetParams,
 ) -> Result<()> {
     let cfg = &ctx.accounts.engine_config;
-    // Ensure caller is an admin and quorum satisfied
-    require!(
-        cfg.admins.iter().any(|k| *k == ctx.accounts.payer.key()),
-        crate::errors::ErrorCode::Unauthorized
-    );
+
+    require!(cfg.admins.iter().any(|k| *k == ctx.accounts.payer.key()), ErrorCode::Unauthorized);
     let signer_set: std::collections::BTreeSet<Pubkey> =
         ctx.remaining_accounts.iter().filter(|ai| ai.is_signer).map(|ai| ai.key()).collect();
     let mut signed = 0u8;
@@ -68,7 +66,7 @@ pub fn init_launch_preset(
             signed = signed.saturating_add(1);
         }
     }
-    require!(signed >= cfg.threshold, crate::errors::ErrorCode::NotEnoughAdminSigners);
+    require!(signed >= cfg.threshold, ErrorCode::NotEnoughAdminSigners);
 
     let p = &mut ctx.accounts.launch_preset;
     p.id = id;
@@ -92,6 +90,6 @@ pub fn init_launch_preset(
     p.withdrawal_limit = params.withdrawal_limit;
     p.creation_fee = params.creation_fee;
 
-    require!(p.is_valid(), crate::errors::ErrorCode::MalformedPreset);
+    require!(p.is_valid(), ErrorCode::MalformedPreset);
     Ok(())
 }

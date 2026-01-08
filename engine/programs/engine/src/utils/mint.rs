@@ -1,11 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token,
-    metadata::{self, mpl_token_metadata::types::DataV2, CreateMetadataAccountsV3},
+    metadata::{self, CreateMetadataAccountsV3, mpl_token_metadata::types::DataV2},
     token::{self, MintTo},
 };
 
-use crate::{state::TokenMetadataConfig, LaunchState, SEED_ROOT};
+use crate::{errors::ErrorCode, LaunchState, SEED_ROOT, state::TokenMetadataConfig};
 
 pub fn create_ata_for_authority<'info>(
     associated_token_program: &AccountInfo<'info>,
@@ -76,7 +76,7 @@ pub fn ensure_token_metadata_for_launch<'info>(
     launch_key: &Pubkey,
 ) -> Result<()> {
     let expected = derive_metadata_pda(&token_metadata_program.key(), &mint.key());
-    require_keys_eq!(metadata_account.key(), expected, crate::errors::ErrorCode::InvalidOwner);
+    require_keys_eq!(metadata_account.key(), expected, ErrorCode::InvalidOwner);
 
     if metadata_account.lamports() == 0 {
         let data = DataV2 {

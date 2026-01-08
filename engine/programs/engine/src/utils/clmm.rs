@@ -68,9 +68,9 @@ impl<'info> ClmmOrder<'info> {
             quote_clmm_supply as f64 / base_sale_supply as f64 * PRICE_GROWING_RATE;
 
         let get_sqrt_price = |price: f64| -> Result<u128> {
-            require!(price.is_finite() && price > 0.0, crate::errors::ErrorCode::InvalidPrice);
+            require!(price.is_finite() && price > 0.0, ErrorCode::InvalidPrice);
             let sqrt_price = price.sqrt() * Q64 as f64;
-            require!(sqrt_price <= u128::MAX as f64, crate::errors::ErrorCode::PriceOverflow);
+            require!(sqrt_price <= u128::MAX as f64, ErrorCode::PriceOverflow);
             Ok(sqrt_price as u128)
         };
 
