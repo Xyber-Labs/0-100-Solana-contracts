@@ -17,11 +17,11 @@ async function main() {
     const projectId = new BN(opts.projectId);
     const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
 
-    console.log("Preparing pool creation:");
+    console.log("Finalizing lottery:");
     console.log("  Project ID:", projectId.toString());
     console.log("  Launch PDA:", launchPda.toBase58());
 
-    const result = await sdk.preparePoolCreation({
+    const result = await sdk.finalizeLottery({
       launch: launchPda,
       computeUnits: 400000,
     });

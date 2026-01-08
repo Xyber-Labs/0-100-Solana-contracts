@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Accounts)]
-pub struct CreatePool<'info> {
+pub struct FinalizeLottery<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
@@ -45,7 +45,7 @@ pub struct CreatePool<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
+pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let lottery_control = &mut ctx.accounts.lottery_control;

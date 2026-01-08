@@ -168,7 +168,7 @@ const EngineSDK = {
 
     // processBatch deprecated in on-chain program; keep for compatibility but will fail
     async function processBatch(_: any): Promise<{ signature: string }> {
-      throw new Error("processBatch deprecated; use setSeed + preparePoolCreation");
+      throw new Error("processBatch deprecated; use setSeed + finalizeLottery");
     }
 
     async function deposit(args: {
@@ -218,7 +218,7 @@ const EngineSDK = {
      * 2) userAta (user's ATA for baseMint) must exist. If
      *    createAtaIfMissing = true, the SDK will add an ix for creation.
      */
-    async function preparePoolCreation(args: {
+    async function finalizeLottery(args: {
       launch: anchor.web3.PublicKey;
       payerKeypair?: anchor.web3.Keypair;
       useTestMode?: boolean;
@@ -227,7 +227,7 @@ const EngineSDK = {
     }): Promise<{ signature: string }> {
       const defaultPayerKp: anchor.web3.Keypair | undefined = (provider as any)?.wallet?.payer;
       const payerPubkey = args.payerKeypair?.publicKey ?? defaultPayerKp?.publicKey ?? payer;
-      const { transaction } = await txBuilder.preparePoolCreationTx({
+      const { transaction } = await txBuilder.finalizeLotteryTx({
         payer: payerPubkey,
         launch: args.launch,
         computeUnits: args.computeUnits,
@@ -742,7 +742,7 @@ const EngineSDK = {
       withdraw,
       refund,
       claim,
-      preparePoolCreation,
+      finalizeLottery,
       createClmmPool,
       addClmmLiquidity,
       getLiquidityRange,
@@ -765,7 +765,7 @@ const EngineSDK = {
       claimRefundTx: txBuilder.claimRefundTx.bind(txBuilder),
       claimRefundIx: txBuilder.claimRefundIx.bind(txBuilder),
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
-      preparePoolCreationTx: txBuilder.preparePoolCreationTx.bind(txBuilder),
+      finalizeLotteryTx: txBuilder.finalizeLotteryTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
       addClmmLiquidityIx: txBuilder.addClmmLiquidityIx.bind(txBuilder),
 

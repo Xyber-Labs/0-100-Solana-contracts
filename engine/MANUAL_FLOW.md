@@ -224,12 +224,12 @@ Set the VRF seed for randomness in winner selection:
 anchor run set-seed --provider.cluster localnet -- --project-id 1
 ```
 
-### Step 5: Prepare Pool Creation
+### Step 5: Finalize Lottery
 
-Prepare pool creation by selecting blockhash and finalizing the lottery:
+Finalize the lottery by running the winner selection algorithm:
 
 ```bash
-anchor run prepare-pool-creation --provider.cluster localnet -- --project-id 1
+anchor run finalize-lottery --provider.cluster localnet -- --project-id 1
 ```
 
 ### Step 6: Create CLMM Pool

@@ -1733,6 +1733,190 @@
       ]
     },
     {
+      "name": "finalize_lottery",
+      "docs": [
+        "Finalize lottery - select winners and open claims"
+      ],
+      "discriminator": [
+        154,
+        15,
+        182,
+        158,
+        104,
+        143,
+        220,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "launch_preset"
+        },
+        {
+          "name": "lottery_control",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  111,
+                  116,
+                  116,
+                  101,
+                  114,
+                  121,
+                  95,
+                  99,
+                  111,
+                  110,
+                  116,
+                  114,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winners_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "get_liquidity_range",
       "discriminator": [
         64,
@@ -2556,190 +2740,6 @@
           }
         }
       ]
-    },
-    {
-      "name": "prepare_pool_creation",
-      "docs": [
-        "Create AMM pool"
-      ],
-      "discriminator": [
-        38,
-        193,
-        253,
-        218,
-        109,
-        225,
-        56,
-        59
-      ],
-      "accounts": [
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "launch_state",
-          "writable": true
-        },
-        {
-          "name": "launch_preset"
-        },
-        {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "winners_bitmap",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  119,
-                  105,
-                  110,
-                  110,
-                  101,
-                  114,
-                  115,
-                  95,
-                  98,
-                  105,
-                  116,
-                  109,
-                  97,
-                  112
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "inactive_bitmap",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  110,
-                  97,
-                  99,
-                  116,
-                  105,
-                  118,
-                  101,
-                  95,
-                  98,
-                  105,
-                  116,
-                  109,
-                  97,
-                  112
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
-          "name": "slot_hashes",
-          "address": "SysvarS1otHashes111111111111111111111111111"
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
     },
     {
       "name": "refund",
@@ -3629,166 +3629,156 @@
   "errors": [
     {
       "code": 6000,
-      "name": "MinRaiseNotMet",
-      "msg": "Minimum raise not met"
-    },
-    {
-      "code": 6001,
       "name": "FundingInactive",
       "msg": "Funding is not active"
     },
     {
-      "code": 6002,
+      "code": 6001,
       "name": "FundingNotEnded",
       "msg": "Funding has not ended yet"
     },
     {
-      "code": 6003,
+      "code": 6002,
       "name": "ClaimsNotOpen",
       "msg": "Claims are not open"
     },
     {
-      "code": 6004,
+      "code": 6003,
       "name": "Unauthorized",
       "msg": "Unauthorized"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "BadAmount",
       "msg": "Amount must be multiple of tau"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "DepositCapExceeded",
       "msg": "Per-wallet cap exceeded"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "InsufficientDeposit",
       "msg": "Insufficient deposit"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "LimitExceeded",
       "msg": "Limit exceeded"
     },
     {
-      "code": 6009,
-      "name": "SeedAlreadySet",
-      "msg": "Seed already set"
-    },
-    {
-      "code": 6010,
+      "code": 6008,
       "name": "SeedMissing",
       "msg": "Seed missing"
     },
     {
-      "code": 6011,
+      "code": 6009,
       "name": "AlreadyFinalized",
       "msg": "Selection already finalized"
     },
     {
-      "code": 6012,
+      "code": 6010,
       "name": "NotFinalized",
       "msg": "Selection not finalized"
     },
     {
-      "code": 6013,
+      "code": 6011,
       "name": "InvalidDivisor",
       "msg": "Divisor must be greater than zero"
     },
     {
-      "code": 6014,
+      "code": 6012,
       "name": "AlreadyRefunded",
       "msg": "Already claimed refund"
     },
     {
-      "code": 6015,
+      "code": 6013,
       "name": "NoRecentBlockhashes",
       "msg": "No recent blockhashes found in SlotHashes sysvar"
     },
     {
-      "code": 6016,
+      "code": 6014,
       "name": "PoolAlreadyCreated",
       "msg": "Pool already created"
     },
     {
-      "code": 6017,
+      "code": 6015,
       "name": "NoValidBlockhash",
       "msg": "No valid blockhash found in recent blocks"
     },
     {
-      "code": 6018,
+      "code": 6016,
       "name": "InvalidSlotHashesData",
       "msg": "Invalid slot hashes data"
     },
     {
-      "code": 6019,
+      "code": 6017,
       "name": "ArithmeticOverflow",
       "msg": "An arithmetic operation overflowed"
     },
     {
-      "code": 6020,
+      "code": 6018,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6021,
+      "code": 6019,
       "name": "InvalidMint",
       "msg": "Invalid mint for ATA"
     },
     {
-      "code": 6022,
+      "code": 6020,
       "name": "InvalidOwner",
       "msg": "Invalid owner for ATA"
     },
     {
-      "code": 6023,
+      "code": 6021,
       "name": "InvalidAuthority",
       "msg": "Invalid authority"
     },
     {
-      "code": 6024,
+      "code": 6022,
       "name": "MalformedPreset",
       "msg": "Malformed preset"
     },
     {
-      "code": 6025,
+      "code": 6023,
       "name": "NotEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6026,
+      "code": 6024,
       "name": "InvalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6027,
+      "code": 6025,
       "name": "InvalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6028,
+      "code": 6026,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6029,
+      "code": 6027,
       "name": "InvalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6030,
+      "code": 6028,
       "name": "PriceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6031,
+      "code": 6029,
       "name": "BitmapFull",
       "msg": "Bitmap is full"
     },
     {
-      "code": 6032,
+      "code": 6030,
       "name": "InvalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
     }

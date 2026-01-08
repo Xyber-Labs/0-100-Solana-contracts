@@ -439,7 +439,7 @@ describe("engine litesvm", () => {
     assert.equal(totalTicketsFinal, expectedTickets, "Final tickets should equal perWalletCap / tau");
   });
 
-  it("Blockhash verification in preparePoolCreation", async () => {
+  it("Blockhash verification in finalizeLottery", async () => {
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
     const nextId = await sdk.getNextProjectId();
@@ -478,7 +478,7 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.seeded, "Lottery should be seeded before preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should be seeded before finalizeLottery");
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
@@ -508,7 +508,7 @@ describe("engine litesvm", () => {
 
     await doAndCheckError(
       (async () => {
-        const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: admin.publicKey, launch: testLaunch });
         sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
@@ -516,7 +516,7 @@ describe("engine litesvm", () => {
 
 
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed finalizeLottery");
 
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
@@ -537,7 +537,7 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    const { transaction } = await sdk.preparePoolCreationTx({
+    const { transaction } = await sdk.finalizeLotteryTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
@@ -545,7 +545,7 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.finalized, "Lottery should be finalized after preparePoolCreation");
+    assert.ok(lottery.status.finalized, "Lottery should be finalized after finalizeLottery");
 
     const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
     assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
@@ -595,7 +595,7 @@ describe("engine litesvm", () => {
 
     // Verify lottery is still in progress
     let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.seeded, "Lottery should be seeded before preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should be seeded before finalizeLottery");
 
     // Get launch state for blockhash range calculation
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
@@ -629,7 +629,7 @@ describe("engine litesvm", () => {
     // Within grace period: should fail with NoValidBlockhash
     await doAndCheckError(
       (async () => {
-        const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunch });
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: admin.publicKey, launch: testLaunch });
         sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
@@ -637,15 +637,15 @@ describe("engine litesvm", () => {
 
     // Verify lottery still seeded after failed attempt
     ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed preparePoolCreation");
+    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed finalizeLottery");
 
     // Advance time beyond grace period
     const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(gracePeriod + 10) });
 
-    // After grace period expires, preparePoolCreation should succeed even with invalid hashes
+    // After grace period expires, finalizeLottery should succeed even with invalid hashes
     // (because random_pool_creation_expired becomes true)
-    const { transaction } = await sdk.preparePoolCreationTx({
+    const { transaction } = await sdk.finalizeLotteryTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
@@ -721,7 +721,7 @@ describe("engine litesvm", () => {
     const rangeEnd = rangeStart + width;
     injectSlotHashesForRange(client, rangeStart, rangeEnd);
 
-    const { transaction: prepTx } = await sdk.preparePoolCreationTx({
+    const { transaction: prepTx } = await sdk.finalizeLotteryTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
@@ -1028,7 +1028,7 @@ describe("engine litesvm", () => {
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
-    const { transaction: prepTx } = await sdk.preparePoolCreationTx({
+    const { transaction: prepTx } = await sdk.finalizeLotteryTx({
       payer: admin.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,

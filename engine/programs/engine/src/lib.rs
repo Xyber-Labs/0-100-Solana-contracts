@@ -34,9 +34,9 @@ pub mod engine {
     // User (UI)
     // -------------------------------
 
-    /// Create AMM pool
-    pub fn prepare_pool_creation(ctx: Context<CreatePool>) -> Result<()> {
-        instructions::prepare_pool_creation(ctx)
+    /// Finalize lottery - select winners and open claims
+    pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
+        instructions::finalize_lottery(ctx)
     }
 
     pub fn init_launch_from_preset(

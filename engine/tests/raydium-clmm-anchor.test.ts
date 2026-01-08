@@ -409,16 +409,16 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, seedSig));
   });
 
-  it("Step 8: Prepare pool creation", async () => {
-    console.log("=== Step 8: Prepare Pool Creation ===");
+  it("Step 8: Finalize lottery", async () => {
+    console.log("=== Step 8: Finalize Lottery ===");
 
-    const { signature: prepSig } = await sdk.preparePoolCreation({
+    const { signature: prepSig } = await sdk.finalizeLottery({
       launch: launchPda,
       payerKeypair: admin1Keypair,
       computeUnits: 1_000_000,
     });
 
-    console.log("✅ Pool creation prepared");
+    console.log("✅ Lottery finalized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, prepSig));
   });
 

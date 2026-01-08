@@ -717,7 +717,7 @@ export class TxBuilder {
     return info.data.slice(8);
   }
 
-  async preparePoolCreationTx(params: {
+  async finalizeLotteryTx(params: {
     payer: web3.PublicKey;
     launch: web3.PublicKey;
     computeUnits?: number;
@@ -734,7 +734,7 @@ export class TxBuilder {
     const presetAddress = launchState.preset;
 
     const ix = await this.program.methods
-      .preparePoolCreation()
+      .finalizeLottery()
       .accountsStrict({
         payer: params.payer,
         launchState: params.launch,
