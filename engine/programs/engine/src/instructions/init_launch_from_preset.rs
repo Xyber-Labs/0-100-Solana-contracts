@@ -60,9 +60,9 @@ pub struct InitLaunchFromPreset<'info> {
     pub token_metadata_config: Box<Account<'info, TokenMetadataConfig>>,
     #[account(seeds = [SEED_ROOT, b"config"], bump)]
     pub engine_config: Box<Account<'info, EngineConfig>>,
-    #[account(mut)]
+    #[account(mut, token::mint = engine_config.xyber_mint, token::authority = creator)]
     pub creator_xyber_ata: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
+    #[account(mut, token::mint = engine_config.xyber_mint, token::authority = engine_config.treasury)]
     pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(seeds = [SEED_ROOT, b"preset", &[preset_id]], bump)]
     pub launch_preset: Box<Account<'info, LaunchPreset>>,
@@ -112,7 +112,6 @@ pub fn init_launch_from_preset(
     meta: TokenMetadataInput,
 ) -> Result<()> {
     let p = &ctx.accounts.launch_preset;
-    let engine_config = &ctx.accounts.engine_config;
     let creator = &ctx.accounts.creator;
 
     require!(p.is_valid(), EngineErrorCode::MalformedPreset);
@@ -123,10 +122,6 @@ pub fn init_launch_from_preset(
         let treasury_xyber_ata = &ctx.accounts.treasury_xyber_ata;
 
         require!(creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
-        require!(creator_xyber_ata.mint == treasury_xyber_ata.mint, EngineErrorCode::InvalidMint);
-        require!(creator_xyber_ata.mint == engine_config.xyber_mint, EngineErrorCode::InvalidMint);
-        require!(creator_xyber_ata.owner == creator.key(), EngineErrorCode::InvalidOwner);
-        require!(treasury_xyber_ata.owner == engine_config.treasury, EngineErrorCode::InvalidOwner);
 
         let cpi_accounts = token::Transfer {
             from: creator_xyber_ata.to_account_info(),
