@@ -9,7 +9,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode,
     state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
-    utils::lottery::{LotteryControl, LotteryRaw},
+    utils::lottery::LotteryRaw,
 };
 
 #[event]
@@ -26,17 +26,11 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
+    #[account(constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_finalized() @ ErrorCode::NotFinalized
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
     #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
@@ -61,7 +55,7 @@ pub struct Claim<'info> {
     )]
     pub tickets_claimed: Account<'info, TicketsClaimed>,
 
-    #[account(constraint = launch_state.base_mint == Some(base_mint.key()) @ ErrorCode::InvalidMint)]
+    #[account(constraint = launch_state.base_mint() == Some(base_mint.key()) @ ErrorCode::InvalidMint)]
     pub base_mint: Account<'info, Mint>,
 
     /// CHECK: PDA owning the escrow ATA for base_mint
@@ -92,11 +86,10 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
 
-    let lottery_control = &ctx.accounts.lottery_control;
     let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
     let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
-    let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
+    let lottery = LotteryRaw::new(&**launch_state, &winners_data[..], &inactive_data[..]);
 
     let now = Clock::get()?.unix_timestamp;
     let start = lottery.claims_opened_at().expect("Expected be finalized");
@@ -155,7 +148,7 @@ struct VestingParams {
     period: i64,
 }
 
-fn vesting_params<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
+fn vesting_params<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>>(
     bucket: Bucket,
     is_creator: bool,
     preset: &LaunchPreset,

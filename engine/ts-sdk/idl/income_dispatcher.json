@@ -2092,15 +2092,71 @@
       }
     },
     {
+      "name": "LaunchPhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Funding",
+            "fields": [
+              {
+                "name": "started_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "funding_ended_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Finalized",
+            "fields": [
+              {
+                "name": "tokens_per_ticket",
+                "type": "u64"
+              },
+              {
+                "name": "claims_opened_at",
+                "type": "i64"
+              },
+              {
+                "name": "pool",
+                "type": {
+                  "defined": {
+                    "name": "PoolStatus"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "LaunchState",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "created_at",
-            "docs": [
-              "Unix timestamp (seconds) when the launch was created"
-            ],
             "type": "i64"
           },
           {
@@ -2116,25 +2172,19 @@
             "type": "pubkey"
           },
           {
-            "name": "base_mint",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "bits_allocated",
+            "type": "u64"
           },
           {
-            "name": "funding_start",
-            "type": "i64"
+            "name": "inactive_count",
+            "type": "u64"
           },
           {
-            "name": "raydium_pool_state",
+            "name": "phase",
             "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "raydium_position_nft_mint",
-            "type": {
-              "option": "pubkey"
+              "defined": {
+                "name": "LaunchPhase"
+              }
             }
           }
         ]
@@ -2148,6 +2198,47 @@
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NotCreated"
+          },
+          {
+            "name": "Created",
+            "fields": [
+              {
+                "name": "base_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "pool_state",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "LiquidityAdded",
+            "fields": [
+              {
+                "name": "base_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "pool_state",
+                "type": "pubkey"
+              },
+              {
+                "name": "position_nft_mint",
+                "type": "pubkey"
+              }
+            ]
           }
         ]
       }

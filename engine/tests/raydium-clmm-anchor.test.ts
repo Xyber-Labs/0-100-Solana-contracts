@@ -350,7 +350,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, creatorDepSig));
 
     // Calculate total deposited from lottery data
-    const { data: lottery } = await sdk.fetchLotteryControl(launchPda);
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
     const tauLamports = presetConfig.tauLamports;
     const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
     const totalDeposited = BigInt(activeTickets) * BigInt(tauLamports);
@@ -383,7 +383,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 6: Wait for Funding Period ===");
 
     const { data: launchData } = await sdk.fetchLaunch(launchPda);
-    const fundingStart = launchData.fundingStart.toNumber();
+    const phase = launchData.phase as any;
+    const fundingStart = phase.funding.startedAt.toNumber();
     const fundingDurationSeconds = presetConfig.fundingDurationSeconds;
     const fundingEndTime = fundingStart + fundingDurationSeconds;
     const currentTime = Math.floor(Date.now() / 1000);
@@ -504,7 +505,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 12a: Buyer Claims Verification ===");
 
     const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
-    const { data: lottery } = await sdk.fetchLotteryControl(launchPda);
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
 
     const saleAllocation = new BN(preset.baseTotalAllocation.toString())
       .mul(new BN(preset.baseSaleBasisPoints))
@@ -514,8 +515,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const kCapacity = new BN(preset.hardCapLamports.toString()).div(new BN(preset.tauLamports.toString()));
     const winningTickets = Math.min(activeTickets, kCapacity.toNumber());
 
-    // Get tokensPerTicket from lottery status (already calculated by contract)
-    const lotteryStatus = lottery.status as any;
+    // Get tokensPerTicket from lottery phase (already calculated by contract)
+    const lotteryStatus = lottery.phase as any;
     const tokensPerTicket = lotteryStatus.finalized
       ? new BN(lotteryStatus.finalized.tokensPerTicket.toString())
       : saleAllocation.div(new BN(winningTickets));
@@ -570,7 +571,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 12b: Creator Vesting Verification (Sale + Team) ===");
 
     const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
-    const { data: lottery } = await sdk.fetchLotteryControl(launchPda);
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
     const { data: creatorContrib } = await sdk.fetchContribution(launchPda, creatorKeypair.publicKey);
 
     const saleAllocation = new BN(preset.baseTotalAllocation.toString())

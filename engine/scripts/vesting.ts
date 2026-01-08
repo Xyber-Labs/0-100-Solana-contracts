@@ -31,6 +31,7 @@ program
 
       const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       const { data: launchState } = await sdk.fetchLaunch(launchPda);
+      const phase = launchState.phase as any;
 
       console.log("Vesting Info:");
       console.log("  Project ID:", projectId.toString());
@@ -39,7 +40,7 @@ program
       console.log("  Bucket:", bucket === 0 ? "Sale" : "Team");
       console.log("  Is Creator:", participant.equals(launchState.creator) ? "Yes" : "No");
 
-      if (!launchState.claimsOpenedAt) {
+      if (!phase.finalized?.claimsOpenedAt) {
         console.log("\n⚠️  Claims not opened yet. Vesting info unavailable.");
         return;
       }
@@ -50,7 +51,7 @@ program
         bucket,
       });
 
-      const claimsOpenedAt = launchState.claimsOpenedAt.toNumber();
+      const claimsOpenedAt = phase.finalized.claimsOpenedAt.toNumber();
       const now = Math.floor(Date.now() / 1000);
       const elapsed = Math.max(0, now - claimsOpenedAt);
       const durationSec = vestingConfig.durationSec.toNumber();
@@ -111,6 +112,8 @@ program
 
       const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       const { data: launchState } = await sdk.fetchLaunch(launchPda);
+      const phase = launchState.phase as any;
+      const baseMint = sdk.extractBaseMint(launchState);
 
       console.log("Claiming vested tokens:");
       console.log("  Project ID:", projectId.toString());
@@ -119,12 +122,12 @@ program
       console.log("  Bucket:", bucket === 0 ? "Sale" : "Team");
       console.log("  Is Creator:", participantKeypair.publicKey.equals(launchState.creator) ? "Yes" : "No");
 
-      if (!launchState.claimsOpenedAt) {
+      if (!phase.finalized?.claimsOpenedAt) {
         console.log("\n❌ Claims not opened yet.");
         return;
       }
 
-      if (!launchState.baseMint) {
+      if (!baseMint) {
         console.log("\n❌ Base mint not created yet.");
         return;
       }
@@ -143,7 +146,7 @@ program
 
       const result = await sdk.claim({
         launch: launchPda,
-        baseMint: launchState.baseMint,
+        baseMint,
         bucket,
         participantKeypair,
       });

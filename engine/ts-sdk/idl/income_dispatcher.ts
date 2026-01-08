@@ -2098,15 +2098,71 @@ export type IncomeDispatcher = {
       }
     },
     {
+      "name": "launchPhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "funding",
+            "fields": [
+              {
+                "name": "startedAt",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "fundingEndedAt",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "finalized",
+            "fields": [
+              {
+                "name": "tokensPerTicket",
+                "type": "u64"
+              },
+              {
+                "name": "claimsOpenedAt",
+                "type": "i64"
+              },
+              {
+                "name": "pool",
+                "type": {
+                  "defined": {
+                    "name": "poolStatus"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "launchState",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "createdAt",
-            "docs": [
-              "Unix timestamp (seconds) when the launch was created"
-            ],
             "type": "i64"
           },
           {
@@ -2122,25 +2178,19 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "baseMint",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "bitsAllocated",
+            "type": "u64"
           },
           {
-            "name": "fundingStart",
-            "type": "i64"
+            "name": "inactiveCount",
+            "type": "u64"
           },
           {
-            "name": "raydiumPoolState",
+            "name": "phase",
             "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "raydiumPositionNftMint",
-            "type": {
-              "option": "pubkey"
+              "defined": {
+                "name": "launchPhase"
+              }
             }
           }
         ]
@@ -2154,6 +2204,47 @@ export type IncomeDispatcher = {
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "notCreated"
+          },
+          {
+            "name": "created",
+            "fields": [
+              {
+                "name": "baseMint",
+                "type": "pubkey"
+              },
+              {
+                "name": "poolState",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "liquidityAdded",
+            "fields": [
+              {
+                "name": "baseMint",
+                "type": "pubkey"
+              },
+              {
+                "name": "poolState",
+                "type": "pubkey"
+              },
+              {
+                "name": "positionNftMint",
+                "type": "pubkey"
+              }
+            ]
           }
         ]
       }

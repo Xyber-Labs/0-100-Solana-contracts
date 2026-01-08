@@ -12,6 +12,8 @@ import { getConstant, getConstantRaw, getEnumVariants } from "../utils";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 
 const SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", IncomeDispatcherIDLJson as any));
+const ENGINE_SEED_ROOT = Buffer.from(getConstant("seedRoot", EngineIDL as any));
+const ENGINE_PROGRAM_ID = new web3.PublicKey(EngineIDL.address);
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDL as any));
 

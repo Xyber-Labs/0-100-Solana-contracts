@@ -56,7 +56,8 @@ async function main() {
 
     const launchAccount = await sdk.fetchLaunch(result.launchPda);
     const presetAccount = await sdk.fetchLaunchPreset(presetId);
-    const fundingEnd = launchAccount.data.fundingStart.toNumber() + presetAccount.data.fundingDurationSeconds.toNumber();
+    const phase = launchAccount.data.phase as any;
+    const fundingEnd = phase.funding.startedAt.toNumber() + presetAccount.data.fundingDurationSeconds.toNumber();
     console.log("Launch state created:");
     console.log("  Project ID:", launchAccount.data.projectId.toString());
     console.log("  Creator:", launchAccount.data.creator.toBase58());

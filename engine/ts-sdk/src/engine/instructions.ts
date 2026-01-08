@@ -304,8 +304,8 @@ const EngineSDK = {
     }> {
       const payerPubkey = args.signers[0]?.publicKey ?? payer;
 
-      const launchState = await program.account.launchState.fetch(args.launch);
-      const baseMint = launchState.baseMint as anchor.web3.PublicKey;
+      const { data: launchState } = await txBuilder.fetchLaunch(args.launch);
+      const baseMint = txBuilder.extractBaseMint(launchState);
 
       if (!baseMint) {
         throw new Error("Launch state does not have baseMint set. Pool must be created first.");
@@ -482,18 +482,14 @@ const EngineSDK = {
       return txBuilder.fetchContribution(launch, contributor);
     }
 
-    async function fetchLotteryControl(launch: anchor.web3.PublicKey) {
-      return txBuilder.fetchLotteryControl(launch);
-    }
-
     async function fetchProjectCounter() {
       return txBuilder.fetchProjectCounter();
     }
 
     async function getRaydiumPoolByProjectId(projectId: number | BN): Promise<anchor.web3.PublicKey | null> {
       const [launch] = getLaunchPdaByProjectId(projectId);
-      const { data: launchState } = await fetchLaunch(launch);
-      return launchState.raydiumPoolState ?? null;
+      const { data: launchState } = await txBuilder.fetchLaunch(launch);
+      return txBuilder.extractPoolState(launchState);
     }
 
     async function getNextProjectId(): Promise<BN> {
@@ -523,8 +519,6 @@ const EngineSDK = {
               projectId,
               launchPda: account.publicKey,
               account: account.account,
-              // Try to derive sale mint from launch PDA
-              baseMint: account.account.baseMint,
             };
           })
           .sort((a, b) => a.projectId - b.projectId);
@@ -546,8 +540,8 @@ const EngineSDK = {
         const filters = [
           {
             memcmp: {
-              // 8 (discriminator) + 8 (project_id) = 16
-              offset: 16,
+              // 8 (discriminator) + 8 (created_at) + 8 (project_id) = 24
+              offset: 24,
               bytes: creator.toBase58(),
             },
           },
@@ -558,7 +552,6 @@ const EngineSDK = {
             projectId: a.account.projectId.toNumber(),
             launchPda: a.publicKey,
             account: a.account,
-            baseMint: a.account.baseMint,
           }))
           .sort((a, b) => a.projectId - b.projectId);
       } catch (error) {
@@ -588,7 +581,6 @@ const EngineSDK = {
           projectId: launchData.projectId.toNumber(),
           launchPda,
           account: launchData,
-          baseMint: launchData.baseMint,
         };
       } catch (error) {
         console.error("Error getting project by launch PDA:", error);
@@ -633,9 +625,9 @@ const EngineSDK = {
       return count;
     }
 
-    function extractTokensPerTicket(status: any): BN {
-      if (status.finalized) {
-        return status.finalized.tokensPerTicket;
+    function extractTokensPerTicket(phase: any): BN {
+      if (phase.finalized) {
+        return phase.finalized.tokensPerTicket;
       }
       return new BN(0);
     }
@@ -671,10 +663,9 @@ const EngineSDK = {
       }
 
       const { data: contribution } = await txBuilder.fetchContribution(params.launch, params.participant);
-      const { data: lotteryControl } = await txBuilder.fetchLotteryControl(params.launch);
       const winnersData = await txBuilder.fetchWinnersBitmap(params.launch);
 
-      const tokensPerTicket = extractTokensPerTicket(lotteryControl.status);
+      const tokensPerTicket = extractTokensPerTicket(launchState.phase);
       const winningTickets = countWinningInRanges(contribution.ticketRanges, winnersData);
       const allocation = new BN(winningTickets).mul(new BN(tokensPerTicket));
 
@@ -773,7 +764,6 @@ const EngineSDK = {
       fetchEngineConfig,
       fetchLaunch,
       fetchContribution,
-      fetchLotteryControl,
       fetchProjectCounter,
       getRaydiumPoolByProjectId,
       getNextProjectId,
@@ -805,6 +795,10 @@ const EngineSDK = {
       fetchLaunchPresetByAddress: txBuilder.fetchLaunchPresetByAddress.bind(txBuilder),
       fetchTicketsClaimed: txBuilder.fetchTicketsClaimed.bind(txBuilder),
       fetchWinnersBitmap: txBuilder.fetchWinnersBitmap.bind(txBuilder),
+
+      // Extract helpers
+      extractBaseMint: txBuilder.extractBaseMint.bind(txBuilder),
+      extractPoolState: txBuilder.extractPoolState.bind(txBuilder),
 
       // Vesting helpers
       getVestingConfig,

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{errors::ErrorCode, utils::realloc::Reallocatable};
+use crate::{errors::ErrorCode, utils::realloc::Reallocatable, utils::lottery::{LaunchPhase, PoolStatus}};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
 pub enum VestingType {
@@ -59,20 +59,182 @@ impl TicketRange {
 }
 
 #[account]
-#[derive(InitSpace)]
+#[derive(InitSpace, Default)]
 pub struct LaunchState {
-    /// Unix timestamp (seconds) when the launch was created
     pub created_at: i64,
-
-    // Project identification
     pub project_id: u64,
     pub creator: Pubkey,
     pub preset: Pubkey,
+    pub bits_allocated: u64,
+    pub inactive_count: u64,
+    pub phase: LaunchPhase,
+}
 
-    pub base_mint: Option<Pubkey>,
-    pub raydium_pool_state: Option<Pubkey>,
+impl AsRef<LaunchState> for LaunchState {
+    fn as_ref(&self) -> &LaunchState {
+        self
+    }
+}
 
-    pub raydium_position_nft_mint: Option<Pubkey>,
+impl AsMut<LaunchState> for LaunchState {
+    fn as_mut(&mut self) -> &mut LaunchState {
+        self
+    }
+}
+
+impl LaunchState {
+    pub fn is_funding(&self) -> bool {
+        matches!(self.phase, LaunchPhase::Funding { .. })
+    }
+
+    pub fn is_seeded(&self) -> bool {
+        matches!(self.phase, LaunchPhase::Seeded { .. })
+    }
+
+    pub fn is_finalized(&self) -> bool {
+        matches!(self.phase, LaunchPhase::Finalized { .. })
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self.phase, LaunchPhase::Cancelled)
+    }
+
+    pub fn set_funding(&mut self, started_at: i64) {
+        self.phase = LaunchPhase::Funding { started_at };
+    }
+
+    pub fn set_seeded(&mut self, seed: [u8; 32], funding_ended_at: i64) {
+        self.phase = LaunchPhase::Seeded {
+            seed,
+            funding_ended_at,
+        };
+    }
+
+    pub fn set_cancelled(&mut self) {
+        self.phase = LaunchPhase::Cancelled;
+    }
+
+    pub fn get_seed(&self) -> Option<[u8; 32]> {
+        match self.phase {
+            LaunchPhase::Seeded { seed, .. } => Some(seed),
+            _ => None,
+        }
+    }
+
+    pub fn funding_started_at(&self) -> Option<i64> {
+        match self.phase {
+            LaunchPhase::Funding { started_at } => Some(started_at),
+            _ => None,
+        }
+    }
+
+    pub fn funding_ended_at(&self) -> Option<i64> {
+        match self.phase {
+            LaunchPhase::Seeded { funding_ended_at, .. } => Some(funding_ended_at),
+            _ => None,
+        }
+    }
+
+    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+        match self.phase {
+            LaunchPhase::Funding { started_at } => {
+                let end = started_at.saturating_add(funding_duration_seconds);
+                now_ts >= started_at && now_ts < end
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+        match self.phase {
+            LaunchPhase::Funding { started_at } => {
+                let end = started_at.saturating_add(funding_duration_seconds);
+                now_ts >= end
+            }
+            _ => true,
+        }
+    }
+
+    pub fn active_tickets(&self) -> u64 {
+        self.bits_allocated - self.inactive_count
+    }
+
+    pub fn pool_status(&self) -> Option<&PoolStatus> {
+        match &self.phase {
+            LaunchPhase::Finalized { pool, .. } => Some(pool),
+            _ => None,
+        }
+    }
+
+    pub fn base_mint(&self) -> Option<Pubkey> {
+        match &self.phase {
+            LaunchPhase::Finalized { pool, .. } => match pool {
+                PoolStatus::Created { base_mint, .. } => Some(*base_mint),
+                PoolStatus::LiquidityAdded { base_mint, .. } => Some(*base_mint),
+                PoolStatus::NotCreated => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub fn pool_state(&self) -> Option<Pubkey> {
+        match &self.phase {
+            LaunchPhase::Finalized { pool, .. } => match pool {
+                PoolStatus::Created { pool_state, .. } => Some(*pool_state),
+                PoolStatus::LiquidityAdded { pool_state, .. } => Some(*pool_state),
+                PoolStatus::NotCreated => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub fn position_nft_mint(&self) -> Option<Pubkey> {
+        match &self.phase {
+            LaunchPhase::Finalized { pool, .. } => match pool {
+                PoolStatus::LiquidityAdded { position_nft_mint, .. } => Some(*position_nft_mint),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub fn is_pool_created(&self) -> bool {
+        matches!(
+            self.phase,
+            LaunchPhase::Finalized {
+                pool: PoolStatus::Created { .. } | PoolStatus::LiquidityAdded { .. },
+                ..
+            }
+        )
+    }
+
+    pub fn is_pool_not_created(&self) -> bool {
+        matches!(
+            self.phase,
+            LaunchPhase::Finalized {
+                pool: PoolStatus::NotCreated,
+                ..
+            }
+        )
+    }
+
+    pub fn set_pool_created(&mut self, base_mint: Pubkey, pool_state: Pubkey) {
+        if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
+            *pool = PoolStatus::Created { base_mint, pool_state };
+        }
+    }
+
+    pub fn set_liquidity_added(&mut self, position_nft_mint: Pubkey) {
+        if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
+            if let PoolStatus::Created { base_mint, pool_state } = *pool {
+                *pool = PoolStatus::LiquidityAdded {
+                    base_mint,
+                    pool_state,
+                    position_nft_mint,
+                };
+            }
+        }
+    }
 }
 
 #[account]

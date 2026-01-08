@@ -6,7 +6,7 @@ use crate::{
     errors::ErrorCode as EngineErrorCode,
     state::{Contribution, LaunchPreset, LaunchState, TicketRange},
     utils::{
-        lottery::{LotteryControl, LotteryRaw},
+        lottery::LotteryRaw,
         realloc::{realloc_raw, Reallocatable},
     },
 };
@@ -24,7 +24,10 @@ pub struct Deposit<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(
@@ -36,14 +39,6 @@ pub struct Deposit<'info> {
     /// CHECK: Platform account for paying reallocation
     #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
     pub realloc_funds: UncheckedAccount<'info>,
-
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
     #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
@@ -127,7 +122,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
 
     require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
 
-    let lottery_control = &mut ctx.accounts.lottery_control;
+    let launch_state = &mut ctx.accounts.launch_state;
     let winners_info = ctx.accounts.winners_bitmap.to_account_info();
     let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
 
@@ -135,7 +130,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
         let mut inactive_data = inactive_info.try_borrow_mut_data()?;
         let mut lottery =
-            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &mut inactive_data[..]);
+            LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &mut inactive_data[..]);
 
         let new_tickets_count = checked_div!(lamports, launch_preset.tau_lamports)?;
         let reused = lottery.take_tickets(new_tickets_count);
@@ -146,7 +141,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
     };
 
     let required_bitmap_space =
-        LotteryRaw::<&LotteryControl, &[u8], &[u8]>::required_bitmap_space(future_bits_allocated);
+        LotteryRaw::<&LaunchState, &[u8], &[u8]>::required_bitmap_space(future_bits_allocated);
 
     realloc_raw(
         &winners_info,
@@ -162,7 +157,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
     let new_ranges: Vec<TicketRange> = {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
         let mut lottery =
-            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &[] as &[u8]);
+            LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &[] as &[u8]);
 
         if remaining > 0 {
             reused_ranges.push(lottery.allocate_tickets(remaining));

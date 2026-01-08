@@ -7,7 +7,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     state::{LaunchPreset, LaunchState},
-    utils::{lottery::{LotteryControl, LotteryRaw}, pool},
+    utils::{lottery::LotteryRaw, pool},
 };
 
 #[event]
@@ -21,19 +21,14 @@ pub struct FinalizeLottery<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_seeded() @ EngineErrorCode::SeedMissing
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_seeded() @ EngineErrorCode::SeedMissing
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
     #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
@@ -53,10 +48,9 @@ pub struct FinalizeLottery<'info> {
 pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
-    let lottery_control = &mut ctx.accounts.lottery_control;
 
     let current_time = Clock::get()?.unix_timestamp;
-    let funding_end = lottery_control
+    let funding_end = launch_state
         .funding_ended_at()
         .ok_or(EngineErrorCode::InvalidState)?;
     select_blockhash(
@@ -68,8 +62,9 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
         launch_preset.unlock_time_sec,
     )?;
 
-    let seed = lottery_control.get_seed().ok_or(EngineErrorCode::SeedMissing)?;
+    let seed = launch_state.get_seed().ok_or(EngineErrorCode::SeedMissing)?;
     let k_capacity = launch_preset.k_capacity()?;
+    let launch_key = launch_state.key();
 
     let winners_info = ctx.accounts.winners_bitmap.to_account_info();
     let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
@@ -77,7 +72,7 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let inactive_data = inactive_info.try_borrow_data()?;
 
     let mut lottery = LotteryRaw::new(
-        &mut **lottery_control,
+        &mut **launch_state,
         &mut winners_data[..],
         &inactive_data[..],
     );
@@ -85,7 +80,7 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation(), current_time)?;
 
     emit!(Finalized {
-        launch: launch_state.key(),
+        launch: launch_key,
         k_capacity,
     });
 

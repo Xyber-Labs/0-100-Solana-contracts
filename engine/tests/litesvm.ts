@@ -221,7 +221,6 @@ describe("engine litesvm", () => {
     assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
     assert.ok(state.creator.equals(admin.publicKey));
     assert.ok(state.preset, "Preset should be set");
-    assert.isNull(state.baseMint);
   });
 
   it("Rejects initLaunch with wrong XYBER mint", async () => {
@@ -282,12 +281,12 @@ describe("engine litesvm", () => {
     );
     assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
-    const { data: lottery } = await sdk.fetchLotteryControl(launchState);
+    const { data: lottery } = await sdk.fetchLaunch(launchState);
     assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
   });
 
   it("Allows withdrawals", async () => {
-    const { data: lotteryInitial } = await sdk.fetchLotteryControl(launchState);
+    const { data: lotteryInitial } = await sdk.fetchLaunch(launchState);
     const initialBitsAllocated = lotteryInitial.bitsAllocated.toNumber();
     assert.equal(initialBitsAllocated, 100, "Initial bits_allocated from previous test");
 
@@ -307,7 +306,7 @@ describe("engine litesvm", () => {
     assert.equal(contribBefore.ticketRanges[0].start.toNumber(), 100, "Range start should be 100");
     assert.equal(contribBefore.ticketRanges[0].end.toNumber(), 150, "Range end should be 150");
 
-    const { data: lotteryAfterDeposit } = await sdk.fetchLotteryControl(launchState);
+    const { data: lotteryAfterDeposit } = await sdk.fetchLaunch(launchState);
     assert.equal(lotteryAfterDeposit.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
 
     const balanceBefore = client.getBalance(depositor.publicKey);
@@ -329,7 +328,7 @@ describe("engine litesvm", () => {
     assert.equal(contribAfter.ticketRanges[0].start.toNumber(), 100, "Range start unchanged at 100");
     assert.equal(contribAfter.ticketRanges[0].end.toNumber(), 130, "Range end should be 130 after withdraw");
 
-    const { data: lotteryAfterWithdraw } = await sdk.fetchLotteryControl(launchState);
+    const { data: lotteryAfterWithdraw } = await sdk.fetchLaunch(launchState);
     assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
     assert.equal(lotteryAfterWithdraw.inactiveCount.toNumber(), 20, "inactive_count should be 20 after withdrawing 20 tickets");
   });
@@ -477,8 +476,8 @@ describe("engine litesvm", () => {
     const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
-    let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.seeded, "Lottery should be seeded before finalizeLottery");
+    let { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.seeded, "Lottery should be seeded before finalizeLottery");
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
     const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
@@ -515,8 +514,8 @@ describe("engine litesvm", () => {
     );
 
 
-    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed finalizeLottery");
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.seeded, "Lottery should still be seeded after failed finalizeLottery");
 
     const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
     slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
@@ -544,8 +543,8 @@ describe("engine litesvm", () => {
     });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
-    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.finalized, "Lottery should be finalized after finalizeLottery");
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized after finalizeLottery");
 
     const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
     assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
@@ -594,8 +593,8 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     // Verify lottery is still in progress
-    let { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.seeded, "Lottery should be seeded before finalizeLottery");
+    let { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.seeded, "Lottery should be seeded before finalizeLottery");
 
     // Get launch state for blockhash range calculation
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
@@ -636,8 +635,8 @@ describe("engine litesvm", () => {
     );
 
     // Verify lottery still seeded after failed attempt
-    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.seeded, "Lottery should still be seeded after failed finalizeLottery");
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.seeded, "Lottery should still be seeded after failed finalizeLottery");
 
     // Advance time beyond grace period
     const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
@@ -653,8 +652,8 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
     // Verify lottery is now finalized
-    ({ data: lottery } = await sdk.fetchLotteryControl(testLaunch));
-    assert.ok(lottery.status.finalized, "Lottery should be finalized after grace period expired");
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized after grace period expired");
 
     // Verify claims_opened_at is set
     const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
@@ -728,8 +727,8 @@ describe("engine litesvm", () => {
     });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], prepTx);
 
-    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.finalized, "Lottery should be finalized");
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized");
 
     // Verify k_capacity >= totalTickets (all tickets win)
     const kCapacity = preset.hardCapLamports.div(tau).toNumber();
@@ -1035,7 +1034,7 @@ describe("engine litesvm", () => {
     });
     const { computeUnitsConsumed } = sendTxWithMeta(client, admin.publicKey, [adminKeypair], prepTx);
 
-    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
     const winners = Math.min(kCapacity, activeTickets);
     console.log(`Lottery finalized: ${winners} winners out of ${activeTickets} active tickets (CU: ${computeUnitsConsumed.toLocaleString()})`);
 
@@ -1083,12 +1082,11 @@ describe("engine litesvm", () => {
     console.log(`Distribution: ${histogram}`);
 
     // Check account sizes and rent
-    const [lotteryControlPda] = sdk.getLotteryControlPda(testLaunch);
-    const lotteryAccountInfo = client.getAccount(lotteryControlPda);
-    const lotteryRent = lotteryAccountInfo?.lamports ?? BigInt(0);
-    const lotterySize = lotteryAccountInfo?.data.length ?? 0;
+    const launchAccountInfo = client.getAccount(testLaunch);
+    const launchRent = launchAccountInfo?.lamports ?? BigInt(0);
+    const launchSize = launchAccountInfo?.data.length ?? 0;
     const inactiveCount = lottery.inactiveCount.toNumber();
-    console.log(`LotteryControl account: ${lotterySize} bytes, ${inactiveCount} inactive tickets, ${Number(lotteryRent) / 1e9} SOL rent`);
+    console.log(`LaunchState account: ${launchSize} bytes, ${inactiveCount} inactive tickets, ${Number(launchRent) / 1e9} SOL rent`);
 
     const winnersBitmapRent = winnersBitmapInfo?.lamports ?? BigInt(0);
     const winnersBitmapSize = winnersBitmapInfo?.data.length ?? 0;
@@ -1100,8 +1098,8 @@ describe("engine litesvm", () => {
     const inactiveBitmapSize = inactiveBitmapInfo?.data.length ?? 0;
     console.log(`Inactive bitmap: ${inactiveBitmapSize} bytes, ${Number(inactiveBitmapRent) / 1e9} SOL rent`);
 
-    const totalRent = Number(lotteryRent) + Number(winnersBitmapRent) + Number(inactiveBitmapRent);
-    console.log(`Total rent on lottery accounts: ${totalRent / 1e9} SOL`);
+    const totalRent = Number(launchRent) + Number(winnersBitmapRent) + Number(inactiveBitmapRent);
+    console.log(`Total rent on launch accounts: ${totalRent / 1e9} SOL`);
 
     const reallocFundsEnd = client.getBalance(reallocFundsPda);
     const reallocFundsSpent = reallocFundsStart - reallocFundsEnd;
@@ -1311,7 +1309,7 @@ describe("engine litesvm", () => {
     console.log(`Total claimed tokens: ${totalClaimedTokens}`);
     console.log(`Total refunded: ${Number(totalRefundedLamports) / 1e9} SOL`);
     console.log(`Total fees: ${Number(totalFeesPaid) / 1e9} SOL (avg ${Number(avgFee) / 1e9} SOL per participant)`);
-    console.log(`LotteryControl account: ${lotterySize} bytes (${Number(lotteryRent) / 1e9} SOL)`);
+    console.log(`LaunchState account: ${launchSize} bytes (${Number(launchRent) / 1e9} SOL)`);
     console.log(`Realloc funds spent: ${Number(reallocFundsSpent) / 1e9} SOL`);
 
     // Verify total claimed is approximately sale_allocation (accounting for rounding)
@@ -1372,8 +1370,8 @@ describe("engine litesvm", () => {
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     // Verify lottery is cancelled (setSeed cancels when min_raise not met)
-    const { data: lottery } = await sdk.fetchLotteryControl(testLaunch);
-    assert.ok(lottery.status.cancelled, "Lottery should be cancelled when min_raise not met");
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.cancelled, "Lottery should be cancelled when min_raise not met");
     console.log("✅ Step 3: Lottery cancelled via setSeed (min_raise not met)");
 
     // === Step 5: Full refund ===

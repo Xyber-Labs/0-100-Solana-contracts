@@ -5,7 +5,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::lottery::{LotteryControl, LotteryRaw},
+    utils::lottery::LotteryRaw,
 };
 
 #[event]
@@ -29,19 +29,14 @@ pub struct Withdraw<'info> {
     )]
     pub contribution: Account<'info, Contribution>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
+    )]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
     #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
@@ -63,7 +58,6 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
-    let lottery_control = &mut ctx.accounts.lottery_control;
 
     require!(
         amount > 0 && amount % launch_preset.tau_lamports == 0,
@@ -84,7 +78,7 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         let mut inactive_data = inactive_info.try_borrow_mut_data()?;
 
         let mut lottery =
-            LotteryRaw::new(&mut **lottery_control, &mut winners_data[..], &mut inactive_data[..]);
+            LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &mut inactive_data[..]);
 
         let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
         lottery.add_inactive(added_inactive);

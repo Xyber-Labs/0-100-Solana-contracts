@@ -47,7 +47,7 @@ pub struct HarvestPool<'info> {
     #[account(address = engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint)]
     pub quote_mint: Box<Account<'info, Mint>>,
 
-    #[account(constraint = Some(base_mint.key()) == launch_state.base_mint @ ErrorCode::InvalidTokenMint)]
+    #[account(constraint = launch_state.base_mint() == Some(base_mint.key()) @ ErrorCode::InvalidTokenMint)]
     pub base_mint: Box<Account<'info, Mint>>,
 
     /// CHECK: Platform treasure base totals - validated and initialized in handler
@@ -117,7 +117,7 @@ pub struct HarvestPool<'info> {
     #[account(mut)]
     pub personal_position: UncheckedAccount<'info>,
     /// CHECK: Pool state - validated by engine CPI and pool address constraint
-    #[account(mut, address = launch_state.raydium_pool_state.unwrap())]
+    #[account(mut, constraint = launch_state.pool_state() == Some(raydium_pool_state.key()) @ ErrorCode::InvalidPoolState)]
     pub raydium_pool_state: UncheckedAccount<'info>,
     /// CHECK: Protocol position state - validated by engine CPI
     #[account(mut)]

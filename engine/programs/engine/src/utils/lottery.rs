@@ -1,9 +1,24 @@
 use anchor_lang::{prelude::*, solana_program::keccak::hash};
 
-use crate::{errors::ErrorCode, state::TicketRange};
+use crate::{errors::ErrorCode, state::{TicketRange, LaunchState}};
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
+pub enum PoolStatus {
+    #[default]
+    NotCreated,
+    Created {
+        base_mint: Pubkey,
+        pool_state: Pubkey,
+    },
+    LiquidityAdded {
+        base_mint: Pubkey,
+        pool_state: Pubkey,
+        position_nft_mint: Pubkey,
+    },
+}
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug)]
-pub enum LotteryStatus {
+pub enum LaunchPhase {
     Funding {
         started_at: i64,
     },
@@ -14,115 +29,17 @@ pub enum LotteryStatus {
     Finalized {
         tokens_per_ticket: u64,
         claims_opened_at: i64,
+        pool: PoolStatus,
     },
     Cancelled,
 }
 
-impl Default for LotteryStatus {
+impl Default for LaunchPhase {
     fn default() -> Self {
-        LotteryStatus::Funding { started_at: 0 }
+        LaunchPhase::Funding { started_at: 0 }
     }
 }
 
-#[account]
-#[derive(Default, InitSpace)]
-pub struct LotteryControl {
-    pub bits_allocated: u64,
-    pub inactive_count: u64,
-    pub status: LotteryStatus,
-}
-
-impl AsRef<LotteryControl> for LotteryControl {
-    fn as_ref(&self) -> &LotteryControl {
-        self
-    }
-}
-
-impl AsMut<LotteryControl> for LotteryControl {
-    fn as_mut(&mut self) -> &mut LotteryControl {
-        self
-    }
-}
-
-impl LotteryControl {
-    pub fn is_funding(&self) -> bool {
-        matches!(self.status, LotteryStatus::Funding { .. })
-    }
-
-    pub fn is_seeded(&self) -> bool {
-        matches!(self.status, LotteryStatus::Seeded { .. })
-    }
-
-    pub fn is_finalized(&self) -> bool {
-        matches!(self.status, LotteryStatus::Finalized { .. })
-    }
-
-    pub fn is_cancelled(&self) -> bool {
-        matches!(self.status, LotteryStatus::Cancelled)
-    }
-
-    pub fn set_funding(&mut self, started_at: i64) {
-        self.status = LotteryStatus::Funding { started_at };
-    }
-
-    pub fn set_seeded(&mut self, seed: [u8; 32], funding_ended_at: i64) {
-        self.status = LotteryStatus::Seeded {
-            seed,
-            funding_ended_at,
-        };
-    }
-
-    pub fn set_cancelled(&mut self) {
-        self.status = LotteryStatus::Cancelled;
-    }
-
-    pub fn get_seed(&self) -> Option<[u8; 32]> {
-        match self.status {
-            LotteryStatus::Seeded { seed, .. } => Some(seed),
-            _ => None,
-        }
-    }
-
-    pub fn funding_started_at(&self) -> Option<i64> {
-        match self.status {
-            LotteryStatus::Funding { started_at } => Some(started_at),
-            _ => None,
-        }
-    }
-
-    pub fn funding_ended_at(&self) -> Option<i64> {
-        match self.status {
-            LotteryStatus::Seeded {
-                funding_ended_at, ..
-            } => Some(funding_ended_at),
-            _ => None,
-        }
-    }
-
-    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
-        match self.status {
-            LotteryStatus::Funding { started_at } => {
-                let end = started_at.saturating_add(funding_duration_seconds);
-                now_ts >= started_at && now_ts < end
-            }
-            _ => false,
-        }
-    }
-
-    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
-        match self.status {
-            LotteryStatus::Funding { started_at } => {
-                let end = started_at.saturating_add(funding_duration_seconds);
-                now_ts >= end
-            }
-            _ => true,
-        }
-    }
-
-    pub fn active_tickets(&self) -> u64 {
-        self.bits_allocated - self.inactive_count
-    }
-}
 
 pub struct LotteryRaw<C, W, I> {
     pub control: C,
@@ -194,7 +111,7 @@ impl<C, W, I> LotteryRaw<C, W, I> {
     }
 }
 
-impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> {
+impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> {
     #[inline]
     pub fn bits_allocated(&self) -> u64 {
         self.control.as_ref().bits_allocated
@@ -227,20 +144,20 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
 
     #[inline]
     pub fn tokens_per_ticket(&self) -> u64 {
-        match self.control.as_ref().status {
-            LotteryStatus::Funding { .. } => 0,
-            LotteryStatus::Seeded { .. } => 0,
-            LotteryStatus::Finalized {
+        match self.control.as_ref().phase {
+            LaunchPhase::Funding { .. } => 0,
+            LaunchPhase::Seeded { .. } => 0,
+            LaunchPhase::Finalized {
                 tokens_per_ticket, ..
             } => tokens_per_ticket,
-            LotteryStatus::Cancelled => 0,
+            LaunchPhase::Cancelled => 0,
         }
     }
 
     #[inline]
     pub fn claims_opened_at(&self) -> Option<i64> {
-        match self.control.as_ref().status {
-            LotteryStatus::Finalized {
+        match self.control.as_ref().phase {
+            LaunchPhase::Finalized {
                 claims_opened_at, ..
             } => Some(claims_opened_at),
             _ => None,
@@ -282,7 +199,7 @@ impl<C: AsRef<LotteryControl>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, 
     }
 }
 
-impl<C: AsMut<LotteryControl>, W, I> LotteryRaw<C, W, I> {
+impl<C: AsMut<LaunchState>, W, I> LotteryRaw<C, W, I> {
     #[inline]
     pub fn set_bits_allocated(&mut self, value: u64) {
         self.control.as_mut().bits_allocated = value;
@@ -304,10 +221,11 @@ impl<C: AsMut<LotteryControl>, W, I> LotteryRaw<C, W, I> {
     }
 
     #[inline]
-    fn set_status_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
-        self.control.as_mut().status = LotteryStatus::Finalized {
+    fn set_phase_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
+        self.control.as_mut().phase = LaunchPhase::Finalized {
             tokens_per_ticket,
             claims_opened_at,
+            pool: PoolStatus::NotCreated,
         };
     }
 }
@@ -337,7 +255,7 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
     }
 }
 
-impl<C: AsMut<LotteryControl> + AsRef<LotteryControl>, W, I> LotteryRaw<C, W, I> {
+impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W, I> LotteryRaw<C, W, I> {
     pub fn allocate_tickets(&mut self, count: u64) -> TicketRange {
         let start = self.control.as_ref().bits_allocated;
         let end = start + count;
@@ -359,7 +277,7 @@ impl<C, W, I: AsMut<[u8]>> LotteryRaw<C, W, I> {
 }
 
 impl<
-        C: AsMut<LotteryControl> + AsRef<LotteryControl>,
+        C: AsMut<LaunchState> + AsRef<LaunchState>,
         W: AsRef<[u8]>,
         I: AsMut<[u8]> + AsRef<[u8]>,
     > LotteryRaw<C, W, I>
@@ -418,7 +336,7 @@ fn read_word(bitmap: &[u8], word_idx: usize) -> u64 {
 }
 
 impl<
-        C: AsMut<LotteryControl> + AsRef<LotteryControl>,
+        C: AsMut<LaunchState> + AsRef<LaunchState>,
         W: AsMut<[u8]> + AsRef<[u8]>,
         I: AsRef<[u8]>,
     > LotteryRaw<C, W, I>
@@ -485,7 +403,7 @@ impl<
         };
 
         let tokens_per_ticket = total_tokens / winners;
-        self.set_status_finalized(tokens_per_ticket, claims_opened_at);
+        self.set_phase_finalized(tokens_per_ticket, claims_opened_at);
 
         Ok(winners)
     }
@@ -507,20 +425,21 @@ mod tests {
         vec![0u8; word_count * 8]
     }
 
-    fn ctrl(bits_allocated: u64, inactive_count: u64) -> LotteryControl {
-        LotteryControl {
+    fn state(bits_allocated: u64, inactive_count: u64) -> LaunchState {
+        LaunchState {
             bits_allocated,
             inactive_count,
-            status: LotteryStatus::default(),
+            phase: LaunchPhase::default(),
+            ..Default::default()
         }
     }
 
     #[test]
     fn test_get_winner_bit() {
-        let ctrl = ctrl(64, 0);
+        let s = state(64, 0);
         let winners = make_bitmap(&[0b1010]);
         let inactive = empty_bitmap(1);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert!(!raw.get_winner_bit(0));
         assert!(raw.get_winner_bit(1));
         assert!(!raw.get_winner_bit(2));
@@ -530,10 +449,10 @@ mod tests {
 
     #[test]
     fn test_get_winner_bit_second_word() {
-        let ctrl = ctrl(128, 0);
+        let s = state(128, 0);
         let winners = make_bitmap(&[0b0, 0b101]);
         let inactive = empty_bitmap(2);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert!(!raw.get_winner_bit(63));
         assert!(raw.get_winner_bit(64));
         assert!(!raw.get_winner_bit(65));
@@ -542,93 +461,93 @@ mod tests {
 
     #[test]
     fn test_try_set_winner_bit_simple() {
-        let mut ctrl = ctrl(128, 0);
+        let mut s = state(128, 0);
         let mut winners = empty_bitmap(2);
         let inactive = empty_bitmap(2);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(5), Some(5));
         assert!(raw.get_winner_bit(5));
     }
 
     #[test]
     fn test_try_set_winner_bit_collision() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = make_bitmap(&[0b111]);
         let inactive = empty_bitmap(1);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(0), Some(3));
     }
 
     #[test]
     fn test_try_set_winner_bit_skips_inactive() {
-        let mut ctrl = ctrl(64, 3);
+        let mut s = state(64, 3);
         let mut winners = empty_bitmap(1);
         let inactive = make_bitmap(&[0b111]);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(0), Some(3));
     }
 
     #[test]
     fn test_try_set_winner_bit_collision_cross_word() {
-        let mut ctrl = ctrl(128, 0);
+        let mut s = state(128, 0);
         let mut winners = make_bitmap(&[u64::MAX, 0b0]);
         let inactive = empty_bitmap(2);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(60), Some(64));
     }
 
     #[test]
     fn test_try_set_winner_bit_wraparound() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = make_bitmap(&[!0b11]);
         let inactive = empty_bitmap(1);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(60), Some(0));
     }
 
     #[test]
     fn test_try_set_winner_bit_full() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = make_bitmap(&[u64::MAX]);
         let inactive = empty_bitmap(1);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(0), None);
     }
 
     #[test]
     fn test_try_set_winner_bit_out_of_bounds() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = empty_bitmap(1);
         let inactive = empty_bitmap(1);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         assert_eq!(raw.try_set_winner_bit(100), None);
     }
 
     #[test]
     fn test_count_ones() {
-        let ctrl = ctrl(64, 0);
+        let s = state(64, 0);
         let winners = make_bitmap(&[0b11111]);
         let inactive = empty_bitmap(1);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert_eq!(raw.count_ones(&TicketRange::new(0, 10)), 5);
     }
 
     #[test]
     fn test_count_ones_cross_word() {
-        let ctrl = ctrl(128, 0);
+        let s = state(128, 0);
         let winners = make_bitmap(&[u64::MAX, 0b1111]);
         let inactive = empty_bitmap(2);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert_eq!(raw.count_ones(&TicketRange::new(60, 70)), 8);
     }
 
     #[test]
     fn test_finalize_all_winners() {
         let seed = [1u8; 32];
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = empty_bitmap(1);
         let inactive = empty_bitmap(1);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         let winners_count = raw.finalize(&seed, 100, 64000, 1000).unwrap();
         assert_eq!(winners_count, 64);
         assert_eq!(raw.count_ones(&TicketRange::new(0, 64)), 64);
@@ -639,10 +558,10 @@ mod tests {
     #[test]
     fn test_finalize_partial_winners() {
         let seed = [2u8; 32];
-        let mut ctrl = ctrl(128, 0);
+        let mut s = state(128, 0);
         let mut winners = empty_bitmap(2);
         let inactive = empty_bitmap(2);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         let winners_count = raw.finalize(&seed, 50, 50000, 1000).unwrap();
         assert_eq!(winners_count, 50);
         assert_eq!(raw.count_ones(&TicketRange::new(0, 128)), 50);
@@ -653,10 +572,10 @@ mod tests {
     #[test]
     fn test_finalize_with_inactive() {
         let seed = [4u8; 32];
-        let mut ctrl = ctrl(100, 20);
+        let mut s = state(100, 20);
         let mut winners = empty_bitmap(2);
         let inactive = make_bitmap(&[0xFFFFF, 0]);
-        let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &inactive[..]);
+        let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &inactive[..]);
         let winners_count = raw.finalize(&seed, 50, 50000, 1000).unwrap();
         assert_eq!(winners_count, 50);
         assert!(raw.is_finalized());
@@ -664,56 +583,60 @@ mod tests {
 
     #[test]
     fn test_sale_allocation() {
-        let ctrl = LotteryControl {
+        let s = LaunchState {
             bits_allocated: 64,
             inactive_count: 0,
-            status: LotteryStatus::Finalized {
+            phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 1000,
                 claims_opened_at: 1000,
+                pool: PoolStatus::NotCreated,
             },
+            ..Default::default()
         };
         let winners = make_bitmap(&[0b1111]);
         let inactive = empty_bitmap(1);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert_eq!(raw.sale_allocation(&[TicketRange::new(0, 4)]), 4000);
     }
 
     #[test]
     fn test_sale_allocation_partial() {
-        let ctrl = LotteryControl {
+        let s = LaunchState {
             bits_allocated: 64,
             inactive_count: 0,
-            status: LotteryStatus::Finalized {
+            phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 500,
                 claims_opened_at: 1000,
+                pool: PoolStatus::NotCreated,
             },
+            ..Default::default()
         };
         let winners = make_bitmap(&[0b1010]);
         let inactive = empty_bitmap(1);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert_eq!(raw.sale_allocation(&[TicketRange::new(0, 4)]), 1000);
     }
 
     #[test]
     #[should_panic(expected = "Expected be finalized")]
     fn test_sale_allocation_not_finalized() {
-        let ctrl = ctrl(64, 0);
+        let s = state(64, 0);
         let winners = make_bitmap(&[0b1111]);
         let inactive = empty_bitmap(1);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         raw.sale_allocation(&[TicketRange::new(0, 4)]);
     }
 
     #[test]
     fn test_clear_range() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = make_bitmap(&[u64::MAX]);
         let mut inactive = empty_bitmap(1);
         {
-            let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &mut inactive[..]);
+            let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &mut inactive[..]);
             raw.clear_range(&TicketRange::new(10, 20));
         }
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         for i in 10..20 {
             assert!(!raw.get_winner_bit(i));
         }
@@ -723,14 +646,14 @@ mod tests {
 
     #[test]
     fn test_set_range() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = empty_bitmap(1);
         let mut inactive = empty_bitmap(1);
         {
-            let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &mut inactive[..]);
+            let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &mut inactive[..]);
             raw.set_range(TicketRange::new(10, 20), true);
         }
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         for i in 10..20 {
             assert!(raw.get_winner_bit(i));
         }
@@ -740,14 +663,14 @@ mod tests {
 
     #[test]
     fn test_set_range_false() {
-        let mut ctrl = ctrl(64, 0);
+        let mut s = state(64, 0);
         let mut winners = empty_bitmap(1);
         let mut inactive = empty_bitmap(1);
         {
-            let mut raw = LotteryRaw::new(&mut ctrl, &mut winners[..], &mut inactive[..]);
+            let mut raw = LotteryRaw::new(&mut s, &mut winners[..], &mut inactive[..]);
             raw.set_range(TicketRange::new(10, 20), false);
         }
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         for i in 10..20 {
             assert!(!raw.get_winner_bit(i));
         }
@@ -755,10 +678,10 @@ mod tests {
 
     #[test]
     fn test_is_inactive() {
-        let ctrl = ctrl(64, 2);
+        let s = state(64, 2);
         let winners = empty_bitmap(1);
         let inactive = make_bitmap(&[0b1010]);
-        let raw = LotteryRaw::new(&ctrl, &winners[..], &inactive[..]);
+        let raw = LotteryRaw::new(&s, &winners[..], &inactive[..]);
         assert!(!raw.is_inactive(0));
         assert!(raw.is_inactive(1));
         assert!(!raw.is_inactive(2));

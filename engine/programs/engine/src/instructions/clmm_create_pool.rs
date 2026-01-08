@@ -13,7 +13,7 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{clmm::ClmmOrder, lottery::LotteryControl, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
 };
 
 #[derive(Accounts)]
@@ -21,18 +21,14 @@ pub struct CreateClmmPool<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated)]
+    #[account(
+        mut,
+        constraint = launch_state.is_pool_not_created() @ ErrorCode::PoolAlreadyCreated
+    )]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_finalized() @ ErrorCode::NotFinalized
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -100,9 +96,8 @@ pub struct CreateClmmPool<'info> {
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
     let preset = &ctx.accounts.launch_preset;
-    let lottery_control = &ctx.accounts.lottery_control;
 
-    let total_deposited = checked_mul!(lottery_control.active_tickets(), preset.tau_lamports)?;
+    let total_deposited = checked_mul!(state.active_tickets(), preset.tau_lamports)?;
 
     mint_utils::mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
@@ -126,8 +121,11 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &state.key(),
         ctx.bumps.escrow_authority,
     )?;
-    state.base_mint = Some(ctx.accounts.base_mint.key());
-    state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
+
+    state.set_pool_created(
+        ctx.accounts.base_mint.key(),
+        ctx.accounts.raydium_pool_state.key(),
+    );
 
     raydium_create_pool_impl(&ctx, total_deposited)?;
 

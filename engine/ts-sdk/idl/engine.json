@@ -33,54 +33,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "base_mint"
         },
         {
@@ -380,54 +332,6 @@
         },
         {
           "name": "launch_preset"
-        },
-        {
-          "name": "lottery_control",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
         },
         {
           "name": "winners_bitmap",
@@ -1074,54 +978,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "escrow_authority",
           "pda": {
             "seeds": [
@@ -1472,55 +1328,6 @@
           }
         },
         {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "winners_bitmap",
           "writable": true,
           "pda": {
@@ -1761,55 +1568,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "winners_bitmap",
           "writable": true,
           "pda": {
@@ -1934,54 +1692,6 @@
         },
         {
           "name": "launch_preset"
-        },
-        {
-          "name": "lottery_control",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
         },
         {
           "name": "base_mint"
@@ -2438,55 +2148,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "winners_bitmap",
           "writable": true,
           "pda": {
@@ -2771,54 +2432,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "winners_bitmap",
           "pda": {
             "seeds": [
@@ -3048,55 +2661,6 @@
           "name": "launch_preset"
         },
         {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
-        },
-        {
           "name": "slot_hashes",
           "address": "SysvarS1otHashes111111111111111111111111111"
         },
@@ -3187,55 +2751,6 @@
         },
         {
           "name": "launch_preset"
-        },
-        {
-          "name": "lottery_control",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  114,
-                  111,
-                  111,
-                  116,
-                  45,
-                  48,
-                  45,
-                  49,
-                  48,
-                  48,
-                  45,
-                  49
-                ]
-              },
-              {
-                "kind": "const",
-                "value": [
-                  108,
-                  111,
-                  116,
-                  116,
-                  101,
-                  114,
-                  121,
-                  95,
-                  99,
-                  111,
-                  110,
-                  116,
-                  114,
-                  111,
-                  108
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "launch_state"
-              }
-            ]
-          }
         },
         {
           "name": "winners_bitmap",
@@ -3465,19 +2980,6 @@
         196,
         133,
         100
-      ]
-    },
-    {
-      "name": "LotteryControl",
-      "discriminator": [
-        48,
-        249,
-        104,
-        98,
-        175,
-        40,
-        51,
-        86
       ]
     },
     {
@@ -3786,6 +3288,11 @@
       "code": 6031,
       "name": "InvalidParams",
       "msg": "Invalid params"
+    },
+    {
+      "code": 6032,
+      "name": "InvalidState",
+      "msg": "Invalid state"
     }
   ],
   "types": [
@@ -4170,6 +3677,65 @@
       }
     },
     {
+      "name": "LaunchPhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Funding",
+            "fields": [
+              {
+                "name": "started_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "funding_ended_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Finalized",
+            "fields": [
+              {
+                "name": "tokens_per_ticket",
+                "type": "u64"
+              },
+              {
+                "name": "claims_opened_at",
+                "type": "i64"
+              },
+              {
+                "name": "pool",
+                "type": {
+                  "defined": {
+                    "name": "PoolStatus"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "LaunchPreset",
       "type": {
         "kind": "struct",
@@ -4264,9 +3830,6 @@
         "fields": [
           {
             "name": "created_at",
-            "docs": [
-              "Unix timestamp (seconds) when the launch was created"
-            ],
             "type": "i64"
           },
           {
@@ -4282,25 +3845,19 @@
             "type": "pubkey"
           },
           {
-            "name": "base_mint",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "bits_allocated",
+            "type": "u64"
           },
           {
-            "name": "funding_start",
-            "type": "i64"
+            "name": "inactive_count",
+            "type": "u64"
           },
           {
-            "name": "raydium_pool_state",
+            "name": "phase",
             "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "raydium_position_nft_mint",
-            "type": {
-              "option": "pubkey"
+              "defined": {
+                "name": "LaunchPhase"
+              }
             }
           }
         ]
@@ -4331,66 +3888,42 @@
       }
     },
     {
-      "name": "LotteryControl",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bits_allocated",
-            "type": "u64"
-          },
-          {
-            "name": "inactive_count",
-            "type": "u64"
-          },
-          {
-            "name": "status",
-            "type": {
-              "defined": {
-                "name": "LotteryStatus"
-              }
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "LotteryStatus",
+      "name": "PoolStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "Funding"
+            "name": "NotCreated"
           },
           {
-            "name": "Seeded",
+            "name": "Created",
             "fields": [
               {
-                "name": "seed",
-                "type": {
-                  "array": [
-                    "u8",
-                    32
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "name": "Finalized",
-            "fields": [
-              {
-                "name": "tokens_per_ticket",
-                "type": "u64"
+                "name": "base_mint",
+                "type": "pubkey"
               },
               {
-                "name": "claims_opened_at",
-                "type": "i64"
+                "name": "pool_state",
+                "type": "pubkey"
               }
             ]
           },
           {
-            "name": "Cancelled"
+            "name": "LiquidityAdded",
+            "fields": [
+              {
+                "name": "base_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "pool_state",
+                "type": "pubkey"
+              },
+              {
+                "name": "position_nft_mint",
+                "type": "pubkey"
+              }
+            ]
           }
         ]
       }

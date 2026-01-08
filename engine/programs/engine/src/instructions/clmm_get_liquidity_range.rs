@@ -7,8 +7,8 @@ use crate::{
     constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
     LaunchState,
-    RAYDIUM_CLMM_PROGRAM_ID, SEED_ROOT, state::LaunchPreset,
-    utils::{lottery::LotteryControl, clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange}},
+    RAYDIUM_CLMM_PROGRAM_ID, state::LaunchPreset,
+    utils::clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange},
 };
 
 #[derive(Accounts)]
@@ -18,9 +18,6 @@ pub struct GetLiquidityRange<'info> {
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()], bump)]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK:
     pub base_mint: Account<'info, Mint>,
@@ -44,9 +41,9 @@ pub struct GetLiquidityRange<'info> {
 }
 
 pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
-    let lottery_control = &ctx.accounts.lottery_control;
+    let launch_state = &ctx.accounts.launch_state;
 
-    let total_deposited = checked_mul!(lottery_control.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
+    let total_deposited = checked_mul!(launch_state.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
 
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     let order = ClmmOrder::from_inputs(

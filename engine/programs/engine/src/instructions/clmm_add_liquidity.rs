@@ -12,10 +12,7 @@ use crate::{
     errors::ErrorCode,
     SEED_ROOT,
     state::{LaunchPreset, LaunchState},
-    utils::{
-        clmm::{ClmmOrder, get_liquidity_range_impl},
-        lottery::LotteryControl,
-    },
+    utils::clmm::{ClmmOrder, get_liquidity_range_impl},
 };
 
 #[derive(Accounts)]
@@ -23,21 +20,17 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_pool_created() @ ErrorCode::NotFinalized
+    )]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
     #[account(
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_finalized() @ ErrorCode::NotFinalized
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
-
-    #[account(
-        constraint = launch_state.base_mint == Some(base_mint.key()),
+        constraint = launch_state.base_mint() == Some(base_mint.key()),
         mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
@@ -119,10 +112,10 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    let lottery_control = &ctx.accounts.lottery_control;
+    let launch_state = &ctx.accounts.launch_state;
 
     let total_deposited =
-        checked_mul!(lottery_control.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
+        checked_mul!(launch_state.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
 
     add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())
@@ -219,7 +212,8 @@ fn add_initial_liquidity_impl<'info>(
         order.base_flag,
     )?;
 
-    ctx.accounts.launch_state.raydium_position_nft_mint =
-        Some(ctx.accounts.raydium_position_nft_mint.key());
+    ctx.accounts
+        .launch_state
+        .set_liquidity_added(ctx.accounts.raydium_position_nft_mint.key());
     Ok(())
 }

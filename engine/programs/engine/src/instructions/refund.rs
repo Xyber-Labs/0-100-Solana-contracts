@@ -5,7 +5,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::lottery::{LotteryControl, LotteryRaw},
+    utils::lottery::LotteryRaw,
 };
 
 #[event]
@@ -20,17 +20,11 @@ pub struct Refund<'info> {
     #[account(mut)]
     pub contributor: Signer<'info>,
 
+    #[account(constraint = launch_state.is_finalized() || launch_state.is_cancelled() @ EngineErrorCode::NotFinalized)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
-
-    #[account(
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump,
-        constraint = lottery_control.is_finalized() || lottery_control.is_cancelled() @ EngineErrorCode::NotFinalized
-    )]
-    pub lottery_control: Account<'info, LotteryControl>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
     #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
@@ -57,17 +51,16 @@ pub struct Refund<'info> {
 pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let contribution = &mut ctx.accounts.contribution;
-    let lottery_control = &ctx.accounts.lottery_control;
 
     let total_tickets = contribution.total_tickets();
 
-    let refundable_total = if lottery_control.is_cancelled() {
+    let refundable_total = if launch_state.is_cancelled() {
         total_tickets
     } else {
         let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
         let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
-        let lottery = LotteryRaw::new(&**lottery_control, &winners_data[..], &inactive_data[..]);
+        let lottery = LotteryRaw::new(&**launch_state, &winners_data[..], &inactive_data[..]);
 
         let winners = lottery.count_winning_in_ranges(&contribution.ticket_ranges);
         checked_sub!(total_tickets, winners)?

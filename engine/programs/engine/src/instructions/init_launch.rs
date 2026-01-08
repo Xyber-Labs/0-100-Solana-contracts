@@ -14,7 +14,6 @@ use crate::{
     state::{
         Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
     },
-    utils::lottery::LotteryControl,
 };
 
 #[event]
@@ -76,14 +75,6 @@ pub struct InitLaunch<'info> {
     pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(seeds = [SEED_ROOT, b"preset", &[preset_id]], bump)]
     pub launch_preset: Box<Account<'info, LaunchPreset>>,
-    #[account(
-        init,
-        payer = creator,
-        space = 8 + LotteryControl::INIT_SPACE,
-        seeds = [SEED_ROOT, b"lottery_control", launch_state.key().as_ref()],
-        bump
-    )]
-    pub lottery_control: Box<Account<'info, LotteryControl>>,
     /// CHECK: Raw winners bitmap, initialized as zero-sized, reallocated on deposit
     #[account(
         init,
@@ -157,8 +148,7 @@ pub fn init_launch(
     state.creator = creator.key();
     state.preset = ctx.accounts.launch_preset.key();
     state.created_at = now;
-
-    ctx.accounts.lottery_control.set_funding(start);
+    state.set_funding(start);
 
     let pending_key = make_pending_key(&creator.key(), project_id);
     let launch_key = state.key();

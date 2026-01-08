@@ -27,8 +27,9 @@ async function main() {
     console.log("\nAdding CLMM liquidity...");
 
     const launchState = await sdk.fetchLaunch(launchPda);
+    const baseMint = sdk.extractBaseMint(launchState.data);
 
-    if (!launchState.data.baseMint) {
+    if (!baseMint) {
       console.error("❌ Pool not created yet. Run create-clmm-pool first.");
       process.exit(1);
     }

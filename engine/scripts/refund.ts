@@ -30,15 +30,15 @@ program
       const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       const { data: launchState } = await sdk.fetchLaunch(launchPda);
       const { data: preset } = await sdk.fetchLaunchPresetByAddress(launchState.preset);
-      const { data: lotteryControl } = await sdk.fetchLotteryControl(launchPda);
+      const phase = launchState.phase as any;
 
       console.log("Refund Info:");
       console.log("  Project ID:", projectId.toString());
       console.log("  Launch PDA:", launchPda.toBase58());
       console.log("  Participant:", participant.toBase58());
 
-      const isFinalized = lotteryControl.status.finalized !== undefined;
-      const isCancelled = lotteryControl.status.cancelled !== undefined;
+      const isFinalized = phase.finalized !== undefined;
+      const isCancelled = phase.cancelled !== undefined;
 
       console.log("\nLottery Status:");
       if (isCancelled) {
