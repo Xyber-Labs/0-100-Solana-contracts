@@ -113,7 +113,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
         Contribution::try_deserialize(&mut &data[..])?
     };
 
-    let current_tickets = contribution.total_tickets();
+    let current_tickets = contribution.total_tickets()?;
     let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
     let new_deposit = checked_add!(current_deposit, lamports)?;
     let is_creator = contributor_key == ctx.accounts.launch_state.creator;
@@ -156,8 +156,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
 
     let new_ranges: Vec<TicketRange> = {
         let mut winners_data = winners_info.try_borrow_mut_data()?;
-        let mut lottery =
-            LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &[] as &[u8]);
+        let mut lottery = LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &[] as &[u8]);
 
         if remaining > 0 {
             reused_ranges.push(lottery.allocate_tickets(remaining));

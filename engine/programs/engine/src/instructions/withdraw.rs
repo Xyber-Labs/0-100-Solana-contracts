@@ -59,14 +59,11 @@ pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
     let contribution = &mut ctx.accounts.contribution;
 
-    require!(
-        amount > 0 && amount % launch_preset.tau_lamports == 0,
-        EngineErrorCode::BadAmount
-    );
+    require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
     let tickets_to_remove = amount / launch_preset.tau_lamports;
 
     require!(
-        contribution.total_tickets() >= tickets_to_remove,
+        contribution.total_tickets()? >= tickets_to_remove,
         EngineErrorCode::InsufficientDeposit
     );
     let removed_ranges = contribution.remove_tickets(tickets_to_remove);

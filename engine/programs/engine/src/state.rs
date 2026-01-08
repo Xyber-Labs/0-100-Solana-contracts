@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
+    checked_add,
     errors::ErrorCode,
     utils::{
         lottery::{LaunchPhase, PoolStatus},
@@ -268,8 +269,12 @@ impl Reallocatable for Contribution {
 }
 
 impl Contribution {
-    pub fn total_tickets(&self) -> u64 {
-        self.ticket_ranges.iter().map(|r| r.count()).sum()
+    pub fn total_tickets(&self) -> Result<u64> {
+        let mut count: u64 = 0;
+        for range in &self.ticket_ranges {
+            count += checked_add!(count, range.count())?;
+        }
+        Ok(count)
     }
 
     pub fn remove_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {

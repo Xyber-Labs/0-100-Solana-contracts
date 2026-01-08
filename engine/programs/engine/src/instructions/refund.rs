@@ -52,7 +52,7 @@ pub fn refund(ctx: Context<Refund>) -> Result<()> {
     let launch_state = &ctx.accounts.launch_state;
     let contribution = &mut ctx.accounts.contribution;
 
-    let total_tickets = contribution.total_tickets();
+    let total_tickets = contribution.total_tickets()?;
 
     let refundable_total = if launch_state.is_cancelled() {
         total_tickets
