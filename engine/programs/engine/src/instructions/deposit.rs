@@ -139,7 +139,7 @@ pub fn deposit(ctx: Context<Deposit>, lamports: u64) -> Result<()> {
 
         let new_tickets_count = checked_div!(lamports, launch_preset.tau_lamports)?;
         let reused = lottery.take_tickets(new_tickets_count);
-        let reused_count: u64 = reused.iter().map(|r| r.count()).sum();
+        let reused_count = reused.iter().try_fold(0u64, |acc, r| checked_add!(acc, r.count()))?;
         let remaining = checked_sub!(new_tickets_count, reused_count)?;
         let future_bits = checked_add!(lottery.bits_allocated(), remaining)?;
         (reused, remaining, future_bits)
