@@ -103,14 +103,22 @@ fn select_blockhash(
     let random_pool_creation_expired = current_time >= effective_end;
 
     let data = slot_hashes.try_borrow_data()?;
-    let num_hashes = u64::from_le_bytes(data[0..8].try_into().unwrap());
+
+    let num_hashes_bytes: [u8; 8] = data
+        .get(0..8)
+        .ok_or(EngineErrorCode::InvalidSlotHashesData)?
+        .try_into()
+        .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
+    let num_hashes = u64::from_le_bytes(num_hashes_bytes);
+
     require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
     if random_pool_creation_expired {
         return Ok(());
     }
 
-    let hashes_to_check = std::cmp::min(512, num_hashes);
+    const MAX_ENTRIES: u64 = 512; // SlotHashes::MAX_ENTRIES
+    let hashes_to_check = std::cmp::min(MAX_ENTRIES, num_hashes);
     let num_partitions = pool::derive_num_partitions_from_unlock(unlock_time_sec);
 
     for i in 0..hashes_to_check {
@@ -118,11 +126,14 @@ fn select_blockhash(
             .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let blockhash_end = blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-        let blockhash: [u8; 32] = data[blockhash_pos as usize
-            ..(blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?) as usize]
+        let blockhash_slice = data
+            .get(blockhash_pos as usize..blockhash_end as usize)
+            .ok_or(EngineErrorCode::InvalidSlotHashesData)?;
+        let blockhash: [u8; 32] = blockhash_slice
             .try_into()
-            .unwrap();
+            .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
 
         if pool::is_blockhash_in_project_range(&blockhash, project_id, num_partitions) {
             return Ok(());
