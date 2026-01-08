@@ -23,7 +23,8 @@ pub struct FinalizeLottery<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.is_seeded() @ EngineErrorCode::SeedMissing
+        constraint = launch_state.is_seeded() @ EngineErrorCode::SeedMissing,
+        constraint = !launch_state.is_finalized() @ EngineErrorCode::AlreadyFinalized
     )]
     pub launch_state: Account<'info, LaunchState>,
 
@@ -50,9 +51,7 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let launch_preset = &ctx.accounts.launch_preset;
 
     let current_time = Clock::get()?.unix_timestamp;
-    let funding_end = launch_state
-        .funding_ended_at()
-        .ok_or(EngineErrorCode::InvalidState)?;
+    let funding_end = launch_state.funding_ended_at().ok_or(EngineErrorCode::InvalidState)?;
     select_blockhash(
         &ctx.accounts.slot_hashes.to_account_info(),
         current_time,
@@ -71,11 +70,8 @@ pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
     let mut winners_data = winners_info.try_borrow_mut_data()?;
     let inactive_data = inactive_info.try_borrow_data()?;
 
-    let mut lottery = LotteryRaw::new(
-        &mut **launch_state,
-        &mut winners_data[..],
-        &inactive_data[..],
-    );
+    let mut lottery =
+        LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &inactive_data[..]);
 
     lottery.finalize(&seed, k_capacity, launch_preset.sale_allocation(), current_time)?;
 
@@ -124,14 +120,14 @@ fn select_blockhash(
             .checked_add(i.checked_mul(40).ok_or(EngineErrorCode::ArithmeticOverflow)?)
             .ok_or(EngineErrorCode::ArithmeticOverflow)?;
         let blockhash_pos = hash_pos.checked_add(8).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-        let blockhash_end = blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        let blockhash_end =
+            blockhash_pos.checked_add(32).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
         let blockhash_slice = data
             .get(blockhash_pos as usize..blockhash_end as usize)
             .ok_or(EngineErrorCode::InvalidSlotHashesData)?;
-        let blockhash: [u8; 32] = blockhash_slice
-            .try_into()
-            .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
+        let blockhash: [u8; 32] =
+            blockhash_slice.try_into().map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
 
         if pool::is_blockhash_in_project_range(&blockhash, project_id, num_partitions) {
             return Ok(());
@@ -139,4 +135,3 @@ fn select_blockhash(
     }
     err!(EngineErrorCode::NoValidBlockhash)
 }
-

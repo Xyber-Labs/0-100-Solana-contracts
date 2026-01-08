@@ -219,16 +219,6 @@ impl LaunchState {
         )
     }
 
-    pub fn is_pool_not_created(&self) -> bool {
-        matches!(
-            self.phase,
-            LaunchPhase::Finalized {
-                pool: PoolStatus::NotCreated,
-                ..
-            }
-        )
-    }
-
     pub fn set_pool_created(&mut self, base_mint: Pubkey, pool_state: Pubkey) {
         if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
             *pool = PoolStatus::Created {

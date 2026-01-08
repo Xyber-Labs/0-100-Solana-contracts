@@ -22,6 +22,7 @@ pub struct AddClmmLiquidity<'info> {
 
     #[account(
         mut,
+        constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized,
         constraint = launch_state.is_pool_created() @ ErrorCode::NotFinalized
     )]
     pub launch_state: Box<Account<'info, LaunchState>>,
@@ -212,8 +213,6 @@ fn add_initial_liquidity_impl<'info>(
         order.base_flag,
     )?;
 
-    ctx.accounts
-        .launch_state
-        .set_liquidity_added(ctx.accounts.raydium_position_nft_mint.key());
+    ctx.accounts.launch_state.set_liquidity_added(ctx.accounts.raydium_position_nft_mint.key());
     Ok(())
 }

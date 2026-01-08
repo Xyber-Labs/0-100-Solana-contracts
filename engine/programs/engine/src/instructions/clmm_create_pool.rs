@@ -23,7 +23,8 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.is_pool_not_created() @ ErrorCode::PoolAlreadyCreated
+        constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized,
+        constraint = !launch_state.is_pool_created() @ ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
@@ -122,10 +123,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         ctx.bumps.escrow_authority,
     )?;
 
-    state.set_pool_created(
-        ctx.accounts.base_mint.key(),
-        ctx.accounts.raydium_pool_state.key(),
-    );
+    state.set_pool_created(ctx.accounts.base_mint.key(), ctx.accounts.raydium_pool_state.key());
 
     raydium_create_pool_impl(&ctx, total_deposited)?;
 
