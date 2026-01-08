@@ -428,7 +428,9 @@ impl LaunchPreset {
     pub fn creator_vesting_params(&self, deposit: u64) -> Result<(i64, i64)> {
         let period = self.creator_period_sec;
         let periods = crate::checked_div!(deposit, self.creator_period_unlock)?.max(1);
-        let duration = crate::checked_mul!(periods, period as u64)? as i64;
+        let duration_u64 = crate::checked_mul!(periods, period as u64)?;
+        let duration =
+            i64::try_from(duration_u64).map_err(|_| error!(ErrorCode::ArithmeticOverflow))?;
         Ok((duration, period))
     }
 
