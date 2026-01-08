@@ -447,11 +447,7 @@ impl LaunchPreset {
     pub fn tokens_per_ticket(&self, active_tickets: u64) -> Result<u64> {
         let k_capacity = self.k_capacity()?;
 
-        let sale_allocation = self
-            .base_total_allocation
-            .checked_mul(self.base_sale_basis_points)
-            .and_then(|v| v.checked_div(10_000))
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        let sale_allocation = self.sale_allocation();
 
         let divisor = active_tickets.min(k_capacity);
         require!(divisor > 0, ErrorCode::InvalidDivisor);
