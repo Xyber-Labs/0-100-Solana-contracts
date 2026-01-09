@@ -1,5 +1,6 @@
 {
   "id": 98,
+  "isEnabled": true,
   "hardCapLamports": 450000000000,
   "minRaiseLamports": 100000000000,
   "perWalletCap": 450000000000,

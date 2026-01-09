@@ -73,7 +73,11 @@ pub struct InitLaunch<'info> {
     pub creator_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut, token::mint = engine_config.xyber_mint, token::authority = engine_config.treasury)]
     pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
-    #[account(seeds = [SEED_ROOT, b"preset", &[preset_id]], bump)]
+    #[account(
+        seeds = [SEED_ROOT, b"preset", &[preset_id]],
+        bump,
+        constraint = launch_preset.is_enabled @ EngineErrorCode::PresetDisabled
+    )]
     pub launch_preset: Box<Account<'info, LaunchPreset>>,
     /// CHECK: Raw winners bitmap, initialized as zero-sized, reallocated on deposit
     #[account(

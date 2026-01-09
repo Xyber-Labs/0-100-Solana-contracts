@@ -61,12 +61,8 @@ pub mod engine {
         instructions::init_launch(ctx, preset_id, project_id, sale_start_time_timestamp, meta)
     }
 
-    pub fn init_launch_preset(
-        ctx: Context<InitLaunchPreset>,
-        id: u8,
-        params: InitLaunchPresetParams,
-    ) -> Result<()> {
-        instructions::init_launch_preset(ctx, id, params)
+    pub fn init_launch_preset(ctx: Context<InitLaunchPreset>, params: LaunchPreset) -> Result<()> {
+        instructions::init_launch_preset(ctx, params)
     }
 
     /// Deposit lamports (must be multiple of τ); allocate tickets in bitmap; move lamports to escrow.

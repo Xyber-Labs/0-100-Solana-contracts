@@ -41,6 +41,7 @@ pub struct TokenMetadataConfig {
 #[derive(InitSpace)]
 pub struct LaunchPreset {
     pub id: u8,
+    pub is_enabled: bool,
     pub hard_cap_lamports: u64,
     pub min_raise_lamports: u64,
     pub per_wallet_cap: u64,

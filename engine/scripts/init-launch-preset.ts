@@ -5,7 +5,7 @@ import * as path from "path";
 
 import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
-function formatLaunchPreset(preset: any): Record<string, string | number> {
+function formatLaunchPreset(preset: any): Record<string, string | number | boolean> {
   const toNum = (v: any): string | number => {
     if (v === null || v === undefined) return "null";
     if (typeof v === "number") return v;
@@ -19,6 +19,7 @@ function formatLaunchPreset(preset: any): Record<string, string | number> {
   };
   return {
     id: toNum(preset.id),
+    isEnabled: Boolean(preset.isEnabled),
     hardCapLamports: toNum(preset.hardCapLamports),
     minRaiseLamports: toNum(preset.minRaiseLamports),
     perWalletCap: toNum(preset.perWalletCap),
@@ -28,14 +29,16 @@ function formatLaunchPreset(preset: any): Record<string, string | number> {
     teamAllocationBasisPoints: toNum(preset.teamAllocationBasisPoints),
     fundingDurationSeconds: toNum(preset.fundingDurationSeconds),
     unlockTimeSec: toNum(preset.unlockTimeSec),
-    rosterShardCap: toNum(preset.rosterShardCap),
-    rosterShardsTotal: toNum(preset.rosterShardsTotal),
-    creatorInitialDepositLamports: toNum(preset.creatorInitialDepositLamports),
-    creatorDailyLamportsLimit: toNum(preset.creatorDailyLamportsLimit),
-    creatorClaimLockPeriodSec: toNum(preset.creatorClaimLockPeriodSec),
+    creatorPeriodUnlock: toNum(preset.creatorPeriodUnlock),
+    creatorPeriodSec: toNum(preset.creatorPeriodSec),
     creatorMaxDeposit: toNum(preset.creatorMaxDeposit),
     poolCreationGracePeriodSec: toNum(preset.poolCreationGracePeriodSec),
-    teamVestingDurationSec: toNum(preset.teamVestingDurationSec),
+    teamDurationSec: toNum(preset.teamDurationSec),
+    teamPeriodSec: toNum(preset.teamPeriodSec),
+    contributorDurationSec: toNum(preset.contributorDurationSec),
+    contributorPeriodSec: toNum(preset.contributorPeriodSec),
+    withdrawalLimit: toNum(preset.withdrawalLimit),
+    creationFee: toNum(preset.creationFee),
   };
 }
 
@@ -72,14 +75,16 @@ async function main() {
   if (idStr === undefined) throw new Error("id is required");
   const id = Number(idStr);
   if (!Number.isInteger(id) || id < 0 || id > 255) throw new Error("id must be 0..255");
+  if (payload.isEnabled === undefined) throw new Error("isEnabled is required");
 
   const multisigKeypair = loadKeypair(opts.multisigKeypair);
   const p = payload;
 
   await runWithSdk(async ({ provider, sdk }) => {
     const result = await sdk.initLaunchPreset({
-      id,
       params: {
+        id,
+        isEnabled: Boolean(p.isEnabled),
         hardCapLamports: new BN(String(p.hardCapLamports)),
         minRaiseLamports: new BN(String(p.minRaiseLamports)),
         perWalletCap: new BN(String(p.perWalletCap)),

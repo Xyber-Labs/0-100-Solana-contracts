@@ -2396,14 +2396,10 @@
       ],
       "args": [
         {
-          "name": "id",
-          "type": "u8"
-        },
-        {
           "name": "params",
           "type": {
             "defined": {
-              "name": "InitLaunchPresetParams"
+              "name": "LaunchPreset"
             }
           }
         }
@@ -3253,51 +3249,56 @@
     },
     {
       "code": 6023,
+      "name": "PresetDisabled",
+      "msg": "Preset is disabled"
+    },
+    {
+      "code": 6024,
       "name": "NotEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "InvalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "InvalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "InsufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "InvalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "PriceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "BitmapFull",
       "msg": "Bitmap is full"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "InvalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "InvalidParams",
       "msg": "Invalid params"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "InvalidState",
       "msg": "Invalid state"
     }
@@ -3521,90 +3522,6 @@
       }
     },
     {
-      "name": "InitLaunchPresetParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "hard_cap_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "min_raise_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "funding_duration_seconds",
-            "type": "i64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_period_unlock",
-            "type": "u64"
-          },
-          {
-            "name": "creator_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_duration_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "contributor_duration_sec",
-            "type": "i64"
-          },
-          {
-            "name": "contributor_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "withdrawal_limit",
-            "type": "u8"
-          },
-          {
-            "name": "creation_fee",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "Initialized",
       "type": {
         "kind": "struct",
@@ -3708,6 +3625,10 @@
           {
             "name": "id",
             "type": "u8"
+          },
+          {
+            "name": "is_enabled",
+            "type": "bool"
           },
           {
             "name": "hard_cap_lamports",

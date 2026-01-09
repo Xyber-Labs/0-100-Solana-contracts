@@ -374,8 +374,9 @@ const EngineSDK = {
     }
 
     async function initLaunchPreset(args: {
-      id: number;
       params: {
+        id: number;
+        isEnabled: boolean;
         hardCapLamports: BN;
         minRaiseLamports: BN;
         perWalletCap: BN;
@@ -400,7 +401,6 @@ const EngineSDK = {
     }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
       const { instruction, launchPreset } = await txBuilder.initLaunchPresetIx({
         multisig: args.multisigKeypair.publicKey,
-        id: args.id,
         ...args.params,
       });
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");

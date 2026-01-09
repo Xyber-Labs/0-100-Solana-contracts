@@ -324,6 +324,7 @@ export class TxBuilder {
   async initLaunchPresetIx(params: {
     multisig: web3.PublicKey;
     id: number;
+    isEnabled: boolean;
     hardCapLamports: BN;
     minRaiseLamports: BN;
     perWalletCap: BN;
@@ -351,7 +352,9 @@ export class TxBuilder {
     const [engineConfig] = this.getPda(["config"]);
     const [launchPreset] = this.getLaunchPresetPda(params.id);
 
-    const initParams: any = {
+    const presetParams: any = {
+      id: params.id,
+      isEnabled: params.isEnabled,
       hardCapLamports: params.hardCapLamports,
       minRaiseLamports: params.minRaiseLamports,
       perWalletCap: params.perWalletCap,
@@ -375,7 +378,7 @@ export class TxBuilder {
 
     const method = this.getIxMethod("initLaunchPreset", "init_launch_preset");
     if (!method) throw new Error("initLaunchPreset method not found in program IDL");
-    const instruction = await method(new BN(params.id), initParams)
+    const instruction = await method(presetParams)
       .accountsStrict({
         multisig: params.multisig,
         engineConfig,
