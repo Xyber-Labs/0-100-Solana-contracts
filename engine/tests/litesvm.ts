@@ -160,7 +160,7 @@ describe("engine litesvm", () => {
       .add(createInitializeMintInstruction(mint.publicKey, 6, multisig.publicKey, null))
       .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: multisig.publicKey, mint: mint.publicKey }).ix)
       .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, multisig.publicKey, BigInt(1_000_000_000)));
+      .add(createMintToInstruction(mint.publicKey, creatorAta, multisig.publicKey, BigInt(10_000_000_000)));
     sendTx(client, multisig.publicKey, [adminKeypair, mint], initMintTx);
 
     // First init_engine_config must be signed by DEPLOYER constant
@@ -282,6 +282,93 @@ describe("engine litesvm", () => {
     assert.ok(state.preset, "Preset should be set");
   });
 
+  it("Initializes launch with thirdParty signer", async () => {
+    const backendKeypair = anchor.web3.Keypair.generate();
+    client.airdrop(backendKeypair.publicKey, BigInt(1_000_000));
+
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "ThirdPartyTest",
+      symbol: "TPT",
+      uri: "https://example.com/tpt.json",
+      thirdParty: backendKeypair.publicKey,
+    });
+
+    sendTx(client, adminKeypair.publicKey, [adminKeypair, backendKeypair], instruction);
+
+    const { data: state } = await sdk.fetchLaunch(launchPda);
+    assert.equal(state.projectId.toNumber(), nextId.toNumber(), "Project ID should match");
+    assert.ok(state.creator.equals(multisig.publicKey));
+    console.log("✅ Launch created with thirdParty signer (backend key)");
+  });
+
+  it("Rejects initLaunch with wrong nonce (projectId)", async () => {
+    const correctId = await sdk.getNextProjectId();
+    const wrongId = new BN(correctId.toNumber() + 100);
+
+    const { instruction } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: wrongId,
+      saleStartTimeTimestamp: 0,
+      name: "WrongNonceTest",
+      symbol: "WNT",
+      uri: "https://example.com/wnt.json",
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction)),
+      "Unauthorized"
+    );
+    console.log("✅ Correctly rejected initLaunch with wrong nonce");
+  });
+
+  it("Initializes launch without thirdParty (third_party=None in event)", async () => {
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "NoThirdPartyTest",
+      symbol: "NTP",
+      uri: "https://example.com/ntp.json",
+    });
+
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+
+    const { data: state } = await sdk.fetchLaunch(launchPda);
+    assert.equal(state.projectId.toNumber(), nextId.toNumber(), "Project ID should match");
+    assert.ok(state.creator.equals(multisig.publicKey));
+    console.log("✅ Launch created without thirdParty (event will have third_party=None)");
+  });
+
+  it("Rejects initLaunch with thirdParty in remainingAccounts but not signed", async () => {
+    const backendKeypair = anchor.web3.Keypair.generate();
+
+    const nextId = await sdk.getNextProjectId();
+    const { instruction } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "UnsignedThirdParty",
+      symbol: "UTP",
+      uri: "https://example.com/utp.json",
+      thirdParty: backendKeypair.publicKey,
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction)),
+      "Signature verification failed"
+    );
+    console.log("✅ Correctly rejected initLaunch with unsigned thirdParty");
+  });
+
   it("Rejects initLaunch with wrong XYBER mint", async () => {
     const nextId = await sdk.getNextProjectId();
     const fee = new anchor.BN(presetData.creationFee);
@@ -396,9 +483,9 @@ describe("engine litesvm", () => {
     const { data: counterBefore } = await sdk.fetchProjectCounter();
     const lastIdBefore = counterBefore.lastProjectId.toNumber();
 
-    // Create project 1
+    // Create project 1: nonce must equal current counter value
     const projectId1 = await sdk.getNextProjectId();
-    assert.equal(projectId1.toNumber(), lastIdBefore + 1, "Next project ID should be lastId + 1");
+    assert.equal(projectId1.toNumber(), lastIdBefore, "Next project ID should equal lastId (nonce)");
 
     const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchIx({
       creator: multisig.publicKey,
@@ -447,9 +534,9 @@ describe("engine litesvm", () => {
     assert.equal(state2.projectId.toNumber(), projectId2.toNumber(), "Launch 2 projectId mismatch");
     assert.equal(state3.projectId.toNumber(), projectId3.toNumber(), "Launch 3 projectId mismatch");
 
-    // Verify counter updated
+    // Counter is incremented after each launch, so it equals projectId3 + 1
     const { data: counterAfter } = await sdk.fetchProjectCounter();
-    assert.equal(counterAfter.lastProjectId.toNumber(), projectId3.toNumber(), "Counter should equal last project ID");
+    assert.equal(counterAfter.lastProjectId.toNumber(), projectId3.toNumber() + 1, "Counter should equal last project ID + 1");
   });
 
   it("Deposit respects perWalletCap limit", async () => {

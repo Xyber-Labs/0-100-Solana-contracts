@@ -3547,12 +3547,9 @@
             "type": "i64"
           },
           {
-            "name": "pending_key",
+            "name": "third_party",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "option": "pubkey"
             }
           }
         ]
