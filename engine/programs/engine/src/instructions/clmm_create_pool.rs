@@ -198,6 +198,7 @@ fn derive_metadata_pda(metaplex_program_id: &Pubkey, mint: &Pubkey) -> Pubkey {
     Pubkey::find_program_address(seeds, metaplex_program_id).0
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ensure_token_metadata_for_launch<'info>(
     token_metadata_program: &AccountInfo<'info>,
     metadata_account: &AccountInfo<'info>,
