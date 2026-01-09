@@ -1,13 +1,11 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{
-        keccak,
-        sysvar::{clock::Clock, Sysvar},
-    },
+    solana_program::sysvar::{clock::Clock, Sysvar},
 };
 use anchor_spl::token::{self, Token, TokenAccount};
 
 use crate::{
+    checked_add,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     MYRIAD,
@@ -23,7 +21,7 @@ pub struct Initialized {
     pub creator: Pubkey,
     pub preset_id: u8,
     pub funding_start: i64,
-    pub pending_key: [u8; 32],
+    pub third_party: Option<Pubkey>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -112,8 +110,8 @@ pub struct InitLaunch<'info> {
 pub fn init_launch(
     ctx: Context<InitLaunch>,
     _preset_id: u8,
-    project_id: u64,
-    sale_start_time_timestamp: i64,
+    nonce: u64,
+    funding_start_timestamp: i64,
     meta: TokenMetadataInput,
 ) -> Result<()> {
     let p = &ctx.accounts.launch_preset;
@@ -139,31 +137,26 @@ pub fn init_launch(
     }
 
     let counter = &mut ctx.accounts.project_counter;
-    let expected_next =
-        counter.last_project_id.checked_add(1).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(project_id == expected_next, EngineErrorCode::Unauthorized);
-    counter.last_project_id = project_id;
+    require!(nonce == counter.last_project_id, EngineErrorCode::Unauthorized);
+    counter.last_project_id = checked_add!(counter.last_project_id, 1)?;
 
     let now = Clock::get()?.unix_timestamp;
-    let start = if sale_start_time_timestamp <= now { now } else { sale_start_time_timestamp };
+    let start = if funding_start_timestamp <= now { now } else { funding_start_timestamp };
 
     let state = &mut ctx.accounts.launch_state;
-    state.project_id = project_id;
+    state.project_id = nonce;
     state.creator = creator.key();
     state.preset = ctx.accounts.launch_preset.key();
     state.created_at = now;
-    state.set_funding(start);
-
-    let pending_key = make_pending_key(&creator.key(), project_id);
-    let launch_key = state.key();
+    state.set_funding_started_at(start);
 
     emit!(Initialized {
-        launch: launch_key,
-        project_id,
+        launch: state.key(),
+        project_id: nonce,
         creator: creator.key(),
         preset_id: p.id,
         funding_start: start,
-        pending_key,
+        third_party: get_third_party_signer(ctx.remaining_accounts),
     });
 
     let token_meta = &mut ctx.accounts.token_metadata_config;
@@ -185,12 +178,6 @@ fn validate_meta(meta: &TokenMetadataInput) -> Result<()> {
     Ok(())
 }
 
-fn make_pending_key(creator: &Pubkey, project_id: u64) -> [u8; 32] {
-    let h = keccak::hashv(&[
-        b"xyber|pending|v1",
-        creator.as_ref(),
-        &project_id.to_le_bytes(),
-        crate::ID.as_ref(),
-    ]);
-    h.to_bytes()
+fn get_third_party_signer(remaining_accounts: &[AccountInfo]) -> Option<Pubkey> {
+    remaining_accounts.first().map_or(None, |acc| if acc.is_signer { Some(*acc.key) } else { None })
 }

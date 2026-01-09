@@ -419,6 +419,8 @@ const EngineSDK = {
       isMutable?: boolean;
       sellerFeeBasisPoints?: number;
       creator?: anchor.web3.Keypair;
+      /** Optional third party signer for event tracking */
+      thirdParty?: anchor.web3.Keypair;
     }): Promise<{ launchPda: anchor.web3.PublicKey; signature: string }> {
       const creatorPubkey = args.creator?.publicKey ?? payer;
       const projectId = args.projectId ?? (await getNextProjectId());
@@ -432,9 +434,12 @@ const EngineSDK = {
         uri: args.uri,
         isMutable: typeof args.isMutable === "boolean" ? args.isMutable : true,
         sellerFeeBasisPoints: typeof args.sellerFeeBasisPoints === "number" ? args.sellerFeeBasisPoints : 0,
+        thirdParty: args.thirdParty?.publicKey,
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      const signers = args.creator ? [args.creator] : [];
+      const signers: anchor.web3.Keypair[] = [];
+      if (args.creator) signers.push(args.creator);
+      if (args.thirdParty) signers.push(args.thirdParty);
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
       const signature = await provider.sendAndConfirm(tx, signers);
       return { launchPda: launchState, signature };
@@ -490,9 +495,9 @@ const EngineSDK = {
       try {
         const { data: counter } = await fetchProjectCounter();
         const last: BN = (counter as any)?.lastProjectId ?? new BN(0);
-        return last.add(new BN(1));
+        return last;
       } catch (_) {
-        return new BN(1);
+        return new BN(0);
       }
     }
 

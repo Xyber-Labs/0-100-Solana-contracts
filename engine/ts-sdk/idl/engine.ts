@@ -3553,12 +3553,9 @@ export type Engine = {
             "type": "i64"
           },
           {
-            "name": "pendingKey",
+            "name": "thirdParty",
             "type": {
-              "array": [
-                "u8",
-                32
-              ]
+              "option": "pubkey"
             }
           }
         ]

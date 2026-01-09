@@ -187,16 +187,27 @@ anchor run init-launch-preset --provider.cluster localnet -- \
 
 ### Step 1: Initialize Launch from Preset
 
-Create a new launch using the preset:
+Create a new launch using the preset. Project ID is automatically fetched from the counter:
 
 ```bash
 anchor run init-launch --provider.cluster localnet -- \
   --preset-id 0 \
-  --project-id 1 \
   --name TestToken \
   --symbol TEST \
   --uri https://example.com/metadata.json \
   --creator-keypair ./keys/creator.json
+```
+
+Optionally, add a third-party signer for backend event tracking:
+
+```bash
+anchor run init-launch --provider.cluster localnet -- \
+  --preset-id 0 \
+  --name TestToken \
+  --symbol TEST \
+  --uri https://example.com/metadata.json \
+  --creator-keypair ./keys/creator.json \
+  --third-party-keypair ./keys/backend.json
 ```
 
 ### Step 2: Make Deposits
@@ -205,13 +216,13 @@ Make deposits to the launch. Lottery and contribution accounts are created autom
 
 ```bash
 # Deposit 1 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer1.json
+anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer1.json
 
 # Deposit 2 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer2.json
+anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer2.json
 
 # Deposit 3 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 1 --amount 150000000000 --user-keypair ./keys/buyer3.json
+anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer3.json
 ```
 
 ### Step 3: Wait for Funding Period
@@ -226,7 +237,7 @@ For production presets with longer durations, wait accordingly.
 Set the VRF seed for randomness in winner selection:
 
 ```bash
-anchor run set-seed --provider.cluster localnet -- --project-id 1
+anchor run set-seed --provider.cluster localnet -- --project-id 0
 ```
 
 ### Step 5: Finalize Lottery
@@ -234,7 +245,7 @@ anchor run set-seed --provider.cluster localnet -- --project-id 1
 Finalize the lottery by running the winner selection algorithm:
 
 ```bash
-anchor run finalize-lottery --provider.cluster localnet -- --project-id 1
+anchor run finalize-lottery --provider.cluster localnet -- --project-id 0
 ```
 
 ### Step 6: Create CLMM Pool
@@ -242,7 +253,7 @@ anchor run finalize-lottery --provider.cluster localnet -- --project-id 1
 Create the Raydium CLMM pool. This also generates the base mint:
 
 ```bash
-anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
+anchor run create-clmm-pool --provider.cluster localnet -- --project-id 0
 ```
 
 ### Step 7: Add Liquidity to CLMM Pool
@@ -250,7 +261,7 @@ anchor run create-clmm-pool --provider.cluster localnet -- --project-id 1
 Add liquidity to the created CLMM pool:
 
 ```bash
-anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
+anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 0
 ```
 
 ### Step 8: Initialize Income Dispatcher

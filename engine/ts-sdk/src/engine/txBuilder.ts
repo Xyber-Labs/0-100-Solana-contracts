@@ -238,6 +238,8 @@ export class TxBuilder {
     isMutable?: boolean;
     sellerFeeBasisPoints?: number;
     xyberMint?: web3.PublicKey;
+    /** Optional third party signer for event tracking */
+    thirdParty?: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchState: web3.PublicKey;
@@ -283,6 +285,10 @@ export class TxBuilder {
     };
     const [creatorContribution] = this.getContributionPda(launchState, params.creator);
 
+    const remainingAccounts = params.thirdParty
+      ? [{ pubkey: params.thirdParty, isSigner: true, isWritable: false }]
+      : [];
+
     const instruction = await (this.program.methods as any)
       .initLaunch(
         new BN(params.presetId),
@@ -306,6 +312,7 @@ export class TxBuilder {
         systemProgram: web3.SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
+      .remainingAccounts(remainingAccounts)
       .instruction();
 
     return {

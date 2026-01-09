@@ -79,7 +79,7 @@ impl LaunchState {
         matches!(self.phase, LaunchPhase::Cancelled)
     }
 
-    pub(crate) fn set_funding(&mut self, started_at: i64) {
+    pub(crate) fn set_funding_started_at(&mut self, started_at: i64) {
         self.phase = LaunchPhase::Funding { started_at };
     }
 

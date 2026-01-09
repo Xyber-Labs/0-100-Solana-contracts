@@ -67,8 +67,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   const presetConfig = JSON.parse(fs.readFileSync("tests/raydium-clmm-anchor-test-preset.json", "utf8"));
   const PRESET_ID = Number(presetConfig.id);
-  const PROJECT_ID = 1;
-  let projectId = PROJECT_ID;
+  let projectId: number;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
   const BUYER2_AMOUNT = parseInt(process.env.BUYER2_AMOUNT || "150");
@@ -255,9 +254,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 3: Initialize launch from preset", async () => {
     console.log("=== Step 3: Initialize Launch from Preset ===");
 
+    const nextProjectId = await sdk.getNextProjectId();
+    projectId = nextProjectId.toNumber();
+
     const { launchPda: launch, signature } = await sdk.initLaunch({
       presetId: PRESET_ID,
-      projectId: PROJECT_ID,
+      projectId: nextProjectId,
       name: "TestToken",
       symbol: "TEST",
       uri: "https://example.com/metadata.json",
