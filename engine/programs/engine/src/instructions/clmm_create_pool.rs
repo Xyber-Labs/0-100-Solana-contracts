@@ -211,9 +211,6 @@ fn ensure_token_metadata_for_launch<'info>(
     launch_key: &Pubkey,
     escrow_authority_bump: u8,
 ) -> Result<()> {
-    let expected = derive_metadata_pda(&token_metadata_program.key(), &mint.key());
-    require_keys_eq!(metadata_account.key(), expected, ErrorCode::InvalidOwner);
-
     if metadata_account.lamports() == 0 {
         let data = DataV2 {
             name: token_metadata_config.name.clone(),
