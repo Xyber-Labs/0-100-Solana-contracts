@@ -1,11 +1,11 @@
-use anchor_lang::{prelude::*, solana_program};
+use anchor_lang::{prelude::*, solana_program, solana_program::sysvar::rent::Rent};
 
 use crate::{
     checked_add, checked_div, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::{lottery::LotteryRaw, realloc::realloc_raw},
+    utils::lottery::LotteryRaw,
 };
 
 #[event]
@@ -255,6 +255,35 @@ fn extend_write_contribution(
 
     let mut data = contribution_info.try_borrow_mut_data()?;
     contribution.try_serialize(&mut &mut data[..])?;
+
+    Ok(())
+}
+
+fn realloc_raw<'info>(
+    account: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    required_space: usize,
+) -> Result<()> {
+    let current_space = account.data_len();
+
+    if required_space > current_space {
+        let rent = Rent::get()?;
+        let new_min_balance = rent.minimum_balance(required_space);
+        let current_lamports = account.lamports();
+
+        if current_lamports < new_min_balance {
+            let diff = new_min_balance
+                .checked_sub(current_lamports)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+            **payer.try_borrow_mut_lamports()? =
+                payer.lamports().checked_sub(diff).ok_or(EngineErrorCode::InsufficientFeeBalance)?;
+            **account.try_borrow_mut_lamports()? =
+                current_lamports.checked_add(diff).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        }
+
+        account.realloc(required_space, true)?;
+    }
 
     Ok(())
 }

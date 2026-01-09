@@ -4126,21 +4126,6 @@ export type Engine = {
       "name": "seedRoot",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
-    },
-    {
-      "name": "teamBasisPoints",
-      "type": "u64",
-      "value": "1000"
-    },
-    {
-      "name": "teamClaimMinIntervalSec",
-      "type": "i64",
-      "value": "1"
-    },
-    {
-      "name": "teamVestingDurationSec",
-      "type": "i64",
-      "value": "31536000"
     }
   ]
 };

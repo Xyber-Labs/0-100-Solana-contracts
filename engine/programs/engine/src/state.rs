@@ -372,7 +372,7 @@ pub struct LaunchPreset {
 }
 
 impl LaunchPreset {
-    pub fn is_valid(&self) -> bool {
+    pub(crate) fn is_valid(&self) -> bool {
         self.tau_lamports > 0
             && self.base_total_allocation > 0
             && self.hard_cap_lamports % self.tau_lamports == 0
@@ -397,24 +397,24 @@ impl LaunchPreset {
             && self.contributor_duration_sec % self.contributor_period_sec == 0
     }
 
-    pub fn sale_allocation(&self) -> u64 {
+    pub(crate) fn sale_allocation(&self) -> u64 {
         (self.base_total_allocation as u128 * self.base_sale_basis_points as u128 / 10_000) as u64
     }
 
-    pub fn team_allocation(&self) -> u64 {
+    fn team_allocation(&self) -> u64 {
         (self.base_total_allocation as u128 * self.team_allocation_basis_points as u128 / 10_000)
             as u64
     }
 
-    pub fn team_vesting_params(&self) -> (u64, i64, i64) {
+    pub(crate) fn team_vesting_params(&self) -> (u64, i64, i64) {
         (self.team_allocation(), self.team_duration_sec, self.team_period_sec)
     }
 
-    pub fn contributor_vesting_params(&self) -> (i64, i64) {
+    pub(crate) fn contributor_vesting_params(&self) -> (i64, i64) {
         (self.contributor_duration_sec, self.contributor_period_sec)
     }
 
-    pub fn creator_vesting_params(&self, deposit: u64) -> Result<(i64, i64)> {
+    pub(crate) fn creator_vesting_params(&self, deposit: u64) -> Result<(i64, i64)> {
         let period = self.creator_period_sec;
         let periods = crate::checked_div!(deposit, self.creator_period_unlock)?.max(1);
         let duration_u64 = crate::checked_mul!(periods, period as u64)?;
@@ -423,21 +423,7 @@ impl LaunchPreset {
         Ok((duration, period))
     }
 
-    pub fn k_capacity(&self) -> Result<u64> {
+    pub(crate) fn k_capacity(&self) -> Result<u64> {
         Ok(crate::checked_div!(self.hard_cap_lamports, self.tau_lamports)?)
-    }
-
-    pub fn tokens_per_ticket(&self, active_tickets: u64) -> Result<u64> {
-        let k_capacity = self.k_capacity()?;
-
-        let sale_allocation = self.sale_allocation();
-
-        let divisor = active_tickets.min(k_capacity);
-        require!(divisor > 0, ErrorCode::InvalidDivisor);
-
-        let tokens_per_ticket =
-            sale_allocation.checked_div(divisor).ok_or(ErrorCode::ArithmeticOverflow)?;
-
-        Ok(tokens_per_ticket)
     }
 }

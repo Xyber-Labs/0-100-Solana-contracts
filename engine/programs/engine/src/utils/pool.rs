@@ -3,7 +3,7 @@ use super::U256;
 const DEFAULT_N: u64 = 100;
 
 /// Check if a blockhash is within the project's personal range.
-pub fn is_blockhash_in_project_range(
+pub(crate) fn is_blockhash_in_project_range(
     blockhash: &[u8; 32],
     project_id: u64,
     num_partitions: u64,
@@ -18,7 +18,7 @@ pub fn is_blockhash_in_project_range(
 /// Range width = floor((2^256 - 1) / N) using U256::MAX / N.
 /// Segment index: seg = (project_id - 1) % num_partitions (1-based → 0-based).
 /// Range is half-open: [seg * width, (seg + 1) * width)
-pub fn calculate_project_range(project_id: u64, num_partitions: u64) -> (U256, U256) {
+fn calculate_project_range(project_id: u64, num_partitions: u64) -> (U256, U256) {
     if num_partitions == 0 {
         return (U256::zero(), U256::zero());
     }
@@ -42,7 +42,7 @@ pub fn calculate_project_range(project_id: u64, num_partitions: u64) -> (U256, U
 /// Map an unlock time window (in seconds) to an internal partition count N.
 /// Logic: N ≈ number of blocks expected in T seconds. With block time ~0.4s,
 /// N = floor(T * 5 / 2). Fallback to DEFAULT_N if T <= 0.
-pub fn derive_num_partitions_from_unlock(unlock_time_sec: i64) -> u64 {
+pub(crate) fn derive_num_partitions_from_unlock(unlock_time_sec: i64) -> u64 {
     if unlock_time_sec <= 0 {
         return DEFAULT_N;
     }

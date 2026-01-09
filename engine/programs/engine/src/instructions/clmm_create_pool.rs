@@ -1,8 +1,8 @@
 use anchor_lang::{prelude::*, solana_program::pubkey::Pubkey};
 use anchor_spl::{
     associated_token::AssociatedToken,
-    metadata::Metadata,
-    token::{Mint, Token},
+    metadata::{self, CreateMetadataAccountsV3, Metadata, mpl_token_metadata::types::DataV2},
+    token::{self, Mint, MintTo, Token},
     token_interface::TokenAccount,
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
@@ -13,7 +13,7 @@ use crate::{
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::clmm::ClmmOrder,
 };
 
 #[derive(Accounts)]
@@ -100,7 +100,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
 
     let total_deposited = checked_mul!(state.active_tickets(), preset.tau_lamports)?;
 
-    mint_utils::mint_to_escrow_for_launch(
+    mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
@@ -110,7 +110,7 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         ctx.bumps.escrow_authority,
     )?;
 
-    mint_utils::ensure_token_metadata_for_launch(
+    ensure_token_metadata_for_launch(
         &ctx.accounts.token_metadata_program.to_account_info(),
         &ctx.accounts.metadata_account.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
@@ -160,5 +160,96 @@ fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>, total_deposited: u64)
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
+    Ok(())
+}
+
+fn mint_to_escrow_for_launch<'info>(
+    token_program: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    escrow_authority: &AccountInfo<'info>,
+    launch_key: &Pubkey,
+    amount: u64,
+    escrow_authority_bump: u8,
+) -> Result<()> {
+    let seeds: &[&[u8]] = &[
+        SEED_ROOT,
+        b"escrow_authority",
+        &launch_key.to_bytes(),
+        &[escrow_authority_bump],
+    ];
+    let signer_seeds = &[seeds];
+    let mint_accounts = MintTo {
+        mint: mint.clone(),
+        to: to.clone(),
+        authority: escrow_authority.clone(),
+    };
+    let mint_ctx = CpiContext::new_with_signer(token_program.clone(), mint_accounts, signer_seeds);
+    token::mint_to(mint_ctx, amount)?;
+    Ok(())
+}
+
+fn derive_metadata_pda(metaplex_program_id: &Pubkey, mint: &Pubkey) -> Pubkey {
+    let seeds = &[
+        b"metadata".as_ref(),
+        metaplex_program_id.as_ref(),
+        mint.as_ref(),
+    ];
+    Pubkey::find_program_address(seeds, metaplex_program_id).0
+}
+
+fn ensure_token_metadata_for_launch<'info>(
+    token_metadata_program: &AccountInfo<'info>,
+    metadata_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    escrow_authority: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    rent: &AccountInfo<'info>,
+    token_metadata_config: &TokenMetadataConfig,
+    launch_key: &Pubkey,
+    escrow_authority_bump: u8,
+) -> Result<()> {
+    let expected = derive_metadata_pda(&token_metadata_program.key(), &mint.key());
+    require_keys_eq!(metadata_account.key(), expected, ErrorCode::InvalidOwner);
+
+    if metadata_account.lamports() == 0 {
+        let data = DataV2 {
+            name: token_metadata_config.name.clone(),
+            symbol: token_metadata_config.symbol.clone(),
+            uri: token_metadata_config.uri.clone(),
+            seller_fee_basis_points: token_metadata_config.seller_fee_basis_points,
+            creators: None,
+            collection: None,
+            uses: None,
+        };
+
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"escrow_authority",
+            &launch_key.to_bytes(),
+            &[escrow_authority_bump],
+        ];
+        let signer_seeds = &[seeds];
+
+        let cpi_accounts = CreateMetadataAccountsV3 {
+            metadata: metadata_account.clone(),
+            mint: mint.clone(),
+            mint_authority: escrow_authority.clone(),
+            payer: payer.clone(),
+            update_authority: escrow_authority.clone(),
+            system_program: system_program.clone(),
+            rent: rent.clone(),
+        };
+        let cpi_ctx =
+            CpiContext::new_with_signer(token_metadata_program.clone(), cpi_accounts, signer_seeds);
+        metadata::create_metadata_accounts_v3(
+            cpi_ctx,
+            data,
+            token_metadata_config.is_mutable,
+            true,
+            None,
+        )?;
+    }
     Ok(())
 }

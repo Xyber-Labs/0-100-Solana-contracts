@@ -128,7 +128,7 @@ pub struct LiquidityRange {
 const PRICE_LOWER_EXP: f64 = -5.975;
 const PRICE_UPPER_EXP: f64 = 6.0;
 
-pub fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64) -> LiquidityRange {
+pub(crate) fn get_liquidity_range_impl(tick_spacing: u16, price_ratio: f64) -> LiquidityRange {
     let price_lower = price_ratio * 10f64.powf(PRICE_LOWER_EXP);
     let price_upper = price_ratio * 10f64.powf(PRICE_UPPER_EXP);
 

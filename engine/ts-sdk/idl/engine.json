@@ -4120,21 +4120,6 @@
       "name": "SEED_ROOT",
       "type": "bytes",
       "value": "[114, 111, 111, 116, 45, 48, 45, 49, 48, 48, 45, 49]"
-    },
-    {
-      "name": "TEAM_BASIS_POINTS",
-      "type": "u64",
-      "value": "1000"
-    },
-    {
-      "name": "TEAM_CLAIM_MIN_INTERVAL_SEC",
-      "type": "i64",
-      "value": "1"
-    },
-    {
-      "name": "TEAM_VESTING_DURATION_SEC",
-      "type": "i64",
-      "value": "31536000"
     }
   ]
 }

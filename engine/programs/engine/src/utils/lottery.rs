@@ -50,7 +50,7 @@ pub struct LotteryRaw<C, W, I> {
 }
 
 impl<C, W, I> LotteryRaw<C, W, I> {
-    pub const BITS_PER_WORD: u64 = 64;
+    const BITS_PER_WORD: u64 = 64;
 
     pub fn new(control: C, winners_bitmap: W, inactive_bitmap: I) -> Self {
         Self {
@@ -61,7 +61,7 @@ impl<C, W, I> LotteryRaw<C, W, I> {
     }
 
     #[inline]
-    pub fn required_words(total_bits: u64) -> usize {
+    fn required_words(total_bits: u64) -> usize {
         total_bits.div_ceil(Self::BITS_PER_WORD) as usize
     }
 
@@ -121,32 +121,22 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
     }
 
     #[inline]
-    pub fn inactive_count(&self) -> u64 {
+    fn inactive_count(&self) -> u64 {
         self.control.as_ref().inactive_count
     }
 
     #[inline]
-    pub fn active_tickets(&self) -> u64 {
+    fn active_tickets(&self) -> u64 {
         self.bits_allocated() - self.inactive_count()
     }
 
     #[inline]
-    pub fn is_funding(&self) -> bool {
-        self.control.as_ref().is_funding()
-    }
-
-    #[inline]
-    pub fn is_finalized(&self) -> bool {
+    fn is_finalized(&self) -> bool {
         self.control.as_ref().is_finalized()
     }
 
     #[inline]
-    pub fn is_cancelled(&self) -> bool {
-        self.control.as_ref().is_cancelled()
-    }
-
-    #[inline]
-    pub fn tokens_per_ticket(&self) -> u64 {
+    fn tokens_per_ticket(&self) -> u64 {
         match self.control.as_ref().phase {
             LaunchPhase::Funding { .. } => 0,
             LaunchPhase::Seeded { .. } => 0,
@@ -168,21 +158,21 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
     }
 
     #[inline]
-    pub fn vec_len(&self) -> u32 {
+    fn vec_len(&self) -> u32 {
         Self::required_words(self.bits_allocated()) as u32
     }
 
     #[inline]
-    pub fn get_winner_bit(&self, index: u64) -> bool {
+    fn get_winner_bit(&self, index: u64) -> bool {
         Self::get_bitmap_bit(self.winners_bitmap.as_ref(), index, self.vec_len())
     }
 
     #[inline]
-    pub fn is_inactive(&self, index: u64) -> bool {
+    fn is_inactive(&self, index: u64) -> bool {
         Self::get_bitmap_bit(self.inactive_bitmap.as_ref(), index, self.vec_len())
     }
 
-    pub fn count_ones(&self, range: &TicketRange) -> u64 {
+    fn count_ones(&self, range: &TicketRange) -> u64 {
         let mut result = 0u64;
         for i in range.start..range.end {
             if self.get_winner_bit(i) {
@@ -204,23 +194,8 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
 
 impl<C: AsMut<LaunchState>, W, I> LotteryRaw<C, W, I> {
     #[inline]
-    pub fn set_bits_allocated(&mut self, value: u64) {
-        self.control.as_mut().bits_allocated = value;
-    }
-
-    #[inline]
-    pub fn set_inactive_count(&mut self, value: u64) {
-        self.control.as_mut().inactive_count = value;
-    }
-
-    #[inline]
     pub fn add_inactive(&mut self, count: u64) {
         self.control.as_mut().inactive_count += count;
-    }
-
-    #[inline]
-    pub fn remove_inactive(&mut self, count: u64) {
-        self.control.as_mut().inactive_count -= count;
     }
 
     #[inline]
@@ -266,11 +241,6 @@ impl<C, W, I: AsMut<[u8]>> LotteryRaw<C, W, I> {
     #[inline]
     pub fn set_inactive_bit(&mut self, index: u64) {
         Self::write_bitmap_bit(self.inactive_bitmap.as_mut(), index, true);
-    }
-
-    #[inline]
-    pub fn clear_inactive_bit(&mut self, index: u64) {
-        Self::write_bitmap_bit(self.inactive_bitmap.as_mut(), index, false);
     }
 }
 
