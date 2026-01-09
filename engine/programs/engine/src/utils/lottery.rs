@@ -83,11 +83,6 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
     }
 
     #[inline]
-    fn inactive_count(&self) -> u64 {
-        self.control.as_ref().inactive_count
-    }
-
-    #[inline]
     fn active_tickets(&self) -> u64 {
         self.control.as_ref().active_tickets()
     }
