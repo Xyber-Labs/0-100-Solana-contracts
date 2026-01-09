@@ -5,10 +5,7 @@ use crate::{
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
     state::{Contribution, LaunchPreset, LaunchState},
-    utils::{
-        lottery::LotteryRaw,
-        realloc::{realloc_raw, Reallocatable},
-    },
+    utils::{lottery::LotteryRaw, realloc::realloc_raw},
 };
 
 #[event]

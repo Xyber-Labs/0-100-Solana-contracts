@@ -2,10 +2,6 @@ use anchor_lang::{prelude::*, solana_program::sysvar::rent::Rent};
 
 use crate::errors::ErrorCode;
 
-pub trait Reallocatable {
-    fn required_space(&self) -> usize;
-}
-
 pub fn realloc_raw<'info>(
     account: &AccountInfo<'info>,
     payer: &AccountInfo<'info>,
@@ -23,13 +19,10 @@ pub fn realloc_raw<'info>(
                 .checked_sub(current_lamports)
                 .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-            **payer.try_borrow_mut_lamports()? = payer
-                .lamports()
-                .checked_sub(diff)
-                .ok_or(ErrorCode::InsufficientFeeBalance)?;
-            **account.try_borrow_mut_lamports()? = current_lamports
-                .checked_add(diff)
-                .ok_or(ErrorCode::ArithmeticOverflow)?;
+            **payer.try_borrow_mut_lamports()? =
+                payer.lamports().checked_sub(diff).ok_or(ErrorCode::InsufficientFeeBalance)?;
+            **account.try_borrow_mut_lamports()? =
+                current_lamports.checked_add(diff).ok_or(ErrorCode::ArithmeticOverflow)?;
         }
 
         account.realloc(required_space, true)?;

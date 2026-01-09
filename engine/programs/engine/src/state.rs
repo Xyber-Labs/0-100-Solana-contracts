@@ -3,10 +3,7 @@ use anchor_lang::prelude::*;
 use crate::{
     checked_add,
     errors::ErrorCode,
-    utils::{
-        lottery::{LaunchPhase, PoolStatus},
-        realloc::Reallocatable,
-    },
+    utils::lottery::{LaunchPhase, PoolStatus},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
@@ -36,22 +33,17 @@ pub struct TicketRange {
 }
 
 impl TicketRange {
-    pub fn new(start: u64, end: u64) -> Self {
+    pub(super) fn new(start: u64, end: u64) -> Self {
         assert!(start <= end, "TicketRange: start must be <= end");
         Self { start, end }
     }
 
     #[inline]
-    pub fn count(&self) -> u64 {
+    pub(super) fn count(&self) -> u64 {
         self.end - self.start
     }
 
-    #[inline]
-    pub fn contains(&self, index: u64) -> bool {
-        index >= self.start && index < self.end
-    }
-
-    pub fn split_tail(&mut self, count: u64) -> Option<Self> {
+    pub(super) fn split_tail(&mut self, count: u64) -> Option<Self> {
         if count == 0 || count > self.count() {
             return None;
         }
@@ -90,52 +82,52 @@ impl AsMut<LaunchState> for LaunchState {
 }
 
 impl LaunchState {
-    pub fn is_funding(&self) -> bool {
+    pub(super) fn is_funding(&self) -> bool {
         matches!(self.phase, LaunchPhase::Funding { .. })
     }
 
-    pub fn is_seeded(&self) -> bool {
+    pub(super) fn is_seeded(&self) -> bool {
         matches!(self.phase, LaunchPhase::Seeded { .. })
     }
 
-    pub fn is_finalized(&self) -> bool {
+    pub(super) fn is_finalized(&self) -> bool {
         matches!(self.phase, LaunchPhase::Finalized { .. })
     }
 
-    pub fn is_cancelled(&self) -> bool {
+    pub(super) fn is_cancelled(&self) -> bool {
         matches!(self.phase, LaunchPhase::Cancelled)
     }
 
-    pub fn set_funding(&mut self, started_at: i64) {
+    pub(super) fn set_funding(&mut self, started_at: i64) {
         self.phase = LaunchPhase::Funding { started_at };
     }
 
-    pub fn set_seeded(&mut self, seed: [u8; 32], funding_ended_at: i64) {
+    pub(super) fn set_seeded(&mut self, seed: [u8; 32], funding_ended_at: i64) {
         self.phase = LaunchPhase::Seeded {
             seed,
             funding_ended_at,
         };
     }
 
-    pub fn set_cancelled(&mut self) {
+    pub(super) fn set_cancelled(&mut self) {
         self.phase = LaunchPhase::Cancelled;
     }
 
-    pub fn get_seed(&self) -> Option<[u8; 32]> {
+    pub(super) fn get_seed(&self) -> Option<[u8; 32]> {
         match self.phase {
             LaunchPhase::Seeded { seed, .. } => Some(seed),
             _ => None,
         }
     }
 
-    pub fn funding_started_at(&self) -> Option<i64> {
+    pub(super) fn funding_started_at(&self) -> Option<i64> {
         match self.phase {
             LaunchPhase::Funding { started_at } => Some(started_at),
             _ => None,
         }
     }
 
-    pub fn funding_ended_at(&self) -> Option<i64> {
+    pub(super) fn funding_ended_at(&self) -> Option<i64> {
         match self.phase {
             LaunchPhase::Seeded {
                 funding_ended_at, ..
@@ -144,7 +136,7 @@ impl LaunchState {
         }
     }
 
-    pub fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+    pub(super) fn is_funding_active(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
         match self.phase {
             LaunchPhase::Funding { started_at } => {
                 let end = started_at.saturating_add(funding_duration_seconds);
@@ -154,7 +146,7 @@ impl LaunchState {
         }
     }
 
-    pub fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
+    pub(super) fn is_funding_ended(&self, funding_duration_seconds: i64, now_ts: i64) -> bool {
         match self.phase {
             LaunchPhase::Funding { started_at } => {
                 let end = started_at.saturating_add(funding_duration_seconds);
@@ -164,16 +156,9 @@ impl LaunchState {
         }
     }
 
-    pub fn active_tickets(&self) -> u64 {
+    pub(super) fn active_tickets(&self) -> u64 {
         assert!(self.bits_allocated >= self.inactive_count);
         self.bits_allocated - self.inactive_count
-    }
-
-    pub fn pool_status(&self) -> Option<&PoolStatus> {
-        match &self.phase {
-            LaunchPhase::Finalized { pool, .. } => Some(pool),
-            _ => None,
-        }
     }
 
     pub fn base_mint(&self) -> Option<Pubkey> {
@@ -198,7 +183,7 @@ impl LaunchState {
         }
     }
 
-    pub fn position_nft_mint(&self) -> Option<Pubkey> {
+    pub(super) fn position_nft_mint(&self) -> Option<Pubkey> {
         match &self.phase {
             LaunchPhase::Finalized {
                 pool:
@@ -211,7 +196,7 @@ impl LaunchState {
         }
     }
 
-    pub fn is_pool_created(&self) -> bool {
+    pub(super) fn is_pool_created(&self) -> bool {
         matches!(
             self.phase,
             LaunchPhase::Finalized {
@@ -221,7 +206,7 @@ impl LaunchState {
         )
     }
 
-    pub fn set_pool_created(&mut self, base_mint: Pubkey, pool_state: Pubkey) {
+    pub(super) fn set_pool_created(&mut self, base_mint: Pubkey, pool_state: Pubkey) {
         if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
             *pool = PoolStatus::Created {
                 base_mint,
@@ -230,7 +215,7 @@ impl LaunchState {
         }
     }
 
-    pub fn set_liquidity_added(&mut self, position_nft_mint: Pubkey) {
+    pub(super) fn set_liquidity_added(&mut self, position_nft_mint: Pubkey) {
         if let LaunchPhase::Finalized { pool, .. } = &mut self.phase {
             if let PoolStatus::Created {
                 base_mint,
@@ -263,14 +248,12 @@ pub struct Contribution {
     pub ticket_ranges: Vec<TicketRange>,
 }
 
-impl Reallocatable for Contribution {
-    fn required_space(&self) -> usize {
+impl Contribution {
+    pub(super) fn required_space(&self) -> usize {
         Contribution::INIT_SPACE + self.ticket_ranges.len() * TicketRange::INIT_SPACE
     }
-}
 
-impl Contribution {
-    pub fn total_tickets(&self) -> Result<u64> {
+    pub(super) fn total_tickets(&self) -> Result<u64> {
         let mut count: u64 = 0;
         for range in &self.ticket_ranges {
             count = checked_add!(count, range.count())?;
@@ -278,7 +261,7 @@ impl Contribution {
         Ok(count)
     }
 
-    pub fn remove_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {
+    pub(super) fn remove_tickets(&mut self, mut count: u64) -> Vec<TicketRange> {
         let mut removed = Vec::new();
         while count > 0 && !self.ticket_ranges.is_empty() {
             let last_idx = self.ticket_ranges.len() - 1;
