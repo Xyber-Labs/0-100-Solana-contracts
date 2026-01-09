@@ -1,6 +1,9 @@
 use anchor_lang::{prelude::*, solana_program::keccak::hash};
 
-use crate::{errors::ErrorCode, state::{TicketRange, LaunchState}};
+use crate::{
+    errors::ErrorCode,
+    state::{LaunchState, TicketRange},
+};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
 pub enum PoolStatus {
@@ -39,7 +42,6 @@ impl Default for LaunchPhase {
         LaunchPhase::Funding { started_at: 0 }
     }
 }
-
 
 pub struct LotteryRaw<C, W, I> {
     pub control: C,
@@ -233,23 +235,18 @@ impl<C: AsMut<LaunchState>, W, I> LotteryRaw<C, W, I> {
 
 impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
     #[inline]
-    pub fn set_winner_bit(&mut self, index: u64) {
+    pub(super) fn set_winner_bit(&mut self, index: u64) {
         Self::write_bitmap_bit(self.winners_bitmap.as_mut(), index, true);
     }
 
-    #[inline]
-    pub fn clear_winner_bit(&mut self, index: u64) {
-        Self::write_bitmap_bit(self.winners_bitmap.as_mut(), index, false);
-    }
-
-    pub fn set_range(&mut self, range: TicketRange, value: bool) {
+    pub(crate) fn set_range(&mut self, range: TicketRange, value: bool) {
         msg!("Range: {:?}", range);
         for i in range.start..range.end {
             Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, value);
         }
     }
 
-    pub fn clear_range(&mut self, range: &TicketRange) {
+    pub(crate) fn clear_range(&mut self, range: &TicketRange) {
         for i in range.start..range.end {
             Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, false);
         }
@@ -277,13 +274,10 @@ impl<C, W, I: AsMut<[u8]>> LotteryRaw<C, W, I> {
     }
 }
 
-impl<
-        C: AsMut<LaunchState> + AsRef<LaunchState>,
-        W: AsRef<[u8]>,
-        I: AsMut<[u8]> + AsRef<[u8]>,
-    > LotteryRaw<C, W, I>
+impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> + AsRef<[u8]>>
+    LotteryRaw<C, W, I>
 {
-    pub fn take_tickets(&mut self, count: u64) -> Vec<TicketRange> {
+    pub(crate) fn take_tickets(&mut self, count: u64) -> Vec<TicketRange> {
         let mut taken = Vec::new();
         if self.control.as_ref().inactive_count == 0 || count == 0 {
             return taken;
@@ -336,13 +330,10 @@ fn read_word(bitmap: &[u8], word_idx: usize) -> u64 {
     u64::from_le_bytes(bitmap[off..off + 8].try_into().expect("Bitmap word access out of bounds"))
 }
 
-impl<
-        C: AsMut<LaunchState> + AsRef<LaunchState>,
-        W: AsMut<[u8]> + AsRef<[u8]>,
-        I: AsRef<[u8]>,
-    > LotteryRaw<C, W, I>
+impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I: AsRef<[u8]>>
+    LotteryRaw<C, W, I>
 {
-    pub fn try_set_winner_bit(&mut self, index: u64) -> Option<u64> {
+    pub(super) fn try_set_winner_bit(&mut self, index: u64) -> Option<u64> {
         let bits_allocated = self.bits_allocated();
         if index >= bits_allocated {
             return None;
@@ -367,7 +358,7 @@ impl<
         None
     }
 
-    pub fn finalize(
+    pub(crate) fn finalize(
         &mut self,
         seed: &[u8; 32],
         capacity: u64,

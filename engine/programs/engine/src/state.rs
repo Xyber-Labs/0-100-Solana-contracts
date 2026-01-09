@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Debug)]
-pub enum VestingType {
+pub(super) enum VestingType {
     Contributor,
     Creator,
     Team,
