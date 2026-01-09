@@ -8,7 +8,7 @@ in `tests/raydium-clmm-anchor.test.ts`.
 - Solana CLI configured with the deployer wallet
 - Anchor CLI installed
 - XYBER token mint created
-- Admin keypairs prepared (minimum 2-3 for multisig)
+- Multisig keypair prepared
 
 ## Local Validator Setup
 
@@ -86,9 +86,7 @@ anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatc
 Before initializing the engine configuration, ensure all wallets have sufficient SOL:
 
 ```bash
-solana airdrop 100 $(solana address -k keys/admin1.json) --url localhost
-solana airdrop 100 $(solana address -k keys/admin2.json) --url localhost
-solana airdrop 100 $(solana address -k keys/admin3.json) --url localhost
+solana airdrop 100 $(solana address -k keys/multisig.json) --url localhost
 solana airdrop 100 $(solana address -k keys/deployer.json) --url localhost
 solana airdrop 100 $(solana address -k keys/platform.json) --url localhost
 solana airdrop 9000 $(solana address -k keys/backend.json) --url localhost
@@ -116,8 +114,8 @@ export CREATOR=$(solana address -k keys/creator.json)
 # Create XYBER token mint
 spl-token create-token \
   --url localhost \
-  --fee-payer keys/admin1.json \
-  --mint-authority keys/admin1.json \
+  --fee-payer keys/multisig.json \
+  --mint-authority keys/multisig.json \
   --decimals 6 \
   keys/xyber-mint.json
 
@@ -132,25 +130,34 @@ export TREASURY=$(solana address -k keys/treasure.json)
 spl-token create-account $XYBER_MINT \
   --owner $TREASURY \
   --url localhost \
-  --fee-payer keys/admin1.json
+  --fee-payer keys/multisig.json
 
 # Mint tokens to creator
-spl-token mint --url localhost --recipient-owner $CREATOR --mint-authority keys/admin1.json $XYBER_MINT 1000000000
+spl-token mint --url localhost --recipient-owner $CREATOR --mint-authority keys/multisig.json $XYBER_MINT 1000000000
 ```
 
 ### 4. Initialize Engine Configuration
 
-Initialize the global engine configuration with multisig admin setup:
+Initialize the global engine configuration. First run must be signed by deployer:
 
 ```bash
 anchor run init-engine-config --provider.cluster localnet -- \
   --treasury $(solana address -k keys/treasure.json) \
   --xyber-mint $(solana address -k keys/xyber-mint.json) \
-  --threshold 2 \
   --realloc-fund-lamports 3000000000 \
-  --admin1-keypair ./keys/admin1.json \
-  --admin2-keypair ./keys/admin2.json \
-  --admin3-keypair ./keys/admin3.json
+  --signer-keypair ./keys/deployer.json \
+  --new-multisig $(solana address -k keys/multisig.json)
+```
+
+For subsequent updates, use the stored multisig as signer:
+
+```bash
+anchor run init-engine-config --provider.cluster localnet -- \
+  --treasury $(solana address -k keys/treasure.json) \
+  --xyber-mint $(solana address -k keys/xyber-mint.json) \
+  --realloc-fund-lamports 3000000000 \
+  --signer-keypair ./keys/multisig.json \
+  --new-multisig $(solana address -k keys/multisig.json)
 ```
 
 ### 5. Fund Realloc PDA (Optional)
@@ -163,7 +170,7 @@ solana transfer \
   $(solana find-program-derived-address DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 string:root-0-100-1 string:realloc_funds) \
   5 \
   --url localhost \
-  --fee-payer keys/admin1.json
+  --fee-payer keys/multisig.json
 ```
 
 ### 6. Create Launch Preset
@@ -173,9 +180,7 @@ Launch presets are reusable templates that store common launch parameters. Creat
 ```bash
 anchor run init-launch-preset --provider.cluster localnet -- \
   --payload ./presets/deployment.json \
-  --admin-keypair ./keys/admin1.json \
-  --admin-keypair ./keys/admin2.json \
-  --admin-keypair ./keys/admin3.json
+  --multisig-keypair ./keys/multisig.json
 ```
 
 ## Launch Flow (Matches Test Suite)

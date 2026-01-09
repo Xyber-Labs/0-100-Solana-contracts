@@ -1795,6 +1795,9 @@ export type Engine = {
     },
     {
       "name": "initEngineConfig",
+      "docs": [
+        "Initialize or update global engine configuration (treasury, xyber_mint, multisig)."
+      ],
       "discriminator": [
         184,
         166,
@@ -1807,7 +1810,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1900,9 +1903,13 @@ export type Engine = {
           "name": "params",
           "type": {
             "defined": {
-              "name": "initEngineConfigParams"
+              "name": "engineConfig"
             }
           }
+        },
+        {
+          "name": "reallocFundLamports",
+          "type": "u64"
         }
       ]
     },
@@ -2345,7 +2352,7 @@ export type Engine = {
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -3497,17 +3504,8 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }
@@ -3523,39 +3521,6 @@ export type Engine = {
           },
           {
             "name": "kCapacity",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "initEngineConfigParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "treasury",
-            "type": "pubkey"
-          },
-          {
-            "name": "xyberMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
-          },
-          {
-            "name": "reallocFundLamports",
             "type": "u64"
           }
         ]
@@ -4106,6 +4071,11 @@ export type Engine = {
       "name": "baseTokenDecimals",
       "type": "u8",
       "value": "9"
+    },
+    {
+      "name": "deployer",
+      "type": "pubkey",
+      "value": "3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP"
     },
     {
       "name": "dispatcherSeedRoot",

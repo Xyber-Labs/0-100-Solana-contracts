@@ -322,7 +322,7 @@ export class TxBuilder {
   }
 
   async initLaunchPresetIx(params: {
-    payer: web3.PublicKey;
+    multisig: web3.PublicKey;
     id: number;
     hardCapLamports: BN;
     minRaiseLamports: BN;
@@ -343,7 +343,6 @@ export class TxBuilder {
     contributorPeriodSec: number;
     withdrawalLimit: number;
     creationFee: BN;
-    signerAdmins: web3.PublicKey[];
   }): Promise<{
     instruction: web3.TransactionInstruction;
     launchPreset: web3.PublicKey;
@@ -378,51 +377,40 @@ export class TxBuilder {
     if (!method) throw new Error("initLaunchPreset method not found in program IDL");
     const instruction = await method(new BN(params.id), initParams)
       .accountsStrict({
-        payer: params.payer,
+        multisig: params.multisig,
         engineConfig,
         launchPreset,
         systemProgram: web3.SystemProgram.programId,
       })
-      .remainingAccounts(
-        params.signerAdmins.map((pubkey) => ({ pubkey, isSigner: true, isWritable: false }))
-      )
       .instruction();
     return { instruction, launchPreset, engineConfig };
   }
 
   async initEngineConfigIx(params: {
-    payer: web3.PublicKey;
+    signer: web3.PublicKey;
+    newMultisig: web3.PublicKey;
     treasury: web3.PublicKey;
     xyberMint: web3.PublicKey;
-    admins: [web3.PublicKey, web3.PublicKey, web3.PublicKey];
-    threshold: number;
     reallocFundLamports: BN;
-    signerAdmins: web3.PublicKey[];
   }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey; reallocFunds: web3.PublicKey }> {
     const [engineConfig] = this.getConfigPda();
     const [reallocFunds] = this.getReallocFundsPda();
     const method = this.getIxMethod("initEngineConfig", "init_engine_config");
     if (!method) throw new Error("initEngineConfig method not found in program IDL");
-    const ix = await method({
-      treasury: params.treasury,
-      xyberMint: params.xyberMint,
-      admins: params.admins,
-      threshold: params.threshold,
-      reallocFundLamports: params.reallocFundLamports,
-    })
+    const ix = await method(
+      {
+        treasury: params.treasury,
+        xyberMint: params.xyberMint,
+        multisig: params.newMultisig,
+      },
+      params.reallocFundLamports
+    )
       .accountsStrict({
-        payer: params.payer,
+        multisig: params.signer,
         engineConfig,
         reallocFunds,
         systemProgram: web3.SystemProgram.programId,
       })
-      .remainingAccounts(
-        params.admins.map((pubkey) => ({
-          pubkey,
-          isSigner: params.signerAdmins.some((s) => s.equals(pubkey)),
-          isWritable: false
-        }))
-      )
       .instruction();
     return { instruction: ix, engineConfig, reallocFunds };
   }

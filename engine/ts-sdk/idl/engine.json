@@ -1789,6 +1789,9 @@
     },
     {
       "name": "init_engine_config",
+      "docs": [
+        "Initialize or update global engine configuration (treasury, xyber_mint, multisig)."
+      ],
       "discriminator": [
         184,
         166,
@@ -1801,7 +1804,7 @@
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1894,9 +1897,13 @@
           "name": "params",
           "type": {
             "defined": {
-              "name": "InitEngineConfigParams"
+              "name": "EngineConfig"
             }
           }
+        },
+        {
+          "name": "realloc_fund_lamports",
+          "type": "u64"
         }
       ]
     },
@@ -2339,7 +2346,7 @@
       ],
       "accounts": [
         {
-          "name": "payer",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -3491,17 +3498,8 @@
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }
@@ -3517,39 +3515,6 @@
           },
           {
             "name": "k_capacity",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "InitEngineConfigParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "treasury",
-            "type": "pubkey"
-          },
-          {
-            "name": "xyber_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
-          },
-          {
-            "name": "realloc_fund_lamports",
             "type": "u64"
           }
         ]
@@ -4100,6 +4065,11 @@
       "name": "BASE_TOKEN_DECIMALS",
       "type": "u8",
       "value": "9"
+    },
+    {
+      "name": "DEPLOYER",
+      "type": "pubkey",
+      "value": "3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP"
     },
     {
       "name": "DISPATCHER_SEED_ROOT",

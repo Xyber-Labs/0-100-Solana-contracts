@@ -20,8 +20,7 @@ pub struct ProjectCounter {
 pub struct EngineConfig {
     pub treasury: Pubkey,
     pub xyber_mint: Pubkey,
-    pub admins: [Pubkey; 3],
-    pub threshold: u8,
+    pub multisig: Pubkey,
 }
 
 #[account]

@@ -25,9 +25,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const program = anchor.workspace.Engine;
   const incomeDispatcherProgram = anchor.workspace.IncomeDispatcher;
 
-  const admin1Keypair = loadKeypair("keys/admin1.json");
-  const admin2Keypair = loadKeypair("keys/admin2.json");
-  const admin3Keypair = loadKeypair("keys/admin3.json");
+  const multisigKeypair = loadKeypair("keys/multisig.json");
   const deployerKeypair = loadKeypair("keys/deployer.json");
   const backendKeypair = loadKeypair("keys/backend.json");
   const xyberMintKeypair = loadKeypair("keys/xyber-mint.json");
@@ -39,8 +37,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const buyer3Keypair = loadKeypair("keys/buyer3.json");
   const communityWallet = loadKeypair("keys/community-signer.json");
 
-  const sdk = EngineSDK.create(provider, program, admin1Keypair);
-  const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
+  const sdk = EngineSDK.create(provider, program, multisigKeypair);
+  const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, multisigKeypair);
 
   let launchPda: anchor.web3.PublicKey;
   let baseMint: anchor.web3.PublicKey;
@@ -109,10 +107,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Setup: Airdrop SOL to wallets ===");
 
     const airdropPromises = [
-      provider.connection.requestAirdrop(admin1Keypair.publicKey, 25 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(multisigKeypair.publicKey, 25 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(deployerKeypair.publicKey, 50 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(backendKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(platformKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(creatorKeypair.publicKey, 1000 * anchor.web3.LAMPORTS_PER_SOL),
@@ -135,8 +131,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       if (!xyberMintInfo) {
         await createMint(
           provider.connection,
-          admin1Keypair,
-          admin1Keypair.publicKey,
+          multisigKeypair,
+          multisigKeypair.publicKey,
           null,
           6,
           xyberMintKeypair
@@ -154,30 +150,29 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       // Mint XYBER tokens to creator for creation fee (preset has creationFee: 100000000 = 100 XYBER)
       await mintTo(
         provider.connection,
-        admin1Keypair,
+        multisigKeypair,
         xyberMintKeypair.publicKey,
         creatorXyberAta.address,
-        admin1Keypair,
+        multisigKeypair,
         1000_000_000 // 1000 XYBER (6 decimals)
       );
       console.log("✅ XYBER minted to creator");
 
       await getOrCreateAssociatedTokenAccount(
         provider.connection,
-        admin1Keypair,
+        multisigKeypair,
         xyberMintKeypair.publicKey,
         treasuryKeypair.publicKey
       );
 
       if (!configInfo) {
+        // First init_engine_config must be signed by DEPLOYER constant
         await sdk.initEngineConfig({
           treasury: treasuryKeypair.publicKey,
-          creationFee: new BN(0),
           xyberMint: xyberMintKeypair.publicKey,
-          admins: [admin1Keypair.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey],
-          threshold: 2,
-          adminKeypairs: [admin1Keypair, admin2Keypair],
+          newMultisig: multisigKeypair.publicKey,
           reallocFundLamports: new BN(20 * anchor.web3.LAMPORTS_PER_SOL),
+          signerKeypair: deployerKeypair,
         });
         console.log("✅ Engine config initialized with 20 SOL for realloc funds");
       } else {
@@ -203,7 +198,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       sdk.initLaunchPreset({
         id: Number(presetConfig.id),
         params: invalidMinRaise,
-        adminKeypairs: [admin1Keypair, admin2Keypair],
+        multisigKeypair,
       }),
       "Malformed preset"
     );
@@ -220,7 +215,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       sdk.initLaunchPreset({
         id: Number(presetConfig.id),
         params: invalidHardCap,
-        adminKeypairs: [admin1Keypair, admin2Keypair],
+        multisigKeypair,
       }),
       "Malformed preset"
     );
@@ -230,7 +225,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await sdk.initLaunchPreset({
       id: Number(presetConfig.id),
       params: validParams,
-      adminKeypairs: [admin1Keypair, admin2Keypair],
+      multisigKeypair,
     });
     console.log("✅ Launch preset initialized successfully from presets/raydium-clmm-anchor-test-preset.json");
   });
@@ -403,7 +398,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature: seedSig } = await sdk.setSeed({
       launch: launchPda,
-      signers: [admin1Keypair],
+      signers: [multisigKeypair],
     });
 
     console.log("✅ VRF seed set");
@@ -415,7 +410,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature: prepSig } = await sdk.finalizeLottery({
       launch: launchPda,
-      payerKeypair: admin1Keypair,
+      payerKeypair: multisigKeypair,
       computeUnits: 1_000_000,
     });
 
@@ -437,7 +432,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await utils.doAndCheckError(
       sdk.createClmmPool({
         launch: fakeLaunchState.publicKey,
-        signers: [admin1Keypair],
+        signers: [multisigKeypair],
       }),
       "Account does not exist"
     );
@@ -450,7 +445,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const result = await sdk.createClmmPool({
       launch: launchPda,
-      signers: [admin1Keypair],
+      signers: [multisigKeypair],
     });
 
     baseMint = result.baseMint;
@@ -469,19 +464,19 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 12: Add liquidity to CLMM pool", async () => {
     console.log("=== Step 12: Add Liquidity ===");
     const addClmmLiquidityTx = await sdk.addClmmLiquidityTx({
-      payer: admin1Keypair.publicKey,
+      payer: multisigKeypair.publicKey,
       launch: launchPda,
       baseMint: baseMint,
       provider,
     });
 
-    addClmmLiquidityTx.transaction.feePayer = admin1Keypair.publicKey;
+    addClmmLiquidityTx.transaction.feePayer = multisigKeypair.publicKey;
     addClmmLiquidityTx.transaction.recentBlockhash = (
       await provider.connection.getLatestBlockhash()
     ).blockhash;
 
     addClmmLiquidityTx.transaction.partialSign(...addClmmLiquidityTx.signers);
-    addClmmLiquidityTx.transaction.partialSign(admin1Keypair);
+    addClmmLiquidityTx.transaction.partialSign(multisigKeypair);
 
     const addLiquiditySig = await provider.connection.sendRawTransaction(
       addClmmLiquidityTx.transaction.serialize(),
@@ -702,12 +697,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     for (let i = 0; i < traders.length; i++) {
       const fundTx = new anchor.web3.Transaction().add(
         anchor.web3.SystemProgram.transfer({
-          fromPubkey: admin1Keypair.publicKey,
+          fromPubkey: multisigKeypair.publicKey,
           toPubkey: traders[i].publicKey,
           lamports: fundAmount.toNumber(),
         })
       );
-      const fundSig = await provider.sendAndConfirm(fundTx, [admin1Keypair]);
+      const fundSig = await provider.sendAndConfirm(fundTx, [multisigKeypair]);
       console.log(`✅ Funded trader ${i + 1}`);
       console.log("Explorer url:", utils.getExplorerUrl(provider, fundSig));
     }
@@ -867,7 +862,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     }
 
     const bundle = await dispatcherSdk.harvestPoolBundle({
-      payer: admin1Keypair.publicKey,
+      payer: multisigKeypair.publicKey,
       launchState: launchPda,
       projectId: launchStateData.projectId,
       baseMint,
@@ -892,7 +887,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature: harvestSig, altAddress } = await dispatcherSdk.executeHarvestPoolBundle(
       bundle,
-      [admin1Keypair]
+      [multisigKeypair]
     );
     console.log("✅ CLMM fees harvested (ALT:", altAddress.toString(), ")");
     console.log("Explorer url:", utils.getExplorerUrl(provider, harvestSig));
@@ -1145,25 +1140,25 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const adminXyberAta = await getOrCreateAssociatedTokenAccount(
       provider.connection,
-      admin1Keypair,
+      multisigKeypair,
       xyberMint,
-      admin1Keypair.publicKey
+      multisigKeypair.publicKey
     );
 
     const xyberAmount = BigInt(1_000_000_000_000); // 1M XYBER (6 decimals)
     const { mintTo } = await import("@solana/spl-token");
     await mintTo(
       provider.connection,
-      admin1Keypair,
+      multisigKeypair,
       xyberMint,
       adminXyberAta.address,
-      admin1Keypair,
+      multisigKeypair,
       xyberAmount
     );
     console.log("✅ Minted XYBER tokens for liquidity:", xyberAmount.toString());
 
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,
@@ -1254,7 +1249,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Full range position: tickLower =", tickLower, ", tickUpper =", tickUpper);
 
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,
@@ -1364,7 +1359,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     // Load Raydium SDK and get pool info for proper tick array computation
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,

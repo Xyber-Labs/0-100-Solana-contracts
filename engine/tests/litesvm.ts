@@ -49,9 +49,10 @@ ensureRaydiumResources();
 let client: LiteSVM;
 let provider: LiteSVMProvider;
 let program: Program<Engine>;
-let admin: anchor.Wallet;
+let multisig: anchor.Wallet;
 let sdk: ReturnType<typeof EngineSDK.create>;
 let adminKeypair: anchor.web3.Keypair;
+let deployerKeypair: anchor.web3.Keypair;
 let xyberMint: anchor.web3.PublicKey;
 
 function bigIntTo32BytesBE(x: bigint): Buffer {
@@ -127,7 +128,6 @@ describe("engine litesvm", () => {
   const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
   const presetParams = parsePresetParams(presetData);
 
-  let adminBKeypair: anchor.web3.Keypair;
   let treasuryPubkey: anchor.web3.PublicKey;
 
   before(async () => {
@@ -135,41 +135,43 @@ describe("engine litesvm", () => {
     provider = new LiteSVMProvider(client);
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
-    admin = provider.wallet;
+    multisig = provider.wallet;
     adminKeypair = (provider.wallet as any).payer;
     sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
-    client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
+    // Load deployer keypair (required for first init_engine_config)
+    const deployerKeypairPath = path.resolve(__dirname, "../keys/deployer.json");
+    const deployerSecret = JSON.parse(fs.readFileSync(deployerKeypairPath, "utf8"));
+    deployerKeypair = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(deployerSecret));
 
-    adminBKeypair = anchor.web3.Keypair.generate();
+    client.airdrop(multisig.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
+    client.airdrop(deployerKeypair.publicKey, BigInt(200 * anchor.web3.LAMPORTS_PER_SOL));
 
     // Initialize XYBER mint and engine config
     const mint = anchor.web3.Keypair.generate();
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
+    const creatorAta = sdk.getUserAta(mint.publicKey, multisig.publicKey);
     const treasuryKeypair = anchor.web3.Keypair.generate();
     client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
     treasuryPubkey = treasuryKeypair.publicKey;
 
     const initMintTx = new anchor.web3.Transaction()
-      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(mint.publicKey, 6, admin.publicKey, null))
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000_000)));
-    sendTx(client, admin.publicKey, [adminKeypair, mint], initMintTx);
+      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: multisig.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+      .add(createInitializeMintInstruction(mint.publicKey, 6, multisig.publicKey, null))
+      .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: multisig.publicKey, mint: mint.publicKey }).ix)
+      .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
+      .add(createMintToInstruction(mint.publicKey, creatorAta, multisig.publicKey, BigInt(1_000_000_000)));
+    sendTx(client, multisig.publicKey, [adminKeypair, mint], initMintTx);
 
-    const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
+    // First init_engine_config must be signed by DEPLOYER constant
     const { instruction: initConfigIx } = await (sdk as any).initEngineConfigIx({
-      payer: admin.publicKey,
+      signer: deployerKeypair.publicKey,
+      newMultisig: multisig.publicKey,
       treasury: treasuryPubkey,
       xyberMint: mint.publicKey,
-      admins,
-      threshold: 2,
       reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    sendTx(client, admin.publicKey, [adminKeypair, adminBKeypair], initConfigIx);
+    sendTx(client, deployerKeypair.publicKey, [deployerKeypair], initConfigIx);
     xyberMint = mint.publicKey;
   });
 
@@ -178,17 +180,16 @@ describe("engine litesvm", () => {
     assert.ok(config, "EngineConfig should exist");
     assert.ok(config.xyberMint.equals(xyberMint));
     assert.ok(config.treasury.equals(treasuryPubkey));
-    assert.equal(config.threshold, 2);
+    assert.ok(config.multisig.equals(multisig.publicKey));
   });
 
   it("Initializes launch preset from file", async () => {
     const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
-      payer: admin.publicKey,
+      multisig: multisig.publicKey,
       id: Number(presetData.id),
       ...presetParams,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], presetIx);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], presetIx);
 
     const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
     assert.ok(preset, "Preset should exist");
@@ -203,7 +204,7 @@ describe("engine litesvm", () => {
     const nextId = await sdk.getNextProjectId();
 
     const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -219,7 +220,7 @@ describe("engine litesvm", () => {
     const { data: state } = await sdk.fetchLaunch(launchState);
 
     assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
-    assert.ok(state.creator.equals(admin.publicKey));
+    assert.ok(state.creator.equals(multisig.publicKey));
     assert.ok(state.preset, "Preset should be set");
   });
 
@@ -230,20 +231,20 @@ describe("engine litesvm", () => {
     const wrongMintKp = anchor.web3.Keypair.generate();
     const wrongMint = wrongMintKp.publicKey;
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = getAssociatedTokenAddressSync(wrongMint, admin.publicKey);
+    const creatorAta = getAssociatedTokenAddressSync(wrongMint, multisig.publicKey);
     const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasuryPubkey);
     {
       const tx = new anchor.web3.Transaction()
-        .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-        .add(createInitializeMintInstruction(wrongMint, 6, admin.publicKey, null))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, wrongMint))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasuryPubkey, wrongMint))
-        .add(createMintToInstruction(wrongMint, creatorAta, admin.publicKey, BigInt(fee.toString())));
+        .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: multisig.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+        .add(createInitializeMintInstruction(wrongMint, 6, multisig.publicKey, null))
+        .add(createAssociatedTokenAccountInstruction(multisig.publicKey, creatorAta, multisig.publicKey, wrongMint))
+        .add(createAssociatedTokenAccountInstruction(multisig.publicKey, treasuryAta, treasuryPubkey, wrongMint))
+        .add(createMintToInstruction(wrongMint, creatorAta, multisig.publicKey, BigInt(fee.toString())));
       sendTx(client, adminKeypair.publicKey, [adminKeypair, wrongMintKp], tx);
     }
 
     const { instruction } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -342,7 +343,7 @@ describe("engine litesvm", () => {
     assert.equal(projectId1.toNumber(), lastIdBefore + 1, "Next project ID should be lastId + 1");
 
     const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId1,
       saleStartTimeTimestamp: 0,
@@ -356,7 +357,7 @@ describe("engine litesvm", () => {
     assert.equal(projectId2.toNumber(), projectId1.toNumber() + 1, "Project 2 ID should be project1 + 1");
 
     const { instruction: ix2, launchState: launch2 } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId2,
       saleStartTimeTimestamp: 0,
@@ -370,7 +371,7 @@ describe("engine litesvm", () => {
     assert.equal(projectId3.toNumber(), projectId2.toNumber() + 1, "Project 3 ID should be project2 + 1");
 
     const { instruction: ix3, launchState: launch3 } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: projectId3,
       saleStartTimeTimestamp: 0,
@@ -443,7 +444,7 @@ describe("engine litesvm", () => {
 
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -473,7 +474,7 @@ describe("engine litesvm", () => {
 
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     let { data: lottery } = await sdk.fetchLaunch(testLaunch);
@@ -507,7 +508,7 @@ describe("engine litesvm", () => {
 
     await doAndCheckError(
       (async () => {
-        const { transaction } = await sdk.finalizeLotteryTx({ payer: admin.publicKey, launch: testLaunch });
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: multisig.publicKey, launch: testLaunch });
         sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
@@ -537,7 +538,7 @@ describe("engine litesvm", () => {
     });
 
     const { transaction } = await sdk.finalizeLotteryTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
@@ -556,7 +557,7 @@ describe("engine litesvm", () => {
     // Create a fresh launch for this test
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -589,7 +590,7 @@ describe("engine litesvm", () => {
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
     // Set VRF seed
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     // Verify lottery is still in progress
@@ -628,7 +629,7 @@ describe("engine litesvm", () => {
     // Within grace period: should fail with NoValidBlockhash
     await doAndCheckError(
       (async () => {
-        const { transaction } = await sdk.finalizeLotteryTx({ payer: admin.publicKey, launch: testLaunch });
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: multisig.publicKey, launch: testLaunch });
         sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
       })(),
       "NoValidBlockhash"
@@ -645,7 +646,7 @@ describe("engine litesvm", () => {
     // After grace period expires, finalizeLottery should succeed even with invalid hashes
     // (because random_pool_creation_expired becomes true)
     const { transaction } = await sdk.finalizeLotteryTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
@@ -664,7 +665,7 @@ describe("engine litesvm", () => {
     // === Step 1: Create launch ===
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -683,7 +684,7 @@ describe("engine litesvm", () => {
     const creatorTickets = 10;
     const creatorDepositAmount = new BN(tau.toString()).muln(creatorTickets);
     const { instruction: creatorDepIx } = await sdk.depositIx({
-      contributor: admin.publicKey,
+      contributor: multisig.publicKey,
       launch: testLaunch,
       amount: creatorDepositAmount,
     });
@@ -708,7 +709,7 @@ describe("engine litesvm", () => {
     // === Step 3: Finalize lottery ===
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
 
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
@@ -721,7 +722,7 @@ describe("engine litesvm", () => {
     injectSlotHashesForRange(client, rangeStart, rangeEnd);
 
     const { transaction: prepTx } = await sdk.finalizeLotteryTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
@@ -749,14 +750,14 @@ describe("engine litesvm", () => {
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
 
     const clmmCreate = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       quoteMint: WSOL_MINT,
       ammConfig,
       clmmProgram: raydiumProgramId,
       provider,
     });
-    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
+    sendTx(client, multisig.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
     console.log(`✅ Step 4: CLMM pool created`);
 
     // === Step 5: Contributor claims Sale bucket ===
@@ -792,7 +793,7 @@ describe("engine litesvm", () => {
     // periods_count = 1, need elapsed >= 60 sec for periods_passed = 1
     // team_allocation = baseTotalAllocation * teamAllocationBasisPoints / 10000
     const expectedTeamTokens = (BigInt("1000000000000000000") * BigInt(preset.teamAllocationBasisPoints) / BigInt(10000)).toString();
-    const creatorAta = getAssociatedTokenAddressSync(clmmCreate.baseMint, admin.publicKey, true);
+    const creatorAta = getAssociatedTokenAddressSync(clmmCreate.baseMint, multisig.publicKey, true);
 
     // Advance time to complete team vesting period
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.teamDurationSec) });
@@ -800,10 +801,10 @@ describe("engine litesvm", () => {
     const { instruction: claimTeamIx } = await sdk.claimIx({
       launch: testLaunch,
       baseMint: clmmCreate.baseMint,
-      participant: admin.publicKey,
+      participant: multisig.publicKey,
       bucket: 1, // Team
     });
-    sendTx(client, admin.publicKey, [adminKeypair], [
+    sendTx(client, multisig.publicKey, [adminKeypair], [
       anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
       claimTeamIx,
     ]);
@@ -832,10 +833,10 @@ describe("engine litesvm", () => {
     const { instruction: claimCreatorSaleIx } = await sdk.claimIx({
       launch: testLaunch,
       baseMint: clmmCreate.baseMint,
-      participant: admin.publicKey,
+      participant: multisig.publicKey,
       bucket: 0, // Sale
     });
-    sendTx(client, admin.publicKey, [adminKeypair], [
+    sendTx(client, multisig.publicKey, [adminKeypair], [
       anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
       claimCreatorSaleIx,
     ]);
@@ -877,12 +878,11 @@ describe("engine litesvm", () => {
     const stressPresetParams = parsePresetParams(stressPresetData);
 
     const { instruction: stressPresetIx } = await (sdk as any).initLaunchPresetIx({
-      payer: admin.publicKey,
+      multisig: multisig.publicKey,
       id: Number(stressPresetData.id),
       ...stressPresetParams,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
     });
-    sendTx(client, adminKeypair.publicKey, [adminKeypair, adminBKeypair], stressPresetIx);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], stressPresetIx);
 
     const { data: preset } = await sdk.fetchLaunchPreset(Number(stressPresetData.id));
     const tau = preset.tauLamports;
@@ -896,7 +896,7 @@ describe("engine litesvm", () => {
     // Create launch
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(stressPresetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -1024,15 +1024,15 @@ describe("engine litesvm", () => {
     console.log(`Random seed: ${randomSeed}`);
     injectSlotHashesForRange(client, rangeStart, rangeEnd, 512, randomSeed);
 
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     const { transaction: prepTx } = await sdk.finalizeLotteryTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    const { computeUnitsConsumed } = sendTxWithMeta(client, admin.publicKey, [adminKeypair], prepTx);
+    const { computeUnitsConsumed } = sendTxWithMeta(client, multisig.publicKey, [adminKeypair], prepTx);
 
     const { data: lottery } = await sdk.fetchLaunch(testLaunch);
     const winners = Math.min(kCapacity, activeTickets);
@@ -1109,14 +1109,14 @@ describe("engine litesvm", () => {
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
     const clmmCreate = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
+      payer: multisig.publicKey,
       launch: testLaunch,
       quoteMint: WSOL_MINT,
       ammConfig,
       clmmProgram: raydiumProgramId,
       provider,
     });
-    sendTx(client, admin.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
+    sendTx(client, multisig.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
 
     // Phase 4: Advance time for full vesting
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorDurationSec + 60) });
@@ -1331,7 +1331,7 @@ describe("engine litesvm", () => {
     // === Step 1: Create launch ===
     const nextId = await sdk.getNextProjectId();
     const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
-      creator: admin.publicKey,
+      creator: multisig.publicKey,
       presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
@@ -1366,7 +1366,7 @@ describe("engine litesvm", () => {
     await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
 
     // === Step 4: Call setSeed - should cancel due to min_raise not met ===
-    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: admin.publicKey });
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
     // Verify lottery is cancelled (setSeed cancels when min_raise not met)

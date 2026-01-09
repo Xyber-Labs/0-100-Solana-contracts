@@ -45,9 +45,7 @@ async function main() {
     .allowExcessArguments(false)
     .option("--info <preset-id>", "Fetch and display preset info by ID")
     .option("--payload <path>", "Path to JSON payload file")
-    .option("--admin-keypair <path>", "Admin keypair file (can be specified multiple times)", (value, previous: string[]) => {
-      return previous ? [...previous, value] : [value];
-    }, []);
+    .requiredOption("--multisig-keypair <path>", "Multisig keypair file");
   program.parse(process.argv);
 
   const opts = program.opts();
@@ -75,13 +73,7 @@ async function main() {
   const id = Number(idStr);
   if (!Number.isInteger(id) || id < 0 || id > 255) throw new Error("id must be 0..255");
 
-  const adminKeyPaths: string[] = opts.adminKeypair && opts.adminKeypair.length > 0
-    ? opts.adminKeypair.map((p: string) => path.resolve(p))
-    : [];
-
-  if (!adminKeyPaths.length) throw new Error("At least one --admin-keypair must be provided");
-
-  const adminKeypairs = adminKeyPaths.map(loadKeypair);
+  const multisigKeypair = loadKeypair(opts.multisigKeypair);
   const p = payload;
 
   await runWithSdk(async ({ provider, sdk }) => {
@@ -108,7 +100,7 @@ async function main() {
         withdrawalLimit: Number(p.withdrawalLimit),
         creationFee: new BN(String(p.creationFee)),
       },
-      adminKeypairs,
+      multisigKeypair,
     });
 
     console.log("✅ Success!");

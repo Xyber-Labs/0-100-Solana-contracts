@@ -32,16 +32,13 @@ pub struct InitLaunchPresetParams {
 #[derive(Accounts)]
 #[instruction(id: u8)]
 pub struct InitLaunchPreset<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    #[account(
-        seeds = [SEED_ROOT, b"config"],
-        bump
-    )]
+    #[account(mut, address = engine_config.multisig @ ErrorCode::Unauthorized)]
+    pub multisig: Signer<'info>,
+    #[account(seeds = [SEED_ROOT, b"config"], bump)]
     pub engine_config: Account<'info, EngineConfig>,
     #[account(
         init,
-        payer = payer,
+        payer = multisig,
         space = 8 + LaunchPreset::INIT_SPACE,
         seeds = [SEED_ROOT, b"preset", &[id]],
         bump
@@ -55,19 +52,6 @@ pub fn init_launch_preset(
     id: u8,
     params: InitLaunchPresetParams,
 ) -> Result<()> {
-    let cfg = &ctx.accounts.engine_config;
-
-    require!(cfg.admins.iter().any(|k| *k == ctx.accounts.payer.key()), ErrorCode::Unauthorized);
-    let signer_set: std::collections::BTreeSet<Pubkey> =
-        ctx.remaining_accounts.iter().filter(|ai| ai.is_signer).map(|ai| ai.key()).collect();
-    let mut signed = 0u8;
-    for k in cfg.admins.iter() {
-        if signer_set.contains(k) {
-            signed = signed.saturating_add(1);
-        }
-    }
-    require!(signed >= cfg.threshold, ErrorCode::NotEnoughAdminSigners);
-
     let p = &mut ctx.accounts.launch_preset;
     p.id = id;
     p.hard_cap_lamports = params.hard_cap_lamports;

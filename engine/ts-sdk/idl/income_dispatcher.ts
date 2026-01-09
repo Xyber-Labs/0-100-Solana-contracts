@@ -2032,17 +2032,8 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }
