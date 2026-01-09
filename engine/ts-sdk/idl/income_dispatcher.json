@@ -1665,7 +1665,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1716,6 +1716,10 @@
         }
       ],
       "args": [
+        {
+          "name": "new_multisig",
+          "type": "pubkey"
+        },
         {
           "name": "backend",
           "type": "pubkey"
@@ -1956,10 +1960,8 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "admin",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "multisig",
+            "type": "pubkey"
           },
           {
             "name": "backend",
@@ -2026,17 +2028,8 @@
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }

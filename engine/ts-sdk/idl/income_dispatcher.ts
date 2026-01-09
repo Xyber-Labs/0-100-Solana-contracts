@@ -1671,7 +1671,7 @@ export type IncomeDispatcher = {
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1722,6 +1722,10 @@ export type IncomeDispatcher = {
         }
       ],
       "args": [
+        {
+          "name": "newMultisig",
+          "type": "pubkey"
+        },
         {
           "name": "backend",
           "type": "pubkey"
@@ -1962,10 +1966,8 @@ export type IncomeDispatcher = {
         "kind": "struct",
         "fields": [
           {
-            "name": "admin",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "multisig",
+            "type": "pubkey"
           },
           {
             "name": "backend",
@@ -2032,17 +2034,8 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }

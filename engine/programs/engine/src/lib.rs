@@ -20,18 +20,31 @@ declare_id!("DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7");
 #[cfg(not(feature = "devnet"))]
 declare_id!("xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p");
 
+#[cfg(feature = "devnet")]
+#[constant]
+pub const DEPLOYER: Pubkey = pubkey!("3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP");
+
+#[cfg(not(feature = "devnet"))]
+#[constant]
+pub const DEPLOYER: Pubkey = pubkey!("DFjKPfGgJP9N7eAXfiEdniboRMHEoUFwjtVvtrcrm7o6");
+
 #[program]
 pub mod engine {
     use super::*;
+
+    /// Initialize or update global engine configuration (treasury, xyber_mint, multisig).
+    pub fn init_engine_config(
+        ctx: Context<InitEngineConfig>,
+        params: EngineConfig,
+        realloc_fund_lamports: u64,
+    ) -> Result<()> {
+        instructions::init_engine_config(ctx, params, realloc_fund_lamports)
+    }
 
     /// Permissionless seed setter using recent blockhash.
     pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
         instructions::set_seed(ctx)
     }
-
-    // -------------------------------
-    // User (UI)
-    // -------------------------------
 
     /// Finalize lottery - select winners and open claims
     pub fn finalize_lottery(ctx: Context<FinalizeLottery>) -> Result<()> {
@@ -93,13 +106,6 @@ pub mod engine {
 
     pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
         instructions::get_liquidity_range(ctx)
-    }
-
-    pub fn init_engine_config(
-        ctx: Context<InitEngineConfig>,
-        params: InitEngineConfigParams,
-    ) -> Result<()> {
-        instructions::init_engine_config(ctx, params)
     }
 
     pub fn claim_clmm_fees<'info>(

@@ -356,24 +356,20 @@ const EngineSDK = {
     async function initEngineConfig(args: {
       treasury: anchor.web3.PublicKey;
       xyberMint: anchor.web3.PublicKey;
-      admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
-      threshold: number;
+      newMultisig: anchor.web3.PublicKey;
       reallocFundLamports: BN;
-      adminKeypairs?: anchor.web3.Keypair[];
+      signerKeypair: anchor.web3.Keypair;
     }): Promise<{ engineConfig: anchor.web3.PublicKey; reallocFunds: anchor.web3.PublicKey; signature: string }> {
       const { instruction, engineConfig, reallocFunds } = await txBuilder.initEngineConfigIx({
-        payer,
+        signer: args.signerKeypair.publicKey,
+        newMultisig: args.newMultisig,
         treasury: args.treasury,
         xyberMint: args.xyberMint,
-        admins: args.admins,
-        threshold: args.threshold,
         reallocFundLamports: args.reallocFundLamports,
-        signerAdmins: (args.adminKeypairs ?? []).map((k) => k.publicKey),
       });
       const tx = new anchor.web3.Transaction().add(instruction);
-      const signers = args.adminKeypairs ?? [];
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(tx, signers);
+      const signature = await provider.sendAndConfirm(tx, [args.signerKeypair]);
       return { engineConfig, reallocFunds, signature };
     }
 
@@ -400,17 +396,15 @@ const EngineSDK = {
         withdrawalLimit: number;
         creationFee: BN;
       };
-      adminKeypairs: anchor.web3.Keypair[];
+      multisigKeypair: anchor.web3.Keypair;
     }): Promise<{ launchPreset: anchor.web3.PublicKey; signature: string }> {
       const { instruction, launchPreset } = await txBuilder.initLaunchPresetIx({
-        payer: args.adminKeypairs[0].publicKey,
+        multisig: args.multisigKeypair.publicKey,
         id: args.id,
         ...args.params,
-        signerAdmins: args.adminKeypairs.map((k) => k.publicKey),
       });
-      const signers = args.adminKeypairs;
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(new anchor.web3.Transaction().add(instruction), signers);
+      const signature = await provider.sendAndConfirm(new anchor.web3.Transaction().add(instruction), [args.multisigKeypair]);
       return { launchPreset, signature };
     }
 
