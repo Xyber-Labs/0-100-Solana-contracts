@@ -179,5 +179,5 @@ fn validate_meta(meta: &TokenMetadataInput) -> Result<()> {
 }
 
 fn get_third_party_signer(remaining_accounts: &[AccountInfo]) -> Option<Pubkey> {
-    remaining_accounts.first().map_or(None, |acc| if acc.is_signer { Some(*acc.key) } else { None })
+    remaining_accounts.first().and_then(|acc| if acc.is_signer { Some(*acc.key) } else { None })
 }
