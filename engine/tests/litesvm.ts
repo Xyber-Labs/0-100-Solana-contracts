@@ -186,7 +186,6 @@ describe("engine litesvm", () => {
   it("Initializes launch preset from file", async () => {
     const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
       multisig: multisig.publicKey,
-      id: Number(presetData.id),
       ...presetParams,
     });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], presetIx);
@@ -198,6 +197,65 @@ describe("engine litesvm", () => {
     assert.equal(preset.tauLamports.toNumber(), 100_000_000);
     assert.equal(preset.fundingDurationSeconds, 3);
     assert.equal(preset.withdrawalLimit, 3);
+  });
+
+  it("Rejects launch creation with disabled preset", async () => {
+    const disabledPresetId = 99;
+    const disabledPresetParams = {
+      ...presetParams,
+      id: disabledPresetId,
+      isEnabled: false,
+    };
+
+    const { instruction: disabledPresetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...disabledPresetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], disabledPresetIx);
+
+    const { data: disabledPreset } = await sdk.fetchLaunchPreset(disabledPresetId);
+    assert.equal(disabledPreset.isEnabled, false);
+
+    const nextId = await sdk.getNextProjectId();
+    const { instruction: launchIx } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: disabledPresetId,
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "DisabledTest",
+      symbol: "DIS",
+      uri: "https://example.com/disabled.json",
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], launchIx)),
+      "Preset is disabled"
+    );
+
+    const enabledPresetParams = {
+      ...disabledPresetParams,
+      isEnabled: true,
+    };
+    const { instruction: enablePresetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...enabledPresetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], enablePresetIx);
+
+    const { data: enabledPreset } = await sdk.fetchLaunchPreset(disabledPresetId);
+    assert.equal(enabledPreset.isEnabled, true);
+
+    const { instruction: launchIx2 } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: disabledPresetId,
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "EnabledTest",
+      symbol: "EN",
+      uri: "https://example.com/enabled.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], launchIx2);
+    console.log("✅ Launch created after enabling preset");
   });
 
   it("Initializes the launch state correctly", async () => {
@@ -879,7 +937,6 @@ describe("engine litesvm", () => {
 
     const { instruction: stressPresetIx } = await (sdk as any).initLaunchPresetIx({
       multisig: multisig.publicKey,
-      id: Number(stressPresetData.id),
       ...stressPresetParams,
     });
     sendTx(client, adminKeypair.publicKey, [adminKeypair], stressPresetIx);

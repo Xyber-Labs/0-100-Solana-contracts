@@ -11,6 +11,8 @@ export function loadKeypair(path: string): anchor.web3.Keypair {
 
 export function parsePresetParams(p: any) {
   return {
+    id: Number(p.id),
+    isEnabled: Boolean(p.isEnabled),
     hardCapLamports: new BN(String(p.hardCapLamports)),
     minRaiseLamports: new BN(String(p.minRaiseLamports)),
     perWalletCap: new BN(String(p.perWalletCap)),

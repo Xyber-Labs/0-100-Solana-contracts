@@ -2402,14 +2402,10 @@ export type Engine = {
       ],
       "args": [
         {
-          "name": "id",
-          "type": "u8"
-        },
-        {
           "name": "params",
           "type": {
             "defined": {
-              "name": "initLaunchPresetParams"
+              "name": "launchPreset"
             }
           }
         }
@@ -3259,51 +3255,56 @@ export type Engine = {
     },
     {
       "code": 6023,
+      "name": "presetDisabled",
+      "msg": "Preset is disabled"
+    },
+    {
+      "code": 6024,
       "name": "notEnoughAdminSigners",
       "msg": "Not enough admin signatures"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "invalidAdminThreshold",
       "msg": "Invalid admin threshold"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "invalidAdminSet",
       "msg": "Invalid admin set"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "insufficientFeeBalance",
       "msg": "Insufficient fee balance"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "invalidPrice",
       "msg": "Invalid price: must be finite and positive"
     },
     {
-      "code": 6028,
+      "code": 6029,
       "name": "priceOverflow",
       "msg": "Price overflow: result exceeds u128::MAX"
     },
     {
-      "code": 6029,
+      "code": 6030,
       "name": "bitmapFull",
       "msg": "Bitmap is full"
     },
     {
-      "code": 6030,
+      "code": 6031,
       "name": "invalidAccountDiscriminator",
       "msg": "Invalid account discriminator"
     },
     {
-      "code": 6031,
+      "code": 6032,
       "name": "invalidParams",
       "msg": "Invalid params"
     },
     {
-      "code": 6032,
+      "code": 6033,
       "name": "invalidState",
       "msg": "Invalid state"
     }
@@ -3527,90 +3528,6 @@ export type Engine = {
       }
     },
     {
-      "name": "initLaunchPresetParams",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "hardCapLamports",
-            "type": "u64"
-          },
-          {
-            "name": "minRaiseLamports",
-            "type": "u64"
-          },
-          {
-            "name": "perWalletCap",
-            "type": "u64"
-          },
-          {
-            "name": "tauLamports",
-            "type": "u64"
-          },
-          {
-            "name": "baseTotalAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "baseSaleBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "teamAllocationBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "fundingDurationSeconds",
-            "type": "i64"
-          },
-          {
-            "name": "unlockTimeSec",
-            "type": "i64"
-          },
-          {
-            "name": "creatorPeriodUnlock",
-            "type": "u64"
-          },
-          {
-            "name": "creatorPeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "creatorMaxDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "poolCreationGracePeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "teamDurationSec",
-            "type": "i64"
-          },
-          {
-            "name": "teamPeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "contributorDurationSec",
-            "type": "i64"
-          },
-          {
-            "name": "contributorPeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "withdrawalLimit",
-            "type": "u8"
-          },
-          {
-            "name": "creationFee",
-            "type": "u64"
-          }
-        ]
-      }
-    },
-    {
       "name": "initialized",
       "type": {
         "kind": "struct",
@@ -3714,6 +3631,10 @@ export type Engine = {
           {
             "name": "id",
             "type": "u8"
+          },
+          {
+            "name": "isEnabled",
+            "type": "bool"
           },
           {
             "name": "hardCapLamports",

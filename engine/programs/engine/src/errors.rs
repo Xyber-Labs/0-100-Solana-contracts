@@ -48,6 +48,8 @@ pub enum ErrorCode {
     InvalidAuthority,
     #[msg("Malformed preset")]
     MalformedPreset,
+    #[msg("Preset is disabled")]
+    PresetDisabled,
     #[msg("Not enough admin signatures")]
     NotEnoughAdminSigners,
     #[msg("Invalid admin threshold")]

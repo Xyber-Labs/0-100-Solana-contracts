@@ -196,7 +196,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     await utils.doAndCheckError(
       sdk.initLaunchPreset({
-        id: Number(presetConfig.id),
         params: invalidMinRaise,
         multisigKeypair,
       }),
@@ -213,7 +212,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     await utils.doAndCheckError(
       sdk.initLaunchPreset({
-        id: Number(presetConfig.id),
         params: invalidHardCap,
         multisigKeypair,
       }),
@@ -223,7 +221,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log("\n--- Attempt 3: Initialize with valid parameters ---");
     await sdk.initLaunchPreset({
-      id: Number(presetConfig.id),
       params: validParams,
       multisigKeypair,
     });
