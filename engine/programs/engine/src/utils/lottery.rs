@@ -2,46 +2,8 @@ use anchor_lang::{prelude::*, solana_program::keccak::hash};
 
 use crate::{
     errors::ErrorCode,
-    state::{LaunchState, TicketRange},
+    state::{LaunchPhase, LaunchState, PoolStatus, TicketRange},
 };
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
-pub enum PoolStatus {
-    #[default]
-    NotCreated,
-    Created {
-        base_mint: Pubkey,
-        pool_state: Pubkey,
-    },
-    LiquidityAdded {
-        base_mint: Pubkey,
-        pool_state: Pubkey,
-        position_nft_mint: Pubkey,
-    },
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug)]
-pub enum LaunchPhase {
-    Funding {
-        started_at: i64,
-    },
-    Seeded {
-        seed: [u8; 32],
-        funding_ended_at: i64,
-    },
-    Finalized {
-        tokens_per_ticket: u64,
-        claims_opened_at: i64,
-        pool: PoolStatus,
-    },
-    Cancelled,
-}
-
-impl Default for LaunchPhase {
-    fn default() -> Self {
-        LaunchPhase::Funding { started_at: 0 }
-    }
-}
 
 pub struct LotteryRaw<C, W, I> {
     pub control: C,

@@ -36,4 +36,3 @@ construct_uint! {
 
 pub mod clmm;
 pub mod lottery;
-pub mod pool;
