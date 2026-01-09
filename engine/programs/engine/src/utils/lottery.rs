@@ -89,7 +89,7 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
 
     #[inline]
     fn active_tickets(&self) -> u64 {
-        self.bits_allocated() - self.inactive_count()
+        self.control.as_ref().active_tickets()
     }
 
     #[inline]
@@ -193,7 +193,7 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
 impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W, I> LotteryRaw<C, W, I> {
     pub fn allocate_tickets(&mut self, count: u64) -> TicketRange {
         let start = self.control.as_ref().bits_allocated;
-        let end = start + count;
+        let end = start.checked_add(count).expect("ticket allocation overflow");
         self.control.as_mut().bits_allocated = end;
         TicketRange::new(start, end)
     }
