@@ -233,16 +233,20 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 2: Setup income-dispatcher program", async () => {
     console.log("=== Step 2: Setup Income-Dispatcher Program ===");
 
-    try {
+    const [configPda] = dispatcherSdk.getConfigPda();
+    const existingConfig = await provider.connection.getAccountInfo(configPda);
+
+    if (!existingConfig) {
       const { signature } = await dispatcherSdk.initialize({
+        newMultisig: multisigKeypair.publicKey,
         backend: backendKeypair.publicKey,
         platformWallet: platformKeypair.publicKey,
         communityWallet: communityWallet.publicKey,
-        signers: [deployerKeypair],
+        signerKeypair: deployerKeypair,
       });
       console.log("✅ Income-dispatcher initialized");
       console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
-    } catch (e) {
+    } else {
       console.log("Income-dispatcher config already exists, skipping initialization.");
     }
 

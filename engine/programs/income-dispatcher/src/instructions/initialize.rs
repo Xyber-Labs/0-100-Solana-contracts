@@ -15,15 +15,12 @@ const DEPLOYER: Pubkey = pubkey!("7xLqtwhLTSmXwNi3ddwpoxsCcGQXtvwdMCd3YdtgHVnF")
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(
-        mut,
-        constraint = (config.admin.is_none() && admin.key() == DEPLOYER) || config.admin == Some(admin.key())
-        @ ErrorCode::Unauthorized
-    )]
-    pub admin: Signer<'info>,
+    #[account(mut, constraint = multisig.key() == DEPLOYER && config.multisig == Pubkey::default() ||
+                                multisig.key() == config.multisig  @ ErrorCode::Unauthorized )]
+    pub multisig: Signer<'info>,
     #[account(
         init_if_needed,
-        payer = admin,
+        payer = multisig,
         space = 8 + Config::INIT_SPACE,
         seeds = [DISPATCHER_SEED_ROOT, b"config"],
         bump
@@ -34,12 +31,13 @@ pub struct Initialize<'info> {
 
 pub fn initialize(
     ctx: Context<Initialize>,
+    new_multisig: Pubkey,
     backend: Pubkey,
     platform_wallet: Pubkey,
     community_wallet: Pubkey,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
-    config.admin = Some(ctx.accounts.admin.key());
+    config.multisig = new_multisig;
     config.backend = backend;
     config.platform_wallet = platform_wallet;
     config.community_wallet = community_wallet;

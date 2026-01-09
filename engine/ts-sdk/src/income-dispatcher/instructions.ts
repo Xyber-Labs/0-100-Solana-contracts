@@ -53,18 +53,18 @@ const IncomeDispatcherSDK = {
     }
 
     async function initialize(args: {
+      newMultisig: anchor.web3.PublicKey;
       backend: anchor.web3.PublicKey;
       platformWallet: anchor.web3.PublicKey;
       communityWallet: anchor.web3.PublicKey;
-      signers: anchor.web3.Keypair[];
+      signerKeypair: anchor.web3.Keypair;
     }): Promise<{ config: anchor.web3.PublicKey; signature: string }> {
       const [config] = getConfigPda();
-      const admin = args.signers[0].publicKey;
 
       const ix = await program.methods
-        .initialize(args.backend, args.platformWallet, args.communityWallet)
+        .initialize(args.newMultisig, args.backend, args.platformWallet, args.communityWallet)
         .accountsStrict({
-          admin,
+          multisig: args.signerKeypair.publicKey,
           config,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -72,7 +72,7 @@ const IncomeDispatcherSDK = {
 
       const tx = new anchor.web3.Transaction().add(ix);
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(tx, args.signers);
+      const signature = await provider.sendAndConfirm(tx, [args.signerKeypair]);
 
       return { config, signature };
     }

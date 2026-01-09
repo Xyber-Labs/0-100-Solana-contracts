@@ -255,8 +255,7 @@ anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 1
 
 ### Step 8: Initialize Income Dispatcher
 
-Initialize the Income Dispatcher program. This must be done with the deployer keypair that matches the
-`DEPLOYER` constant hardcoded in the contract:
+Initialize the Income Dispatcher program. First run must be signed by deployer:
 
 - **devnet/localnet**: `3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP`
 - **mainnet**: `7xLqtwhLTSmXwNi3ddwpoxsCcGQXtvwdMCd3YdtgHVnF`
@@ -266,11 +265,20 @@ anchor run dispatcher-init --provider.cluster localnet -- \
   --backend $(solana address -k keys/backend.json) \
   --platform-wallet $(solana address -k keys/platform.json) \
   --community-wallet $(solana address -k keys/backend.json) \
-  --deployer-keypair ./keys/deployer.json
+  --signer-keypair ./keys/deployer.json \
+  --new-multisig $(solana address -k keys/multisig.json)
 ```
 
-**Note:** The Income Dispatcher can only be initialized once. After initialization, the deployer becomes
-the admin and can reinitialize to update wallets.
+For subsequent updates, use the stored multisig as signer:
+
+```bash
+anchor run dispatcher-init --provider.cluster localnet -- \
+  --backend $(solana address -k keys/backend.json) \
+  --platform-wallet $(solana address -k keys/platform.json) \
+  --community-wallet $(solana address -k keys/backend.json) \
+  --signer-keypair ./keys/multisig.json \
+  --new-multisig $(solana address -k keys/multisig.json)
+```
 
 ### Step 9: Check Vesting Info
 
