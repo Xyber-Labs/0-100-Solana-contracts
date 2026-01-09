@@ -124,6 +124,9 @@ jobs:
       - name: Cargo clippy
         run: cargo clippy -- -D warnings
 
+      - name: Cargo test
+        run: cargo test --package engine --package income-dispatcher
+
       - name: yarn build
         run: yarn build
 
