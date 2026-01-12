@@ -12,6 +12,11 @@ in `tests/raydium-clmm-anchor.test.ts`.
 
 ## Local Validator Setup
 
+```bash
+export CLUSTER=devnet
+export PROJECT_ID=1
+```
+
 ### 0. Download Required Programs
 
 Download Raydium CLMM and Token Metadata Program:
@@ -110,30 +115,33 @@ Create XYBER token mint (if not exists):
 ```bash
 export XYBER_MINT=$(solana address -k keys/xyber-mint.json)
 export CREATOR=$(solana address -k keys/creator.json)
+export MULTISIG=$(solana address -k keys/multisig.json)
+
+
 
 # Create XYBER token mint
 spl-token create-token \
   --url localhost \
-  --fee-payer keys/multisig.json \
-  --mint-authority keys/multisig.json \
+  --fee-payer ${CLUSTER}/multisig.json \
+  --mint-authority ${CLUSTER}/multisig.json \
   --decimals 6 \
-  keys/xyber-mint.json
+  ${CLUSTER}/xyber-mint.json
 
 # Create token account for creator
 spl-token create-account $XYBER_MINT \
   --owner $CREATOR \
-  --url localhost \
-  --fee-payer keys/creator.json
+  --url ${CLUSTER} \
+  --fee-payer ${CLUSTER}/creator.json
 
 # Create token account for treasury
-export TREASURY=$(solana address -k keys/treasure.json)
+export TREASURY=$(solana address -k ${CLUSTER}/treasure.json)
 spl-token create-account $XYBER_MINT \
   --owner $TREASURY \
-  --url localhost \
-  --fee-payer keys/multisig.json
+  --url ${CLUSTER} \
+  --fee-payer ${CLUSTER}/multisig.json
 
 # Mint tokens to creator
-spl-token mint --url localhost --recipient-owner $CREATOR --mint-authority keys/multisig.json $XYBER_MINT 1000000000
+spl-token mint --url ${CLUSTER} --recipient-owner $CREATOR --mint-authority ${CLUSTER}/multisig.json $XYBER_MINT 1000000000
 ```
 
 ### 4. Initialize Engine Configuration
@@ -141,23 +149,23 @@ spl-token mint --url localhost --recipient-owner $CREATOR --mint-authority keys/
 Initialize the global engine configuration. First run must be signed by deployer:
 
 ```bash
-anchor run init-engine-config --provider.cluster localnet -- \
-  --treasury $(solana address -k keys/treasure.json) \
-  --xyber-mint $(solana address -k keys/xyber-mint.json) \
+anchor run init-engine-config --provider.cluster ${CLUSTER} -- \
+  --treasury $(solana address -k ${CLUSTER}/treasure.json) \
+  --xyber-mint $(solana address -k ${CLUSTER}/xyber-mint.json) \
   --realloc-fund-lamports 3000000000 \
-  --signer-keypair ./keys/deployer.json \
-  --new-multisig $(solana address -k keys/multisig.json)
+  --signer-keypair ${CLUSTER}/deployer.json \
+  --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
 For subsequent updates, use the stored multisig as signer:
 
 ```bash
-anchor run init-engine-config --provider.cluster localnet -- \
-  --treasury $(solana address -k keys/treasure.json) \
-  --xyber-mint $(solana address -k keys/xyber-mint.json) \
+anchor run init-engine-config --provider.cluster ${CLUSTER} -- \
+  --treasury $(solana address -k ${CLUSTER}/treasure.json) \
+  --xyber-mint $(solana address -k ${CLUSTER}/xyber-mint.json) \
   --realloc-fund-lamports 3000000000 \
-  --signer-keypair ./keys/multisig.json \
-  --new-multisig $(solana address -k keys/multisig.json)
+  --signer-keypair ${CLUSTER}/multisig.json \
+  --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
 ### 5. Fund Realloc PDA (Optional)
@@ -178,9 +186,9 @@ solana transfer \
 Launch presets are reusable templates that store common launch parameters. Create a test preset for rapid local testing:
 
 ```bash
-anchor run init-launch-preset --provider.cluster localnet -- \
-  --payload ./presets/deployment.json \
-  --multisig-keypair ./keys/multisig.json
+anchor run init-launch-preset --provider.cluster ${CLUSTER} -- \
+  --payload ./presets/deployment-${CLUSTER}.json \
+  --multisig-keypair ${CLUSTER}/multisig.json
 ```
 
 ## Launch Flow (Matches Test Suite)
@@ -190,24 +198,24 @@ anchor run init-launch-preset --provider.cluster localnet -- \
 Create a new launch using the preset. Project ID is automatically fetched from the counter:
 
 ```bash
-anchor run init-launch --provider.cluster localnet -- \
+anchor run init-launch --provider.cluster ${CLUSTER} -- \
   --preset-id 0 \
   --name TestToken \
   --symbol TEST \
   --uri https://example.com/metadata.json \
-  --creator-keypair ./keys/creator.json
+  --creator-keypair ${CLUSTER}/creator.json
 ```
 
 Optionally, add a third-party signer for backend event tracking:
 
 ```bash
-anchor run init-launch --provider.cluster localnet -- \
+anchor run init-launch --provider.cluster ${CLUSTER} -- \
   --preset-id 0 \
   --name TestToken \
   --symbol TEST \
   --uri https://example.com/metadata.json \
-  --creator-keypair ./keys/creator.json \
-  --third-party-keypair ./keys/backend.json
+  --creator-keypair ${CLUSTER}/creator.json \
+  --third-party-keypair ${CLUSTER}/backend.json
 ```
 
 ### Step 2: Make Deposits
@@ -216,13 +224,13 @@ Make deposits to the launch. Lottery and contribution accounts are created autom
 
 ```bash
 # Deposit 1 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer1.json
+anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 150000000000 --user-keypair ${CLUSTER}/buyer1.json
 
 # Deposit 2 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer2.json
+anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 150000000000 --user-keypair ${CLUSTER}/buyer2.json
 
 # Deposit 3 (150 SOL)
-anchor run deposit --provider.cluster localnet -- --project-id 0 --amount 150000000000 --user-keypair ./keys/buyer3.json
+anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 150000000000 --user-keypair ${CLUSTER}/buyer3.json
 ```
 
 ### Step 3: Wait for Funding Period
@@ -237,7 +245,7 @@ For production presets with longer durations, wait accordingly.
 Set the VRF seed for randomness in winner selection:
 
 ```bash
-anchor run set-seed --provider.cluster localnet -- --project-id 0
+anchor run set-seed --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 ```
 
 ### Step 5: Finalize Lottery
@@ -245,7 +253,7 @@ anchor run set-seed --provider.cluster localnet -- --project-id 0
 Finalize the lottery by running the winner selection algorithm:
 
 ```bash
-anchor run finalize-lottery --provider.cluster localnet -- --project-id 0
+anchor run finalize-lottery --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 ```
 
 ### Step 6: Create CLMM Pool
@@ -253,7 +261,7 @@ anchor run finalize-lottery --provider.cluster localnet -- --project-id 0
 Create the Raydium CLMM pool. This also generates the base mint:
 
 ```bash
-anchor run create-clmm-pool --provider.cluster localnet -- --project-id 0
+anchor run create-clmm-pool --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 ```
 
 ### Step 7: Add Liquidity to CLMM Pool
@@ -261,7 +269,7 @@ anchor run create-clmm-pool --provider.cluster localnet -- --project-id 0
 Add liquidity to the created CLMM pool:
 
 ```bash
-anchor run add-clmm-liquidity --provider.cluster localnet -- --project-id 0
+anchor run add-clmm-liquidity --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 ```
 
 ### Step 8: Initialize Income Dispatcher
@@ -272,23 +280,23 @@ Initialize the Income Dispatcher program. First run must be signed by deployer:
 - **mainnet**: `7xLqtwhLTSmXwNi3ddwpoxsCcGQXtvwdMCd3YdtgHVnF`
 
 ```bash
-anchor run dispatcher-init --provider.cluster localnet -- \
-  --backend $(solana address -k keys/backend.json) \
-  --platform-wallet $(solana address -k keys/platform.json) \
-  --community-wallet $(solana address -k keys/backend.json) \
-  --signer-keypair ./keys/deployer.json \
-  --new-multisig $(solana address -k keys/multisig.json)
+anchor run dispatcher-init --provider.cluster ${CLUSTER} -- \
+  --backend $(solana address -k ${CLUSTER}/backend.json) \
+  --platform-wallet $(solana address -k ${CLUSTER}/platform.json) \
+  --community-wallet $(solana address -k ${CLUSTER}/backend.json) \
+  --signer-keypair ./${CLUSTER}/deployer.json \
+  --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
 For subsequent updates, use the stored multisig as signer:
 
 ```bash
-anchor run dispatcher-init --provider.cluster localnet -- \
-  --backend $(solana address -k keys/backend.json) \
-  --platform-wallet $(solana address -k keys/platform.json) \
-  --community-wallet $(solana address -k keys/backend.json) \
-  --signer-keypair ./keys/multisig.json \
-  --new-multisig $(solana address -k keys/multisig.json)
+anchor run dispatcher-init --provider.cluster ${CLUSTER} -- \
+  --backend $(solana address -k ${CLUSTER}/backend.json) \
+  --platform-wallet $(solana address -k ${CLUSTER}/platform.json) \
+  --community-wallet $(solana address -k ${CLUSTER}/backend.json) \
+  --signer-keypair ./${CLUSTER}/multisig.json \
+  --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
 ### Step 9: Check Vesting Info
@@ -297,16 +305,16 @@ After claims are opened, participants can check their vesting status:
 
 ```bash
 # Check Sale bucket vesting for a buyer
-anchor run vesting --provider.cluster localnet -- info \
-  --project-id 0 \
-  --participant ./keys/buyer1.json
+anchor run vesting --provider.cluster ${CLUSTER} -- info \
+  --project-id ${PROJECT_ID} \
+  --participant ./${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Check Team bucket vesting for creator
-anchor run vesting --provider.cluster localnet -- info \
-  --project-id 0 \
-  --participant ./keys/creator.json \
+anchor run vesting --provider.cluster ${CLUSTER} -- info \
+  --project-id ${PROJECT_ID} \
+  --participant ./${CLUSTER}/creator.json \
   --bucket 1
 ```
 
@@ -316,24 +324,24 @@ Participants can claim their vested tokens as they unlock:
 
 ```bash
 # Buyer claims from Sale bucket
-anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 0 \
-  --participant-keypair ./keys/buyer1.json
+anchor run vesting --provider.cluster ${CLUSTER} -- claim \
+  --project-id ${PROJECT_ID} \
+  --participant-keypair ./${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Creator claims from Team bucket
-anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 0 \
-  --participant-keypair ./keys/creator.json \
+anchor run vesting --provider.cluster ${CLUSTER} -- claim \
+  --project-id ${PROJECT_ID} \
+  --participant-keypair ./${CLUSTER}/creator.json \
   --bucket 1
 ```
 
 ```bash
 # Creator can also claim from Sale bucket (if participated)
-anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 0 \
-  --participant-keypair ./keys/creator.json \
+anchor run vesting --provider.cluster ${CLUSTER} -- claim \
+  --project-id ${PROJECT_ID} \
+  --participant-keypair ./${CLUSTER}/creator.json \
   --bucket 0
 ```
 
@@ -344,14 +352,14 @@ If the launch is cancelled (min raise not met), full refund is available.
 
 ```bash
 # Check refund info
-anchor run refund --provider.cluster localnet -- info \
-  --project-id 0 \
-  --participant ./keys/buyer1.json
+anchor run refund --provider.cluster ${CLUSTER} -- info \
+  --project-id ${PROJECT_ID} \
+  --participant ./${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Claim refunds for losing tickets or cancelled launches
-anchor run refund --provider.cluster localnet -- claim \
-  --project-id 0 \
-  --user-keypair ./keys/buyer1.json
+anchor run refund --provider.cluster ${CLUSTER} -- claim \
+  --project-id ${PROJECT_ID} \
+  --user-keypair ./${CLUSTER}/buyer1.json
 ```
