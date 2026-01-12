@@ -12,11 +12,9 @@ import {
 import { Raydium, TxVersion, PoolUtils } from "@raydium-io/raydium-sdk-v2";
 import Decimal from "decimal.js";
 
-import { EngineSDK } from "../ts-sdk/src/engine";
-
 import * as utils from "./utils";
 import { loadKeypair } from "./utils";
-import { IncomeDispatcherSDK, Role } from "@xyber-labs/0-100-sdk";
+import { EngineSDK, IncomeDispatcherSDK, Role } from "@xyber-labs/0-100-sdk";
 
 describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const provider = anchor.AnchorProvider.env();
