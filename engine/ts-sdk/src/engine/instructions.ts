@@ -336,6 +336,33 @@ const EngineSDK = {
       }
     }
 
+    async function closeClmmPosition(args: {
+      launch: anchor.web3.PublicKey;
+      creatorKeypair: anchor.web3.Keypair;
+    }): Promise<{
+      signature: string;
+    }> {
+      const result = await txBuilder.closeClmmPositionTx({
+        creator: args.creatorKeypair.publicKey,
+        launch: args.launch,
+      });
+
+      if (!provider.sendAndConfirm) {
+        throw new Error("Provider does not support sendAndConfirm");
+      }
+
+      try {
+        const signature = await provider.sendAndConfirm(result.transaction, [args.creatorKeypair]);
+        return { signature };
+      } catch (error: any) {
+        console.error("Transaction failed:", error.message);
+        if (error.logs) {
+          console.error("Transaction logs:", error.logs);
+        }
+        throw error;
+      }
+    }
+
     async function claim(args: {
       launch: anchor.web3.PublicKey;
       baseMint: anchor.web3.PublicKey;
@@ -718,6 +745,7 @@ const EngineSDK = {
       finalizeLottery,
       createClmmPool,
       addClmmLiquidity,
+      closeClmmPosition,
       getLiquidityRange,
       getSqrtPriceLowerX64ForPool,
       estimateQuoteForBase,
@@ -741,6 +769,8 @@ const EngineSDK = {
       finalizeLotteryTx: txBuilder.finalizeLotteryTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),
       addClmmLiquidityIx: txBuilder.addClmmLiquidityIx.bind(txBuilder),
+      closeClmmPositionTx: txBuilder.closeClmmPositionTx.bind(txBuilder),
+      closeClmmPositionIx: txBuilder.closeClmmPositionIx.bind(txBuilder),
 
       // Fetch helpers
       fetchEngineConfig,
@@ -781,6 +811,7 @@ const EngineSDK = {
       // Extract helpers
       extractBaseMint: txBuilder.extractBaseMint.bind(txBuilder),
       extractPoolState: txBuilder.extractPoolState.bind(txBuilder),
+      extractPositionNftMint: txBuilder.extractPositionNftMint.bind(txBuilder),
 
       // Vesting helpers
       getVestingConfig,

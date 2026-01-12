@@ -1036,6 +1036,125 @@ export class TxBuilder {
     return { transaction, ...rest };
   }
 
+  async closeClmmPositionIx(params: {
+    creator: web3.PublicKey;
+    launch: web3.PublicKey;
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    creatorWsolAta: web3.PublicKey;
+    creatorBaseAta: web3.PublicKey;
+  }> {
+    const { data: launchState } = await this.fetchLaunch(params.launch);
+
+    const baseMint = this.extractBaseMint(launchState);
+    if (!baseMint) {
+      throw new Error("Pool not created - baseMint not available");
+    }
+
+    const poolState = this.extractPoolState(launchState);
+    if (!poolState) {
+      throw new Error("Pool not created - poolState not available");
+    }
+
+    const positionNftMint = this.extractPositionNftMint(launchState);
+    if (!positionNftMint) {
+      throw new Error("Liquidity not added - positionNftMint not available");
+    }
+
+    const [escrowAuthority] = this.getPda(["escrow_authority", params.launch]);
+    const clmmProgram = this.getRaydiumClmmProgramId();
+
+    const [quoteVault] = this.getRaydiumPoolVaultPda(poolState, WSOL_MINT);
+    const [baseVault] = this.getRaydiumPoolVaultPda(poolState, baseMint);
+
+    const [personalPosition] = this.getRaydiumPersonalPositionPda(positionNftMint);
+
+    const raydiumPositionNftAccount = getAssociatedTokenAddressSync(
+      positionNftMint,
+      escrowAuthority,
+      true,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    const range = await this.getLiquidityRange({
+      launch: params.launch,
+      baseMint,
+      quoteMint: WSOL_MINT,
+      raydiumQuoteVault: quoteVault,
+      raydiumBaseVault: baseVault,
+    });
+
+    const tickLowerIndex = range.tickArrayLower;
+    const tickUpperIndex = range.tickArrayUpper;
+    const tickArrayLowerStartIndex = range.tickArrayLowerStartIndex;
+    const tickArrayUpperStartIndex = range.tickArrayUpperStartIndex;
+
+    const [protocolPosition] = this.getRaydiumProtocolPositionPda(poolState, tickLowerIndex, tickUpperIndex);
+    const [tickArrayLower] = this.getRaydiumTickArrayPda(poolState, tickArrayLowerStartIndex);
+    const [tickArrayUpper] = this.getRaydiumTickArrayPda(poolState, tickArrayUpperStartIndex);
+    const [bitmapExtension] = this.getRaydiumPoolTickArrayBitmapExtensionPda(poolState);
+
+    const creatorWsolAta = getAssociatedTokenAddressSync(WSOL_MINT, params.creator, true);
+    const creatorBaseAta = getAssociatedTokenAddressSync(baseMint, params.creator, true);
+
+    const instruction = await this.program.methods
+      .closeClmmPosition()
+      .accountsStrict({
+        launchState: params.launch,
+        escrowAuthority,
+        raydiumPositionNftMint: positionNftMint,
+        raydiumPositionNftAccount,
+        personalPosition,
+        poolState,
+        protocolPosition,
+        tokenVault0: quoteVault,
+        tokenVault1: baseVault,
+        tickArrayLower,
+        tickArrayUpper,
+        creatorTokenAccount0: creatorWsolAta,
+        creatorTokenAccount1: creatorBaseAta,
+        creator: params.creator,
+        raydiumProgram: clmmProgram,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+        memoProgram: new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+        vault0Mint: WSOL_MINT,
+        vault1Mint: baseMint,
+      } as any)
+      .remainingAccounts([
+        { pubkey: bitmapExtension, isSigner: false, isWritable: true },
+      ])
+      .instruction();
+
+    return {
+      instruction,
+      creatorWsolAta,
+      creatorBaseAta,
+    };
+  }
+
+  async closeClmmPositionTx(params: {
+    creator: web3.PublicKey;
+    launch: web3.PublicKey;
+  }): Promise<{
+    transaction: web3.Transaction;
+    creatorWsolAta: web3.PublicKey;
+    creatorBaseAta: web3.PublicKey;
+  }> {
+    const { instruction, ...rest } = await this.closeClmmPositionIx(params);
+
+    const computeBudgetIx = web3.ComputeBudgetProgram.setComputeUnitLimit({
+      units: 1_400_000,
+    });
+
+    const transaction = new web3.Transaction()
+      .add(computeBudgetIx)
+      .add(instruction);
+
+    return { transaction, ...rest };
+  }
+
   async getLiquidityRange(params: {
     launch: web3.PublicKey;
     baseMint: web3.PublicKey;

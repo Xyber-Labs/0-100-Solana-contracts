@@ -1,6 +1,7 @@
 pub use claim::*;
 pub use claim_clmm_fees::*;
 pub use clmm_add_liquidity::*;
+pub use clmm_close_position::*;
 pub use clmm_create_pool::*;
 pub use clmm_get_liquidity_range::*;
 pub use deposit::*;
@@ -15,6 +16,7 @@ pub use withdraw::*;
 mod claim;
 mod claim_clmm_fees;
 mod clmm_add_liquidity;
+mod clmm_close_position;
 mod clmm_create_pool;
 mod clmm_get_liquidity_range;
 mod deposit;

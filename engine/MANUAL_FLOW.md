@@ -355,3 +355,15 @@ anchor run refund --provider.cluster localnet -- claim \
   --project-id 0 \
   --user-keypair ./keys/buyer1.json
 ```
+
+### Step 12: Close CLMM Position (Creator Only)
+
+The creator can close the CLMM position to withdraw all liquidity and remaining SOL from escrow.
+This removes all liquidity from the pool, closes the position NFT, unwraps WSOL to native SOL,
+and transfers any remaining lamports from the escrow authority back to the creator.
+
+```bash
+anchor run close-clmm-position --provider.cluster localnet -- \
+  --project-id 0 \
+  --creator-keypair ./keys/creator.json
+```

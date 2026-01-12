@@ -953,6 +953,181 @@
       "args": []
     },
     {
+      "name": "close_clmm_position",
+      "discriminator": [
+        233,
+        35,
+        66,
+        233,
+        56,
+        86,
+        143,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "launch_state",
+          "docs": [
+            "Launch state for this pool"
+          ],
+          "writable": true
+        },
+        {
+          "name": "escrow_authority",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "raydium_position_nft_mint",
+          "writable": true
+        },
+        {
+          "name": "raydium_position_nft_account",
+          "docs": [
+            "We pass it through to Raydium CPIs which will validate it; Anchor",
+            "cannot type-check it as a Token-2022 account here."
+          ],
+          "writable": true
+        },
+        {
+          "name": "personal_position",
+          "docs": [
+            "Personal position state (Raydium CLMM)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "pool_state",
+          "writable": true
+        },
+        {
+          "name": "protocol_position",
+          "writable": true
+        },
+        {
+          "name": "token_vault_0",
+          "writable": true
+        },
+        {
+          "name": "token_vault_1",
+          "writable": true
+        },
+        {
+          "name": "tick_array_lower",
+          "writable": true
+        },
+        {
+          "name": "tick_array_upper",
+          "writable": true
+        },
+        {
+          "name": "creator_token_account_0",
+          "docs": [
+            "Creator's WSOL token account (token 0)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator_token_account_1",
+          "docs": [
+            "Creator's base token account (token 1)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "creator",
+          "docs": [
+            "Creator's system account. Must match `launch_state.creator` and",
+            "sign the transaction so we can unwrap WSOL inside this instruction."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "raydium_program",
+          "docs": [
+            "because this instruction is intended for controlled test/mainnet",
+            "flows and the client passes the correct Raydium program id."
+          ]
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "We don't enforce the program id at the Anchor level to avoid",
+            "mismatches between different clusters/SDKs; Raydium will validate",
+            "it internally during CPI."
+          ]
+        },
+        {
+          "name": "token_program_2022",
+          "docs": [
+            "Same rationale as `token_program` above: we forward it to Raydium",
+            "and let their program perform any strict validation."
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "memo_program",
+          "address": "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+        },
+        {
+          "name": "vault_0_mint"
+        },
+        {
+          "name": "vault_1_mint"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "create_clmm_pool",
       "discriminator": [
         181,
@@ -3031,6 +3206,19 @@
       ]
     },
     {
+      "name": "PersonalPositionState",
+      "discriminator": [
+        70,
+        111,
+        150,
+        126,
+        230,
+        15,
+        25,
+        117
+      ]
+    },
+    {
       "name": "ProjectCounter",
       "discriminator": [
         210,
@@ -3134,6 +3322,19 @@
         82,
         201,
         209
+      ]
+    },
+    {
+      "name": "PositionClosed",
+      "discriminator": [
+        157,
+        163,
+        227,
+        228,
+        13,
+        97,
+        138,
+        121
       ]
     },
     {
@@ -3816,6 +4017,115 @@
       }
     },
     {
+      "name": "PersonalPositionState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "docs": [
+              "Bump to identify PDA"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                1
+              ]
+            }
+          },
+          {
+            "name": "nft_mint",
+            "docs": [
+              "Mint address of the tokenized position"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "The ID of the pool with which this token is connected"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "tick_lower_index",
+            "docs": [
+              "The lower bound tick of the position"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "tick_upper_index",
+            "docs": [
+              "The upper bound tick of the position"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "liquidity",
+            "docs": [
+              "The amount of liquidity owned by this position"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "fee_growth_inside_0_last_x64",
+            "docs": [
+              "The token_0 fee growth of the aggregate position as of the last action on the individual position"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "fee_growth_inside_1_last_x64",
+            "docs": [
+              "The token_1 fee growth of the aggregate position as of the last action on the individual position"
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "token_fees_owed_0",
+            "docs": [
+              "The fees owed to the position owner in token_0, as of the last computation"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "token_fees_owed_1",
+            "docs": [
+              "The fees owed to the position owner in token_1, as of the last computation"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "reward_infos",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PositionRewardInfo"
+                  }
+                },
+                3
+              ]
+            }
+          },
+          {
+            "name": "recent_epoch",
+            "type": "u64"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                7
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "PoolStatus",
       "type": {
         "kind": "enum",
@@ -3852,6 +4162,42 @@
                 "type": "pubkey"
               }
             ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "liquidity",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionRewardInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "growth_inside_last_x64",
+            "type": "u128"
+          },
+          {
+            "name": "reward_amount_owed",
+            "type": "u64"
           }
         ]
       }

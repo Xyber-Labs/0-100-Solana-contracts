@@ -109,6 +109,12 @@ pub mod engine {
     ) -> Result<()> {
         instructions::claim_clmm_fees(ctx)
     }
+
+    pub fn close_clmm_position<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseClmmPosition<'info>>,
+    ) -> Result<()> {
+        instructions::close_clmm_position(ctx)
+    }
 }
 
 const MYRIAD: u128 = 10000;
