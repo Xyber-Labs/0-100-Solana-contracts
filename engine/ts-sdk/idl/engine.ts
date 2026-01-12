@@ -1851,6 +1851,51 @@ export type Engine = {
           }
         },
         {
+          "name": "projectCounter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "reallocFunds",
           "writable": true,
           "pda": {
@@ -2011,7 +2056,7 @@ export type Engine = {
               },
               {
                 "kind": "arg",
-                "path": "projectId"
+                "path": "nonce"
               }
             ]
           }
@@ -3823,7 +3868,7 @@ export type Engine = {
         "kind": "struct",
         "fields": [
           {
-            "name": "lastProjectId",
+            "name": "value",
             "type": "u64"
           }
         ]

@@ -34,23 +34,20 @@ pub struct TokenMetadataInput {
 }
 
 #[derive(Accounts)]
-#[instruction(preset_id: u8, project_id: u64)]
+#[instruction(preset_id: u8, nonce: u64)]
 pub struct InitLaunch<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
     #[account(
-        init_if_needed,
-        payer = creator,
-        space = 8 + ProjectCounter::INIT_SPACE,
-        seeds = [SEED_ROOT, b"project_counter"],
-        bump
+        mut, seeds = [SEED_ROOT, b"project_counter"], bump,
+        constraint = nonce == project_counter.value @ EngineErrorCode::Unauthorized
     )]
     pub project_counter: Box<Account<'info, ProjectCounter>>,
     #[account(
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", &project_id.to_le_bytes()],
+        seeds = [SEED_ROOT, b"launch", &nonce.to_le_bytes()],
         bump
     )]
     pub launch_state: Box<Account<'info, LaunchState>>,
@@ -67,7 +64,10 @@ pub struct InitLaunch<'info> {
     pub token_metadata_config: Box<Account<'info, TokenMetadataConfig>>,
     #[account(seeds = [SEED_ROOT, b"config"], bump)]
     pub engine_config: Box<Account<'info, EngineConfig>>,
-    #[account(mut, token::mint = engine_config.xyber_mint, token::authority = creator)]
+    #[account(
+        mut, token::mint = engine_config.xyber_mint, token::authority = creator,
+        constraint = creator_xyber_ata.amount >= launch_preset.creation_fee @ EngineErrorCode::InsufficientFeeBalance
+    )]
     pub creator_xyber_ata: Box<Account<'info, TokenAccount>>,
     #[account(mut, token::mint = engine_config.xyber_mint, token::authority = engine_config.treasury)]
     pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
@@ -117,15 +117,12 @@ pub fn init_launch(
     let p = &ctx.accounts.launch_preset;
     let creator = &ctx.accounts.creator;
 
-    require!(p.is_valid(), EngineErrorCode::MalformedPreset);
     validate_meta(&meta)?;
 
     let fee = p.creation_fee;
     if fee > 0 {
         let creator_xyber_ata = &ctx.accounts.creator_xyber_ata;
         let treasury_xyber_ata = &ctx.accounts.treasury_xyber_ata;
-
-        require!(creator_xyber_ata.amount >= fee, EngineErrorCode::InsufficientFeeBalance);
 
         let cpi_accounts = token::Transfer {
             from: creator_xyber_ata.to_account_info(),
@@ -137,8 +134,8 @@ pub fn init_launch(
     }
 
     let counter = &mut ctx.accounts.project_counter;
-    require!(nonce == counter.last_project_id, EngineErrorCode::Unauthorized);
-    counter.last_project_id = checked_add!(counter.last_project_id, 1)?;
+
+    counter.value = checked_add!(counter.value, 1)?;
 
     let now = Clock::get()?.unix_timestamp;
     let start = if funding_start_timestamp <= now { now } else { funding_start_timestamp };

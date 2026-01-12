@@ -481,7 +481,7 @@ describe("engine litesvm", () => {
 
   it("Project ID increments correctly", async () => {
     const { data: counterBefore } = await sdk.fetchProjectCounter();
-    const lastIdBefore = counterBefore.lastProjectId.toNumber();
+    const lastIdBefore = counterBefore.value.toNumber();
 
     // Create project 1: nonce must equal current counter value
     const projectId1 = await sdk.getNextProjectId();
@@ -536,7 +536,7 @@ describe("engine litesvm", () => {
 
     // Counter is incremented after each launch, so it equals projectId3 + 1
     const { data: counterAfter } = await sdk.fetchProjectCounter();
-    assert.equal(counterAfter.lastProjectId.toNumber(), projectId3.toNumber() + 1, "Counter should equal last project ID + 1");
+    assert.equal(counterAfter.value.toNumber(), projectId3.toNumber() + 1, "Counter should equal last project ID + 1");
   });
 
   it("Deposit respects perWalletCap limit", async () => {

@@ -402,8 +402,9 @@ export class TxBuilder {
     treasury: web3.PublicKey;
     xyberMint: web3.PublicKey;
     reallocFundLamports: BN;
-  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey; reallocFunds: web3.PublicKey }> {
+  }): Promise<{ instruction: web3.TransactionInstruction; engineConfig: web3.PublicKey; reallocFunds: web3.PublicKey; projectCounter: web3.PublicKey }> {
     const [engineConfig] = this.getConfigPda();
+    const [projectCounter] = this.getPda(["project_counter"]);
     const [reallocFunds] = this.getReallocFundsPda();
     const method = this.getIxMethod("initEngineConfig", "init_engine_config");
     if (!method) throw new Error("initEngineConfig method not found in program IDL");
@@ -418,11 +419,12 @@ export class TxBuilder {
       .accountsStrict({
         multisig: params.signer,
         engineConfig,
+        projectCounter,
         reallocFunds,
         systemProgram: web3.SystemProgram.programId,
       })
       .instruction();
-    return { instruction: ix, engineConfig, reallocFunds };
+    return { instruction: ix, engineConfig, reallocFunds, projectCounter };
   }
 
   async setSeedIx(params: { launch: web3.PublicKey; payer: web3.PublicKey }): Promise<{

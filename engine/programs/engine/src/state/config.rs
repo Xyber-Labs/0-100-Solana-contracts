@@ -12,7 +12,7 @@ pub struct EscrowAccount {
 #[account]
 #[derive(InitSpace)]
 pub struct ProjectCounter {
-    pub last_project_id: u64,
+    pub value: u64,
 }
 
 #[account]

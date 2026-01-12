@@ -1845,6 +1845,51 @@
           }
         },
         {
+          "name": "project_counter",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  106,
+                  101,
+                  99,
+                  116,
+                  95,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  101,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "realloc_funds",
           "writable": true,
           "pda": {
@@ -2005,7 +2050,7 @@
               },
               {
                 "kind": "arg",
-                "path": "project_id"
+                "path": "nonce"
               }
             ]
           }
@@ -3817,7 +3862,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "last_project_id",
+            "name": "value",
             "type": "u64"
           }
         ]

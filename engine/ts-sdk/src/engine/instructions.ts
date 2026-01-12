@@ -359,8 +359,8 @@ const EngineSDK = {
       newMultisig: anchor.web3.PublicKey;
       reallocFundLamports: BN;
       signerKeypair: anchor.web3.Keypair;
-    }): Promise<{ engineConfig: anchor.web3.PublicKey; reallocFunds: anchor.web3.PublicKey; signature: string }> {
-      const { instruction, engineConfig, reallocFunds } = await txBuilder.initEngineConfigIx({
+    }): Promise<{ engineConfig: anchor.web3.PublicKey; reallocFunds: anchor.web3.PublicKey; projectCounter: anchor.web3.PublicKey; signature: string }> {
+      const { instruction, engineConfig, reallocFunds, projectCounter } = await txBuilder.initEngineConfigIx({
         signer: args.signerKeypair.publicKey,
         newMultisig: args.newMultisig,
         treasury: args.treasury,
@@ -370,7 +370,7 @@ const EngineSDK = {
       const tx = new anchor.web3.Transaction().add(instruction);
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
       const signature = await provider.sendAndConfirm(tx, [args.signerKeypair]);
-      return { engineConfig, reallocFunds, signature };
+      return { engineConfig, reallocFunds, projectCounter, signature };
     }
 
     async function initLaunchPreset(args: {
@@ -492,13 +492,8 @@ const EngineSDK = {
     }
 
     async function getNextProjectId(): Promise<BN> {
-      try {
-        const { data: counter } = await fetchProjectCounter();
-        const last: BN = (counter as any)?.lastProjectId ?? new BN(0);
-        return last;
-      } catch (_) {
-        return new BN(0);
-      }
+      const { data: counter } = await fetchProjectCounter();
+      return counter.value;
     }
 
     // Get all launch states (projects) from the blockchain
