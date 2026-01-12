@@ -605,6 +605,9 @@ export class TxBuilder {
     const presetAddress = launchState.preset;
 
     const participantAta = getAssociatedTokenAddressSync(params.baseMint, params.participant, true);
+    if (params.bucket !== 0 && params.bucket !== 1) {
+      throw new Error(`Invalid bucket value: ${params.bucket}. Must be 0 (sale) or 1 (team).`);
+    }
     const bucketArg = params.bucket === 0 ? { sale: {} } : { team: {} };
 
     const instruction = await this.program.methods
