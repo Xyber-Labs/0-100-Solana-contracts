@@ -16,7 +16,7 @@ pub enum Role {
 #[account]
 #[derive(InitSpace)]
 pub struct Config {
-    pub admin: Option<Pubkey>,
+    pub multisig: Pubkey,
     pub backend: Pubkey,
     pub platform_wallet: Pubkey,
     pub community_wallet: Pubkey,

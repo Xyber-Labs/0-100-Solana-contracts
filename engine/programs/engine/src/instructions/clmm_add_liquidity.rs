@@ -7,10 +7,12 @@ use anchor_spl::{
 use raydium_amm_v3::{program::AmmV3, states::AmmConfig};
 
 use crate::{
+    checked_mul,
     constants::AMM_CONFIG_INDEX,
-    LaunchState,
+    errors::ErrorCode,
     SEED_ROOT,
-    state::PoolState, utils::clmm::{ClmmOrder, get_liquidity_range_impl},
+    state::{LaunchPreset, LaunchState},
+    utils::clmm::{ClmmOrder, get_liquidity_range_impl},
 };
 
 #[derive(Accounts)]
@@ -18,11 +20,18 @@ pub struct AddClmmLiquidity<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized,
+        constraint = launch_state.is_pool_created() @ ErrorCode::NotFinalized
+    )]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
     #[account(
-        constraint = launch_state.base_mint == Some(base_mint.key()),
+        constraint = launch_state.base_mint() == Some(base_mint.key()),
         mint::authority = escrow_authority,
         mint::token_program = base_token_program
     )]
@@ -57,9 +66,6 @@ pub struct AddClmmLiquidity<'info> {
 
     #[account(seeds = [b"amm_config", &AMM_CONFIG_INDEX.to_be_bytes()], bump, seeds::program = raydium_program.key())]
     pub raydium_amm_config: Box<Account<'info, AmmConfig>>,
-
-    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
-    pub pool_state: Account<'info, PoolState>,
 
     /// CHECK: Pool state PDA (created by Raydium)
     #[account(mut)]
@@ -107,17 +113,22 @@ pub struct AddClmmLiquidity<'info> {
 pub fn add_clmm_liquidity<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
 ) -> Result<()> {
-    // TODO: base_mint to be used instead of this explicit approach
-    ctx.accounts.pool_state.claims_ready = true;
-    add_initial_liquidity_impl(ctx)?;
+    let launch_state = &ctx.accounts.launch_state;
+
+    let total_deposited =
+        checked_mul!(launch_state.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
+
+    add_initial_liquidity_impl(ctx, total_deposited)?;
     Ok(())
 }
 
 fn add_initial_liquidity_impl<'info>(
     ctx: Context<'_, '_, '_, 'info, AddClmmLiquidity<'info>>,
+    total_deposited: u64,
 ) -> Result<()> {
     let order = ClmmOrder::from_inputs(
-        &ctx.accounts.launch_state,
+        &ctx.accounts.launch_preset,
+        total_deposited,
         &ctx.accounts.quote_mint,
         &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,
@@ -202,7 +213,6 @@ fn add_initial_liquidity_impl<'info>(
         order.base_flag,
     )?;
 
-    ctx.accounts.launch_state.raydium_position_nft_mint =
-        Some(ctx.accounts.raydium_position_nft_mint.key());
+    ctx.accounts.launch_state.set_liquidity_added(ctx.accounts.raydium_position_nft_mint.key());
     Ok(())
 }

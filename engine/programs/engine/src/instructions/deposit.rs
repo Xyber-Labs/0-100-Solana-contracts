@@ -1,186 +1,289 @@
+use anchor_lang::{prelude::*, solana_program, solana_program::sysvar::rent::Rent};
+
 use crate::{
+    checked_add, checked_div, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::{DepositMade, RosterShardFull, RosterShardNearFull},
-    state::{LaunchState, RosterShard, UserContribution},
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::lottery::LotteryRaw,
 };
-use anchor_lang::{prelude::*, solana_program, AccountDeserialize};
-use solana_program::sysvar::clock::Clock;
+
+#[event]
+pub struct Deposited {
+    pub launch: Pubkey,
+    pub contributor: Pubkey,
+    pub lamports: u64,
+}
 
 #[derive(Accounts)]
+#[instruction(lamports: u64)]
 pub struct Deposit<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
-    #[account(mut)]
-    pub launch_state: Account<'info, LaunchState>,
+    pub contributor: Signer<'info>,
+
     #[account(
-        init_if_needed,
-        payer = user,
-        space = 8 + UserContribution::INIT_SPACE,
-        seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()],
+        mut,
+        constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
+    )]
+    pub launch_state: Account<'info, LaunchState>,
+
+    #[account(
+        address = launch_state.preset @ EngineErrorCode::MalformedPreset,
+        constraint = lamports > 0 && lamports % launch_preset.tau_lamports == 0 @ EngineErrorCode::BadAmount
+    )]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    /// CHECK: Platform account for paying reallocation
+    #[account(mut, seeds = [SEED_ROOT, b"realloc_funds"], bump)]
+    pub realloc_funds: UncheckedAccount<'info>,
+
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Initialized manually, validated via seeds
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()],
         bump
     )]
-    pub user_contribution: Account<'info, UserContribution>,
-    
-    #[account(mut, constraint = roster_shard.launch == launch_state.key())]
-    pub roster_shard: Account<'info, RosterShard>,
+    pub contribution: UncheckedAccount<'info>,
+
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    /// CHECK: This is the launch account referenced by the roster
-    #[account(address = launch_state.key())]
-    pub launch: UncheckedAccount<'info>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 
-pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-    let launch_state = &mut ctx.accounts.launch_state;
+pub fn deposit(mut ctx: Context<Deposit>, lamports: u64) -> Result<()> {
+    let launch_preset = &ctx.accounts.launch_preset;
+    let contribution_info = ctx.accounts.contribution.to_account_info();
+    let launch_key = ctx.accounts.launch_state.key();
+    let contributor_key = ctx.accounts.contributor.key();
 
-    // Check if funding period is still active
-    let current_time = Clock::get()?.unix_timestamp;
-    require!(current_time >= launch_state.funding_period_start, EngineErrorCode::FundingPeriodNotStarted);
-    require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
-    require!(
-        amount > 0 && amount % launch_state.tau_lamports == 0,
-        EngineErrorCode::AmountNotMultipleTau
-    );
+    let mut contribution =
+        get_or_init_contribution(&ctx, &contribution_info, &launch_key, &contributor_key)?;
 
-    // Creator must use privileged creator_deposit, not user deposit
-    require!(ctx.accounts.user.key() != launch_state.creator, EngineErrorCode::Unauthorized);
+    let is_creator = contributor_key == ctx.accounts.launch_state.creator;
+    check_deposit_cap(lamports, launch_preset, contribution.total_tickets()?, is_creator)?;
+    allocate_lottery_bits(&mut ctx, lamports, &mut contribution, is_creator)?;
+    extend_write_contribution(&ctx, &contributor_key, contribution)?;
 
-    // per-wallet cap check
-    let current = ctx.accounts.user_contribution.deposited;
-    require!(
-        current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?
-            <= launch_state.per_wallet_cap,
-        EngineErrorCode::PerWalletCapExceeded
-    );
-
-    // transfer to escrow_authority
-    let ix = solana_program::system_instruction::transfer(
-        &ctx.accounts.user.key(),
-        &ctx.accounts.escrow_authority.key(),
-        amount,
-    );
-    anchor_lang::solana_program::program::invoke(
-        &ix,
+    solana_program::program::invoke(
+        &solana_program::system_instruction::transfer(
+            &contributor_key,
+            &ctx.accounts.escrow_authority.key(),
+            lamports,
+        ),
         &[
-            ctx.accounts.user.to_account_info(),
+            ctx.accounts.contributor.to_account_info(),
             ctx.accounts.escrow_authority.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
         ],
     )?;
 
-    // update user
-    let user = &mut ctx.accounts.user_contribution;
-    let is_first_deposit = user.wallet == Pubkey::default();
-
-    // Initialize wallet field if this is the first deposit
-    if is_first_deposit {
-        user.launch = launch_state.key();
-        user.wallet = ctx.accounts.user.key();
-        user.claimed_refund = false;
-        user.claimed_tokens = false;
-    }
-
-    let old_tickets = user.ticket_count;
-    user.deposited = current.checked_add(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let new_tickets_u64 = user
-        .deposited
-        .checked_div(launch_state.tau_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    require!(new_tickets_u64 <= u32::MAX as u64, EngineErrorCode::U64ConversionOverflow);
-    let new_tickets = new_tickets_u64 as u32;
-    let delta = new_tickets.checked_sub(old_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    user.ticket_count = new_tickets;
-
-    // Sharded roster update: assign on first deposit, then O(1) by index
-    let shard = &mut ctx.accounts.roster_shard;
-    if is_first_deposit {
-        // Enforce sequential fill across shards: s > 1 requires s-1 to be full
-        if shard.shard_id > 1 {
-            let prev_id = shard.shard_id - 1;
-            let (expected_prev_pda, _) = Pubkey::find_program_address(
-                &[SEED_ROOT, b"roster_shard", launch_state.key().as_ref(), &prev_id.to_le_bytes()],
-                &crate::ID,
-            );
-            let prev_ai = ctx
-                .remaining_accounts
-                .get(0)
-                .ok_or(EngineErrorCode::MappingError)?;
-            require_keys_eq!(prev_ai.key(), expected_prev_pda, EngineErrorCode::Unauthorized);
-            let data_ref = prev_ai.try_borrow_data()?;
-            let mut read_cursor: &[u8] = &data_ref;
-            let prev: RosterShard = RosterShard::try_deserialize(&mut read_cursor)?;
-            let cap = launch_state.roster_shard_cap as usize;
-            // Strict: allow deposits into shard s only when shard (s-1) is fully filled
-            require!(prev.wallets.len() == cap, EngineErrorCode::RosterShardFull);
-        }
-        // first deposit path: assign shard and index
-        require!(
-            shard.wallets.len() < launch_state.roster_shard_cap as usize,
-            EngineErrorCode::RosterShardFull
-        );
-        user.shard_id = shard.shard_id;
-        user.idx_in_shard = shard.wallets.len() as u32;
-        shard.wallets.push(ctx.accounts.user.key());
-        // Start counts at 0 for first deposit; we'll add the delta below.
-        shard.counts.push(0);
-        shard.prefix.clear(); // invalidate prefix if already built
-        // Track highest used shard id
-        if shard.shard_id as u16 > launch_state.roster_highest_used_shard {
-            launch_state.roster_highest_used_shard = shard.shard_id as u16;
-        }
-        // Emit near/full events on threshold crossings
-        let used = shard.wallets.len() as u16;
-        let cap_u16 = launch_state.roster_shard_cap;
-        let threshold_u16 = ((cap_u16 as u32).saturating_mul(80).saturating_add(99) / 100) as u16;
-        if used == threshold_u16 {
-            emit!(RosterShardNearFull {
-                launch: launch_state.key(),
-                shard_id: shard.shard_id,
-                used,
-                cap: cap_u16,
-                threshold_percent: 80,
-            });
-        }
-        if used == cap_u16 {
-            emit!(RosterShardFull {
-                launch: launch_state.key(),
-                shard_id: shard.shard_id,
-                cap: cap_u16,
-            });
-        }
-    } else {
-        // must stay in the same shard
-        require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
-    }
-    let u = user.idx_in_shard as usize;
-    if shard.counts.len() <= u {
-        shard.counts.resize(u + 1, 0);
-    }
-    shard.counts[u] =
-        shard.counts[u].checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    shard.prefix.clear(); // will be recomputed at finalize
-    shard.total_in_shard = 0; // prevent stale reads pre-finalization
-
-    launch_state.total_deposited = launch_state
-        .total_deposited
-        .checked_add(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    launch_state.total_tickets =
-        launch_state.total_tickets.checked_add(delta).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-
-    emit!(DepositMade {
-        launch: launch_state.key(),
-        user: ctx.accounts.user.key(),
-        amount,
-        tickets_before: old_tickets,
-        tickets_after: new_tickets,
-        total_deposited: launch_state.total_deposited,
-        total_tickets: launch_state.total_tickets,
+    emit!(Deposited {
+        launch: launch_key,
+        contributor: contributor_key,
+        lamports,
     });
+
+    Ok(())
+}
+
+fn get_or_init_contribution<'a>(
+    ctx: &Context<Deposit<'a>>,
+    contribution_info: &AccountInfo<'a>,
+    launch_key: &Pubkey,
+    contributor_key: &Pubkey,
+) -> Result<Contribution> {
+    if contribution_info.data_is_empty() {
+        init_contribution(ctx, contribution_info, launch_key, contributor_key)
+    } else {
+        let data = contribution_info.try_borrow_data()?;
+        require!(
+            data[..8] == *Contribution::DISCRIMINATOR,
+            EngineErrorCode::InvalidAccountDiscriminator
+        );
+        Contribution::try_deserialize(&mut &data[..])
+    }
+}
+
+fn init_contribution<'a>(
+    ctx: &Context<Deposit<'a>>,
+    contribution_info: &AccountInfo<'a>,
+    launch_key: &Pubkey,
+    contributor_key: &Pubkey,
+) -> Result<Contribution> {
+    let initial_space = 8 + Contribution::INIT_SPACE;
+    let rent = Rent::get()?;
+    let lamports = rent.minimum_balance(initial_space);
+
+    let signer_seeds: &[&[&[u8]]] = &[&[
+        SEED_ROOT,
+        b"contributor",
+        launch_key.as_ref(),
+        contributor_key.as_ref(),
+        &[ctx.bumps.contribution],
+    ]];
+
+    solana_program::program::invoke_signed(
+        &solana_program::system_instruction::create_account(
+            contributor_key,
+            &contribution_info.key(),
+            lamports,
+            initial_space as u64,
+            ctx.program_id,
+        ),
+        &[
+            ctx.accounts.contributor.to_account_info(),
+            contribution_info.clone(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+        signer_seeds,
+    )?;
+
+    let mut data = contribution_info.try_borrow_mut_data()?;
+    data[..8].copy_from_slice(Contribution::DISCRIMINATOR);
+    Ok(Contribution::default())
+}
+
+fn check_deposit_cap(
+    lamports: u64,
+    launch_preset: &LaunchPreset,
+    current_tickets: u64,
+    is_creator: bool,
+) -> Result<()> {
+    let current_deposit = checked_mul!(current_tickets, launch_preset.tau_lamports)?;
+    let new_deposit = checked_add!(current_deposit, lamports)?;
+    let cap =
+        if is_creator { launch_preset.creator_max_deposit } else { launch_preset.per_wallet_cap };
+    require!(new_deposit <= cap, EngineErrorCode::DepositCapExceeded);
+    Ok(())
+}
+
+fn allocate_lottery_bits(
+    ctx: &mut Context<Deposit<'_>>,
+    lamports: u64,
+    contribution: &mut Contribution,
+    is_creator: bool,
+) -> Result<()> {
+    let launch_preset = &ctx.accounts.launch_preset;
+
+    let launch_state: &mut LaunchState = &mut ctx.accounts.launch_state;
+    let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+    let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+
+    let (mut reused_ranges, remaining, future_bits_allocated) = {
+        let mut winners_data = winners_info.try_borrow_mut_data()?;
+        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
+        let mut lottery =
+            LotteryRaw::new(&mut *launch_state, &mut winners_data[..], &mut inactive_data[..]);
+
+        let new_tickets_count = checked_div!(lamports, launch_preset.tau_lamports)?;
+        let reused = lottery.take_tickets(new_tickets_count);
+        let reused_count = reused.iter().try_fold(0u64, |acc, r| checked_add!(acc, r.count()))?;
+        let remaining = checked_sub!(new_tickets_count, reused_count)?;
+        let future_bits = checked_add!(lottery.bits_allocated(), remaining)?;
+        (reused, remaining, future_bits)
+    };
+
+    let required_bitmap_space =
+        LotteryRaw::<&LaunchState, &[u8], &[u8]>::required_bitmap_space(future_bits_allocated);
+
+    realloc_raw(
+        &winners_info,
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
+    realloc_raw(
+        &inactive_info,
+        &ctx.accounts.realloc_funds.to_account_info(),
+        required_bitmap_space,
+    )?;
+
+    let mut winners_data = winners_info.try_borrow_mut_data()?;
+    let mut lottery = LotteryRaw::new(launch_state, &mut winners_data[..], &[] as &[u8]);
+
+    if remaining > 0 {
+        reused_ranges.push(lottery.allocate_tickets(remaining));
+    }
+
+    for range in &reused_ranges {
+        lottery.set_range(*range, is_creator);
+        contribution.ticket_ranges.push(*range);
+    }
+
+    Ok(())
+}
+
+fn extend_write_contribution(
+    ctx: &Context<Deposit<'_>>,
+    contributor_key: &Pubkey,
+    contribution: Contribution,
+) -> Result<()> {
+    let contribution_info = ctx.accounts.contribution.to_account_info();
+    let required_contribution_space = 8 + contribution.required_space();
+    let current_space = contribution_info.data_len();
+    if required_contribution_space > current_space {
+        let rent = Rent::get()?;
+        let new_min_balance = rent.minimum_balance(required_contribution_space);
+        let current_lamports = contribution_info.lamports();
+        let diff = checked_sub!(new_min_balance, current_lamports)?;
+
+        solana_program::program::invoke(
+            &solana_program::system_instruction::transfer(
+                contributor_key,
+                &contribution_info.key(),
+                diff,
+            ),
+            &[
+                ctx.accounts.contributor.to_account_info(),
+                contribution_info.clone(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        contribution_info.realloc(required_contribution_space, true)?;
+    }
+
+    let mut data = contribution_info.try_borrow_mut_data()?;
+    contribution.try_serialize(&mut &mut data[..])?;
+
+    Ok(())
+}
+
+fn realloc_raw<'info>(
+    account: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    required_space: usize,
+) -> Result<()> {
+    let current_space = account.data_len();
+
+    if required_space > current_space {
+        let rent = Rent::get()?;
+        let new_min_balance = rent.minimum_balance(required_space);
+        let current_lamports = account.lamports();
+
+        if current_lamports < new_min_balance {
+            let diff = new_min_balance
+                .checked_sub(current_lamports)
+                .ok_or(EngineErrorCode::ArithmeticOverflow)?;
+
+            **payer.try_borrow_mut_lamports()? =
+                payer.lamports().checked_sub(diff).ok_or(EngineErrorCode::InsufficientFeeBalance)?;
+            **account.try_borrow_mut_lamports()? =
+                current_lamports.checked_add(diff).ok_or(EngineErrorCode::ArithmeticOverflow)?;
+        }
+
+        account.realloc(required_space, true)?;
+    }
 
     Ok(())
 }

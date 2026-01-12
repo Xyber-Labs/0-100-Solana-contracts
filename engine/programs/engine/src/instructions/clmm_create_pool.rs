@@ -1,18 +1,19 @@
 use anchor_lang::{prelude::*, solana_program::pubkey::Pubkey};
 use anchor_spl::{
     associated_token::AssociatedToken,
-    metadata::Metadata,
-    token::{Mint, Token},
+    metadata::{self, CreateMetadataAccountsV3, Metadata, mpl_token_metadata::types::DataV2},
+    token::{self, Mint, MintTo, Token},
     token_interface::TokenAccount,
 };
 use raydium_amm_v3::{cpi, program::AmmV3, states::AmmConfig};
 
 use crate::{
     BASE_TOKEN_DECIMALS,
+    checked_mul,
     constants::{AMM_CONFIG_INDEX, WSOL_MINT},
     errors::ErrorCode,
     LaunchState,
-    SEED_ROOT, state::{PoolState, TokenMetadataConfig}, utils::{clmm::ClmmOrder, mint as mint_utils},
+    SEED_ROOT, state::{LaunchPreset, TokenMetadataConfig}, utils::clmm::ClmmOrder,
 };
 
 #[derive(Accounts)]
@@ -22,14 +23,13 @@ pub struct CreateClmmPool<'info> {
 
     #[account(
         mut,
-        constraint = launch_state.base_mint.is_none() @ ErrorCode::PoolAlreadyCreated,
-        constraint = launch_state.selection_finalized @ ErrorCode::NotFinalized,
-        constraint = launch_state.total_deposited >= launch_state.min_raise_lamports @ ErrorCode::MinRaiseNotMet,
+        constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized,
+        constraint = !launch_state.is_pool_created() @ ErrorCode::PoolAlreadyCreated
     )]
     pub launch_state: Box<Account<'info, LaunchState>>,
 
-    #[account(mut, seeds = [SEED_ROOT, b"pool", launch_state.key().as_ref()], bump)]
-    pub pool_state: Account<'info, PoolState>,
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK: Escrow authority PDA without data for token ownership
     #[account(seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
@@ -96,27 +96,21 @@ pub struct CreateClmmPool<'info> {
 
 pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
     let state = &mut ctx.accounts.launch_state;
-    require!(
-        state.total_deposited >= state.min_raise_lamports,
-        ErrorCode::MinRaiseNotMet
-    );
-    require!(
-        state.roster_shards > 0
-            && state.roster_highest_used_shard as i32 >= 1
-            && state.roster_finalized_up_to >= state.roster_highest_used_shard as i32,
-        ErrorCode::ShardsNotFullyFinalized
-    );
+    let preset = &ctx.accounts.launch_preset;
 
-    mint_utils::mint_to_escrow_for_launch(
+    let total_deposited = checked_mul!(state.active_tickets(), preset.tau_lamports)?;
+
+    mint_to_escrow_for_launch(
         &ctx.accounts.base_token_program.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
         &ctx.accounts.base_escrow_ata.to_account_info(),
         &ctx.accounts.escrow_authority.to_account_info(),
         &state.key(),
-        state.base_total_allocation,
+        preset.base_total_allocation,
+        ctx.bumps.escrow_authority,
     )?;
 
-    mint_utils::ensure_token_metadata_for_launch(
+    ensure_token_metadata_for_launch(
         &ctx.accounts.token_metadata_program.to_account_info(),
         &ctx.accounts.metadata_account.to_account_info(),
         &ctx.accounts.base_mint.to_account_info(),
@@ -126,18 +120,20 @@ pub fn create_clmm_pool(ctx: Context<CreateClmmPool>) -> Result<()> {
         &ctx.accounts.rent.to_account_info(),
         &ctx.accounts.token_metadata_config,
         &state.key(),
+        ctx.bumps.escrow_authority,
     )?;
-    state.base_mint = Some(ctx.accounts.base_mint.key());
-    state.raydium_pool_state = Some(ctx.accounts.raydium_pool_state.key());
 
-    raydium_create_pool_impl(&ctx)?;
+    state.set_pool_created(ctx.accounts.base_mint.key(), ctx.accounts.raydium_pool_state.key());
+
+    raydium_create_pool_impl(&ctx, total_deposited)?;
 
     Ok(())
 }
 
-fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
+fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>, total_deposited: u64) -> Result<()> {
     let order = ClmmOrder::from_inputs(
-        &ctx.accounts.launch_state,
+        &ctx.accounts.launch_preset,
+        total_deposited,
         &ctx.accounts.quote_mint,
         &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,
@@ -164,5 +160,85 @@ fn raydium_create_pool_impl(ctx: &Context<CreateClmmPool>) -> Result<()> {
     };
     let cpi_context = CpiContext::new(ctx.accounts.raydium_program.to_account_info(), cpi_accounts);
     cpi::create_pool(cpi_context, order.sqrt_price, 0)?;
+    Ok(())
+}
+
+fn mint_to_escrow_for_launch<'info>(
+    token_program: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    escrow_authority: &AccountInfo<'info>,
+    launch_key: &Pubkey,
+    amount: u64,
+    escrow_authority_bump: u8,
+) -> Result<()> {
+    let seeds: &[&[u8]] = &[
+        SEED_ROOT,
+        b"escrow_authority",
+        &launch_key.to_bytes(),
+        &[escrow_authority_bump],
+    ];
+    let signer_seeds = &[seeds];
+    let mint_accounts = MintTo {
+        mint: mint.clone(),
+        to: to.clone(),
+        authority: escrow_authority.clone(),
+    };
+    let mint_ctx = CpiContext::new_with_signer(token_program.clone(), mint_accounts, signer_seeds);
+    token::mint_to(mint_ctx, amount)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn ensure_token_metadata_for_launch<'info>(
+    token_metadata_program: &AccountInfo<'info>,
+    metadata_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    escrow_authority: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    rent: &AccountInfo<'info>,
+    token_metadata_config: &TokenMetadataConfig,
+    launch_key: &Pubkey,
+    escrow_authority_bump: u8,
+) -> Result<()> {
+    if metadata_account.lamports() == 0 {
+        let data = DataV2 {
+            name: token_metadata_config.name.clone(),
+            symbol: token_metadata_config.symbol.clone(),
+            uri: token_metadata_config.uri.clone(),
+            seller_fee_basis_points: token_metadata_config.seller_fee_basis_points,
+            creators: None,
+            collection: None,
+            uses: None,
+        };
+
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"escrow_authority",
+            &launch_key.to_bytes(),
+            &[escrow_authority_bump],
+        ];
+        let signer_seeds = &[seeds];
+
+        let cpi_accounts = CreateMetadataAccountsV3 {
+            metadata: metadata_account.clone(),
+            mint: mint.clone(),
+            mint_authority: escrow_authority.clone(),
+            payer: payer.clone(),
+            update_authority: escrow_authority.clone(),
+            system_program: system_program.clone(),
+            rent: rent.clone(),
+        };
+        let cpi_ctx =
+            CpiContext::new_with_signer(token_metadata_program.clone(), cpi_accounts, signer_seeds);
+        metadata::create_metadata_accounts_v3(
+            cpi_ctx,
+            data,
+            token_metadata_config.is_mutable,
+            true,
+            None,
+        )?;
+    }
     Ok(())
 }

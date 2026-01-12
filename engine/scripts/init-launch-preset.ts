@@ -5,7 +5,7 @@ import * as path from "path";
 
 import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
 
-function formatLaunchPreset(preset: any): Record<string, string | number> {
+function formatLaunchPreset(preset: any): Record<string, string | number | boolean> {
   const toNum = (v: any): string | number => {
     if (v === null || v === undefined) return "null";
     if (typeof v === "number") return v;
@@ -19,6 +19,7 @@ function formatLaunchPreset(preset: any): Record<string, string | number> {
   };
   return {
     id: toNum(preset.id),
+    isEnabled: Boolean(preset.isEnabled),
     hardCapLamports: toNum(preset.hardCapLamports),
     minRaiseLamports: toNum(preset.minRaiseLamports),
     perWalletCap: toNum(preset.perWalletCap),
@@ -28,14 +29,16 @@ function formatLaunchPreset(preset: any): Record<string, string | number> {
     teamAllocationBasisPoints: toNum(preset.teamAllocationBasisPoints),
     fundingDurationSeconds: toNum(preset.fundingDurationSeconds),
     unlockTimeSec: toNum(preset.unlockTimeSec),
-    rosterShardCap: toNum(preset.rosterShardCap),
-    rosterShardsTotal: toNum(preset.rosterShardsTotal),
-    creatorInitialDepositLamports: toNum(preset.creatorInitialDepositLamports),
-    creatorDailyLamportsLimit: toNum(preset.creatorDailyLamportsLimit),
-    creatorClaimLockPeriodSec: toNum(preset.creatorClaimLockPeriodSec),
+    creatorPeriodUnlock: toNum(preset.creatorPeriodUnlock),
+    creatorPeriodSec: toNum(preset.creatorPeriodSec),
     creatorMaxDeposit: toNum(preset.creatorMaxDeposit),
     poolCreationGracePeriodSec: toNum(preset.poolCreationGracePeriodSec),
-    teamVestingDurationSec: toNum(preset.teamVestingDurationSec),
+    teamDurationSec: toNum(preset.teamDurationSec),
+    teamPeriodSec: toNum(preset.teamPeriodSec),
+    contributorDurationSec: toNum(preset.contributorDurationSec),
+    contributorPeriodSec: toNum(preset.contributorPeriodSec),
+    withdrawalLimit: toNum(preset.withdrawalLimit),
+    creationFee: toNum(preset.creationFee),
   };
 }
 
@@ -45,9 +48,7 @@ async function main() {
     .allowExcessArguments(false)
     .option("--info <preset-id>", "Fetch and display preset info by ID")
     .option("--payload <path>", "Path to JSON payload file")
-    .option("--admin-keypair <path>", "Admin keypair file (can be specified multiple times)", (value, previous: string[]) => {
-      return previous ? [...previous, value] : [value];
-    }, []);
+    .requiredOption("--multisig-keypair <path>", "Multisig keypair file");
   program.parse(process.argv);
 
   const opts = program.opts();
@@ -74,39 +75,37 @@ async function main() {
   if (idStr === undefined) throw new Error("id is required");
   const id = Number(idStr);
   if (!Number.isInteger(id) || id < 0 || id > 255) throw new Error("id must be 0..255");
+  if (payload.isEnabled === undefined) throw new Error("isEnabled is required");
 
-  const adminKeyPaths: string[] = opts.adminKeypair && opts.adminKeypair.length > 0
-    ? opts.adminKeypair.map((p: string) => path.resolve(p))
-    : [];
-
-  if (!adminKeyPaths.length) throw new Error("At least one --admin-keypair must be provided");
-
-  const adminKeypairs = adminKeyPaths.map(loadKeypair);
+  const multisigKeypair = loadKeypair(opts.multisigKeypair);
   const p = payload;
 
   await runWithSdk(async ({ provider, sdk }) => {
     const result = await sdk.initLaunchPreset({
-      id,
       params: {
+        id,
+        isEnabled: Boolean(p.isEnabled),
         hardCapLamports: new BN(String(p.hardCapLamports)),
         minRaiseLamports: new BN(String(p.minRaiseLamports)),
         perWalletCap: new BN(String(p.perWalletCap)),
         tauLamports: new BN(String(p.tauLamports)),
         baseTotalAllocation: new BN(String(p.baseTotalAllocation)),
         baseSaleBasisPoints: new BN(String(p.baseSaleBasisPoints)),
-        teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : 1000,
-        fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : 0,
-        unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : 0,
-        rosterShardCap: Number(p.rosterShardCap),
-        rosterShardsTotal: Number(p.rosterShardsTotal),
-        creatorInitialDepositLamports: new BN(String(p.creatorInitialDepositLamports ?? "0")),
-        creatorDailyLamportsLimit: new BN(String(p.creatorDailyLamportsLimit ?? "0")),
-        creatorClaimLockPeriodSec: new BN(String(p.creatorClaimLockPeriodSec)),
-        creatorMaxDepositLamports: new BN(String(p.creatorMaxDepositLamports)),
-        poolCreationGracePeriodSec: p.poolCreationGracePeriodSec !== undefined ? Number(p.poolCreationGracePeriodSec) : 0,
-        teamVestingDurationSec: p.teamVestingDurationSec !== undefined ? Number(p.teamVestingDurationSec) : 365 * 24 * 60 * 60,
+        teamAllocationBasisPoints: Number(p.teamAllocationBasisPoints),
+        fundingDurationSeconds: Number(p.fundingDurationSeconds),
+        unlockTimeSec: Number(p.unlockTimeSec ?? 0),
+        creatorPeriodUnlock: new BN(String(p.creatorPeriodUnlock)),
+        creatorPeriodSec: Number(p.creatorPeriodSec),
+        creatorMaxDeposit: new BN(String(p.creatorMaxDeposit)),
+        poolCreationGracePeriodSec: Number(p.poolCreationGracePeriodSec),
+        teamDurationSec: Number(p.teamDurationSec),
+        teamPeriodSec: Number(p.teamPeriodSec),
+        contributorDurationSec: Number(p.contributorDurationSec),
+        contributorPeriodSec: Number(p.contributorPeriodSec),
+        withdrawalLimit: Number(p.withdrawalLimit),
+        creationFee: new BN(String(p.creationFee)),
       },
-      adminKeypairs,
+      multisigKeypair,
     });
 
     console.log("✅ Success!");

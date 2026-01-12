@@ -2,9 +2,12 @@ import * as anchor from "@coral-xyz/anchor";
 import { BN, Program } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
+import EngineIDLJson from "../../idl/engine.json";
 import { TxBuilder, Role, RoleType } from "./txBuilder";
+import { getConstant } from "../utils";
 
 const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+const ENGINE_SEED_ROOT = Buffer.from(getConstant("SEED_ROOT", EngineIDLJson as any));
 const TOKEN_PROGRAM_ID = new anchor.web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM_ID = new anchor.web3.PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM_ID = new anchor.web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -50,18 +53,18 @@ const IncomeDispatcherSDK = {
     }
 
     async function initialize(args: {
+      newMultisig: anchor.web3.PublicKey;
       backend: anchor.web3.PublicKey;
       platformWallet: anchor.web3.PublicKey;
       communityWallet: anchor.web3.PublicKey;
-      signers: anchor.web3.Keypair[];
+      signerKeypair: anchor.web3.Keypair;
     }): Promise<{ config: anchor.web3.PublicKey; signature: string }> {
       const [config] = getConfigPda();
-      const admin = args.signers[0].publicKey;
 
       const ix = await program.methods
-        .initialize(args.backend, args.platformWallet, args.communityWallet)
+        .initialize(args.newMultisig, args.backend, args.platformWallet, args.communityWallet)
         .accountsStrict({
-          admin,
+          multisig: args.signerKeypair.publicKey,
           config,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -69,7 +72,7 @@ const IncomeDispatcherSDK = {
 
       const tx = new anchor.web3.Transaction().add(ix);
       if (!provider.sendAndConfirm) throw new Error("Provider does not support sendAndConfirm");
-      const signature = await provider.sendAndConfirm(tx, args.signers);
+      const signature = await provider.sendAndConfirm(tx, [args.signerKeypair]);
 
       return { config, signature };
     }
@@ -348,7 +351,7 @@ const IncomeDispatcherSDK = {
       const xyberVault = getAssociatedTokenAddressSync(args.xyberMint, authority, true);
 
       const engineConfigPda = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("root-0-100-1"), Buffer.from("config")],
+        [ENGINE_SEED_ROOT, Buffer.from("config")],
         args.engineProgramId
       )[0];
 

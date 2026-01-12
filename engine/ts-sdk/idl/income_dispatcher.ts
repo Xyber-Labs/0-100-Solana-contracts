@@ -1671,7 +1671,7 @@ export type IncomeDispatcher = {
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1722,6 +1722,10 @@ export type IncomeDispatcher = {
         }
       ],
       "args": [
+        {
+          "name": "newMultisig",
+          "type": "pubkey"
+        },
         {
           "name": "backend",
           "type": "pubkey"
@@ -1868,46 +1872,41 @@ export type IncomeDispatcher = {
     },
     {
       "code": 6004,
-      "name": "recipientNotFound",
-      "msg": "Recipient not found in distribution"
-    },
-    {
-      "code": 6005,
       "name": "invalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "invalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "invalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "invalidCalculator",
       "msg": "Invalid calculator"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "notAllowed",
       "msg": "Not allowed"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "serializationError",
       "msg": "Serialization error"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "nothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "invalidParameter",
       "msg": "Invalid parameter"
     }
@@ -1967,10 +1966,8 @@ export type IncomeDispatcher = {
         "kind": "struct",
         "fields": [
           {
-            "name": "admin",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "multisig",
+            "type": "pubkey"
           },
           {
             "name": "backend",
@@ -2033,25 +2030,12 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "creationFee",
-            "type": "u64"
-          },
-          {
             "name": "xyberMint",
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }
@@ -2107,15 +2091,71 @@ export type IncomeDispatcher = {
       }
     },
     {
+      "name": "launchPhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "funding",
+            "fields": [
+              {
+                "name": "startedAt",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "fundingEndedAt",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "finalized",
+            "fields": [
+              {
+                "name": "tokensPerTicket",
+                "type": "u64"
+              },
+              {
+                "name": "claimsOpenedAt",
+                "type": "i64"
+              },
+              {
+                "name": "pool",
+                "type": {
+                  "defined": {
+                    "name": "poolStatus"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "launchState",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "createdAt",
-            "docs": [
-              "Unix timestamp (seconds) when the launch was created"
-            ],
             "type": "i64"
           },
           {
@@ -2127,162 +2167,23 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
-            "name": "hardCapLamports",
+            "name": "preset",
+            "type": "pubkey"
+          },
+          {
+            "name": "bitsAllocated",
             "type": "u64"
           },
           {
-            "name": "minRaiseLamports",
+            "name": "inactiveCount",
             "type": "u64"
           },
           {
-            "name": "perWalletCap",
-            "type": "u64"
-          },
-          {
-            "name": "tauLamports",
-            "type": "u64"
-          },
-          {
-            "name": "unlockTimeSec",
-            "type": "i64"
-          },
-          {
-            "name": "baseMint",
+            "name": "phase",
             "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "baseTotalAllocation",
-            "type": "u64"
-          },
-          {
-            "name": "baseSaleBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "fundingPeriodEnd",
-            "type": "i64"
-          },
-          {
-            "name": "totalDeposited",
-            "type": "u64"
-          },
-          {
-            "name": "totalTickets",
-            "type": "u32"
-          },
-          {
-            "name": "kCapacity",
-            "type": "u32"
-          },
-          {
-            "name": "vrfSeed",
-            "type": {
-              "option": {
-                "array": [
-                  "u8",
-                  32
-                ]
+              "defined": {
+                "name": "launchPhase"
               }
-            }
-          },
-          {
-            "name": "selectionProcessed",
-            "type": "u32"
-          },
-          {
-            "name": "selectionFinalized",
-            "type": "bool"
-          },
-          {
-            "name": "thresholdScore",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "rosterShards",
-            "type": "u16"
-          },
-          {
-            "name": "rosterInitializedUpTo",
-            "type": "i32"
-          },
-          {
-            "name": "rosterFinalizedUpTo",
-            "type": "i32"
-          },
-          {
-            "name": "publicTotalTickets",
-            "type": "u32"
-          },
-          {
-            "name": "rosterShardCap",
-            "type": "u16"
-          },
-          {
-            "name": "rosterHighestUsedShard",
-            "type": "u16"
-          },
-          {
-            "name": "tokensPerTicket",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creatorReservedTickets",
-            "type": "u32"
-          },
-          {
-            "name": "creatorGrantPresent",
-            "type": "bool"
-          },
-          {
-            "name": "claimsOpenedAt",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "creatorClaimLockPeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "creatorInitialDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "creatorMaxDeposit",
-            "type": "u64"
-          },
-          {
-            "name": "fundingPeriodStart",
-            "type": "i64"
-          },
-          {
-            "name": "poolCreationGracePeriodSec",
-            "type": "i64"
-          },
-          {
-            "name": "teamAllocationBasisPoints",
-            "type": "u64"
-          },
-          {
-            "name": "teamVestingDurationSec",
-            "type": "i64"
-          },
-          {
-            "name": "raydiumPoolState",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "raydiumPositionNftMint",
-            "type": {
-              "option": "pubkey"
             }
           }
         ]
@@ -2296,6 +2197,47 @@ export type IncomeDispatcher = {
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "poolStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "notCreated"
+          },
+          {
+            "name": "created",
+            "fields": [
+              {
+                "name": "baseMint",
+                "type": "pubkey"
+              },
+              {
+                "name": "poolState",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "liquidityAdded",
+            "fields": [
+              {
+                "name": "baseMint",
+                "type": "pubkey"
+              },
+              {
+                "name": "poolState",
+                "type": "pubkey"
+              },
+              {
+                "name": "positionNftMint",
+                "type": "pubkey"
+              }
+            ]
           }
         ]
       }

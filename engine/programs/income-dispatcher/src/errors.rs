@@ -10,8 +10,6 @@ pub enum ErrorCode {
     InvalidBaseDecimals,
     #[msg("No distribution rules found for market cap")]
     NoDistributionRules,
-    #[msg("Recipient not found in distribution")]
-    RecipientNotFound,
     #[msg("Invalid pool state account")]
     InvalidPoolState,
     #[msg("Invalid token mint")]

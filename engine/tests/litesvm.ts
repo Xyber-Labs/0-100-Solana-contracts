@@ -1,7 +1,7 @@
 import { fromWorkspace, LiteSVMProvider } from "anchor-litesvm";
 import { FailedTransactionMetadata, LiteSVM } from "litesvm";
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import { SendTransactionError } from "@solana/web3.js";
 import {
@@ -20,7 +20,13 @@ import { execSync } from "child_process";
 import { Engine } from "../target/types/engine";
 import EngineSDK from "../ts-sdk/src/engine";
 
-import { advanceTime, createAndFundAccount, injectSlotHashesForRange } from "./utils";
+import {
+  advanceTime,
+  createAndFundAccount,
+  doAndCheckError,
+  injectSlotHashesForRange,
+  parsePresetParams
+} from "./utils";
 import { setupRaydiumCLMM } from "./raydium-setup";
 
 function ensureRaydiumResources(): void {
@@ -43,12 +49,10 @@ ensureRaydiumResources();
 let client: LiteSVM;
 let provider: LiteSVMProvider;
 let program: Program<Engine>;
-let admin: anchor.Wallet;
+let multisig: anchor.Wallet;
 let sdk: ReturnType<typeof EngineSDK.create>;
 let adminKeypair: anchor.web3.Keypair;
-let admin2Keypair: anchor.web3.Keypair;
-let admin3Keypair: anchor.web3.Keypair;
-let xyberMintKeypair: anchor.web3.Keypair;
+let deployerKeypair: anchor.web3.Keypair;
 let xyberMint: anchor.web3.PublicKey;
 
 function bigIntTo32BytesBE(x: bigint): Buffer {
@@ -76,22 +80,26 @@ function encodeSignatureSafe(sigRaw: any): string {
   throw new TypeError("Unsupported signature type for encoding");
 }
 
-async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx: any, signers: any[]): Promise<string> {
-  if ("version" in tx) {
-    signers?.forEach((s) => {
-      try { tx.sign([s]); } catch (_) {}
-    });
+function sendTxWithMeta(
+  client: LiteSVM,
+  feePayer: anchor.web3.PublicKey,
+  signers: anchor.web3.Keypair[],
+  instructions: anchor.web3.TransactionInstruction | anchor.web3.TransactionInstruction[] | anchor.web3.Transaction,
+): { signature: string; computeUnitsConsumed: bigint } {
+  let tx: anchor.web3.Transaction;
+  if (instructions instanceof anchor.web3.Transaction) {
+    tx = instructions;
+  } else if (Array.isArray(instructions)) {
+    tx = new anchor.web3.Transaction().add(...instructions);
   } else {
-    tx.feePayer = tx.feePayer ?? provider.wallet.publicKey;
-    tx.recentBlockhash = client.latestBlockhash();
-    signers?.forEach((s) => {
-      try { tx.partialSign(s); } catch (_) {}
-    });
+    tx = new anchor.web3.Transaction().add(instructions);
   }
-  await provider.wallet.signTransaction(tx as any);
-  const sigRaw = "version" in tx ? tx.signatures?.[0] : tx.signature;
+  tx.feePayer = feePayer;
+  tx.recentBlockhash = client.latestBlockhash();
+  signers.forEach((s) => tx.partialSign(s));
+  const sigRaw = tx.signature;
   const signature = encodeSignatureSafe(sigRaw);
-  const res = client.sendTransaction(tx as any);
+  const res = client.sendTransaction(tx);
   if (res instanceof FailedTransactionMetadata) {
     throw new SendTransactionError({
       action: "send",
@@ -100,852 +108,542 @@ async function safeSendAndConfirm(provider: LiteSVMProvider, client: LiteSVM, tx
       logs: res.meta().logs(),
     } as any);
   }
-  return signature;
+  return { signature, computeUnitsConsumed: res.computeUnitsConsumed() };
 }
 
-async function ensureClaimsReadyForTest(
-  sdkInst: ReturnType<typeof EngineSDK.create>,
-  programInst: Program<Engine>,
-  clientInst: LiteSVM,
-  launch: anchor.web3.PublicKey
-): Promise<void> {
-  if (!sdkInst || !programInst || !clientInst) return;
-  const [poolState] = sdkInst.getPoolPda(launch);
-  let poolAccount: any;
-  try {
-    poolAccount = await programInst.account.poolState.fetch(poolState);
-  } catch {
-    return;
-  }
-  if (poolAccount.claimsReady) return;
-  poolAccount.claimsReady = true;
-  const encoded = await programInst.coder.accounts.encode("poolState", poolAccount);
-  const info = clientInst.getAccount(poolState);
-  const owner =
-    info?.owner instanceof anchor.web3.PublicKey
-      ? info.owner
-      : info?.owner
-      ? new anchor.web3.PublicKey(info.owner)
-      : program.programId;
-  const lamports =
-    typeof info?.lamports === "bigint"
-      ? Number(info.lamports)
-      : typeof info?.lamports === "number"
-      ? info.lamports
-      : 1;
-  clientInst.setAccount(poolState, {
-    lamports,
-    data: encoded,
-    owner,
-    executable: !!info?.executable,
-  });
-  const verifyInfo = clientInst.getAccount(poolState);
-  const verifyData = programInst.coder.accounts.decode(
-    "poolState",
-    Buffer.from(verifyInfo.data)
-  );
-  if (!verifyData.claimsReady) {
-    throw new Error("LiteSVM failed to flip claimsReady");
-  }
-  const externalCheck = await sdkInst.fetchPoolState(launch);
-  if (!externalCheck.claimsReady) {
-    console.log(
-      "ensureClaimsReadyForTest: claimsReady still false for pool",
-      poolState.toBase58()
-    );
-  }
+function sendTx(
+  client: LiteSVM,
+  feePayer: anchor.web3.PublicKey,
+  signers: anchor.web3.Keypair[],
+  instructions: anchor.web3.TransactionInstruction | anchor.web3.TransactionInstruction[] | anchor.web3.Transaction,
+): string {
+  return sendTxWithMeta(client, feePayer, signers, instructions).signature;
 }
 
 describe("engine litesvm", () => {
 
-  let baseMint: anchor.web3.Keypair;
   let launchState: anchor.web3.PublicKey;
 
-  const HARD_CAP_LAMPORTS = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
-  const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-  const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-  const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-  const SALE_ALLOCATION = new anchor.BN(1000000);
-  const LP_ALLOCATION = new anchor.BN(500000);
-  const BASE_TOTAL_ALLOCATION_F = SALE_ALLOCATION.add(LP_ALLOCATION);
-  const BASE_SALE_BPS_F = new anchor.BN(Math.floor(SALE_ALLOCATION.toNumber() * 10000 / BASE_TOTAL_ALLOCATION_F.toNumber()));
-  const ROSTER_SHARD_CAP = 100;
+  const presetPath = path.resolve(__dirname, "litesvm-test-preset.json");
+  const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
+  const presetParams = parsePresetParams(presetData);
 
-  let adminBKeypair: anchor.web3.Keypair;
+  let treasuryPubkey: anchor.web3.PublicKey;
+
   before(async () => {
     client = fromWorkspace("./");
     provider = new LiteSVMProvider(client);
     anchor.setProvider(provider);
     program = anchor.workspace.engine as Program<Engine>;
-    admin = provider.wallet;
+    multisig = provider.wallet;
     adminKeypair = (provider.wallet as any).payer;
     sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
-    // Fund the admin account with more SOL for account creation
-    client.airdrop(admin.publicKey, BigInt(100 * anchor.web3.LAMPORTS_PER_SOL));
+    // Load deployer keypair (required for first init_engine_config)
+    const deployerKeypairPath = path.resolve(__dirname, "../keys/deployer.json");
+    const deployerSecret = JSON.parse(fs.readFileSync(deployerKeypairPath, "utf8"));
+    deployerKeypair = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(deployerSecret));
 
-    // Note: EngineConfig/XYBER mint initialized in the suite-level setup below
+    client.airdrop(multisig.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
+    client.airdrop(deployerKeypair.publicKey, BigInt(200 * anchor.web3.LAMPORTS_PER_SOL));
+
+    // Initialize XYBER mint and engine config
+    const mint = anchor.web3.Keypair.generate();
+    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
+    const creatorAta = sdk.getUserAta(mint.publicKey, multisig.publicKey);
+    const treasuryKeypair = anchor.web3.Keypair.generate();
+    client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
+    treasuryPubkey = treasuryKeypair.publicKey;
+
+    const initMintTx = new anchor.web3.Transaction()
+      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: multisig.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+      .add(createInitializeMintInstruction(mint.publicKey, 6, multisig.publicKey, null))
+      .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: multisig.publicKey, mint: mint.publicKey }).ix)
+      .add(sdk.buildCreateAtaIx({ payer: multisig.publicKey, owner: treasuryPubkey, mint: mint.publicKey }).ix)
+      .add(createMintToInstruction(mint.publicKey, creatorAta, multisig.publicKey, BigInt(10_000_000_000)));
+    sendTx(client, multisig.publicKey, [adminKeypair, mint], initMintTx);
+
+    // First init_engine_config must be signed by DEPLOYER constant
+    const { instruction: initConfigIx } = await (sdk as any).initEngineConfigIx({
+      signer: deployerKeypair.publicKey,
+      newMultisig: multisig.publicKey,
+      treasury: treasuryPubkey,
+      xyberMint: mint.publicKey,
+      reallocFundLamports: new BN(100 * anchor.web3.LAMPORTS_PER_SOL),
+    });
+    sendTx(client, deployerKeypair.publicKey, [deployerKeypair], initConfigIx);
+    xyberMint = mint.publicKey;
+  });
+
+  it("Initializes engine config with XYBER mint", async () => {
+    const { data: config } = await sdk.fetchEngineConfig();
+    assert.ok(config, "EngineConfig should exist");
+    assert.ok(config.xyberMint.equals(xyberMint));
+    assert.ok(config.treasury.equals(treasuryPubkey));
+    assert.ok(config.multisig.equals(multisig.publicKey));
+  });
+
+  it("Initializes launch preset from file", async () => {
+    const { instruction: presetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...presetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], presetIx);
+
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    assert.ok(preset, "Preset should exist");
+    assert.equal(preset.hardCapLamports.toNumber(), 450_000_000_000);
+    assert.equal(preset.minRaiseLamports.toNumber(), 100_000_000_000);
+    assert.equal(preset.tauLamports.toNumber(), 100_000_000);
+    assert.equal(preset.fundingDurationSeconds, 3);
+    assert.equal(preset.withdrawalLimit, 3);
+  });
+
+  it("Rejects launch creation with disabled preset", async () => {
+    const disabledPresetId = 99;
+    const disabledPresetParams = {
+      ...presetParams,
+      id: disabledPresetId,
+      isEnabled: false,
+    };
+
+    const { instruction: disabledPresetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...disabledPresetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], disabledPresetIx);
+
+    const { data: disabledPreset } = await sdk.fetchLaunchPreset(disabledPresetId);
+    assert.equal(disabledPreset.isEnabled, false);
+
+    const nextId = await sdk.getNextProjectId();
+    const { instruction: launchIx } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: disabledPresetId,
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "DisabledTest",
+      symbol: "DIS",
+      uri: "https://example.com/disabled.json",
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], launchIx)),
+      "Preset is disabled"
+    );
+
+    const enabledPresetParams = {
+      ...disabledPresetParams,
+      isEnabled: true,
+    };
+    const { instruction: enablePresetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...enabledPresetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], enablePresetIx);
+
+    const { data: enabledPreset } = await sdk.fetchLaunchPreset(disabledPresetId);
+    assert.equal(enabledPreset.isEnabled, true);
+
+    const { instruction: launchIx2 } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: disabledPresetId,
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "EnabledTest",
+      symbol: "EN",
+      uri: "https://example.com/enabled.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], launchIx2);
+    console.log("✅ Launch created after enabling preset");
   });
 
   it("Initializes the launch state correctly", async () => {
     const nextId = await sdk.getNextProjectId();
 
-    const result = await sdk.initLaunchTx({
-      creator: admin.publicKey,
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
       projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
+      saleStartTimeTimestamp: 0,
+      name: "TestToken",
+      symbol: "TEST",
+      uri: "https://example.com/metadata.json",
     });
 
-    const initTx = await safeSendAndConfirm(provider, client, result.initLaunchTx, [admin.payer, ...result.signers]);
+    const initTx = sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
     console.log("Init launch tx signature:", initTx);
 
-    launchState = result.launchState;
-    const state = await sdk.fetchLaunch(launchState);
+    launchState = launchPda;
+    const { data: state } = await sdk.fetchLaunch(launchState);
 
     assert.isTrue(state.projectId.toNumber() >= 0, "Project ID should be non-negative");
-    assert.ok(state.creator.equals(admin.publicKey));
-    assert.equal(state.hardCapLamports.toNumber(), HARD_CAP_LAMPORTS.toNumber());
-    assert.equal(state.minRaiseLamports.toNumber(), MIN_RAISE_LAMPORTS.toNumber());
-    assert.equal(state.perWalletCap.toNumber(), PER_WALLET_CAP.toNumber());
-    assert.equal(state.tauLamports.toNumber(), TAU_LAMPORTS.toNumber());
-    assert.equal(state.baseTotalAllocation.toNumber(), BASE_TOTAL_ALLOCATION_F.toNumber());
-    assert.equal(state.baseSaleBasisPoints.toNumber(), BASE_SALE_BPS_F.toNumber());
-    assert.equal(state.totalDeposited.toNumber(), 0);
-    assert.equal(state.totalTickets, 0);
-    const expectedKCapacity = HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber();
-    assert.equal(state.kCapacity, expectedKCapacity);
-    assert.isFalse(state.selectionFinalized);
-    assert.equal(state.selectionProcessed, 0);
-    assert.isNull(state.thresholdScore);
-    assert.isNull(state.vrfSeed);
-    assert.isNull(state.tokensPerTicket);
-    assert.isNull(state.baseMint);
+    assert.ok(state.creator.equals(multisig.publicKey));
+    assert.ok(state.preset, "Preset should be set");
   });
 
-  it.skip("Sets the VRF seed", async () => {
-    // This test is flaky due to litesvm's time simulation.
-    // The functionality is fully covered in the "Complete flow" test.
-    // TODO (@wotory, @xykeeper): to get this test properly alive
-  });
+  it("Initializes launch with thirdParty signer", async () => {
+    const backendKeypair = anchor.web3.Keypair.generate();
+    client.airdrop(backendKeypair.publicKey, BigInt(1_000_000));
 
-  // Global Xyber/config for all tests in this suite
-  let xyberMint: anchor.web3.PublicKey;
-  before(async () => {
-    // Setup XYBER mint + ATAs and EngineConfig with fee=0
-    const mint = anchor.web3.Keypair.generate();
-    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = sdk.getUserAta(mint.publicKey, admin.publicKey);
-    const treasuryKeypair = anchor.web3.Keypair.generate();
-    client.airdrop(treasuryKeypair.publicKey, BigInt(1_000_000));
-    const treasury = treasuryKeypair.publicKey;
-    const treasuryAta = sdk.getUserAta(mint.publicKey, treasury);
-    const tx = new anchor.web3.Transaction()
-      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: mint.publicKey, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(mint.publicKey, 9, admin.publicKey, null))
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: admin.publicKey, mint: mint.publicKey }).ix)
-      .add(sdk.buildCreateAtaIx({ payer: admin.publicKey, owner: treasury, mint: mint.publicKey }).ix)
-      .add(createMintToInstruction(mint.publicKey, creatorAta, admin.publicKey, BigInt(1_000_000))); // pre-mint some XYBER for potential fee
-    await safeSendAndConfirm(provider, client, tx, [admin.payer, mint]);
-
-    adminBKeypair = anchor.web3.Keypair.generate();
-    const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [admin.publicKey, adminBKeypair.publicKey, anchor.web3.Keypair.generate().publicKey];
-    const { instruction } = await (sdk as any).initEngineConfigIx({
-      payer: admin.publicKey,
-      treasury,
-      creationFee: new anchor.BN(0),
-      xyberMint: mint.publicKey,
-      admins,
-      threshold: 2,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "ThirdPartyTest",
+      symbol: "TPT",
+      uri: "https://example.com/tpt.json",
+      thirdParty: backendKeypair.publicKey,
     });
-    await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
-    xyberMint = mint.publicKey;
+
+    sendTx(client, adminKeypair.publicKey, [adminKeypair, backendKeypair], instruction);
+
+    const { data: state } = await sdk.fetchLaunch(launchPda);
+    assert.equal(state.projectId.toNumber(), nextId.toNumber(), "Project ID should match");
+    assert.ok(state.creator.equals(multisig.publicKey));
+    console.log("✅ Launch created with thirdParty signer (backend key)");
+  });
+
+  it("Rejects initLaunch with wrong nonce (projectId)", async () => {
+    const correctId = await sdk.getNextProjectId();
+    const wrongId = new BN(correctId.toNumber() + 100);
+
+    const { instruction } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: wrongId,
+      saleStartTimeTimestamp: 0,
+      name: "WrongNonceTest",
+      symbol: "WNT",
+      uri: "https://example.com/wnt.json",
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction)),
+      "Unauthorized"
+    );
+    console.log("✅ Correctly rejected initLaunch with wrong nonce");
+  });
+
+  it("Initializes launch without thirdParty (third_party=None in event)", async () => {
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: launchPda } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "NoThirdPartyTest",
+      symbol: "NTP",
+      uri: "https://example.com/ntp.json",
+    });
+
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+
+    const { data: state } = await sdk.fetchLaunch(launchPda);
+    assert.equal(state.projectId.toNumber(), nextId.toNumber(), "Project ID should match");
+    assert.ok(state.creator.equals(multisig.publicKey));
+    console.log("✅ Launch created without thirdParty (event will have third_party=None)");
+  });
+
+  it("Rejects initLaunch with thirdParty in remainingAccounts but not signed", async () => {
+    const backendKeypair = anchor.web3.Keypair.generate();
+
+    const nextId = await sdk.getNextProjectId();
+    const { instruction } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "UnsignedThirdParty",
+      symbol: "UTP",
+      uri: "https://example.com/utp.json",
+      thirdParty: backendKeypair.publicKey,
+    });
+
+    await doAndCheckError(
+      Promise.resolve().then(() => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction)),
+      "Signature verification failed"
+    );
+    console.log("✅ Correctly rejected initLaunch with unsigned thirdParty");
   });
 
   it("Rejects initLaunch with wrong XYBER mint", async () => {
     const nextId = await sdk.getNextProjectId();
-    // 1) Ensure EngineConfig has non-zero fee (so InvalidMint is checked)
-    const fee = new anchor.BN(1234);
-    {
-      const { instruction } = await (sdk as any).updateEngineConfigIx({
-        payer: admin.publicKey,
-        newCreationFee: fee,
-        signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-      });
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(instruction), [admin.payer, adminBKeypair]);
-      // verify fee applied
-      const [cfgPdaVerify] = (sdk as any).getConfigPda();
-      const cfgVerify: any = await (program.account as any).engineConfig.fetch(cfgPdaVerify);
-      assert.equal(Number(cfgVerify.creationFee), Number(fee));
-    }
-    // 2) Prepare a wrong mint and ATAs for creator/treasury with enough balance on creator ATA
+    const fee = new anchor.BN(presetData.creationFee);
+
     const wrongMintKp = anchor.web3.Keypair.generate();
     const wrongMint = wrongMintKp.publicKey;
-    const [cfgPda] = (sdk as any).getConfigPda();
-    const cfg: any = await (program.account as any).engineConfig.fetch(cfgPda);
-    const treasury: anchor.web3.PublicKey = cfg.treasury as anchor.web3.PublicKey;
     const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = getAssociatedTokenAddressSync(wrongMint, admin.publicKey);
-    const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasury);
+    const creatorAta = getAssociatedTokenAddressSync(wrongMint, multisig.publicKey);
+    const treasuryAta = getAssociatedTokenAddressSync(wrongMint, treasuryPubkey);
     {
       const tx = new anchor.web3.Transaction()
-        .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-        .add(createInitializeMintInstruction(wrongMint, 9, admin.publicKey, null))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, wrongMint))
-        .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, treasury, wrongMint))
-        .add(createMintToInstruction(wrongMint, creatorAta, admin.publicKey, BigInt(fee.toString())));
-      await safeSendAndConfirm(provider, client, tx, [admin.payer, wrongMintKp]);
+        .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: multisig.publicKey, newAccountPubkey: wrongMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
+        .add(createInitializeMintInstruction(wrongMint, 6, multisig.publicKey, null))
+        .add(createAssociatedTokenAccountInstruction(multisig.publicKey, creatorAta, multisig.publicKey, wrongMint))
+        .add(createAssociatedTokenAccountInstruction(multisig.publicKey, treasuryAta, treasuryPubkey, wrongMint))
+        .add(createMintToInstruction(wrongMint, creatorAta, multisig.publicKey, BigInt(fee.toString())));
+      sendTx(client, adminKeypair.publicKey, [adminKeypair, wrongMintKp], tx);
     }
-    // 3) Build initLaunchTx with wrong mint and simulate signed
-    const { initLaunchTx } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint: wrongMint,
-    });
-    let failed = false;
-    try {
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-      failed = true; // should not reach
-    } catch (e) {
-      const msg = String((e as any)?.message ?? e);
-      assert.isTrue(
-        msg.includes("InvalidMint") || msg.includes("0x4b0") || msg.includes("custom program error") || msg.includes("3012"),
-        `Expected program failure due to wrong XYBER mint; got: ${msg}`
-      );
-    }
-    if (failed) {
-      assert.fail("initLaunch unexpectedly succeeded with wrong xyberMint");
-    }
-  });
 
-  it("Creates preset and launches from it", async () => {
-    const presetId = 1;
-    // Prepare preset parameters
-    const params = {
-      hardCapLamports: new anchor.BN(20 * anchor.web3.LAMPORTS_PER_SOL),
-      minRaiseLamports: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      perWalletCap: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      tauLamports: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
-      baseTotalAllocation: new anchor.BN(1_000_000),
-      baseSaleBasisPoints: new anchor.BN(8000),
-      fundingDurationSeconds: 10,
-      unlockTimeSec: 0,
-      rosterShardCap: 100,
-      rosterShardsTotal: 10,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      creatorMaxDepositLamports: new anchor.BN(0),
-      poolCreationGracePeriodSec: 0,
-      teamVestingDurationSec: 365 * 24 * 60 * 60,
-      teamAllocationBasisPoints: 1000,
-    };
-    // Create preset by admins
-    const { launchPreset } = await (sdk as any).initLaunchPreset({
-      id: presetId,
-      params,
-      adminKeypairs: [adminKeypair, adminBKeypair],
-    });
-    assert.ok(launchPreset);
-
-    // Update preset parameters (admin-gated)
-    const patch = {
-      minRaiseLamports: new anchor.BN(7 * anchor.web3.LAMPORTS_PER_SOL),
-      baseSaleBasisPoints: new anchor.BN(7500),
-      rosterShardsTotal: 12,
-      // Optionally also tweak funding duration, etc.
-      // fundingDurationSeconds: 20,
-    };
-    await (sdk as any).updateLaunchPreset({
-      id: presetId,
-      patch,
-      adminKeypairs: [adminKeypair, adminBKeypair],
-    });
-
-    // Launch from preset
-    const nextId = await sdk.getNextProjectId();
-    const { launchPda } = await (sdk as any).initLaunchFromPreset({
-      presetId,
+    const { instruction } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
       projectId: nextId,
       saleStartTimeTimestamp: 0,
-      name: "PresetToken",
-      symbol: "PST",
-      uri: "https://metadata.xyberlabs.dev/preset/default.json",
-      isMutable: true,
-      sellerFeeBasisPoints: 0,
+      name: "WrongMintTest",
+      symbol: "WMT",
+      uri: "https://example.com/wmt.json",
+      xyberMint: wrongMint,
     });
-
-    const state = await sdk.fetchLaunch(launchPda);
-    assert.equal(state.projectId.toNumber(), nextId.toNumber ? nextId.toNumber() : Number(nextId));
-    assert.equal(state.hardCapLamports.toNumber(), params.hardCapLamports.toNumber());
-    // minRaise and some fields should reflect updated preset values
-    assert.equal(state.minRaiseLamports.toNumber(), (patch.minRaiseLamports as anchor.BN).toNumber());
-    assert.equal(state.tauLamports.toNumber(), params.tauLamports.toNumber());
-    assert.equal(state.baseTotalAllocation.toNumber(), params.baseTotalAllocation.toNumber());
-    assert.equal(state.baseSaleBasisPoints.toNumber(), (patch.baseSaleBasisPoints as anchor.BN).toNumber());
-    assert.equal(state.rosterShardCap, params.rosterShardCap);
-    assert.equal(state.rosterShards, patch.rosterShardsTotal as number);
+    await doAndCheckError(
+      (async () => sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction))(),
+      "InvalidMint"
+    );
   });
 
   it("Allows deposits", async () => {
-    const nextId = await sdk.getNextProjectId();
-
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
-    });
-
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
     const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const depositAmount = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
 
-    const depositTx = await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-    console.log("Deposit tx signature:", depositTx);
-
-    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userContrib.deposited.toNumber(), depositAmount.toNumber());
-    assert.equal(userContrib.ticketCount, 2);
-
-    const state = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(state.totalDeposited.toNumber(), depositAmount.toNumber());
-    assert.equal(state.totalTickets, 2);
-  });
-
-  it("Fills multiple roster shards via depositAutoShard", async () => {
-    const shardsTotal = 3;
-    const usersPerShard = 50;
-    const totalUsers = shardsTotal * usersPerShard;
-
-    const nextId = await sdk.getNextProjectId();
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      // For this test we want each shard to become "full" exactly when usersPerShard wallets have deposited.
-      rosterShardCap: usersPerShard,
-      rosterShardsTotal: shardsTotal,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
+    const { instruction } = await sdk.depositIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: depositAmount,
     });
 
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
+    sendTx(client, depositor.publicKey, [depositor], instruction);
 
-    // Pre-create shards sequentially (1..shardsTotal); backend will do this in production.
-    for (let shardId = 1; shardId <= shardsTotal; shardId++) {
-      await sdk.initRosterShard({ launch: testLaunchState, shardId, signers: [] });
-    }
+    const { data: userContrib } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(userContrib.ticketRanges.length, 1, "Should have 1 range");
+    assert.equal(userContrib.ticketRanges[0].start.toNumber(), 0, "Range should start at 0");
+    assert.equal(userContrib.ticketRanges[0].end.toNumber(), 100, "Range should end at 100");
 
-    const seenPerShard: Record<number, number> = {};
-    const depositAmount = TAU_LAMPORTS.clone();
-
-    for (let i = 0; i < totalUsers; i++) {
-      const user = await createAndFundAccount(client, 5);
-      const res = await (sdk as any).depositAutoShard({
-        launch: testLaunchState,
-        amountLamports: depositAmount,
-        userKeypair: user,
-      });
-      seenPerShard[res.shardId] = (seenPerShard[res.shardId] ?? 0) + 1;
-
-      const contrib = await sdk.fetchUserContribution(testLaunchState, user.publicKey);
-      assert.equal(contrib.shardId, res.shardId, "UserContribution.shardId must match depositAutoShard result");
-    }
-
-    const launchAfter: any = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(launchAfter.rosterShardCap, usersPerShard, "rosterShardCap should equal usersPerShard for this test");
-    assert.equal(launchAfter.rosterShards, shardsTotal, "rosterShards should equal configured total");
-    assert.equal(
-      launchAfter.rosterHighestUsedShard,
-      shardsTotal,
-      "Highest used shard should equal total shards after full fill"
+    const totalTickets = userContrib.ticketRanges.reduce(
+      (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
+      0
     );
+    assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
-    for (let shardId = 1; shardId <= shardsTotal; shardId++) {
-      assert.equal(
-        seenPerShard[shardId],
-        usersPerShard,
-        `Expected exactly ${usersPerShard} users in shard ${shardId}`
-      );
-      const [rosterShardPda] = sdk.getRosterShardPda(testLaunchState, shardId);
-      const shard: any = await (program.account as any).rosterShard.fetch(rosterShardPda);
-      assert.equal(
-        shard.wallets.length,
-        usersPerShard,
-        `On-chain rosterShard.wallets length must equal ${usersPerShard} for shard ${shardId}`
-      );
-    }
+    const { data: lottery } = await sdk.fetchLaunch(launchState);
+    assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
   });
 
   it("Allows withdrawals", async () => {
-    const nextId = await sdk.getNextProjectId();
-
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
-    });
-
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
+    const { data: lotteryInitial } = await sdk.fetchLaunch(launchState);
+    const initialBitsAllocated = lotteryInitial.bitsAllocated.toNumber();
+    assert.equal(initialBitsAllocated, 100, "Initial bits_allocated from previous test");
 
     const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
+    const depositAmount = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL); // 50 tickets
+    const withdrawAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL); // 20 tickets
 
-    await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-
-    const initialBalance = client.getBalance(depositor.publicKey);
-
-    const withdrawSig = await program.methods
-      .withdraw(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(
-          testLaunchState,
-          depositor.publicKey
-        )[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
-
-    console.log("Withdraw tx signature:", withdrawSig);
-
-    const finalBalance = client.getBalance(depositor.publicKey);
-
-    assert.isAbove(Number(finalBalance), Number(initialBalance));
-
-    const state = await sdk.fetchLaunch(testLaunchState);
-    assert.equal(state.totalDeposited.toNumber(), 0);
-
-    const userContrib = await sdk.fetchUserContribution(testLaunchState, depositor.publicKey);
-    assert.equal(userContrib.deposited.toNumber(), 0);
-  });
-
-  it("Seals and closes shard; verifies closure (and rent delta logged)", async () => {
-    const nextId = await sdk.getNextProjectId();
-    const { initLaunchTx, signers, launchState: testLaunchState } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextId,
-      hardCapLamports: new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL),
-      minRaiseLamports: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      perWalletCap: new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL),
-      tauLamports: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      baseTotalAllocation: new anchor.BN(1000),
-      baseSaleBasisPoints: new anchor.BN(10000),
-      fundingDurationSeconds: 10,
-      rosterShardCap: 100,
-      rosterShardsTotal: 1,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
+    const { instruction: depositIx } = await sdk.depositIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: depositAmount,
     });
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer, ...signers]);
+    sendTx(client, depositor.publicKey, [depositor], depositIx);
 
-    await sdk.initRoster({ launch: testLaunchState });
+    const { data: contribBefore } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(contribBefore.ticketRanges.length, 1, "Should have 1 range after deposit");
+    assert.equal(contribBefore.ticketRanges[0].start.toNumber(), 100, "Range start should be 100");
+    assert.equal(contribBefore.ticketRanges[0].end.toNumber(), 150, "Range end should be 150");
 
-    const depositor = await createAndFundAccount(client, 20);
-    const depositAmount = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    await program.methods
-      .deposit(depositAmount)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: testLaunchState,
-        userContribution: sdk.getUserContributionPda(testLaunchState, depositor.publicKey)[0],
-        rosterShard,
-        escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([depositor])
-      .rpc();
+    const { data: lotteryAfterDeposit } = await sdk.fetchLaunch(launchState);
+    assert.equal(lotteryAfterDeposit.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
 
-    await advanceTime(client, { seconds: BigInt(12) });
-    await sdk.setSeed({ launch: testLaunchState });
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
+    const balanceBefore = client.getBalance(depositor.publicKey);
 
-    // seal
-    const walletsSlice = [depositor.publicKey];
-    const { transaction: sealTx } = await (sdk as any).sealRosterShardTx({ launch: testLaunchState, shardId: 1, from: 0, max: 1, walletsSlice });
-    await safeSendAndConfirm(provider, client, sealTx, [admin.payer]);
+    const { instruction: withdrawIx } = await sdk.withdrawIx({
+      launch: launchState,
+      contributor: depositor.publicKey,
+      amount: withdrawAmount,
+    });
+    sendTx(client, depositor.publicKey, [depositor], withdrawIx);
 
-    // close
-    let beforeLamports = 0;
-    try {
-      const beforeInfo = await provider.connection.getAccountInfo(rosterShard);
-      beforeLamports = Number(beforeInfo?.lamports ?? 0);
-    } catch (_) {}
-    const beforePayer = Number(client.getBalance(admin.publicKey));
-    const { transaction: closeTx } = await sdk.closeRosterShardTx({ launch: testLaunchState, shardId: 1, payer: admin.publicKey, refundTo: admin.publicKey });
-    await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
-    let afterInfo: any = null;
-    try {
-      afterInfo = await provider.connection.getAccountInfo(rosterShard);
-    } catch (_) {
-      afterInfo = null;
-    }
-    const afterPayer = Number(client.getBalance(admin.publicKey));
-    assert.isTrue(afterInfo === null, "Roster shard should be closed");
-    console.log("Seal/close test: payer delta", afterPayer - beforePayer, "rent was", beforeLamports);
+    const balanceAfter = client.getBalance(depositor.publicKey);
+    const balanceDiff = Number(balanceAfter) - Number(balanceBefore);
+    const txFee = 5000; // LiteSVM transaction fee
+    assert.equal(balanceDiff + txFee, 2 * anchor.web3.LAMPORTS_PER_SOL, "Should receive exactly 2 SOL back minus tx fee");
+
+    const { data: contribAfter } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    assert.equal(contribAfter.ticketRanges.length, 1, "Should still have 1 range");
+    assert.equal(contribAfter.ticketRanges[0].start.toNumber(), 100, "Range start unchanged at 100");
+    assert.equal(contribAfter.ticketRanges[0].end.toNumber(), 130, "Range end should be 130 after withdraw");
+
+    const { data: lotteryAfterWithdraw } = await sdk.fetchLaunch(launchState);
+    assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
+    assert.equal(lotteryAfterWithdraw.inactiveCount.toNumber(), 20, "inactive_count should be 20 after withdrawing 20 tickets");
   });
+
   it("Project ID increments correctly", async () => {
-    const projectId1 = await sdk.getNextProjectId();
-    const [project1Launch] = sdk.getLaunchPdaByProjectId(projectId1);
+    const { data: counterBefore } = await sdk.fetchProjectCounter();
+    const lastIdBefore = counterBefore.value.toNumber();
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId1,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
+    // Create project 1: nonce must equal current counter value
+    const projectId1 = await sdk.getNextProjectId();
+    assert.equal(projectId1.toNumber(), lastIdBefore, "Next project ID should equal lastId (nonce)");
+
+    const { instruction: ix1, launchState: launch1 } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId1,
+      saleStartTimeTimestamp: 0,
+      name: "Project1",
+      symbol: "P1",
+      uri: "https://example.com/p1.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix1);
 
     const projectId2 = await sdk.getNextProjectId();
-    const [project2Launch] = sdk.getLaunchPdaByProjectId(projectId2);
+    assert.equal(projectId2.toNumber(), projectId1.toNumber() + 1, "Project 2 ID should be project1 + 1");
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId2,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
+    const { instruction: ix2, launchState: launch2 } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId2,
+      saleStartTimeTimestamp: 0,
+      name: "Project2",
+      symbol: "P2",
+      uri: "https://example.com/p2.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix2);
 
     const projectId3 = await sdk.getNextProjectId();
-    const [project3Launch] = sdk.getLaunchPdaByProjectId(projectId3);
+    assert.equal(projectId3.toNumber(), projectId2.toNumber() + 1, "Project 3 ID should be project2 + 1");
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId: projectId3,
-        hardCapLamports: HARD_CAP_LAMPORTS,
-        minRaiseLamports: MIN_RAISE_LAMPORTS,
-        perWalletCap: PER_WALLET_CAP,
-        tauLamports: TAU_LAMPORTS,
-        baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-        baseSaleBasisPoints: BASE_SALE_BPS_F,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 60,
-        rosterShardCap: ROSTER_SHARD_CAP,
-        rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        xyberMint,
-      });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-    }
-
-    const project1State = await sdk.fetchLaunch(project1Launch);
-    const project2State = await sdk.fetchLaunch(project2Launch);
-    const project3State = await sdk.fetchLaunch(project3Launch);
-
-    assert.equal(
-      project2State.projectId.toNumber(),
-      project1State.projectId.toNumber() + 1
-    );
-    assert.equal(
-      project3State.projectId.toNumber(),
-      project2State.projectId.toNumber() + 1
-    );
-
-    console.log("Project IDs increment correctly:", {
-      project1: project1State.projectId.toNumber(),
-      project2: project2State.projectId.toNumber(),
-      project3: project3State.projectId.toNumber(),
+    const { instruction: ix3, launchState: launch3 } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: projectId3,
+      saleStartTimeTimestamp: 0,
+      name: "Project3",
+      symbol: "P3",
+      uri: "https://example.com/p3.json",
     });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], ix3);
+
+    const { data: state1 } = await sdk.fetchLaunch(launch1);
+    const { data: state2 } = await sdk.fetchLaunch(launch2);
+    const { data: state3 } = await sdk.fetchLaunch(launch3);
+
+    assert.equal(state1.projectId.toNumber(), projectId1.toNumber(), "Launch 1 projectId mismatch");
+    assert.equal(state2.projectId.toNumber(), projectId2.toNumber(), "Launch 2 projectId mismatch");
+    assert.equal(state3.projectId.toNumber(), projectId3.toNumber(), "Launch 3 projectId mismatch");
+
+    // Counter is incremented after each launch, so it equals projectId3 + 1
+    const { data: counterAfter } = await sdk.fetchProjectCounter();
+    assert.equal(counterAfter.value.toNumber(), projectId3.toNumber() + 1, "Counter should equal last project ID + 1");
   });
 
-  it("PDA derivation consistency", async () => {
-    const projectId = await sdk.getNextProjectId();
+  it("Deposit respects perWalletCap limit", async () => {
+    const perWalletCap = new anchor.BN(presetData.perWalletCap);
+    const tau = new anchor.BN(presetData.tauLamports);
+    const depositor = await createAndFundAccount(client, 300);
 
-    const sdkPdas = sdk.deriveAllPdas(projectId);
+    const deposit1 = new anchor.BN(150 * anchor.web3.LAMPORTS_PER_SOL);
+    const tickets1 = deposit1.div(tau).toNumber();
+    const { instruction: depIx1 } = await sdk.depositIx({
+      contributor: depositor.publicKey,
+      launch: launchState,
+      amount: deposit1,
+    });
+    sendTx(client, depositor.publicKey, [depositor], depIx1);
 
-    const [directLaunch] = sdk.getLaunchPdaByProjectId(projectId);
-    const [directEscrow] = sdk.getEscrowPda(directLaunch);
-    const [directRoster] = sdk.getRosterPda(directLaunch);
-    const [directRosterShard] = sdk.getRosterShardPda(directLaunch, 1);
-    const [directMintAuth] = sdk.getEscrowAuthorityPda(directLaunch);
-    const [directProjectCounter] = sdk.getProjectCounterPda();
+    const { data: contrib1 } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    const totalTickets1 = contrib1.ticketRanges.reduce((sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()), 0);
+    assert.equal(totalTickets1, tickets1, "First deposit tickets mismatch");
 
-    assert.ok(sdkPdas.launch.equals(directLaunch));
-    assert.ok(sdkPdas.escrow.equals(directEscrow));
-    assert.ok(sdkPdas.roster.equals(directRoster));
-    // selection PDA deprecated; verify roster shard PDA derivation works
-    assert.ok(directRosterShard.equals(sdk.getRosterShardPda(directLaunch, 1)[0]));
-    assert.ok(sdkPdas.escrow.equals(directMintAuth));
-    assert.ok(sdkPdas.projectCounter.equals(directProjectCounter));
-
-    console.log(
-      "All PDA derivations are consistent between SDK and direct program calls"
+    const deposit2 = new anchor.BN(100 * anchor.web3.LAMPORTS_PER_SOL);
+    await doAndCheckError(
+      (async () => {
+        const { instruction: depIx2 } = await sdk.depositIx({
+          contributor: depositor.publicKey,
+          launch: launchState,
+          amount: deposit2,
+        });
+        sendTx(client, depositor.publicKey, [depositor], depIx2);
+      })(),
+      "PerWalletCapExceeded"
     );
+
+    const deposit3 = new anchor.BN(50 * anchor.web3.LAMPORTS_PER_SOL);
+    const { instruction: depIx3 } = await sdk.depositIx({
+      contributor: depositor.publicKey,
+      launch: launchState,
+      amount: deposit3,
+    });
+    sendTx(client, depositor.publicKey, [depositor], depIx3);
+
+    const { data: contribFinal } = await sdk.fetchContribution(launchState, depositor.publicKey);
+    const totalTicketsFinal = contribFinal.ticketRanges.reduce((sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()), 0);
+    const expectedTickets = perWalletCap.div(tau).toNumber();
+    assert.equal(totalTicketsFinal, expectedTickets, "Final tickets should equal perWalletCap / tau");
   });
 
-  it("Creates pool with blockhash verification", async () => {
-    console.log("\n=== Creating Pool ===");
-
-    // Use a fresh launch to avoid interfering with prior tests' time advances
-    const nextIdForPool = await sdk.getNextProjectId();
-    const { initLaunchTx: initForPoolTx, launchState: existingLaunchPda } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId: nextIdForPool,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 60,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: TAU_LAMPORTS.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      xyberMint,
-    });
-    await safeSendAndConfirm(provider, client, initForPoolTx, [admin.payer]);
-    const [earlyPoolState] = sdk.getPoolPda(existingLaunchPda);
+  it("Blockhash verification in finalizeLottery", async () => {
     const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    // Attempt to create pool at the very beginning - should fail (simulate to avoid side effects)
-    try {
-      const { transaction } = await sdk.preparePoolCreationTx({
-        payer: admin.publicKey,
-        launch: existingLaunchPda,
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "BlockhashTest",
+      symbol: "BHT",
+      uri: "https://example.com/bht.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+
+    const minRaise = new anchor.BN(presetData.minRaiseLamports);
+    const perWallet = new anchor.BN(presetData.perWalletCap);
+    let totalDeposited = new anchor.BN(0);
+
+    while (totalDeposited.lt(minRaise)) {
+      const depositor = await createAndFundAccount(client, 250);
+      const remaining = minRaise.sub(totalDeposited);
+      const amount = remaining.gt(perWallet) ? perWallet : remaining;
+
+      const { instruction: depIx } = await sdk.depositIx({
+        contributor: depositor.publicKey,
+        launch: testLaunch,
+        amount,
       });
-      await provider.simulate(transaction);
-      assert.fail("preparePoolCreation should fail before deposits/claims/blockhash setup");
-    } catch (err) {
-      const msg = (err as any)?.message ?? String(err);
-      console.log("Expected failure (early preparePoolCreation):", msg);
+      sendTx(client, depositor.publicKey, [depositor], depIx);
+      totalDeposited = totalDeposited.add(amount);
     }
 
-    // Ensure selection is finalized and claims are open (mirror flowRunner.ts)
-    let launchAccount = await sdk.fetchLaunch(existingLaunchPda);
-    if (!launchAccount.selectionFinalized || !(launchAccount as any).claimsReady) {
-      // 1) Init roster and shard 1
-      await sdk.initRoster({ launch: existingLaunchPda });
-      // initRoster initializes shard 1 in current flow
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
-      // 2) Deposit up to min raise using multiple users, respecting per-wallet cap
-      let totalDeposited = new anchor.BN(0);
-      const [rosterShard] = sdk.getRosterShardPda(existingLaunchPda, 1);
-      while (totalDeposited.lt(MIN_RAISE_LAMPORTS)) {
-        const depositor = await createAndFundAccount(client, 10);
-        const remaining = MIN_RAISE_LAMPORTS.sub(totalDeposited);
-        const amount = remaining.gt(PER_WALLET_CAP) ? PER_WALLET_CAP : remaining;
-        const depIx = await (program.methods as any)
-          .deposit(amount)
-          .accounts({
-            user: depositor.publicKey,
-            launchState: existingLaunchPda,
-            userContribution: sdk.getUserContributionPda(existingLaunchPda, depositor.publicKey)[0],
-            rosterShard,
-            escrowAuthority: sdk.getEscrowAuthorityPda(existingLaunchPda)[0],
-            launch: existingLaunchPda,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          } as any)
-          .instruction();
-        const depTx = new anchor.web3.Transaction().add(depIx);
-        await safeSendAndConfirm(provider, client, depTx, [depositor]);
-        totalDeposited = totalDeposited.add(amount);
-      }
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
-      // Skip second early simulation under LiteSVM to reduce flakiness
+    let { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.seeded, "Lottery should be seeded before finalizeLottery");
 
-      // 3) Advance time beyond funding period (fundingDurationSeconds was set to 60)
-      await advanceTime(client, { slots: BigInt(2000), seconds: BigInt(70) });
-
-      // 4) Set VRF seed, finalize shard
-      await sdk.setSeed({ launch: existingLaunchPda });
-      await sdk.finalizeRosterShard({ launch: existingLaunchPda, shardId: 1, signers: [] });
-      // claims are opened in preparePoolCreation now
-
-      // Refresh state
-      launchAccount = await sdk.fetchLaunch(existingLaunchPda);
-      console.log(
-        `Launch state - Selection finalized: ${launchAccount.selectionFinalized}`
-      );
-      console.log(`Launch state - Selection finalized: ${launchAccount.selectionFinalized}`);
-    }
-
-    // Configure SlotHashes to include a valid blockhash for this project's range
+    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
+    const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
     const currentClock = client.getClock();
 
-    // Compute project's personal blockhash range and pick range_start (inclusive)
     const projectId = launchAccount.projectId.toNumber();
-    const unlock = Number((launchAccount as any).unlockTimeSec);
+    const unlock = Number(presetAccount.unlockTimeSec);
     const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
     const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
     const rangeStart = width * BigInt(projectId - 1);
-    const rangeEnd = rangeStart + width; // exclusive upper bound; safe to use as an invalid hash
+    const rangeEnd = rangeStart + width;
 
-    // Write incorrect SlotHashes and simulate preparePoolCreation (should fail)
-    const invalidNumHashes = 512;
-    const slotHashesDataInvalid = Buffer.alloc(8 + invalidNumHashes * 40);
-    slotHashesDataInvalid.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
-    for (let i = 0; i < invalidNumHashes; i++) {
+    const numHashes = 512;
+    const slotHashesDataInvalid = Buffer.alloc(8 + numHashes * 40);
+    slotHashesDataInvalid.writeBigUInt64LE(BigInt(numHashes), 0);
+    for (let i = 0; i < numHashes; i++) {
       const offset = 8 + i * 40;
       slotHashesDataInvalid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8);
+      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8); // rangeEnd is outside valid range
     }
-
     client.setAccount(SLOT_HASHES_SYSVAR, {
       lamports: 1_000_000,
       data: slotHashesDataInvalid,
@@ -953,1198 +651,896 @@ describe("engine litesvm", () => {
       executable: false,
     });
 
-    try {
-      const { transaction } = await sdk.preparePoolCreationTx({
-        payer: admin.publicKey,
-        launch: existingLaunchPda,
-      });
-      await provider.simulate(transaction);
-      assert.fail("preparePoolCreation should fail with incorrect slot hashes");
-    } catch (err) {
-      const msg = (err as any)?.message ?? String(err);
-      console.log("Expected failure (invalid SlotHashes):", msg);
-    }
+    await doAndCheckError(
+      (async () => {
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: multisig.publicKey, launch: testLaunch });
+        sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
+      })(),
+      "NoValidBlockhash"
+    );
 
-    const numHashes = 512;
-    const slotHashesData = Buffer.alloc(8 + numHashes * 40);
-    slotHashesData.writeBigUInt64LE(BigInt(numHashes), 0);
-    // Fill 63 invalid hashes and put the valid one at index 63 (64th element)
+
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.seeded, "Lottery should still be seeded after failed finalizeLottery");
+
+    const slotHashesDataValid = Buffer.alloc(8 + numHashes * 40);
+    slotHashesDataValid.writeBigUInt64LE(BigInt(numHashes), 0);
     for (let i = 0; i < numHashes; i++) {
       const offset = 8 + i * 40;
-      slotHashesData.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      slotHashesDataValid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
       if (i === numHashes - 1) {
-        bigIntTo32BytesBE(rangeStart).copy(slotHashesData, offset + 8);
+        bigIntTo32BytesBE(rangeStart).copy(slotHashesDataValid, offset + 8); // rangeStart is valid
       } else {
-        bigIntTo32BytesBE(rangeEnd).copy(slotHashesData, offset + 8);
+        bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataValid, offset + 8);
       }
     }
 
     client.setAccount(SLOT_HASHES_SYSVAR, {
       lamports: 1_000_000,
-      data: slotHashesData,
+      data: slotHashesDataValid,
       owner: anchor.web3.SystemProgram.programId,
       executable: false,
     });
 
-    const { transaction } = await sdk.preparePoolCreationTx({
-      payer: admin.publicKey,
-      launch: existingLaunchPda,
-      computeUnits: 2_000_000
+    const { transaction } = await sdk.finalizeLotteryTx({
+      payer: multisig.publicKey,
+      launch: testLaunch,
+      computeUnits: 2_000_000,
     });
-    const signature = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
-    console.log("Pool created successfully!");
-    console.log("Signature:", signature);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
-    const poolState = await sdk.fetchPoolState(existingLaunchPda);
-    console.log("Pool ID:", poolState.poolId.toString());
-    console.log("Project ID:", poolState.projectId.toString());
-    console.log("Created:", poolState.created);
-    console.log("Created Slot:", poolState.createdSlot.toString());
-    console.log(
-      "Created Blockhash:",
-      Buffer.from(poolState.createdBlockhash).toString("hex")
-    );
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized after finalizeLottery");
 
-    assert.ok(poolState.created, "Pool should be marked as created");
-    assert.ok(
-      poolState.launch.equals(existingLaunchPda),
-      "Pool should reference correct launch"
-    );
-
+    const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
   });
 
   it("Grace period: invalid hashes fail within grace; succeed after", async () => {
-    const GRACE = 20;
-    const HARD_CAP = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    const TAU = new anchor.BN(1); // 1 lamport to avoid divisibility issues
-    const MIN_RAISE = TAU.clone();
-    const PER_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const TOTAL = new anchor.BN(1000000);
-    const SALE_BPS = new anchor.BN(10000);
+    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
 
-    const projectId = await sdk.getNextProjectId();
-    const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
+    // Create a fresh launch for this test
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "GracePeriodTest",
+      symbol: "GPT",
+      uri: "https://example.com/gpt.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
 
-    {
-      const { initLaunchTx } = await sdk.initLaunchTx({
-        creator: admin.publicKey,
-        projectId,
-        hardCapLamports: HARD_CAP,
-        minRaiseLamports: MIN_RAISE,
-        perWalletCap: PER_CAP,
-        tauLamports: TAU,
-        baseTotalAllocation: TOTAL,
-        baseSaleBasisPoints: SALE_BPS,
-        fundingDurationSeconds: 10,
-        saleStartTimeTimestamp: 0,
-        rosterShardCap: 100,
-      rosterShardsTotal: 1,
-        creatorInitialDepositLamports: new anchor.BN(0),
-        creatorDailyLamportsLimit: TAU.clone(),
-        creatorClaimLockPeriodSec: new anchor.BN(2),
-        provider,
-        creatorMaxDepositLamports: new anchor.BN(0),
-        poolCreationGracePeriodSec: GRACE,
-        xyberMint,
+    // Deposit enough to meet min_raise
+    const minRaise = new anchor.BN(presetData.minRaiseLamports);
+    const perWallet = new anchor.BN(presetData.perWalletCap);
+    let totalDeposited = new anchor.BN(0);
+
+    while (totalDeposited.lt(minRaise)) {
+      const depositor = await createAndFundAccount(client, 250);
+      const remaining = minRaise.sub(totalDeposited);
+      const amount = remaining.gt(perWallet) ? perWallet : remaining;
+
+      const { instruction: depIx } = await sdk.depositIx({
+        contributor: depositor.publicKey,
+        launch: testLaunch,
+        amount,
       });
-      await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
+      sendTx(client, depositor.publicKey, [depositor], depIx);
+      totalDeposited = totalDeposited.add(amount);
     }
 
-    await sdk.initRoster({ launch: launchPda });
+    // Advance time beyond funding period
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(presetData.fundingDurationSeconds + 10) });
 
-    const depositor = await createAndFundAccount(client, 20);
-    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
-    const stateAfterInit = await sdk.fetchLaunch(launchPda) as any;
-    const tauBn = new anchor.BN((stateAfterInit.tauLamports as anchor.BN).toString());
-    const [userContribution] = sdk.getUserContributionPda(launchPda, depositor.publicKey);
-    const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-    const depIx = await (program.methods as any)
-      .deposit(tauBn)
-      .accounts({
-        user: depositor.publicKey,
-        launchState: launchPda,
-        userContribution,
-        rosterShard,
-        escrowAuthority,
-        launch: launchPda,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .instruction();
-    const depTx = new anchor.web3.Transaction().add(depIx);
-    await safeSendAndConfirm(provider, client, depTx, [depositor]);
-    // ignore remainder if any, to keep multiples of tau strictly
+    // Set VRF seed
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
 
-    await advanceTime(client, { seconds: BigInt(12) });
-    await sdk.setSeed({ launch: launchPda });
-    await sdk.finalizeRosterShard({ launch: launchPda, shardId: 1, signers: [] });
+    // Verify lottery is still in progress
+    let { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.seeded, "Lottery should be seeded before finalizeLottery");
 
-    const state = await sdk.fetchLaunch(launchPda);
-    const project = state.projectId.toNumber();
-    const unlock = Number((state as any).unlockTimeSec);
+    // Get launch state for blockhash range calculation
+    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
+    const { data: presetAccount } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const currentClock = client.getClock();
+
+    // Compute project's personal blockhash range
+    const projectId = launchAccount.projectId.toNumber();
+    const unlock = Number(presetAccount.unlockTimeSec);
     const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
     const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-    const rangeStart = width * BigInt(project - 1);
+    const rangeStart = width * BigInt(projectId - 1);
     const rangeEnd = rangeStart + width;
 
-    const SLOT_HASHES_SYSVAR = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
-    const invalidNumHashes = 512;
-    const currentClock = client.getClock();
-    const data = Buffer.alloc(8 + invalidNumHashes * 40);
-    data.writeBigUInt64LE(BigInt(invalidNumHashes), 0);
-    for (let i = 0; i < invalidNumHashes; i++) {
+    // Write INVALID SlotHashes (all hashes outside project's range)
+    const numHashes = 512;
+    const slotHashesDataInvalid = Buffer.alloc(8 + numHashes * 40);
+    slotHashesDataInvalid.writeBigUInt64LE(BigInt(numHashes), 0);
+    for (let i = 0; i < numHashes; i++) {
       const offset = 8 + i * 40;
-      data.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-      bigIntTo32BytesBE(rangeEnd).copy(data, offset + 8);
+      slotHashesDataInvalid.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
+      bigIntTo32BytesBE(rangeEnd).copy(slotHashesDataInvalid, offset + 8); // rangeEnd is outside valid range
     }
-    client.setAccount(SLOT_HASHES_SYSVAR, { lamports: 1_000_000, data, owner: anchor.web3.SystemProgram.programId, executable: false });
-
-    let threw = false;
-    try {
-      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda });
-      await provider.simulate(transaction);
-    } catch (_) {
-      threw = true;
-    }
-    assert.isTrue(threw, "Expected failure within grace when no in-range blockhash present");
-
-    await advanceTime(client, { seconds: BigInt(GRACE + 5) });
-    injectSlotHashesForRange(client, rangeStart, rangeEnd);
-    const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: launchPda, computeUnits: 1_500_000 });
-    const sig = await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
-    assert.isString(sig);
-    const poolState = await sdk.fetchPoolState(launchPda);
-    assert.isTrue(poolState.created);
-  });
-
-  it("Initializes launch with creator deposit", async () => {
-    // Check admin balance and adjust creator deposit accordingly
-    const adminBalance = client.getBalance(admin.publicKey);
-    const availableForDeposit = adminBalance - BigInt(anchor.web3.LAMPORTS_PER_SOL) / BigInt(2); // Reserve 0.5 SOL for fees
-    let creatorDepositAmount = new anchor.BN(0);
-    if (availableForDeposit > BigInt(0)) {
-      const maxAllowed = 4 * anchor.web3.LAMPORTS_PER_SOL; // will be overwritten by testHardCap below after it's defined
-      // temporarily compute with safe numbers; adjust precisely after testHardCap is defined
-      const desired = Number(availableForDeposit);
-      creatorDepositAmount = new anchor.BN(desired);
-    }
-
-    const projectId = await sdk.getNextProjectId();
-    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
-    const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
-    const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
-
-    const dailyLimit = TAU_LAMPORTS.clone();
-    // Align creator deposit to tau and cap by hard cap
-    {
-      let desired = creatorDepositAmount.toNumber();
-      const maxAllowed = HARD_CAP_LAMPORTS.toNumber();
-      desired = Math.min(desired, maxAllowed);
-      const tau = TAU_LAMPORTS.toNumber();
-      if (tau > 0) desired -= desired % tau;
-      creatorDepositAmount = new anchor.BN(desired);
-    }
-
-    // Skip test if no funds available for creator deposit
-    if (creatorDepositAmount.toNumber() === 0) {
-      console.log("Skipping creator deposit test - insufficient funds");
-      return;
-    }
-
-    // Initialize launch
-    const { initLaunchTx } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId,
-      hardCapLamports: HARD_CAP_LAMPORTS,
-      minRaiseLamports: MIN_RAISE_LAMPORTS,
-      perWalletCap: PER_WALLET_CAP,
-      tauLamports: TAU_LAMPORTS,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 10,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(HARD_CAP_LAMPORTS.toNumber() / TAU_LAMPORTS.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: creatorDepositAmount,
-      creatorDailyLamportsLimit: dailyLimit,
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      creatorMaxDepositLamports: creatorDepositAmount,
-      xyberMint,
-    });
-    const signature = await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-
-    console.log("Launch with creator deposit initialized. Signature:", signature);
-
-    // Check launch state
-    const launchState = await sdk.fetchLaunch(testLaunchState);
-    const expectedTickets = Math.floor(creatorDepositAmount.toNumber() / TAU_LAMPORTS.toNumber());
-    assert.equal(launchState.creatorReservedTickets, 0);
-    assert.equal(launchState.creatorGrantPresent, creatorDepositAmount.toNumber() > 0);
-
-    // Check creator grant state (only if creator deposit > 0)
-    if (creatorDepositAmount.toNumber() > 0) {
-      const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
-      assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
-      assert.equal(creatorGrantState.reservedTickets, 0);
-      assert.equal(creatorGrantState.dailyLamportsLimit.toNumber(), dailyLimit.toNumber());
-      assert.equal(creatorGrantState.dailyTicketCap, dailyLimit.toNumber() / TAU_LAMPORTS.toNumber());
-      assert.equal(creatorGrantState.claimedTickets, 0);
-      assert.isFalse(creatorGrantState.refunded);
-      assert.ok(creatorGrantState.creator.equals(admin.publicKey));
-      assert.ok(creatorGrantState.launch.equals(testLaunchState));
-    }
-
-    console.log("Creator deposit test passed!");
-  });
-
-  it("Creator deposit/withdraw within max limit", async () => {
-    // Ensure admin has enough SOL for transfers
-    const want = BigInt(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const cur = client.getBalance(admin.publicKey);
-    if (cur < want) {
-      client.airdrop(admin.publicKey, want - cur);
-    }
-
-    const MAX = new anchor.BN(3 * anchor.web3.LAMPORTS_PER_SOL);
-    const testHardCap = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-    const testMinRaise = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    const testPerWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const testTau = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-
-    const projectId = await sdk.getNextProjectId();
-    const { initLaunchTx, launchState: launchPda } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId,
-      hardCapLamports: testHardCap,
-      minRaiseLamports: testMinRaise,
-      perWalletCap: testPerWalletCap,
-      tauLamports: testTau,
-      baseTotalAllocation: new anchor.BN(0),
-      baseSaleBasisPoints: new anchor.BN(0),
-      fundingDurationSeconds: 20,
-      unlockTimeSec: 0,
-      rosterShardCap: 100,
-      rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / 100)),
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: testTau.clone(),
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      creatorMaxDepositLamports: MAX,
-      xyberMint,
-      name: "Lumi",
-      symbol: "LUMI",
-      uri: "https://metadata.xyberlabs.dev/lumi/default.json",
-    } as any);
-    await safeSendAndConfirm(provider, client, initLaunchTx, [admin.payer]);
-
-    // Deposit 2 SOL by creator
-    const dep1 = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    {
-      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
-      const tx = await program.methods
-        .creatorDeposit(dep1)
-        .accountsStrict({
-          creator: adminKeypair.publicKey,
-          launchState: launchPda,
-          escrowAuthority,
-          creatorGrant,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .transaction();
-      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
-    }
-    let grant = await sdk.fetchCreatorGrant(launchPda);
-    let state = await sdk.fetchLaunch(launchPda);
-    assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
-    assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
-
-    // Attempt to exceed max (deposit another 2 SOL -> should fail)
-    try {
-      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
-      const tx = await program.methods
-        .creatorDeposit(dep1)
-        .accountsStrict({
-          creator: adminKeypair.publicKey,
-          launchState: launchPda,
-          escrowAuthority,
-          creatorGrant,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .transaction();
-      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
-      assert.fail("Expected deposit beyond max to fail");
-    } catch (_) { /* expected */ }
-
-    // Deposit remaining 1 SOL to reach max
-    const dep2 = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-    {
-      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
-      const tx = await program.methods
-        .creatorDeposit(dep2)
-        .accountsStrict({
-          creator: adminKeypair.publicKey,
-          launchState: launchPda,
-          escrowAuthority,
-          creatorGrant,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .transaction();
-      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
-    }
-    grant = await sdk.fetchCreatorGrant(launchPda);
-    state = await sdk.fetchLaunch(launchPda);
-    assert.equal(grant.lockedLamports.toNumber(), MAX.toNumber());
-    assert.equal(state.totalDeposited.toNumber(), MAX.toNumber());
-
-    // Withdraw 1 SOL
-    {
-      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
-      const [creatorGrant] = (sdk as any).getCreatorGrantPda(launchPda);
-      const tx = await program.methods
-        .creatorWithdraw(dep2)
-        .accountsStrict({
-          creator: adminKeypair.publicKey,
-          launchState: launchPda,
-          escrowAuthority,
-          creatorGrant,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        })
-        .transaction();
-      await safeSendAndConfirm(provider, client, tx, [adminKeypair]);
-    }
-    grant = await sdk.fetchCreatorGrant(launchPda);
-    state = await sdk.fetchLaunch(launchPda);
-    assert.equal(grant.lockedLamports.toNumber(), dep1.toNumber());
-    assert.equal(state.totalDeposited.toNumber(), dep1.toNumber());
-  });
-
-  it("Engine config: init and update", async () => {
-    const admin1 = anchor.web3.Keypair.generate();
-    const admin2 = anchor.web3.Keypair.generate();
-    const admin3 = anchor.web3.Keypair.generate();
-
-    const treasury1 = anchor.web3.Keypair.generate().publicKey;
-    const creationFee1 = new anchor.BN(123456789);
-    const admins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [
-      admin1.publicKey,
-      admin2.publicKey,
-      admin3.publicKey,
-    ];
-
-    // Try init only if not exists
-    const [cfgPda] = (sdk as any).getConfigPda();
-    const exists = await provider.connection.getAccountInfo(cfgPda);
-    if (!exists) {
-      const { instruction: initCfgIx } = await (sdk as any).initEngineConfigIx({
-      payer: admin.publicKey,
-      treasury: treasury1,
-      creationFee: creationFee1,
-      xyberMint,
-      admins,
-      threshold: 2,
-      signerAdmins: [admin1.publicKey, admin2.publicKey],
-      });
-      const initCfgSig = await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(initCfgIx), [admin.payer, admin1, admin2]);
-      console.log("Init engine config signature:", initCfgSig);
-    } else {
-      console.log("EngineConfig already exists; skipping init");
-    }
-
-    const [cfgPda1] = (sdk as any).getConfigPda();
-    const cfgAcc = await (program.account as any).engineConfig.fetch(cfgPda1);
-    // If config already existed from previous tests, skip initial-state assertions
-    if ((cfgAcc.treasury as anchor.web3.PublicKey).equals(treasury1)) {
-      assert.equal(Number(cfgAcc.creationFee), Number(creationFee1));
-      assert.deepEqual(cfgAcc.admins.map((k: anchor.web3.PublicKey) => k.toBase58()), admins.map(k => k.toBase58()));
-      assert.equal(cfgAcc.threshold, 2);
-    }
-
-    const treasury2 = anchor.web3.Keypair.generate().publicKey;
-    const creationFee2 = new anchor.BN(777);
-    const { instruction: updCfg1 } = await (sdk as any).updateEngineConfigIx({
-      payer: admin.publicKey,
-      newTreasury: treasury2,
-      newCreationFee: creationFee2,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-    });
-    const updSig1 = await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(updCfg1), [admin.payer, adminBKeypair]);
-    console.log("Update engine config signature:", updSig1);
-
-    const [cfgPda2] = (sdk as any).getConfigPda();
-    const updated = await (program.account as any).engineConfig.fetch(cfgPda2);
-    assert.ok((updated.treasury as anchor.web3.PublicKey).equals(treasury2));
-    assert.equal(Number(updated.creationFee), Number(creationFee2));
-    // Do not assert admins here; they may come from previous suite config
-    assert.equal(updated.threshold, 2);
-
-    const newAdmins: [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey] = [
-      admin1.publicKey,
-      admin2.publicKey,
-      admin.publicKey,
-    ];
-    const { instruction: updCfg2 } = await (sdk as any).updateEngineConfigIx({
-      payer: admin.publicKey,
-      newAdmins,
-      newThreshold: 3,
-      signerAdmins: [admin.publicKey, adminBKeypair.publicKey],
-    });
-    const updSig2 = await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(updCfg2), [admin.payer, adminBKeypair]);
-    console.log("Update admins/threshold signature:", updSig2);
-
-    const [cfgPda3] = (sdk as any).getConfigPda();
-    const finalCfg = await (program.account as any).engineConfig.fetch(cfgPda3);
-    assert.deepEqual(finalCfg.admins.map((k: anchor.web3.PublicKey) => k.toBase58()), newAdmins.map(k => k.toBase58()));
-    assert.equal(finalCfg.threshold, 3);
-  });
-
-
-});
-
-describe("engine litesvm - raydium clmm", () => {
-  let raydiumProgramId: anchor.web3.PublicKey;
-  let raydiumAmmConfig: anchor.web3.PublicKey;
-
-  const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-  const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-  const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-  const ROSTER_SHARD_CAP = 100;
-
-  before(async () => {
-    client = fromWorkspace("./");
-    provider = new LiteSVMProvider(client);
-    anchor.setProvider(provider);
-    program = anchor.workspace.engine as Program<Engine>;
-    admin = provider.wallet;
-    adminKeypair = (provider.wallet as any).payer;
-    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
-    client.airdrop(admin.publicKey, BigInt(500 * anchor.web3.LAMPORTS_PER_SOL));
-
-    const raydiumSetup = await setupRaydiumCLMM(client);
-    raydiumProgramId = raydiumSetup.raydiumProgramId;
-    raydiumAmmConfig = raydiumSetup.ammConfig;
-  });
-
-  
-});
-
-
-describe("Full flow", () => {
-  let client: LiteSVM;
-  let provider: LiteSVMProvider;
-  let program: Program<Engine>;
-  let admin: anchor.Wallet;
-  let sdk: ReturnType<typeof EngineSDK.create>;
-  let adminKeypair: anchor.web3.Keypair;
-  let admin2Keypair: anchor.web3.Keypair;
-  let admin3Keypair: anchor.web3.Keypair;
-  let xyberMintKeypair: anchor.web3.Keypair;
-  let xyberMint: anchor.web3.PublicKey;
-
-  const MIN_RAISE_LAMPORTS = new anchor.BN(10 * anchor.web3.LAMPORTS_PER_SOL);
-  const PER_WALLET_CAP = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-  const TAU_LAMPORTS = new anchor.BN(1 * anchor.web3.LAMPORTS_PER_SOL);
-  const SALE_ALLOCATION = new anchor.BN(1000000);
-  const LP_ALLOCATION = new anchor.BN(500000);
-  const BASE_TOTAL_ALLOCATION_F = SALE_ALLOCATION.add(LP_ALLOCATION);
-  const BASE_SALE_BPS_F = new anchor.BN(Math.floor(SALE_ALLOCATION.toNumber() * 10000 / BASE_TOTAL_ALLOCATION_F.toNumber()));
-  const ROSTER_SHARD_CAP = 100;
-
-  before(async () => {
-    client = fromWorkspace("./");
-    provider = new LiteSVMProvider(client);
-    anchor.setProvider(provider);
-    program = anchor.workspace.engine as Program<Engine>;
-    admin = provider.wallet;
-    adminKeypair = (provider.wallet as any).payer;
-    sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
-
-    // Ensure some SOL for account creations
-    client.airdrop(admin.publicKey, BigInt(100 * anchor.web3.LAMPORTS_PER_SOL));
-
-    // Initialize EngineConfig (multisig admins) for creation fee flow
-    admin2Keypair = anchor.web3.Keypair.generate();
-    admin3Keypair = anchor.web3.Keypair.generate();
-    // Ensure treasury (admin2) is a valid System-owned account for ATA ownership
-    client.airdrop(admin2Keypair.publicKey, BigInt(2 * anchor.web3.LAMPORTS_PER_SOL));
-
-    // Create XYBER mint keypair first, so we can store it in EngineConfig
-    xyberMintKeypair = anchor.web3.Keypair.generate();
-    xyberMint = xyberMintKeypair.publicKey;
-
-    const creationFee = new anchor.BN(1_000_000);
-    const creationFeeSupply = creationFee.muln(10);
-    const adminsArray = [admin.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey] as [anchor.web3.PublicKey, anchor.web3.PublicKey, anchor.web3.PublicKey];
-    await sdk.initEngineConfig({
-      treasury: admin2Keypair.publicKey,
-      creationFee,
-      xyberMint,
-      admins: adminsArray,
-      threshold: 2,
-      adminKeypairs: [adminKeypair, admin2Keypair],
+    client.setAccount(SLOT_HASHES_SYSVAR, {
+      lamports: 1_000_000,
+      data: slotHashesDataInvalid,
+      owner: anchor.web3.SystemProgram.programId,
+      executable: false,
     });
 
-    // Create XYBER mint account, ATAs, and fund creator ATA with fee amount
-    const rent = await provider.connection.getMinimumBalanceForRentExemption(82);
-    const creatorAta = getAssociatedTokenAddressSync(xyberMint, admin.publicKey, true);
-    const treasuryAta = getAssociatedTokenAddressSync(xyberMint, admin2Keypair.publicKey, true);
-    const tx = new anchor.web3.Transaction()
-      .add(anchor.web3.SystemProgram.createAccount({ fromPubkey: admin.publicKey, newAccountPubkey: xyberMint, space: 82, lamports: rent, programId: TOKEN_PROGRAM_ID }))
-      .add(createInitializeMintInstruction(xyberMint, 9, admin.publicKey, null))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, creatorAta, admin.publicKey, xyberMint))
-      .add(createAssociatedTokenAccountInstruction(admin.publicKey, treasuryAta, admin2Keypair.publicKey, xyberMint))
-      .add(createMintToInstruction(xyberMint, creatorAta, admin.publicKey, BigInt(creationFeeSupply.toString())));
-    await safeSendAndConfirm(provider, client, tx, [adminKeypair, xyberMintKeypair]);
-  });
-
-
-  it("Complete flow with creator deposit: Full lifecycle including creator token claiming", async () => {
-    // Check admin balance and adjust creator deposit accordingly
-    const adminBalance = client.getBalance(admin.publicKey);
-    const availableForDeposit = adminBalance - BigInt(anchor.web3.LAMPORTS_PER_SOL) / BigInt(2); // Reserve 0.5 SOL for fees
-    let creatorDepositAmount = new anchor.BN(0);
-    if (availableForDeposit > BigInt(0)) {
-      const remainder = new anchor.BN(Number(availableForDeposit)).mod(TAU_LAMPORTS);
-      creatorDepositAmount = new anchor.BN(Number(availableForDeposit)).sub(remainder);
-    }
-
-    const projectId = await sdk.getNextProjectId();
-    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
-    const [mintAuth] = sdk.getEscrowAuthorityPda(testLaunchState);
-
-    const testHardCap = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
-    const testMinRaise = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const testPerWalletCap = new anchor.BN(5 * anchor.web3.LAMPORTS_PER_SOL);
-    const testTau = new anchor.BN(2 * anchor.web3.LAMPORTS_PER_SOL);
-    const dailyLimit = testTau.clone();
-
-    // Cap creator deposit by creatorMaxDeposit (testHardCap) and align to tau multiple
-    {
-      const maxAllowed = testHardCap.toNumber();
-      let desired = creatorDepositAmount.toNumber();
-      desired = Math.min(desired, maxAllowed);
-      const tau = testTau.toNumber();
-      if (tau > 0) desired -= desired % tau;
-      creatorDepositAmount = new anchor.BN(desired);
-    }
-
-    console.log("=== Initializing Launch with Creator Deposit ===");
-    // Initialize launch with creator deposit
-    const { initLaunchTx } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId,
-      hardCapLamports: testHardCap,
-      minRaiseLamports: testMinRaise,
-      perWalletCap: testPerWalletCap,
-      tauLamports: testTau,
-      baseTotalAllocation: BASE_TOTAL_ALLOCATION_F,
-      baseSaleBasisPoints: BASE_SALE_BPS_F,
-      fundingDurationSeconds: 11,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: Math.min(65535, Math.ceil(testHardCap.toNumber() / testTau.toNumber() / ROSTER_SHARD_CAP)),
-      creatorInitialDepositLamports: creatorDepositAmount,
-      creatorDailyLamportsLimit: dailyLimit,
-      creatorClaimLockPeriodSec: new anchor.BN(2),
-      provider,
-      creatorMaxDepositLamports: testHardCap,
-      xyberMint,
-    });
-    await safeSendAndConfirm(provider, client, initLaunchTx, [adminKeypair]);
-
-    // Verify creator grant was initialized
-    const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
-    assert.equal(creatorGrantState.lockedLamports.toNumber(), creatorDepositAmount.toNumber());
-    assert.equal(creatorGrantState.reservedTickets, 0);
-    console.log(`Creator grant initialized: ${creatorGrantState.reservedTickets} reserved tickets`);
-
-    console.log("=== Initializing Roster Shard 1 ===");
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
-
-    console.log("=== Simulating User Deposits ===");
-    // Simulate multiple users depositing beyond hard cap
-    const users = [];
-    const depositAmount = new anchor.BN(4 * anchor.web3.LAMPORTS_PER_SOL);
-
-    for (let i = 0; i < 1; i++) {
-      const user = await createAndFundAccount(client, 20);
-
-      await program.methods
-        .deposit(depositAmount)
-        .accounts({
-          user: user.publicKey,
-          launchState: testLaunchState,
-          userContribution: sdk.getUserContributionPda(
-            testLaunchState,
-            user.publicKey
-          )[0],
-          rosterShard,
-          escrowAuthority: sdk.getEscrowAuthorityPda(testLaunchState)[0],
-          launch: testLaunchState,
-          systemProgram: anchor.web3.SystemProgram.programId,
-        } as any)
-        .signers([user])
-        .rpc();
-
-      users.push({
-        keypair: user,
-        contribution: sdk.getUserContributionPda(
-          testLaunchState,
-          user.publicKey
-        )[0],
-      });
-    }
-
-    let state = await sdk.fetchLaunch(testLaunchState);
-    assert.isAtLeast(state.totalDeposited.toNumber(), testHardCap.toNumber());
-    console.log(
-      `Total deposited: ${state.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL
-      } SOL (Hard cap: ${testHardCap.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL)`
+    // Within grace period: should fail with NoValidBlockhash
+    await doAndCheckError(
+      (async () => {
+        const { transaction } = await sdk.finalizeLotteryTx({ payer: multisig.publicKey, launch: testLaunch });
+        sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
+      })(),
+      "NoValidBlockhash"
     );
 
-    const balanceBefore = client.getBalance(sdk.getEscrowAuthorityPda(testLaunchState)[0]);
-    console.log("=== Waiting for Funding Period to End ===");
-    // Wait for funding period to end
-    await advanceTime(client, { slots: BigInt(1000), seconds: BigInt(15) });
+    // Verify lottery still seeded after failed attempt
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.seeded, "Lottery should still be seeded after failed finalizeLottery");
 
-    console.log("=== Setting VRF Seed ===");
-    // Set VRF seed (no SelectionState account now)
-    await sdk.setSeed({ launch: testLaunchState });
+    // Advance time beyond grace period
+    const gracePeriod = Number(presetAccount.poolCreationGracePeriodSec);
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(gracePeriod + 10) });
 
-    console.log("=== Finalizing Shard ===");
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
-
-    console.log("=== Creating Pool (finalizes selection and opens claims) ===");
-    {
-      const st = await sdk.fetchLaunch(testLaunchState) as any;
-      console.log("DEBUG roster_shards:", st.rosterShards, "finalized_up_to:", st.rosterFinalizedUpTo);
-    }
-    {
-      state = await sdk.fetchLaunch(testLaunchState);
-      const projectId = state.projectId.toNumber();
-      const unlock = Number((state as any).unlockTimeSec);
-      const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
-      const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-      const rangeStart = width * BigInt(projectId - 1);
-      const rangeEnd = rangeStart + width;
-      injectSlotHashesForRange(client, rangeStart, rangeEnd);
-    }
-    {
-      const { transaction } = await sdk.preparePoolCreationTx({ payer: admin.publicKey, launch: testLaunchState, computeUnits: 2_000_000 });
-      await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
-    }
-
-    // Verify close before seal still fails after preparePoolCreation (skip under LiteSVM)
-    {
-      const supportsNeg = typeof (provider.connection as any)?.simulateTransaction === "function";
-      if (!supportsNeg) {
-        console.log("Skipping negative pre-seal close check under LiteSVM");
-      } else {
-      try {
-        const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-        const closeTx = await (program.methods as any)
-          .closeRosterShard(1)
-          .accounts({
-            payer: admin.publicKey,
-            launchState: testLaunchState,
-            rosterShard,
-            systemProgram: anchor.web3.SystemProgram.programId,
-          } as any)
-          .transaction();
-        let failed = false;
-        try {
-          await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
-        } catch (_) {
-          failed = true;
-        }
-        if (!failed) {
-          assert.fail("closeRosterShard should fail before seal");
-        }
-        } catch (_) {}
-      }
-    }
-
-    // Seal roster shard snapshot for users and close shard; verify payer receives lamports back
-    {
-      const walletsSlice = users.map((u) => u.keypair.publicKey);
-      await sdk.sealRosterShard({ launch: testLaunchState, shardId: 1, from: 0, max: walletsSlice.length, walletsSlice });
-      const beforeClose = client.getBalance(admin.publicKey);
-      const { transaction: closeTx } = await sdk.closeRosterShardTx({ launch: testLaunchState, shardId: 1, payer: admin.publicKey, refundTo: admin.publicKey });
-      await safeSendAndConfirm(provider, client, closeTx, [admin.payer]);
-      const afterClose = client.getBalance(admin.publicKey);
-      // Expect some rent back; ensure strictly increased
-      if (!(afterClose > beforeClose)) {
-        throw new Error("Expected payer lamports to increase after closing roster shard");
-      }
-    }
-
-    // Create Raydium CLMM pool and add liquidity to open claims and initialize escrow ATA
-    const { raydiumProgramId, ammConfig: raydiumAmmConfig } = await setupRaydiumCLMM(client);
-    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
-
-    const clmmCreate = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
-      launch: testLaunchState,
-      quoteMint: WSOL_MINT,
-      ammConfig: raydiumAmmConfig,
-      clmmProgram: raydiumProgramId,
-      provider,
-    });
-    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [admin.payer, ...clmmCreate.signers]);
-
-    try {
-      const clmmAddLiq = await sdk.addClmmLiquidityTx({
-        payer: admin.publicKey,
-        launch: testLaunchState,
-        baseMint: clmmCreate.baseMint,
-        provider,
-      });
-      await safeSendAndConfirm(provider, client, clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
-    } catch (e) {
-      console.log(`Skipping addClmmLiquidity under LiteSVM: ${String((e as any)?.message ?? e)}`);
-    }
-    await ensureClaimsReadyForTest(sdk, program, client, testLaunchState);
-    {
-      const maybePool = await sdk.fetchPoolState(testLaunchState);
-      assert.isTrue(maybePool.claimsReady, "claimsReady flag must be true before creator claim");
-    }
-
-    // Verify tokens_per_ticket set after preparePoolCreation later
-
-    console.log("=== Testing Creator Token Claiming ===");
-    // Test creator token claiming (only if creator deposit > 0)
-    if (creatorDepositAmount.toNumber() > 0) {
-      const creatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
-
-      const claimResultTx = await sdk.claimCreatorTokensTx({
-        launch: testLaunchState,
-        baseMint: clmmCreate.baseMint,
-        creator: admin.publicKey,
-        creatorAta: creatorAta,
-        createAtaIfMissing: true,
-      });
-      const claimSig = await safeSendAndConfirm(provider, client, claimResultTx.transaction, [adminKeypair]);
-      console.log("Creator tokens claimed. Signature:", claimSig);
-
-      // Verify creator grant state after claiming
-      const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
-      const expectedFirstDayTickets = Math.floor(dailyLimit.toNumber() / testTau.toNumber());
-      assert.equal(creatorGrantAfterClaim.claimedTickets, expectedFirstDayTickets);
-
-      // Verify creator token balance
-      const tokenAccountInfo = client.getAccount(creatorAta);
-      const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
-      const latestState: any = await sdk.fetchLaunch(testLaunchState);
-      const perVal: any = latestState.tokensPerTicket ?? state.tokensPerTicket;
-      const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
-      const ticketsClaimed = creatorGrantAfterClaim.claimedTickets;
-      const expectedAmountRaw = per * ticketsClaimed;
-      assert.equal(Number(tokenAccount.amount), expectedAmountRaw);
-
-      console.log(`Creator claimed ${expectedFirstDayTickets} tickets worth ${expectedAmountRaw} raw units`);
-    } else {
-      console.log("Skipping creator token claiming - no creator deposit");
-    }
-
-    console.log("=== Testing Creator Deposit Fix ===");
-    const escrowAuthorityBalance = balanceBefore;
-    console.log(`Main launch escrow_authority balance: ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-    console.log(`Creator deposit amount: ${creatorDepositAmount.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL`);
-
-    const userDeposits = testHardCap;
-    const expectedMinBalance = creatorDepositAmount.add(userDeposits);
-
-    assert.isTrue(Number(escrowAuthorityBalance) >= expectedMinBalance.toNumber());
-    console.log(`Escrow authority balance ${Number(escrowAuthorityBalance) / anchor.web3.LAMPORTS_PER_SOL} SOL >= expected minimum ${expectedMinBalance.toNumber() / anchor.web3.LAMPORTS_PER_SOL} SOL before liquidity move`);
-
-    if (creatorDepositAmount.toNumber() > 0) {
-      console.log("Creator deposit fix verified: escrow contains creator's initial deposit");
-    } else {
-      console.log("Creator deposit fix verified: escrow contains user deposits only (no creator deposit)");
-    }
-
-    console.log("=== Testing User Refund and Token Claiming ===");
-    // Test regular user refund and token claiming
-    const testUser = users[0];
-    const userInitialBalance = client.getBalance(testUser.keypair.publicKey);
-
-    // User claims refund
-    const { transaction: claimRefundTx } = await sdk.claimRefundTx({
-      launch: testLaunchState,
-      userPubkey: testUser.keypair.publicKey,
-    });
-    claimRefundTx.feePayer = admin.publicKey;
-    claimRefundTx.recentBlockhash = client.latestBlockhash();
-    await provider.wallet.signTransaction(claimRefundTx as any);
-
-    // Add compute budget instruction to increase compute units
-    const computeBudgetIx = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 3_000_000,
-    });
-    claimRefundTx.instructions.unshift(computeBudgetIx);
-
-    await safeSendAndConfirm(provider, client, claimRefundTx, [testUser.keypair]);
-
-    const userFinalBalance = client.getBalance(testUser.keypair.publicKey);
-    const userAccountAfter = await sdk.fetchUserContribution(
-      testLaunchState,
-      testUser.keypair.publicKey
-    );
-
-    assert.isTrue(userAccountAfter.claimedRefund);
-    console.log(
-      `User refund claimed. Balance change: ${(Number(userFinalBalance) - Number(userInitialBalance)) /
-      anchor.web3.LAMPORTS_PER_SOL
-      } SOL`
-    );
-
-    // User claims tokens (after pool created in this flow)
-    // In some LiteSVM environments, pool creation may fail silently; guard to avoid false negatives on CI
-    try {
-      const maybePool = await sdk.fetchPoolState(testLaunchState);
-      if (!maybePool?.created) {
-        console.log("Skipping user token claiming under LiteSVM: pool not created");
-        return;
-      }
-    } catch (_) {
-      console.log("Skipping user token claiming under LiteSVM: pool state not available");
-      return;
-    }
-    const userAta = sdk.getUserAta(
-      clmmCreate.baseMint,
-      testUser.keypair.publicKey
-    );
-    const { transaction: claimTokensTx } = await sdk.claimTokensTx({
-      launch: testLaunchState,
-      baseMint: clmmCreate.baseMint,
-      userPubkey: testUser.keypair.publicKey,
-      createAtaIfMissing: true,
-    });
-
-    const computeBudgetIx2 = anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
-      units: 3_000_000,
-    });
-    claimTokensTx.instructions.unshift(computeBudgetIx2);
-
-    await safeSendAndConfirm(provider, client, claimTokensTx, [testUser.keypair]);
-
-    const userTokenAccountInfo = client.getAccount(userAta);
-    const userTokenAccount = unpackAccount(userAta, { ...(userTokenAccountInfo as any), data: Buffer.from(userTokenAccountInfo.data) } as any);
-    const userAccountFinal = await sdk.fetchUserContribution(
-      testLaunchState,
-      testUser.keypair.publicKey
-    );
-
-    assert.isTrue(userAccountFinal.claimedTokens);
-    console.log(
-      `User tokens claimed. Token balance: ${Number(userTokenAccount.amount) / 1_000_000
-      }`
-    );
-
-    console.log("=== Testing Creator Grant State ===");
-
-    const finalCreatorGrant = await sdk.fetchCreatorGrant(testLaunchState);
-    console.log(`Final creator grant state:`);
-    console.log(`  - Reserved tickets: ${finalCreatorGrant.reservedTickets}`);
-    console.log(`  - Claimed tickets: ${finalCreatorGrant.claimedTickets}`);
-    console.log(`  - Daily ticket cap: ${finalCreatorGrant.dailyTicketCap}`);
-    console.log(`  - Refunded: ${finalCreatorGrant.refunded}`);
-
-    if (creatorDepositAmount.toNumber() > 0) {
-      assert.equal(finalCreatorGrant.claimedTickets, 1);
-    } else {
-      assert.equal(finalCreatorGrant.claimedTickets, 0);
-    }
-    assert.isFalse(finalCreatorGrant.refunded);
-
-    console.log("=== Testing Team Vesting Claiming ===");
-    // Initialize team vesting account
-    await sdk.initTeamVesting({ launch: testLaunchState });
-
-    // Ensure creator ATA exists (was created earlier for creator claim), but create defensively if missing
-    const teamCreatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
-    try {
-      const ataInfo = await provider.connection.getAccountInfo(teamCreatorAta);
-      if (!ataInfo) {
-        const createAtaIx = sdk.buildCreateAtaIx({
-          payer: admin.publicKey,
-          owner: admin.publicKey,
-          mint: clmmCreate.baseMint,
-        }).ix;
-        await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(createAtaIx), []);
-      }
-    } catch (_) {
-      const createAtaIx = sdk.buildCreateAtaIx({
-        payer: admin.publicKey,
-        owner: admin.publicKey,
-        mint: clmmCreate.baseMint,
-      }).ix;
-      await safeSendAndConfirm(provider, client, new anchor.web3.Transaction().add(createAtaIx), []);
-    }
-
-    // Advance chain time to accrue some vested amount (≥ 1 token unit)
-    await advanceTime(client, { seconds: BigInt(2000) });
-
-    const beforeVesting = await sdk.fetchTeamVesting(testLaunchState);
-    const beforeTokenAccInfo = client.getAccount(teamCreatorAta);
-    const beforeToken = unpackAccount(teamCreatorAta, { ...(beforeTokenAccInfo as any), data: Buffer.from(beforeTokenAccInfo.data) } as any);
-
-    const { transaction: claimTeamTx } = await sdk.claimTeamTokensTx({
-      launch: testLaunchState,
-      baseMint: clmmCreate.baseMint,
-      creator: admin.publicKey,
-      creatorAta: teamCreatorAta,
-      createAtaIfMissing: false,
-    });
-    claimTeamTx.instructions.unshift(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 3_000_000 }));
-    claimTeamTx.feePayer = admin.publicKey;
-    claimTeamTx.recentBlockhash = client.latestBlockhash();
-    await provider.wallet.signTransaction(claimTeamTx as any);
-    let firstSig: string | null = null;
-    try {
-      firstSig = await safeSendAndConfirm(provider, client, claimTeamTx, []);
-      console.log("Team vesting: first claim signature:", firstSig);
-    } catch (e) {
-      const msg = String((e as any)?.message ?? e);
-      if (msg.includes("Nothing to claim") || msg.includes("6037")) {
-        console.log("Skipping team vesting claim under LiteSVM: Nothing to claim yet");
-        return;
-      }
-      throw e;
-    }
-
-    const afterVesting = await sdk.fetchTeamVesting(testLaunchState);
-    const afterTokenAccInfo = client.getAccount(teamCreatorAta);
-    const afterToken = unpackAccount(teamCreatorAta, { ...(afterTokenAccInfo as any), data: Buffer.from(afterTokenAccInfo.data) } as any);
-
-    assert.isAbove(Number(afterVesting.claimed), Number(beforeVesting.claimed));
-    assert.isAbove(Number(afterToken.amount), Number(beforeToken.amount));
-
-    // Immediate re-claim should fail due to min interval (1 sec)
-    if (firstSig) {
-      const { transaction } = await sdk.claimTeamTokensTx({
-        launch: testLaunchState,
-        baseMint: clmmCreate.baseMint,
-        creator: admin.publicKey,
-        creatorAta: teamCreatorAta,
-        createAtaIfMissing: false,
-      });
-      let tooFrequentFailed = false;
-      try {
-        transaction.feePayer = admin.publicKey;
-        transaction.recentBlockhash = client.latestBlockhash();
-        await provider.wallet.signTransaction(transaction as any);
-        await provider.simulate(transaction);
-      } catch (_) {
-        tooFrequentFailed = true;
-      }
-      assert.isTrue(tooFrequentFailed, "Expected TeamClaimTooFrequent on immediate re-claim (simulation)");
-    }
-
-    // Wait enough time to accrue at least 1 unit again (avoid floor to 0)
-    await advanceTime(client, { seconds: BigInt(400) });
-    await sdk.claimTeamTokens({
-      launch: testLaunchState,
-      baseMint: clmmCreate.baseMint,
-      creatorAta: teamCreatorAta,
-      createAtaIfMissing: false,
-    });
-
-    const finalVesting = await sdk.fetchTeamVesting(testLaunchState);
-    assert.isAbove(Number(finalVesting.claimed), Number(afterVesting.claimed));
-
-    console.log(
-      "✅ Complete flow with creator deposit test passed! All functions tested successfully."
-    );
-  });
-
-  it("Creator can claim after zero initial deposit", async () => {
-    const projectId = await sdk.getNextProjectId();
-    const [testLaunchState] = sdk.getLaunchPdaByProjectId(projectId);
-    const testHardCap = new anchor.BN(450000000000);
-    const testMinRaise = new anchor.BN(300000000000);
-    const testPerWalletCap = new anchor.BN(200000000000);
-    const testTau = new anchor.BN(5000000000);
-    const baseTotalAllocation = new anchor.BN("1000000000000000000");
-    const baseSaleBasisPoints = new anchor.BN(4814);
-    const dailyLimit = testTau;
-    const postInitDeposit = testTau.clone();
-    const rosterShardCount = 1;
-
-    const { initLaunchTx } = await sdk.initLaunchTx({
-      creator: admin.publicKey,
-      projectId,
-      hardCapLamports: testHardCap,
-      minRaiseLamports: testMinRaise,
-      perWalletCap: testPerWalletCap,
-      tauLamports: testTau,
-      baseTotalAllocation,
-      baseSaleBasisPoints,
-      fundingDurationSeconds: 300,
-      saleStartTimeTimestamp: 0,
-      unlockTimeSec: 60,
-      rosterShardCap: ROSTER_SHARD_CAP,
-      rosterShardsTotal: rosterShardCount,
-      creatorInitialDepositLamports: new anchor.BN(0),
-      creatorDailyLamportsLimit: dailyLimit,
-      creatorClaimLockPeriodSec: new anchor.BN(10),
-      provider,
-      creatorMaxDepositLamports: new anchor.BN(8000000000),
-      poolCreationGracePeriodSec: 0,
-      teamAllocationBasisPoints: 1000,
-      teamVestingDurationSec: 60,
-      xyberMint,
-    });
-    await safeSendAndConfirm(provider, client, initLaunchTx, [adminKeypair]);
-
-    const [escrowAuthority] = sdk.getEscrowAuthorityPda(testLaunchState);
-    const [creatorGrant] = sdk.getCreatorGrantPda(testLaunchState);
-    await program.methods
-      .creatorDeposit(postInitDeposit)
-      .accountsStrict({
-        creator: admin.publicKey,
-        launchState: testLaunchState,
-        escrowAuthority,
-        creatorGrant,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .signers([adminKeypair])
-      .rpc();
-
-    const launchAfterDeposit = await sdk.fetchLaunch(testLaunchState);
-    assert.isTrue(launchAfterDeposit.creatorGrantPresent);
-    assert.equal(launchAfterDeposit.totalDeposited.toNumber(), postInitDeposit.toNumber());
-
-    const creatorGrantState = await sdk.fetchCreatorGrant(testLaunchState);
-    assert.equal(creatorGrantState.lockedLamports.toNumber(), postInitDeposit.toNumber());
-
-    const [rosterShard] = sdk.getRosterShardPda(testLaunchState, 1);
-    const initRosterShardTx = await program.methods
-      .initRosterShard(1)
-      .accounts({
-        payer: admin.publicKey,
-        launchState: testLaunchState,
-        rosterShard,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .transaction();
-    await safeSendAndConfirm(provider, client, initRosterShardTx, [admin.payer]);
-
-    const user = await createAndFundAccount(client, 210);
-    const userContribution = sdk.getUserContributionPda(testLaunchState, user.publicKey)[0];
-    const userDeposit = testPerWalletCap.clone();
-    await program.methods
-      .deposit(userDeposit)
-      .accounts({
-        user: user.publicKey,
-        launchState: testLaunchState,
-        userContribution,
-        rosterShard,
-        escrowAuthority,
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([user])
-      .rpc();
-
-    const user2 = await createAndFundAccount(client, 110);
-    const userContribution2 = sdk.getUserContributionPda(testLaunchState, user2.publicKey)[0];
-    const userDeposit2 = testTau.muln(19);
-    await program.methods
-      .deposit(userDeposit2)
-      .accounts({
-        user: user2.publicKey,
-        launchState: testLaunchState,
-        userContribution: userContribution2,
-        rosterShard,
-        escrowAuthority,
-        launch: testLaunchState,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      } as any)
-      .signers([user2])
-      .rpc();
-
-    await advanceTime(client, { slots: BigInt(500), seconds: BigInt(400) });
-    await sdk.setSeed({ launch: testLaunchState });
-    await sdk.finalizeRosterShard({ launch: testLaunchState, shardId: 1, signers: [] });
-
-    let state = await sdk.fetchLaunch(testLaunchState);
-    const projectIdNumber = state.projectId.toNumber();
-    const unlockTime = Number((state as any).unlockTimeSec);
-    const computedN = BigInt(unlockTime > 0 ? unlockTime * 17 : 100);
-    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
-    const rangeStart = width * BigInt(projectIdNumber - 1);
-    const rangeEnd = rangeStart + width;
-    injectSlotHashesForRange(client, rangeStart, rangeEnd);
-
-    const { transaction } = await sdk.preparePoolCreationTx({
-      payer: admin.publicKey,
-      launch: testLaunchState,
+    // After grace period expires, finalizeLottery should succeed even with invalid hashes
+    // (because random_pool_creation_expired becomes true)
+    const { transaction } = await sdk.finalizeLotteryTx({
+      payer: multisig.publicKey,
+      launch: testLaunch,
       computeUnits: 2_000_000,
     });
-    await safeSendAndConfirm(provider, client, transaction, [admin.payer]);
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], transaction);
 
-    state = await sdk.fetchLaunch(testLaunchState);
-    assert.isAbove(state.creatorReservedTickets, 0);
+    // Verify lottery is now finalized
+    ({ data: lottery } = await sdk.fetchLaunch(testLaunch));
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized after grace period expired");
 
+    // Verify claims_opened_at is set
+    const { data: launchAfter } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(launchAfter.claimsOpenedAt !== null, "claims_opened_at should be set");
+  });
+
+  it("Success flow: deposit → lottery → pool → claim → refund", async () => {
+    // === Step 1: Create launch ===
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "SuccessFlowTest",
+      symbol: "SFT",
+      uri: "https://example.com/sft.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+    console.log("✅ Step 1: Launch created");
+
+    // === Step 2: Deposits ===
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const tau = preset.tauLamports;
+
+    // Creator deposits 10 tickets (1 SOL with tau=0.1 SOL)
+    const creatorTickets = 10;
+    const creatorDepositAmount = new BN(tau.toString()).muln(creatorTickets);
+    const { instruction: creatorDepIx } = await sdk.depositIx({
+      contributor: multisig.publicKey,
+      launch: testLaunch,
+      amount: creatorDepositAmount,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], creatorDepIx);
+
+    // Contributor deposits to meet min_raise
+    const minRaise = preset.minRaiseLamports;
+    const contributorDepositAmount = minRaise.sub(creatorDepositAmount);
+    const contributorTickets = contributorDepositAmount.div(tau).toNumber();
+
+    const contributor = await createAndFundAccount(client, 250);
+    const { instruction: contribDepIx } = await sdk.depositIx({
+      contributor: contributor.publicKey,
+      launch: testLaunch,
+      amount: contributorDepositAmount,
+    });
+    sendTx(client, contributor.publicKey, [contributor], contribDepIx);
+
+    const totalTickets = creatorTickets + contributorTickets;
+    console.log(`✅ Step 2: Deposits complete (creator: ${creatorTickets} tickets, contributor: ${contributorTickets} tickets, total: ${totalTickets})`);
+
+    // === Step 3: Finalize lottery ===
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
+
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
+
+    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
+    const projectId = launchAccount.projectId.toNumber();
+    const unlock = Number(preset.unlockTimeSec);
+    const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
+    const rangeStart = width * BigInt(projectId - 1);
+    const rangeEnd = rangeStart + width;
+    injectSlotHashesForRange(client, rangeStart, rangeEnd);
+
+    const { transaction: prepTx } = await sdk.finalizeLotteryTx({
+      payer: multisig.publicKey,
+      launch: testLaunch,
+      computeUnits: 2_000_000,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], prepTx);
+
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.finalized, "Lottery should be finalized");
+
+    // Verify k_capacity >= totalTickets (all tickets win)
+    const kCapacity = preset.hardCapLamports.div(tau).toNumber();
+    assert.ok(kCapacity >= totalTickets, "All tickets should win when k_capacity >= totalTickets");
+
+    // Calculate expected values using BigInt for precision
+    // sale_allocation = baseTotalAllocation * baseSaleBasisPoints / 10000
+    const baseTotalAllocationBigInt = BigInt("1000000000000000000");
+    const saleAllocationBigInt = baseTotalAllocationBigInt * BigInt(preset.baseSaleBasisPoints) / BigInt(10000);
+    // All tickets win, so winners = totalTickets
+    // tokens_per_ticket = sale_allocation / winners
+    const tokensPerTicket = saleAllocationBigInt / BigInt(totalTickets);
+
+    console.log(`✅ Step 3: Lottery finalized (winners: ${totalTickets}, tokensPerTicket: ${tokensPerTicket.toString()})`);
+
+    // === Step 4: Create CLMM pool ===
     const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
     const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+
     const clmmCreate = await sdk.createClmmPoolTx({
-      payer: admin.publicKey,
-      launch: testLaunchState,
+      payer: multisig.publicKey,
+      launch: testLaunch,
       quoteMint: WSOL_MINT,
       ammConfig,
       clmmProgram: raydiumProgramId,
       provider,
     });
-    await safeSendAndConfirm(provider, client, clmmCreate.transaction, [admin.payer, ...clmmCreate.signers]);
+    sendTx(client, multisig.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
+    console.log(`✅ Step 4: CLMM pool created`);
 
-    try {
-      const clmmAddLiq = await sdk.addClmmLiquidityTx({
-        payer: admin.publicKey,
-        launch: testLaunchState,
-        baseMint: clmmCreate.baseMint,
-        provider,
-      });
-      await safeSendAndConfirm(provider, client, clmmAddLiq.transaction, [admin.payer, ...clmmAddLiq.signers]);
-    } catch (e) {
-      console.log(`Skipping addClmmLiquidity for zero-init test: ${String((e as any)?.message ?? e)}`);
-    }
-    await ensureClaimsReadyForTest(sdk, program, client, testLaunchState);
-    {
-      const maybePool = await sdk.fetchPoolState(testLaunchState);
-      assert.isTrue(maybePool.claimsReady, "claimsReady flag must be true before creator claim (zero-init)");
-    }
+    // === Step 5: Contributor claims Sale bucket ===
+    // Vesting: contributorDurationSec=1, contributorPeriodSec=1
+    // periods_count = 1, need elapsed >= 1 sec for periods_passed = 1
+    // available = allocation * periods_passed / periods_count = allocation * 1 / 1 = full allocation
+    const expectedContributorTokens = (tokensPerTicket * BigInt(contributorTickets)).toString();
+    await advanceTime(client, { seconds: BigInt(preset.contributorDurationSec) });
 
-    const creatorAta = sdk.getUserAta(clmmCreate.baseMint, admin.publicKey);
-    const claimCreatorTx = await sdk.claimCreatorTokensTx({
-      launch: testLaunchState,
+    const { instruction: claimContribIx, participantAta: contribAta } = await sdk.claimIx({
+      launch: testLaunch,
       baseMint: clmmCreate.baseMint,
-      creator: admin.publicKey,
-      creatorAta,
-      createAtaIfMissing: true,
+      participant: contributor.publicKey,
+      bucket: 0, // Sale
     });
-    await safeSendAndConfirm(provider, client, claimCreatorTx.transaction, [adminKeypair]);
+    sendTx(client, contributor.publicKey, [contributor], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimContribIx,
+    ]);
 
-    const creatorGrantAfterClaim = await sdk.fetchCreatorGrant(testLaunchState);
-    const expectedTickets = dailyLimit.toNumber() / testTau.toNumber();
-    assert.equal(creatorGrantAfterClaim.claimedTickets, expectedTickets);
+    const contribAtaInfo = client.getAccount(contribAta);
+    const unpacked = unpackAccount(contribAta, {
+      ...(contribAtaInfo as any),
+      data: Buffer.from(contribAtaInfo.data),
+    } as any);
+    const contribTokens = unpacked.amount.toString();
+    assert.equal(contribTokens, expectedContributorTokens,
+      `Contributor should receive exactly ${expectedContributorTokens} tokens`);
+    console.log(`✅ Step 5: Contributor claimed ${contribTokens} tokens`);
 
-    const latestState: any = await sdk.fetchLaunch(testLaunchState);
-    const perVal: any = latestState.tokensPerTicket;
-    const per = typeof perVal?.toNumber === "function" ? perVal.toNumber() : Number(perVal ?? 0);
-    const tokenAccountInfo = client.getAccount(creatorAta);
-    const tokenAccount = unpackAccount(creatorAta, { ...(tokenAccountInfo as any), data: Buffer.from(tokenAccountInfo.data) } as any);
-    assert.equal(Number(tokenAccount.amount), per * expectedTickets);
+    // === Step 6: Creator claims Team bucket ===
+    // Vesting: teamDurationSec=60, teamPeriodSec=60
+    // periods_count = 1, need elapsed >= 60 sec for periods_passed = 1
+    // team_allocation = baseTotalAllocation * teamAllocationBasisPoints / 10000
+    const expectedTeamTokens = (BigInt("1000000000000000000") * BigInt(preset.teamAllocationBasisPoints) / BigInt(10000)).toString();
+    const creatorAta = getAssociatedTokenAddressSync(clmmCreate.baseMint, multisig.publicKey, true);
+
+    // Advance time to complete team vesting period
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.teamDurationSec) });
+
+    const { instruction: claimTeamIx } = await sdk.claimIx({
+      launch: testLaunch,
+      baseMint: clmmCreate.baseMint,
+      participant: multisig.publicKey,
+      bucket: 1, // Team
+    });
+    sendTx(client, multisig.publicKey, [adminKeypair], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimTeamIx,
+    ]);
+
+    const teamAtaInfo = client.getAccount(creatorAta);
+    const teamTokens = unpackAccount(creatorAta, {
+      ...(teamAtaInfo as any),
+      data: Buffer.from(teamAtaInfo.data),
+    } as any).amount.toString();
+    assert.equal(teamTokens, expectedTeamTokens,
+      `Creator should receive exactly ${expectedTeamTokens} team tokens`);
+    console.log(`✅ Step 6: Creator claimed ${teamTokens} team tokens`);
+
+    // === Step 7: Creator claims Sale bucket ===
+    // Creator sale has vesting based on deposit:
+    // deposit = creatorTickets * tau = 10 * 0.1 SOL = 1 SOL
+    // periods = deposit / creatorPeriodUnlock = 1_000_000_000 / 100_000_000 = 10
+    // duration = periods * creatorPeriodSec = 10 * 60 = 600 seconds
+    // We advanced 60 sec for team, need 540 more for full creator sale vesting
+    const creatorSaleVestingRemaining = 10 * preset.creatorPeriodSec - preset.teamDurationSec;
+    await advanceTime(client, { slots: BigInt(10), seconds: BigInt(creatorSaleVestingRemaining) });
+
+    const expectedCreatorSaleTokens = tokensPerTicket * BigInt(creatorTickets);
+    const expectedCreatorTotal = BigInt(expectedTeamTokens) + expectedCreatorSaleTokens;
+
+    const { instruction: claimCreatorSaleIx } = await sdk.claimIx({
+      launch: testLaunch,
+      baseMint: clmmCreate.baseMint,
+      participant: multisig.publicKey,
+      bucket: 0, // Sale
+    });
+    sendTx(client, multisig.publicKey, [adminKeypair], [
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+      claimCreatorSaleIx,
+    ]);
+
+    const creatorAtaAfterSale = client.getAccount(creatorAta);
+    const creatorTotalTokens = unpackAccount(creatorAta, {
+      ...(creatorAtaAfterSale as any),
+      data: Buffer.from(creatorAtaAfterSale.data),
+    } as any).amount.toString();
+    assert.equal(creatorTotalTokens, expectedCreatorTotal.toString(),
+      `Creator total should be team + sale allocation`);
+    console.log(`✅ Step 7: Creator claimed sale tokens. Total: ${creatorTotalTokens}`);
+
+    // === Step 8: Verify no refund available (all tickets won) ===
+    // When k_capacity >= active_tickets, all tickets win, so refund = 0
+    const refundIx = (await sdk.refundTx({ launch: testLaunch, contributor: contributor.publicKey })).transaction.instructions[0];
+    await doAndCheckError(
+      (async () => sendTx(client, contributor.publicKey, [contributor], [
+        anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }),
+        refundIx,
+      ]))(),
+      "AlreadyRefunded"
+    );
+    console.log(`✅ Step 8: Refund correctly rejected (all tickets won)`);
+
+    console.log("✅ SUCCESS FLOW COMPLETE");
   });
+
+  // Stress test configuration loaded from JSON
+  const stressConfigPath = path.resolve(__dirname, "stress-test-config.json");
+  const STRESS_TEST_CONFIG = JSON.parse(fs.readFileSync(stressConfigPath, "utf8"));
+
+  it("Stress test: overflow with withdrawals and full verification", async () => {
+    console.log(`=== Stress Test: ${STRESS_TEST_CONFIG.participantCount} participants ===`);
+
+    // Load and initialize stress preset
+    const stressPresetPath = path.resolve(__dirname, "litesvm-stress-test-preset.json");
+    const stressPresetData = JSON.parse(fs.readFileSync(stressPresetPath, "utf8"));
+    const stressPresetParams = parsePresetParams(stressPresetData);
+
+    const { instruction: stressPresetIx } = await (sdk as any).initLaunchPresetIx({
+      multisig: multisig.publicKey,
+      ...stressPresetParams,
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], stressPresetIx);
+
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(stressPresetData.id));
+    const tau = preset.tauLamports;
+    const hardCap = preset.hardCapLamports;
+    const kCapacity = hardCap.div(tau).toNumber(); // 2000 tickets max
+
+    console.log(`Hard cap: ${hardCap.div(new anchor.BN(1e9)).toString()} SOL (${kCapacity} tickets)`);
+    console.log(`Per wallet: ${preset.perWalletCap.div(new anchor.BN(1e9)).toString()} SOL`);
+    console.log(`Tau: ${tau.toString()} lamports (${tau.toNumber() / 1e9} SOL)`);
+
+    // Create launch
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(stressPresetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "StressTest",
+      symbol: "STR",
+      uri: "https://example.com/stress.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+
+    // Track all participants
+    interface Participant {
+      keypair: anchor.web3.Keypair;
+      depositedTickets: number;
+      withdrawnTickets: number;
+      activeTickets: number;
+      fundedLamports: bigint;
+      txCount: number;
+      refundedLamports: bigint;
+      claimedTokens: bigint;
+    }
+    const participants: Participant[] = [];
+    let totalDepositedTickets = 0;
+    let totalWithdrawnTickets = 0;
+
+    // Pseudo-random number generator for reproducibility
+    let seed = 12345;
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+
+    // Track realloc funds balance
+    const [reallocFundsPda] = sdk.getReallocFundsPda();
+    const reallocFundsStart = client.getBalance(reallocFundsPda);
+    console.log(`Realloc funds start: ${Number(reallocFundsStart) / 1e9} SOL`);
+
+    console.log(`Depositing and withdrawing (interleaved for range reuse)...`);
+
+    // Interleaved deposits and withdrawals for proper range reuse testing
+    let withdrawCount = 0;
+
+    // Calculate max tickets per wallet from preset
+    const maxTicketsPerWallet = preset.perWalletCap.div(tau).toNumber();
+    console.log(`Max tickets per wallet: ${maxTicketsPerWallet}`);
+
+    for (let i = 0; i < STRESS_TEST_CONFIG.participantCount; i++) {
+      // Random ticket count: 1 to maxTicketsPerWallet
+      const ticketCount = Math.floor(1 + random() * maxTicketsPerWallet);
+      const amount = new BN(tau.toString()).muln(ticketCount);
+      const fundAmount = Number(amount.toString()) / 1e9 + 0.1; // deposit + rent + fees + buffer
+      const participant = await createAndFundAccount(client, fundAmount);
+
+      const { instruction: depIx } = await sdk.depositIx({
+        contributor: participant.publicKey,
+        launch: testLaunch,
+        amount,
+      });
+      try {
+        sendTx(client, participant.publicKey, [participant], depIx);
+      } catch (e: any) {
+        console.log(`\n❌ Deposit FAILED at i=${i}, tickets=${ticketCount}, amount=${Number(amount.toString())/1e9} SOL`);
+        throw e;
+      }
+
+      participants.push({
+        keypair: participant,
+        depositedTickets: ticketCount,
+        withdrawnTickets: 0,
+        activeTickets: ticketCount,
+        fundedLamports: BigInt(Math.floor(fundAmount * 1e9)),
+        txCount: 1,
+        refundedLamports: BigInt(0),
+        claimedTokens: BigInt(0),
+      });
+      totalDepositedTickets += ticketCount;
+
+      // Random withdrawal from existing participants (interleaved)
+      if (participants.length > 10 && random() < STRESS_TEST_CONFIG.withdrawProbability) {
+        const pIdx = Math.floor(random() * (participants.length - 1)); // не последний
+        const p = participants[pIdx];
+        if (p.activeTickets > 1) {
+          const withdrawTickets = Math.floor(random() * (p.activeTickets - 1)) + 1;
+          const withdrawAmount = new BN(tau.toString()).muln(withdrawTickets);
+
+          const { instruction: withdrawIx } = await sdk.withdrawIx({
+            contributor: p.keypair.publicKey,
+            launch: testLaunch,
+            amount: withdrawAmount,
+          });
+          sendTx(client, p.keypair.publicKey, [p.keypair], withdrawIx);
+
+          p.withdrawnTickets += withdrawTickets;
+          p.activeTickets -= withdrawTickets;
+          p.txCount++;
+          totalWithdrawnTickets += withdrawTickets;
+          withdrawCount++;
+        }
+      }
+
+      if ((i + 1) % 200 === 0) {
+        console.log(`  Progress: ${i + 1}/${STRESS_TEST_CONFIG.participantCount} (deposits: ${totalDepositedTickets}, withdrawals: ${withdrawCount})`);
+      }
+    }
+
+    const tauSol = Number(tau.toString()) / 1e9;
+    console.log(`Total deposited: ${totalDepositedTickets} tickets (${(totalDepositedTickets * tauSol).toFixed(2)} SOL)`);
+    console.log(`Total withdrawals: ${withdrawCount} (${totalWithdrawnTickets} tickets)`);
+    const isOverflow = totalDepositedTickets > kCapacity;
+    console.log(`Overflow: ${isOverflow ? 'YES' : 'NO'} (capacity: ${kCapacity})`);
+    const activeTickets = totalDepositedTickets - totalWithdrawnTickets;
+    console.log(`Active tickets after withdrawals: ${activeTickets}`);
+
+    // Phase 3: Finalize lottery
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
+
+    // Inject random slot hashes BEFORE setSeedIx (which reads from them)
+    const { data: launchAccount } = await sdk.fetchLaunch(testLaunch);
+    const projectId = launchAccount.projectId.toNumber();
+    const unlock = Number(preset.unlockTimeSec);
+    const computedN = BigInt(unlock > 0 ? unlock * 17 : 100);
+    const width = ((BigInt(1) << BigInt(256)) - BigInt(1)) / computedN;
+    const rangeStart = width * BigInt(projectId - 1);
+    const rangeEnd = rangeStart + width;
+    const randomSeed = BigInt(Date.now()) * BigInt(Math.floor(Math.random() * 1_000_000));
+    console.log(`Random seed: ${randomSeed}`);
+    injectSlotHashesForRange(client, rangeStart, rangeEnd, 512, randomSeed);
+
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
+
+    const { transaction: prepTx } = await sdk.finalizeLotteryTx({
+      payer: multisig.publicKey,
+      launch: testLaunch,
+      computeUnits: 2_000_000,
+    });
+    const { computeUnitsConsumed } = sendTxWithMeta(client, multisig.publicKey, [adminKeypair], prepTx);
+
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    const winners = Math.min(kCapacity, activeTickets);
+    console.log(`Lottery finalized: ${winners} winners out of ${activeTickets} active tickets (CU: ${computeUnitsConsumed.toLocaleString()})`);
+
+    // Visualize bitmap distribution - read from winners_bitmap account
+    const [winnersBitmapPda] = sdk.getWinnersBitmapPda(testLaunch);
+    const winnersBitmapInfo = client.getAccount(winnersBitmapPda);
+    const bitmapData = winnersBitmapInfo?.data ?? new Uint8Array(0);
+    const totalWords = Math.ceil(bitmapData.length / 8);
+    const numSegments = 64;
+    console.log(`\nBitmap distribution (${totalWords} words, ${lottery.bitsAllocated.toString()} allocated, ${activeTickets} active):`);
+
+    // Count winners per segment (divide evenly across allocated bits, not array length)
+    const bitsAllocated = lottery.bitsAllocated.toNumber();
+    const segmentCounts: number[] = [];
+    const bitsPerSegment = Math.ceil(bitsAllocated / numSegments);
+
+    for (let seg = 0; seg < numSegments; seg++) {
+      let count = 0;
+      const bitStart = seg * bitsPerSegment;
+      const bitEnd = Math.min(bitStart + bitsPerSegment, bitsAllocated);
+
+      for (let bitIdx = bitStart; bitIdx < bitEnd; bitIdx++) {
+        const byteIdx = Math.floor(bitIdx / 8);
+        const byteBit = bitIdx % 8;
+        if (byteIdx < bitmapData.length && (bitmapData[byteIdx] >> byteBit) & 1) {
+          count++;
+        }
+      }
+      segmentCounts.push(count);
+    }
+
+    // Find max for normalization
+    const maxCount = Math.max(...segmentCounts);
+    const avgCount = segmentCounts.reduce((a, b) => a + b, 0) / segmentCounts.length;
+
+    // Print histogram
+    const barChars = '▁▂▃▄▅▆▇█';
+    let histogram = '';
+    for (const count of segmentCounts) {
+      const normalized = maxCount > 0 ? count / maxCount : 0;
+      const idx = Math.min(Math.floor(normalized * 8), 7);
+      histogram += barChars[idx];
+    }
+    console.log(`Winners per segment: min=${Math.min(...segmentCounts)}, avg=${avgCount.toFixed(0)}, max=${maxCount}`);
+    console.log(`Distribution: ${histogram}`);
+
+    // Check account sizes and rent
+    const launchAccountInfo = client.getAccount(testLaunch);
+    const launchRent = launchAccountInfo?.lamports ?? BigInt(0);
+    const launchSize = launchAccountInfo?.data.length ?? 0;
+    const inactiveCount = lottery.inactiveCount.toNumber();
+    console.log(`LaunchState account: ${launchSize} bytes, ${inactiveCount} inactive tickets, ${Number(launchRent) / 1e9} SOL rent`);
+
+    const winnersBitmapRent = winnersBitmapInfo?.lamports ?? BigInt(0);
+    const winnersBitmapSize = winnersBitmapInfo?.data.length ?? 0;
+    console.log(`Winners bitmap: ${winnersBitmapSize} bytes, ${Number(winnersBitmapRent) / 1e9} SOL rent`);
+
+    const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(testLaunch);
+    const inactiveBitmapInfo = client.getAccount(inactiveBitmapPda);
+    const inactiveBitmapRent = inactiveBitmapInfo?.lamports ?? BigInt(0);
+    const inactiveBitmapSize = inactiveBitmapInfo?.data.length ?? 0;
+    console.log(`Inactive bitmap: ${inactiveBitmapSize} bytes, ${Number(inactiveBitmapRent) / 1e9} SOL rent`);
+
+    const totalRent = Number(launchRent) + Number(winnersBitmapRent) + Number(inactiveBitmapRent);
+    console.log(`Total rent on launch accounts: ${totalRent / 1e9} SOL`);
+
+    const reallocFundsEnd = client.getBalance(reallocFundsPda);
+    const reallocFundsSpent = reallocFundsStart - reallocFundsEnd;
+    console.log(`Realloc funds end: ${Number(reallocFundsEnd) / 1e9} SOL (spent: ${Number(reallocFundsSpent) / 1e9} SOL)`);
+
+    // Create pool
+    const { raydiumProgramId, ammConfig } = await setupRaydiumCLMM(client);
+    const WSOL_MINT = new anchor.web3.PublicKey("So11111111111111111111111111111111111111112");
+    const clmmCreate = await sdk.createClmmPoolTx({
+      payer: multisig.publicKey,
+      launch: testLaunch,
+      quoteMint: WSOL_MINT,
+      ammConfig,
+      clmmProgram: raydiumProgramId,
+      provider,
+    });
+    sendTx(client, multisig.publicKey, [adminKeypair, ...clmmCreate.signers], clmmCreate.transaction);
+
+    // Phase 4: Advance time for full vesting
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.contributorDurationSec + 60) });
+
+    // Phase 5: Verify claims and refunds for all participants
+    console.log(`Verifying claims and refunds for ${participants.length} participants...`);
+
+    const baseTotalAllocationBigInt = BigInt("1000000000000000000");
+    const saleAllocationBigInt = baseTotalAllocationBigInt * BigInt(preset.baseSaleBasisPoints) / BigInt(10000);
+    const tokensPerTicket = saleAllocationBigInt / BigInt(winners);
+
+    let totalClaimedTokens = BigInt(0);
+    let totalRefundedLamports = BigInt(0);
+    let claimSuccessCount = 0;
+    let refundSuccessCount = 0;
+
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+
+      // Try to claim
+      if (p.activeTickets > 0) {
+        try {
+          const { instruction: claimIx, participantAta } = await sdk.claimIx({
+            launch: testLaunch,
+            baseMint: clmmCreate.baseMint,
+            participant: p.keypair.publicKey,
+            bucket: 0,
+          });
+          sendTx(client, p.keypair.publicKey, [p.keypair], [
+            anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+            claimIx,
+          ]);
+          p.txCount++;
+
+          const ataInfo = client.getAccount(participantAta);
+          if (ataInfo) {
+            const balance = BigInt(unpackAccount(participantAta, {
+              ...(ataInfo as any),
+              data: Buffer.from(ataInfo.data),
+            } as any).amount);
+            p.claimedTokens = balance;
+            totalClaimedTokens += balance;
+            claimSuccessCount++;
+          }
+        } catch (e: any) {
+          // Some may have no winning tickets
+          if (!e.message?.includes("NothingToClaim")) {
+            console.log(`Participant ${i} claim error: ${e.message?.slice(0, 100)}`);
+          }
+        }
+      }
+
+      // Try to refund (for losing tickets)
+      try {
+        const balanceBefore = client.getBalance(p.keypair.publicKey);
+        const { transaction: refundTx } = await sdk.refundTx({
+          launch: testLaunch,
+          contributor: p.keypair.publicKey,
+        });
+        refundTx.instructions.unshift(anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 500_000 }));
+        sendTx(client, p.keypair.publicKey, [p.keypair], refundTx);
+        p.txCount++;
+
+        const balanceAfter = client.getBalance(p.keypair.publicKey);
+        const refunded = balanceAfter - balanceBefore;
+        if (refunded > BigInt(0)) {
+          p.refundedLamports = refunded;
+          totalRefundedLamports += refunded;
+          refundSuccessCount++;
+        }
+      } catch (e: any) {
+        // AlreadyRefunded or no losing tickets
+        if (!e.message?.includes("AlreadyRefunded")) {
+          // Ignore
+        }
+      }
+
+      if ((i + 1) % 200 === 0) {
+        console.log(`  Verified: ${i + 1}/${participants.length}`);
+      }
+    }
+
+    // Fee verification for all participants
+    // Fee = contribution rent + tx fees + ATA rent (if claimed)
+    // Formula: fees = funded - finalBalance - withdrawn*tau - refunded - winningValue
+    // where winningValue = winningTickets * tau (locked for tokens, not "lost")
+    // We compute winningTickets from refund: losingTickets ≈ refunded / tau
+    console.log(`\nVerifying fees paid by participants...`);
+    const tauLamports = BigInt(tau.toString());
+    let totalFeesPaid = BigInt(0);
+    let maxFee = BigInt(0);
+    let minFee = BigInt(Number.MAX_SAFE_INTEGER);
+    let feeErrors: string[] = [];
+
+    for (let i = 0; i < participants.length; i++) {
+      const p = participants[i];
+      const finalBalance = client.getBalance(p.keypair.publicKey);
+
+      // Money flows:
+      // OUT: deposit (activeTickets * tau) + fees
+      // IN: withdrawn (W * tau) + refund (losingTickets * tau - txfee)
+      // finalBalance = funded - activeTickets*tau - fees + W*tau + refund
+      // fees = funded - finalBalance - activeTickets*tau + W*tau + refund
+      //      = funded - finalBalance - (activeTickets - W)*tau + refund
+      //      but activeTickets = deposited - withdrawn, so activeTickets - W is wrong
+      //
+      // Simpler: total_out = funded - finalBalance
+      //          total_in_from_protocol = withdrawn*tau + refund
+      //          net_to_escrow = deposited*tau - withdrawn*tau = activeTickets*tau
+      //          refund = losingTickets*tau (approx, minus tx fee)
+      //          winning_value = activeTickets*tau - losingTickets*tau = winningTickets*tau
+      //          fees = total_out - winning_value = funded - finalBalance - winningTickets*tau
+
+      const activeTickets = BigInt(p.activeTickets);
+
+      // Approximate losing tickets from refund (refund includes -txfee, so round up)
+      const losingTickets = p.refundedLamports > BigInt(0)
+        ? (p.refundedLamports + tauLamports - BigInt(1)) / tauLamports
+        : BigInt(0);
+      const winningTickets = activeTickets > losingTickets ? activeTickets - losingTickets : BigInt(0);
+      const winningValue = winningTickets * tauLamports;
+
+      // fees = funded - finalBalance - winningValue
+      const totalOut = p.fundedLamports - finalBalance;
+      const feesPaid = totalOut - winningValue;
+      totalFeesPaid += feesPaid;
+
+      if (feesPaid > maxFee) maxFee = feesPaid;
+      if (feesPaid < minFee) minFee = feesPaid;
+
+      // Expected fee: contribution rent (~0.00115 SOL) + tx fees (~5000 per tx)
+      //              + ATA rent if claimed (~0.002 SOL) + TicketsClaimed rent (~0.001 SOL)
+      const contributionRent = BigInt(1_150_000);
+      const txFees = BigInt(p.txCount * 5000);
+      const ataRent = p.claimedTokens > BigInt(0) ? BigInt(2_039_280) : BigInt(0);
+      const ticketsClaimedRent = p.claimedTokens > BigInt(0) ? BigInt(1_002_240) : BigInt(0); // 8 + 8 = 16 bytes account
+      const expectedFee = contributionRent + txFees + ataRent + ticketsClaimedRent;
+
+      // Allow some tolerance for rounding
+      const tolerance = BigInt(50_000); // 0.00005 SOL
+      const diff = feesPaid - expectedFee;
+      if (feesPaid < expectedFee - tolerance || feesPaid > expectedFee + tolerance) {
+        feeErrors.push({
+          idx: i,
+          paid: feesPaid,
+          expected: expectedFee,
+          diff,
+          txs: p.txCount,
+          won: winningTickets,
+          claimed: p.claimedTokens > BigInt(0),
+          active: p.activeTickets,
+          refunded: p.refundedLamports,
+        });
+      }
+    }
+
+    const avgFee = totalFeesPaid / BigInt(participants.length);
+    console.log(`Fee stats (SOL): min=${(Number(minFee)/1e9).toFixed(6)}, avg=${(Number(avgFee)/1e9).toFixed(6)}, max=${(Number(maxFee)/1e9).toFixed(6)}`);
+    console.log(`Total fees paid: ${Number(totalFeesPaid)/1e9} SOL`);
+
+    if (feeErrors.length > 0) {
+      console.log(`Fee anomalies (${feeErrors.length}):`);
+      // Group by diff to understand pattern
+      const diffGroups = new Map<string, number>();
+      for (const e of feeErrors) {
+        const key = `${(Number(e.diff)/1e6).toFixed(1)}m`;
+        diffGroups.set(key, (diffGroups.get(key) || 0) + 1);
+      }
+      console.log(`  Diff distribution:`, Object.fromEntries(diffGroups));
+
+      // Show first 5 details
+      feeErrors.slice(0, 5).forEach(e => {
+        console.log(`  P${e.idx}: paid=${(Number(e.paid)/1e9).toFixed(6)} exp=${(Number(e.expected)/1e9).toFixed(6)} diff=${(Number(e.diff)/1e9).toFixed(6)} SOL`);
+        console.log(`         txs=${e.txs}, active=${e.active}, won=${e.won}, claimed=${e.claimed}, refund=${(Number(e.refunded)/1e9).toFixed(4)}`);
+      });
+    } else {
+      console.log(`✅ All participant fees within expected range`);
+    }
+
+    // Summary
+    console.log(`\n=== Stress Test Results ===`);
+    console.log(`Participants: ${participants.length}`);
+    console.log(`Total deposited: ${totalDepositedTickets} tickets`);
+    console.log(`Total withdrawn: ${totalWithdrawnTickets} tickets`);
+    console.log(`Active tickets: ${activeTickets}`);
+    console.log(`Winners: ${winners}`);
+    console.log(`Losers: ${activeTickets - winners}`);
+    console.log(`Claims successful: ${claimSuccessCount}`);
+    console.log(`Refunds successful: ${refundSuccessCount}`);
+    console.log(`Total claimed tokens: ${totalClaimedTokens}`);
+    console.log(`Total refunded: ${Number(totalRefundedLamports) / 1e9} SOL`);
+    console.log(`Total fees: ${Number(totalFeesPaid) / 1e9} SOL (avg ${Number(avgFee) / 1e9} SOL per participant)`);
+    console.log(`LaunchState account: ${launchSize} bytes (${Number(launchRent) / 1e9} SOL)`);
+    console.log(`Realloc funds spent: ${Number(reallocFundsSpent) / 1e9} SOL`);
+
+    // Verify total claimed is approximately sale_allocation (accounting for rounding)
+    const expectedTotalClaim = tokensPerTicket * BigInt(winners);
+    const claimDiff = totalClaimedTokens > expectedTotalClaim
+      ? totalClaimedTokens - expectedTotalClaim
+      : expectedTotalClaim - totalClaimedTokens;
+    const claimDiffPercent = Number(claimDiff * BigInt(10000) / expectedTotalClaim) / 100;
+    console.log(`Expected total claim: ${expectedTotalClaim}`);
+    console.log(`Claim difference: ${claimDiff} (${claimDiffPercent}%)`);
+
+    assert.ok(claimDiffPercent < 1, `Claim difference should be < 1%, got ${claimDiffPercent}%`);
+
+
+    console.log(`✅ Stress test complete`);
+  });
+
+  it("Cancel flow: min_raise not met → full refund", async () => {
+    // === Step 1: Create launch ===
+    const nextId = await sdk.getNextProjectId();
+    const { instruction, launchState: testLaunch } = await (sdk as any).initLaunchIx({
+      creator: multisig.publicKey,
+      presetId: Number(presetData.id),
+      projectId: nextId,
+      saleStartTimeTimestamp: 0,
+      name: "CancelTest",
+      symbol: "CNL",
+      uri: "https://example.com/cnl.json",
+    });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], instruction);
+    console.log("✅ Step 1: Launch created");
+
+    // === Step 2: Small deposit (below min_raise) ===
+    const { data: preset } = await sdk.fetchLaunchPreset(Number(presetData.id));
+    const tau = preset.tauLamports;
+    const minRaise = preset.minRaiseLamports;
+
+    // Deposit only 10% of min_raise
+    const depositAmount = minRaise.divn(10);
+    const depositTickets = depositAmount.div(tau).toNumber();
+
+    const contributor = await createAndFundAccount(client, 250);
+    const balanceBefore = client.getBalance(contributor.publicKey);
+
+    const { instruction: depositIx } = await sdk.depositIx({
+      contributor: contributor.publicKey,
+      launch: testLaunch,
+      amount: depositAmount,
+    });
+    sendTx(client, contributor.publicKey, [contributor], depositIx);
+    console.log(`✅ Step 2: Deposited ${depositTickets} tickets (${Number(depositAmount) / 1e9} SOL, min_raise: ${Number(minRaise) / 1e9} SOL)`);
+
+    // === Step 3: Wait for funding to end ===
+    await advanceTime(client, { slots: BigInt(100), seconds: BigInt(preset.fundingDurationSeconds + 10) });
+
+    // === Step 4: Call setSeed - should cancel due to min_raise not met ===
+    const { instruction: seedIx } = await sdk.setSeedIx({ launch: testLaunch, payer: multisig.publicKey });
+    sendTx(client, adminKeypair.publicKey, [adminKeypair], seedIx);
+
+    // Verify lottery is cancelled (setSeed cancels when min_raise not met)
+    const { data: lottery } = await sdk.fetchLaunch(testLaunch);
+    assert.ok(lottery.phase.cancelled, "Lottery should be cancelled when min_raise not met");
+    console.log("✅ Step 3: Lottery cancelled via setSeed (min_raise not met)");
+
+    // === Step 5: Full refund ===
+    const { transaction: refundTx } = await sdk.refundTx({
+      launch: testLaunch,
+      contributor: contributor.publicKey,
+    });
+    sendTx(client, contributor.publicKey, [contributor], refundTx);
+
+    const balanceAfter = client.getBalance(contributor.publicKey);
+    const refunded = balanceAfter - balanceBefore;
+
+    // Should get back full deposit minus tx fees and contribution rent
+    // Allow for tx fees (~10k each) + contribution account rent (~1.1M lamports)
+    const feeAllowance = BigInt(1_500_000); // ~0.0015 SOL
+    const actualLoss = balanceBefore - balanceAfter;
+
+    console.log(`Balance before: ${Number(balanceBefore) / 1e9} SOL`);
+    console.log(`Balance after: ${Number(balanceAfter) / 1e9} SOL`);
+    console.log(`Actual loss: ${Number(actualLoss) / 1e9} SOL (fees + rent)`);
+
+    // Loss should be only tx fees + rent, not the deposit
+    assert.ok(actualLoss < feeAllowance, `Should only lose fees+rent, but lost ${Number(actualLoss) / 1e9} SOL`);
+
+    console.log("✅ Step 4: Full refund received (cancelled launch)");
+  });
+
 });

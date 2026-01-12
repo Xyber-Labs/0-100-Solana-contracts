@@ -7,13 +7,13 @@ import {
 } from "@solana/spl-token";
 import type { IncomeDispatcher as IncomeDispatcherIDL } from "../../idl/income_dispatcher";
 import IncomeDispatcherIDLJson from "../../idl/income_dispatcher.json";
-import EngineIDL from "../../idl/engine.json";
+import EngineIDLJson from "../../idl/engine.json";
 import { getConstant, getConstantRaw, getEnumVariants } from "../utils";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 
 const SEED_ROOT = Buffer.from(getConstant("DISPATCHER_SEED_ROOT", IncomeDispatcherIDLJson as any));
 const MEMO_PROGRAM_ID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDL as any));
+const RAYDIUM_CLMM_PROGRAM_ID = new web3.PublicKey(getConstantRaw("RAYDIUM_CLMM_PROGRAM_ID", EngineIDLJson as any));
 
 export const Role = getEnumVariants("Role", IncomeDispatcherIDLJson as any);
 export type RoleType = number;

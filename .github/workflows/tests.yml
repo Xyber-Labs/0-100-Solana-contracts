@@ -34,9 +34,10 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.84.0
         with:
-          toolchain: stable
+          toolchain: 1.84.0
+          components: clippy
 
       - name: Restore Solana CLI cache
         id: solana-restore
@@ -120,6 +121,12 @@ jobs:
             /home/runner/.cargo/git
           key: anchor-${{ runner.os }}-${{ env.ANCHOR_VERSION }}-${{ github.head_ref || github.ref_name }}
 
+      - name: Cargo clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --package engine --package income-dispatcher
+
       - name: yarn build
         run: yarn build
 
@@ -134,9 +141,6 @@ jobs:
 
       - name: Install deps
         run: yarn install --frozen-lockfile
-
-      - name: Run litesvm basic tests
-        run: anchor run litesvm-basic
 
       - name: Restore Raydium programs cache
         id: raydium-restore
@@ -156,9 +160,6 @@ jobs:
           path: engine/tests/resources
           key: raydium-programs-${{ runner.os }}-v1
 
-      - name: Run litesvm raydium tests
-        run: anchor run litesvm-raydium
-
-      - name: Run complete flow  tests
-        run: anchor run litesvm-full
+      - name: Run litesvm tests
+        run: anchor run litesvm
 

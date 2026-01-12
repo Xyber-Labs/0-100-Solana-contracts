@@ -14,9 +14,6 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
-anchor-debug = []
-test = []
-anchor-test = []
 devnet = ["raydium-amm-v3/devnet"]
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
@@ -26,10 +23,4 @@ anchor-spl = "0.31.1"
 raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-clmm", features = ["no-entrypoint", "cpi"] }
 uint = { version = "0.9.3", default-features = false }
 mpl-token-metadata = { version = "5.1.1" }
-
-[dev-dependencies]
-
-[lints.rust]
-deprecated = "allow"
-
 

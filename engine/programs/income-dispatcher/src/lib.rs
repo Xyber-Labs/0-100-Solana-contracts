@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
 
 use instructions::*;
@@ -23,11 +25,12 @@ pub mod income_dispatcher {
 
     pub fn initialize(
         ctx: Context<Initialize>,
+        new_multisig: Pubkey,
         backend: Pubkey,
         platform_wallet: Pubkey,
         community_wallet: Pubkey,
     ) -> Result<()> {
-        instructions::initialize(ctx, backend, platform_wallet, community_wallet)
+        instructions::initialize(ctx, new_multisig, backend, platform_wallet, community_wallet)
     }
 
     pub fn harvest_pool<'info>(

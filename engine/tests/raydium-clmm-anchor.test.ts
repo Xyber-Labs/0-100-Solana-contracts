@@ -4,17 +4,17 @@ import { assert } from "chai";
 import * as fs from "fs";
 import {
   createMint,
-  getAccount,
+  getOrCreateAssociatedTokenAccount,
+  mintTo,
   getAssociatedTokenAddressSync,
-  getOrCreateAssociatedTokenAccount
+  getAccount,
 } from "@solana/spl-token";
-
-import { EngineSDK } from "../ts-sdk/src/engine";
-import { IncomeDispatcherSDK, Role } from "../ts-sdk/src/income-dispatcher";
-import { PoolUtils, Raydium, TxVersion } from "@raydium-io/raydium-sdk-v2";
+import { Raydium, TxVersion, PoolUtils } from "@raydium-io/raydium-sdk-v2";
+import Decimal from "decimal.js";
 
 import * as utils from "./utils";
 import { loadKeypair } from "./utils";
+import { EngineSDK, IncomeDispatcherSDK, Role } from "@xyber-labs/0-100-sdk";
 
 describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const provider = anchor.AnchorProvider.env();
@@ -23,9 +23,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const program = anchor.workspace.Engine;
   const incomeDispatcherProgram = anchor.workspace.IncomeDispatcher;
 
-  const admin1Keypair = loadKeypair("keys/admin1.json");
-  const admin2Keypair = loadKeypair("keys/admin2.json");
-  const admin3Keypair = loadKeypair("keys/admin3.json");
+  const multisigKeypair = loadKeypair("keys/multisig.json");
   const deployerKeypair = loadKeypair("keys/deployer.json");
   const backendKeypair = loadKeypair("keys/backend.json");
   const xyberMintKeypair = loadKeypair("keys/xyber-mint.json");
@@ -37,8 +35,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const buyer3Keypair = loadKeypair("keys/buyer3.json");
   const communityWallet = loadKeypair("keys/community-signer.json");
 
-  const sdk = EngineSDK.create(provider, program, admin1Keypair);
-  const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, admin1Keypair);
+  const sdk = EngineSDK.create(provider, program, multisigKeypair);
+  const dispatcherSdk = IncomeDispatcherSDK.create(provider, incomeDispatcherProgram, multisigKeypair);
 
   let launchPda: anchor.web3.PublicKey;
   let baseMint: anchor.web3.PublicKey;
@@ -65,9 +63,9 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   let xyberPoolTickArray2: anchor.web3.PublicKey;
   let xyberPoolBitmapExtension: anchor.web3.PublicKey;
 
-  const PRESET_ID = 0;
-  const PROJECT_ID = 1;
-  let projectId = PROJECT_ID;
+  const presetConfig = JSON.parse(fs.readFileSync("tests/raydium-clmm-anchor-test-preset.json", "utf8"));
+  const PRESET_ID = Number(presetConfig.id);
+  let projectId: number;
 
   const BUYER1_AMOUNT = parseInt(process.env.BUYER1_AMOUNT || "150");
   const BUYER2_AMOUNT = parseInt(process.env.BUYER2_AMOUNT || "150");
@@ -106,10 +104,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Setup: Airdrop SOL to wallets ===");
 
     const airdropPromises = [
-      provider.connection.requestAirdrop(admin1Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(admin2Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(admin3Keypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
-      provider.connection.requestAirdrop(deployerKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(multisigKeypair.publicKey, 25 * anchor.web3.LAMPORTS_PER_SOL),
+      provider.connection.requestAirdrop(deployerKeypair.publicKey, 50 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(backendKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(platformKeypair.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL),
       provider.connection.requestAirdrop(creatorKeypair.publicKey, 1000 * anchor.web3.LAMPORTS_PER_SOL),
@@ -132,8 +128,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       if (!xyberMintInfo) {
         await createMint(
           provider.connection,
-          admin1Keypair,
-          admin1Keypair.publicKey,
+          multisigKeypair,
+          multisigKeypair.publicKey,
           null,
           6,
           xyberMintKeypair
@@ -141,29 +137,44 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
         console.log("✅ XYBER mint created");
       }
 
-      await getOrCreateAssociatedTokenAccount(
+      const creatorXyberAta = await getOrCreateAssociatedTokenAccount(
         provider.connection,
         creatorKeypair,
         xyberMintKeypair.publicKey,
         creatorKeypair.publicKey
       );
 
+      // Mint XYBER tokens to creator for creation fee (preset has creationFee: 100000000 = 100 XYBER)
+      await mintTo(
+        provider.connection,
+        multisigKeypair,
+        xyberMintKeypair.publicKey,
+        creatorXyberAta.address,
+        multisigKeypair,
+        1000_000_000 // 1000 XYBER (6 decimals)
+      );
+      console.log("✅ XYBER minted to creator");
+
       await getOrCreateAssociatedTokenAccount(
         provider.connection,
-        admin1Keypair,
+        multisigKeypair,
         xyberMintKeypair.publicKey,
         treasuryKeypair.publicKey
       );
 
-      await sdk.initEngineConfig({
-        treasury: treasuryKeypair.publicKey,
-        creationFee: new BN(0),
-        xyberMint: xyberMintKeypair.publicKey,
-        admins: [admin1Keypair.publicKey, admin2Keypair.publicKey, admin3Keypair.publicKey],
-        threshold: 2,
-        adminKeypairs: [admin1Keypair, admin2Keypair],
-      });
-      console.log("✅ Engine config initialized");
+      if (!configInfo) {
+        // First init_engine_config must be signed by DEPLOYER constant
+        await sdk.initEngineConfig({
+          treasury: treasuryKeypair.publicKey,
+          xyberMint: xyberMintKeypair.publicKey,
+          newMultisig: multisigKeypair.publicKey,
+          reallocFundLamports: new BN(20 * anchor.web3.LAMPORTS_PER_SOL),
+          signerKeypair: deployerKeypair,
+        });
+        console.log("✅ Engine config initialized with 20 SOL for realloc funds");
+      } else {
+        console.log("⏭️  Engine config already exists, skipping");
+      }
 
   });
 
@@ -171,16 +182,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("=== Step 1: Initialize Launch Preset ===");
 
     const [presetPda] = sdk.getLaunchPresetPda(PRESET_ID);
-    const presetInfo = await provider.connection.getAccountInfo(presetPda);
 
-    if (presetInfo) {
-      console.log("⏭️  Preset already exists, skipping");
-      return;
-    }
-
-    const presetPath = "presets/test-preset.json";
-    const presetData = JSON.parse(fs.readFileSync(presetPath, "utf8"));
-    const validParams = utils.parsePresetParams(presetData);
+    const validParams = utils.parsePresetParams(presetConfig);
 
     console.log("\n--- Attempt 1: Try with min_raise < AMMV3_CREATION_RESERVE ---");
     const invalidMinRaise = {
@@ -190,9 +193,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     await utils.doAndCheckError(
       sdk.initLaunchPreset({
-        id: Number(presetData.id),
         params: invalidMinRaise,
-        adminKeypairs: [admin1Keypair, admin2Keypair],
+        multisigKeypair,
       }),
       "Malformed preset"
     );
@@ -207,9 +209,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     await utils.doAndCheckError(
       sdk.initLaunchPreset({
-        id: Number(presetData.id),
         params: invalidHardCap,
-        adminKeypairs: [admin1Keypair, admin2Keypair],
+        multisigKeypair,
       }),
       "Malformed preset"
     );
@@ -217,26 +218,29 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log("\n--- Attempt 3: Initialize with valid parameters ---");
     await sdk.initLaunchPreset({
-      id: Number(presetData.id),
       params: validParams,
-      adminKeypairs: [admin1Keypair, admin2Keypair],
+      multisigKeypair,
     });
-    console.log("✅ Launch preset initialized successfully from", presetPath);
+    console.log("✅ Launch preset initialized successfully from presets/raydium-clmm-anchor-test-preset.json");
   });
 
   it("Step 2: Setup income-dispatcher program", async () => {
     console.log("=== Step 2: Setup Income-Dispatcher Program ===");
 
-    try {
+    const [configPda] = dispatcherSdk.getConfigPda();
+    const existingConfig = await provider.connection.getAccountInfo(configPda);
+
+    if (!existingConfig) {
       const { signature } = await dispatcherSdk.initialize({
+        newMultisig: multisigKeypair.publicKey,
         backend: backendKeypair.publicKey,
         platformWallet: platformKeypair.publicKey,
         communityWallet: communityWallet.publicKey,
-        signers: [deployerKeypair],
+        signerKeypair: deployerKeypair,
       });
       console.log("✅ Income-dispatcher initialized");
       console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
-    } catch (e) {
+    } else {
       console.log("Income-dispatcher config already exists, skipping initialization.");
     }
 
@@ -248,9 +252,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 3: Initialize launch from preset", async () => {
     console.log("=== Step 3: Initialize Launch from Preset ===");
 
-    const { launchPda: launch, signature } = await sdk.initLaunchFromPreset({
+    const nextProjectId = await sdk.getNextProjectId();
+    projectId = nextProjectId.toNumber();
+
+    const { launchPda: launch, signature } = await sdk.initLaunch({
       presetId: PRESET_ID,
-      projectId: PROJECT_ID,
+      projectId: nextProjectId,
       name: "TestToken",
       symbol: "TEST",
       uri: "https://example.com/metadata.json",
@@ -263,70 +270,119 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
     console.log("   Launch PDA:", launchPda.toString());
 
-    const launchData = await sdk.fetchLaunch(launchPda);
+    const { data: launchData } = await sdk.fetchLaunch(launchPda);
     assert.ok(launchData, "Launch should exist");
   });
 
-  it("Step 4: Initialize roster and shard", async () => {
-    console.log("=== Step 4: Initialize Roster ===");
-
-    const { signature: rosterSig } = await sdk.initRoster({
-      launch: launchPda,
-    });
-
-    console.log("✅ Roster initialized");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, rosterSig));
-
-    console.log("=== Initialize Roster Shard ===");
-    const [rosterShard] = sdk.getRosterShardPda(launchPda, 1);
-    const rosterShardInfo = await provider.connection.getAccountInfo(rosterShard);
-    assert.ok(rosterShardInfo, "Roster shard 1 should exist after initRoster");
-    console.log("Roster shard 1 already initialized via initRoster");
-
+  it("Step 4: Roster is initialized automatically with deposits", async () => {
+    console.log("=== Step 4: Roster is initialized automatically ===");
+    console.log("✅ Roster initialization is handled automatically by deposit instruction");
   });
 
   it(`Step 5: Make deposits (${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL total)`, async () => {
     console.log(`=== Step 5: Make Deposits (${BUYER1_AMOUNT} + ${BUYER2_AMOUNT} + ${BUYER3_AMOUNT} = ${BUYER1_AMOUNT + BUYER2_AMOUNT + BUYER3_AMOUNT} SOL) ===`);
 
+    const logBalances = async (label: string, contributor: anchor.web3.Keypair) => {
+      const [contributionPda] = sdk.getContributionPda(launchPda, contributor.publicKey);
+      const [escrowAuthority] = sdk.getEscrowAuthorityPda(launchPda);
+      const [reallocFundsPda] = sdk.getReallocFundsPda();
+      const contributorBal = await provider.connection.getBalance(contributor.publicKey);
+      const contributionBal = await provider.connection.getBalance(contributionPda);
+      const escrowBal = await provider.connection.getBalance(escrowAuthority);
+      const reallocBal = await provider.connection.getBalance(reallocFundsPda);
+      console.log(`[${label}] contributor=${(contributorBal/1e9).toFixed(4)} contribution=${(contributionBal/1e9).toFixed(6)} escrow=${(escrowBal/1e9).toFixed(4)} realloc=${(reallocBal/1e9).toFixed(4)}`);
+      return { contributorBal, contributionBal, escrowBal, reallocBal };
+    };
+
+    console.log("\n--- Deposit 1 (buyer1) ---");
+    const b1 = await logBalances("BEFORE", buyer1Keypair);
     const { signature: dep1Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER1_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
-      userKeypair: buyer1Keypair,
-      shardId: 1,
+      contributorKeypair: buyer1Keypair,
     });
+    const a1 = await logBalances("AFTER", buyer1Keypair);
+    console.log(`Spent: ${((b1.contributorBal - a1.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER1_AMOUNT})`);
     console.log(`✅ Deposit 1 (buyer1: ${BUYER1_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep1Sig));
 
+    console.log("\n--- Deposit 2 (buyer2) ---");
+    const b2 = await logBalances("BEFORE", buyer2Keypair);
     const { signature: dep2Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER2_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
-      userKeypair: buyer2Keypair,
-      shardId: 1,
+      contributorKeypair: buyer2Keypair,
     });
+    const a2 = await logBalances("AFTER", buyer2Keypair);
+    console.log(`Spent: ${((b2.contributorBal - a2.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER2_AMOUNT})`);
     console.log(`✅ Deposit 2 (buyer2: ${BUYER2_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep2Sig));
 
+    console.log("\n--- Deposit 3 (buyer3) ---");
+    const b3 = await logBalances("BEFORE", buyer3Keypair);
     const { signature: dep3Sig } = await sdk.deposit({
       launch: launchPda,
       amountLamports: new BN(BUYER3_AMOUNT * anchor.web3.LAMPORTS_PER_SOL),
-      userKeypair: buyer3Keypair,
-      shardId: 1,
+      contributorKeypair: buyer3Keypair,
     });
+    const a3 = await logBalances("AFTER", buyer3Keypair);
+    console.log(`Spent: ${((b3.contributorBal - a3.contributorBal)/1e9).toFixed(6)} SOL (deposit=${BUYER3_AMOUNT})`);
     console.log(`✅ Deposit 3 (buyer3: ${BUYER3_AMOUNT} SOL)`);
     console.log("Explorer url:", utils.getExplorerUrl(provider, dep3Sig));
 
-    const launchData = await sdk.fetchLaunch(launchPda);
-    const totalSOL = launchData.totalDeposited.toNumber() / anchor.web3.LAMPORTS_PER_SOL;
+    // Creator deposit (required for team vesting claim)
+    const CREATOR_DEPOSIT_SOL = 8;
+
+    console.log("\n--- Deposit 4 (creator) ---");
+    const b4 = await logBalances("BEFORE", creatorKeypair);
+    const { signature: creatorDepSig } = await sdk.deposit({
+      launch: launchPda,
+      amountLamports: new BN(CREATOR_DEPOSIT_SOL * anchor.web3.LAMPORTS_PER_SOL),
+      contributorKeypair: creatorKeypair,
+    });
+    const a4 = await logBalances("AFTER", creatorKeypair);
+    console.log(`Spent: ${((b4.contributorBal - a4.contributorBal)/1e9).toFixed(6)} SOL (deposit=${CREATOR_DEPOSIT_SOL})`);
+    console.log(`✅ Deposit 4 (creator: ${CREATOR_DEPOSIT_SOL} SOL)`);
+    console.log("Explorer url:", utils.getExplorerUrl(provider, creatorDepSig));
+
+    // Calculate total deposited from lottery data
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
+    const tauLamports = presetConfig.tauLamports;
+    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const totalDeposited = BigInt(activeTickets) * BigInt(tauLamports);
+    const totalSOL = Number(totalDeposited) / anchor.web3.LAMPORTS_PER_SOL;
     console.log(
-      `Total raised: ${launchData.totalDeposited.toString()} lamports (${totalSOL} SOL including creator deposit)`
+      `Total raised: ${totalDeposited.toString()} lamports (${totalSOL} SOL, ${activeTickets} active tickets)`
     );
   });
 
-  it("Step 6: Wait for funding period and finalize shard", async () => {
+  it("Step 5b: Contribution realloc - 15 deposits exceed initial 10 ranges limit", async () => {
+    console.log("=== Step 5b: Test Contribution Realloc (15 deposits) ===");
+
+    const tauLamports = new BN(presetConfig.tauLamports);
+
+    for (let i = 0; i < 15; i++) {
+      const { signature } = await sdk.deposit({
+        launch: launchPda,
+        amountLamports: tauLamports,
+        contributorKeypair: buyer1Keypair,
+      });
+      console.log(`✅ Deposit ${i + 1}/15`);
+    }
+
+    const { data: contrib } = await sdk.fetchContribution(launchPda, buyer1Keypair.publicKey);
+    console.log(`Contribution ticket_ranges count: ${contrib.ticketRanges.length}`);
+    console.log(`Total tickets: ${contrib.ticketRanges.reduce((sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()), 0)}`);
+  });
+
+  it("Step 6: Wait for funding period to end", async () => {
     console.log("=== Step 6: Wait for Funding Period ===");
 
-    const launchData = await sdk.fetchLaunch(launchPda);
-    const fundingEndTime = launchData.fundingPeriodEnd.toNumber();
+    const { data: launchData } = await sdk.fetchLaunch(launchPda);
+    const phase = launchData.phase as any;
+    const fundingStart = phase.funding.startedAt.toNumber();
+    const fundingDurationSeconds = presetConfig.fundingDurationSeconds;
+    const fundingEndTime = fundingStart + fundingDurationSeconds;
     const currentTime = Math.floor(Date.now() / 1000);
     const waitTime = fundingEndTime - currentTime + 2;
 
@@ -335,16 +391,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
     }
 
-    console.log("=== Finalize Roster Shard ===");
-
-    const { signature } = await sdk.finalizeRosterShard({
-      launch: launchPda,
-      shardId: 1,
-      signers: [admin1Keypair],
-    });
-
-    console.log("✅ Roster shard finalized");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
+    console.log("✅ Funding period ended");
   });
 
   it("Step 7: Set VRF seed", async () => {
@@ -352,22 +399,23 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature: seedSig } = await sdk.setSeed({
       launch: launchPda,
-      payerKeypair: admin1Keypair,
+      signers: [multisigKeypair],
     });
 
     console.log("✅ VRF seed set");
     console.log("Explorer url:", utils.getExplorerUrl(provider, seedSig));
   });
 
-  it("Step 8: Prepare pool creation", async () => {
-    console.log("=== Step 8: Prepare Pool Creation ===");
+  it("Step 8: Finalize lottery", async () => {
+    console.log("=== Step 8: Finalize Lottery ===");
 
-    const { signature: prepSig } = await sdk.preparePoolCreation({
+    const { signature: prepSig } = await sdk.finalizeLottery({
       launch: launchPda,
-      payerKeypair: admin1Keypair,
+      payerKeypair: multisigKeypair,
+      computeUnits: 1_000_000,
     });
 
-    console.log("✅ Pool creation prepared");
+    console.log("✅ Lottery finalized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, prepSig));
   });
 
@@ -381,15 +429,16 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const fakeLaunchState = anchor.web3.Keypair.generate();
 
+    // SDK fetches launch data first, so we get "Account does not exist" error before on-chain validation
     await utils.doAndCheckError(
       sdk.createClmmPool({
         launch: fakeLaunchState.publicKey,
-        signers: [admin1Keypair],
+        signers: [multisigKeypair],
       }),
-      "Invalid authority"
+      "Account does not exist"
     );
 
-    console.log("✅ Pool creation rejected for invalid launch_state owner");
+    console.log("✅ Pool creation rejected for invalid launch_state");
   });
 
   it("Step 11: Create CLMM pool", async () => {
@@ -397,7 +446,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const result = await sdk.createClmmPool({
       launch: launchPda,
-      signers: [admin1Keypair],
+      signers: [multisigKeypair],
     });
 
     baseMint = result.baseMint;
@@ -416,19 +465,19 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 12: Add liquidity to CLMM pool", async () => {
     console.log("=== Step 12: Add Liquidity ===");
     const addClmmLiquidityTx = await sdk.addClmmLiquidityTx({
-      payer: admin1Keypair.publicKey,
+      payer: multisigKeypair.publicKey,
       launch: launchPda,
       baseMint: baseMint,
       provider,
     });
 
-    addClmmLiquidityTx.transaction.feePayer = admin1Keypair.publicKey;
+    addClmmLiquidityTx.transaction.feePayer = multisigKeypair.publicKey;
     addClmmLiquidityTx.transaction.recentBlockhash = (
       await provider.connection.getLatestBlockhash()
     ).blockhash;
 
     addClmmLiquidityTx.transaction.partialSign(...addClmmLiquidityTx.signers);
-    addClmmLiquidityTx.transaction.partialSign(admin1Keypair);
+    addClmmLiquidityTx.transaction.partialSign(multisigKeypair);
 
     const addLiquiditySig = await provider.connection.sendRawTransaction(
       addClmmLiquidityTx.transaction.serialize(),
@@ -448,6 +497,193 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     tickArrayUpper = addClmmLiquidityTx.tickArrayUpper;
   });
 
+  it("Step 12a: Buyer claims - verify all buyers can claim tokens", async () => {
+    console.log("=== Step 12a: Buyer Claims Verification ===");
+
+    const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
+
+    const saleAllocation = new BN(preset.baseTotalAllocation.toString())
+      .mul(new BN(preset.baseSaleBasisPoints))
+      .div(new BN(10000));
+
+    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const kCapacity = new BN(preset.hardCapLamports.toString()).div(new BN(preset.tauLamports.toString()));
+    const winningTickets = Math.min(activeTickets, kCapacity.toNumber());
+
+    // Get tokensPerTicket from lottery phase (already calculated by contract)
+    const lotteryStatus = lottery.phase as any;
+    const tokensPerTicket = lotteryStatus.finalized
+      ? new BN(lotteryStatus.finalized.tokensPerTicket.toString())
+      : saleAllocation.div(new BN(winningTickets));
+
+    console.log(`Sale allocation: ${saleAllocation.toString()}`);
+    console.log(`Active tickets: ${activeTickets}, k_capacity: ${kCapacity.toString()}, winning: ${winningTickets}`);
+    console.log(`Tokens per ticket (from lottery): ${tokensPerTicket.toString()}`);
+
+    // Wait for contributor vesting period
+    await new Promise(resolve => setTimeout(resolve, preset.contributorPeriodSec * 1000 + 1000));
+
+    const buyers = [buyer1Keypair, buyer2Keypair, buyer3Keypair];
+    let totalClaimed = new BN(0);
+
+    for (let i = 0; i < buyers.length; i++) {
+      const buyer = buyers[i];
+      const buyerAta = getAssociatedTokenAddressSync(baseMint, buyer.publicKey, true);
+
+      const { data: contrib } = await sdk.fetchContribution(launchPda, buyer.publicKey);
+      const buyerTickets = contrib.ticketRanges.reduce(
+        (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
+        0
+      );
+
+      await sdk.claim({
+        launch: launchPda,
+        baseMint: baseMint,
+        participantKeypair: buyer,
+        bucket: 0,
+      });
+
+      const ataInfo = await getAccount(provider.connection, buyerAta);
+      const balance = new BN(ataInfo.amount.toString());
+      totalClaimed = totalClaimed.add(balance);
+
+      const maxExpected = tokensPerTicket.muln(buyerTickets);
+      console.log(`Buyer ${i + 1}: tickets=${buyerTickets}, claimed=${balance.toString()}, max=${maxExpected.toString()}`);
+
+      // When activeTickets > k_capacity, some tickets lose lottery - claimed <= max
+      assert.ok(balance.gt(new BN(0)), `Buyer ${i + 1}: should receive tokens`);
+      assert.ok(balance.lte(maxExpected), `Buyer ${i + 1}: claimed ${balance.toString()} exceeds max ${maxExpected.toString()}`);
+    }
+
+    // Total claimed by all buyers should be close to winning_tickets * tokensPerTicket
+    const expectedTotal = tokensPerTicket.muln(winningTickets);
+    console.log(`Total claimed by buyers: ${totalClaimed.toString()}, expected ~${expectedTotal.toString()}`);
+
+    console.log("✅ All buyers claimed their tokens");
+  });
+
+  it("Step 12b: Creator vesting - verify sale and team vesting together", async () => {
+    console.log("=== Step 12b: Creator Vesting Verification (Sale + Team) ===");
+
+    const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
+    const { data: lottery } = await sdk.fetchLaunch(launchPda);
+    const { data: creatorContrib } = await sdk.fetchContribution(launchPda, creatorKeypair.publicKey);
+
+    const saleAllocation = new BN(preset.baseTotalAllocation.toString())
+      .mul(new BN(preset.baseSaleBasisPoints))
+      .div(new BN(10000));
+    const teamAllocation = new BN(preset.baseTotalAllocation.toString())
+      .mul(new BN(preset.teamAllocationBasisPoints))
+      .div(new BN(10000));
+
+    // Calculate creator's tickets
+    const creatorTickets = creatorContrib.ticketRanges.reduce(
+      (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
+      0
+    );
+    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const kCapacity = new BN(preset.hardCapLamports.toString()).div(new BN(preset.tauLamports.toString()));
+    const divisor = BN.min(new BN(activeTickets), kCapacity);
+    const tokensPerTicket = saleAllocation.div(divisor);
+    const creatorSaleShare = tokensPerTicket.muln(creatorTickets);
+
+    // Creator sale vesting: creatorPeriodUnlock per period, calculated as SOL per period / tau
+    const creatorDepositLamports = BigInt(creatorTickets) * BigInt(preset.tauLamports.toString());
+    const periodsForSale = Math.ceil(Number(creatorDepositLamports) / Number(preset.creatorPeriodUnlock.toString()));
+    const teamPeriods = preset.teamDurationSec / preset.teamPeriodSec;
+
+    console.log(`Sale allocation: ${saleAllocation.toString()}`);
+    console.log(`Active tickets: ${activeTickets}, k_capacity: ${kCapacity.toString()}, divisor: ${divisor.toString()}`);
+    console.log(`Tokens per ticket: ${tokensPerTicket.toString()}`);
+    console.log(`Creator sale share: ${creatorSaleShare.toString()}`);
+    console.log(`Sale periods: ${periodsForSale}`);
+    console.log(`Team allocation: ${teamAllocation.toString()}`);
+    console.log(`Team periods: ${teamPeriods}, per period: ${teamAllocation.div(new BN(teamPeriods)).toString()}`);
+    console.log(`Period duration: ${preset.creatorPeriodSec} sec`);
+
+    const creatorAta = getAssociatedTokenAddressSync(baseMint, creatorKeypair.publicKey, true);
+
+    let initialBalance = new BN(0);
+    try {
+      const ataInfo = await getAccount(provider.connection, creatorAta);
+      initialBalance = new BN(ataInfo.amount.toString());
+      console.log(`Initial creator balance: ${initialBalance.toString()}`);
+    } catch {
+      console.log("Creator ATA does not exist yet");
+    }
+
+    console.log("\n--- Immediate claim attempt (both buckets) ---");
+    await utils.doAndCheckError(
+      sdk.claim({ launch: launchPda, baseMint, participantKeypair: creatorKeypair, bucket: 0 }),
+      "NothingToClaim"
+    );
+    await utils.doAndCheckError(
+      sdk.claim({ launch: launchPda, baseMint, participantKeypair: creatorKeypair, bucket: 1 }),
+      "NothingToClaim"
+    );
+    console.log("✅ Immediate claims correctly rejected (NothingToClaim)");
+
+    let totalSaleClaimed = new BN(0);
+    let totalTeamClaimed = new BN(0);
+    const periodInterval = preset.creatorPeriodSec * 1000;
+    const periodsToTest = 3;
+
+    for (let period = 1; period <= periodsToTest; period++) {
+      console.log(`\n--- Period ${period}/${periodsToTest} ---`);
+      await new Promise(resolve => setTimeout(resolve, periodInterval + 1000));
+
+      let balanceBefore = new BN(0);
+      try {
+        balanceBefore = new BN((await getAccount(provider.connection, creatorAta)).amount.toString());
+      } catch {
+        // ATA doesn't exist yet, will be created by first claim
+      }
+
+      await sdk.claim({ launch: launchPda, baseMint, participantKeypair: creatorKeypair, bucket: 0 });
+      const afterSale = new BN((await getAccount(provider.connection, creatorAta)).amount.toString());
+      const saleGrowth = afterSale.sub(balanceBefore);
+      totalSaleClaimed = totalSaleClaimed.add(saleGrowth);
+
+      await sdk.claim({ launch: launchPda, baseMint, participantKeypair: creatorKeypair, bucket: 1 });
+      const afterTeam = new BN((await getAccount(provider.connection, creatorAta)).amount.toString());
+      const teamGrowth = afterTeam.sub(afterSale);
+      totalTeamClaimed = totalTeamClaimed.add(teamGrowth);
+
+      const expectedTeamPerPeriod = teamAllocation.div(new BN(teamPeriods));
+
+      console.log(`  Sale: +${saleGrowth.toString()}`);
+      console.log(`  Team: +${teamGrowth.toString()}, expected/period: ${expectedTeamPerPeriod.toString()}`);
+
+      assert.ok(saleGrowth.gt(new BN(0)), `Period ${period}: Sale should grow`);
+      assert.ok(teamGrowth.gt(new BN(0)), `Period ${period}: Team should grow`);
+
+      console.log(`✅ Period ${period} verified`);
+    }
+
+    console.log(`\nTotal after ${periodsToTest} periods - Sale: ${totalSaleClaimed.toString()}, Team: ${totalTeamClaimed.toString()}`);
+
+    console.log("\n--- Claiming remaining sale tokens ---");
+    const balanceBeforeFinal = new BN((await getAccount(provider.connection, creatorAta)).amount.toString());
+    // Wait for remaining sale periods
+    const remainingPeriods = Math.max(0, periodsForSale - periodsToTest);
+    await new Promise(resolve => setTimeout(resolve, (remainingPeriods + 1) * periodInterval + 2000));
+
+    await sdk.claim({ launch: launchPda, baseMint, participantKeypair: creatorKeypair, bucket: 0 });
+    const finalBalance = new BN((await getAccount(provider.connection, creatorAta)).amount.toString());
+    const finalSaleGrowth = finalBalance.sub(balanceBeforeFinal);
+    totalSaleClaimed = totalSaleClaimed.add(finalSaleGrowth);
+
+    console.log(`  Final sale claim: +${finalSaleGrowth.toString()}`);
+    console.log(`  Total sale claimed: ${totalSaleClaimed.toString()}`);
+    console.log(`  Expected total sale: ${creatorSaleShare.toString()}`);
+
+    // Allow tolerance for rounding (1 token per ticket)
+    const saleDiff = totalSaleClaimed.sub(creatorSaleShare).abs();
+    assert.ok(saleDiff.lte(new BN(creatorTickets)), `Total sale claimed should equal creator's sale share (diff: ${saleDiff.toString()})`);
+
+    console.log(`\n✅ Creator vesting verified - sale and team tokens vest correctly`);
+  });
 
   it("Step 13: Perform trading on Raydium CLMM pool", async () => {
     console.log("=== Step 13: Perform Trading on Raydium CLMM Pool ===");
@@ -462,12 +698,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     for (let i = 0; i < traders.length; i++) {
       const fundTx = new anchor.web3.Transaction().add(
         anchor.web3.SystemProgram.transfer({
-          fromPubkey: admin1Keypair.publicKey,
+          fromPubkey: multisigKeypair.publicKey,
           toPubkey: traders[i].publicKey,
           lamports: fundAmount.toNumber(),
         })
       );
-      const fundSig = await provider.sendAndConfirm(fundTx, [admin1Keypair]);
+      const fundSig = await provider.sendAndConfirm(fundTx, [multisigKeypair]);
       console.log(`✅ Funded trader ${i + 1}`);
       console.log("Explorer url:", utils.getExplorerUrl(provider, fundSig));
     }
@@ -584,7 +820,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
   it("Step 14: Harvest CLMM fees through income-dispatcher", async () => {
     console.log("=== Step 14: Harvest CLMM Fees ===");
-    launchStateData = await sdk.fetchLaunch(launchPda);
+    ({ data: launchStateData } = await sdk.fetchLaunch(launchPda));
     const escrowAuthority = sdk.getEscrowAuthorityPda(launchPda)[0];
 
     const isQuoteSmaller = Buffer.compare(WSOL_MINT.toBuffer(), baseMint.toBuffer()) < 0;
@@ -627,7 +863,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     }
 
     const bundle = await dispatcherSdk.harvestPoolBundle({
-      payer: admin1Keypair.publicKey,
+      payer: multisigKeypair.publicKey,
       launchState: launchPda,
       projectId: launchStateData.projectId,
       baseMint,
@@ -652,7 +888,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const { signature: harvestSig, altAddress } = await dispatcherSdk.executeHarvestPoolBundle(
       bundle,
-      [admin1Keypair]
+      [multisigKeypair]
     );
     console.log("✅ CLMM fees harvested (ALT:", altAddress.toString(), ")");
     console.log("Explorer url:", utils.getExplorerUrl(provider, harvestSig));
@@ -810,20 +1046,23 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
   });
 
-  it("Step 16b: Claim creator fees (quote)", async () => {
+  it("Step 16b: Claim creator fees (quote) - expect NothingToClaim", async () => {
     console.log("=== Step 16b: Claim Creator Fees (quote) ===");
+    console.log("Creator only receives base tokens from pool fees in this scenario");
 
-    const { signature } = await dispatcherSdk.claim({
-      role: { creator: {} },
-      projectId: launchStateData.projectId,
-      launchState: launchPda,
-      recipient: creatorKeypair.publicKey,
-      mint: WSOL_MINT,
-      nonce: new BN(1),
-      signers: [creatorKeypair],
-    });
-    console.log("✅ Creator quote fees claimed");
-    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
+    await utils.doAndCheckError(
+      dispatcherSdk.claim({
+        role: { creator: {} },
+        projectId: launchStateData.projectId,
+        launchState: launchPda,
+        recipient: creatorKeypair.publicKey,
+        mint: WSOL_MINT,
+        nonce: new BN(1),
+        signers: [creatorKeypair],
+      }),
+      "NothingToClaim"
+    );
+    console.log("✅ NothingToClaim error as expected");
   });
 
   it("Step 17: Claim community fees (base)", async () => {
@@ -902,25 +1141,24 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     const adminXyberAta = await getOrCreateAssociatedTokenAccount(
       provider.connection,
-      admin1Keypair,
+      multisigKeypair,
       xyberMint,
-      admin1Keypair.publicKey
+      multisigKeypair.publicKey
     );
 
     const xyberAmount = BigInt(1_000_000_000_000); // 1M XYBER (6 decimals)
-    const { mintTo } = await import("@solana/spl-token");
     await mintTo(
       provider.connection,
-      admin1Keypair,
+      multisigKeypair,
       xyberMint,
       adminXyberAta.address,
-      admin1Keypair,
+      multisigKeypair,
       xyberAmount
     );
     console.log("✅ Minted XYBER tokens for liquidity:", xyberAmount.toString());
 
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,
@@ -1011,7 +1249,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("Full range position: tickLower =", tickLower, ", tickUpper =", tickUpper);
 
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,
@@ -1025,8 +1263,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const poolKeys = data.poolKeys;
     console.log("Pool info loaded via RPC");
 
-    const solAmount = new BN(7 * anchor.web3.LAMPORTS_PER_SOL);
-    const xyberAmount = new BN(500_000_000_000); // 500K XYBER (6 decimals)
+    const solAmount = new BN(1 * anchor.web3.LAMPORTS_PER_SOL);
+    const xyberAmount = new BN(100_000_000_000); // 100K XYBER (6 decimals)
 
     console.log("Adding liquidity: SOL =", solAmount.toString(), ", XYBER =", xyberAmount.toString());
     console.log("Pool mintA:", poolInfo.mintA.address, "mintB:", poolInfo.mintB.address);
@@ -1121,7 +1359,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     // Load Raydium SDK and get pool info for proper tick array computation
     const raydium = await Raydium.load({
-      owner: admin1Keypair,
+      owner: multisigKeypair,
       connection: provider.connection,
       cluster: 'mainnet',
       disableFeatureCheck: true,

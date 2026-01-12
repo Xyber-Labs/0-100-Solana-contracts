@@ -1,82 +1,113 @@
-use crate::{events::SeedSet, state::LaunchState};
 use anchor_lang::{
     prelude::*,
-    solana_program::{
-        keccak,
-        sysvar::{self, clock::Clock, Sysvar},
-    },
+    solana_program::{keccak, sysvar},
 };
+
+use crate::{
+    checked_add, checked_mul,
+    errors::ErrorCode as EngineErrorCode,
+    state::{LaunchPreset, LaunchState},
+};
+
+#[event]
+pub struct Seeded {
+    pub launch: Pubkey,
+    pub seed_hash: [u8; 32],
+}
+
+#[event]
+pub struct Cancelled {
+    pub launch: Pubkey,
+    pub total_deposited: u64,
+    pub min_raise: u64,
+}
 
 #[derive(Accounts)]
 pub struct SetSeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = launch_state.is_funding() @ EngineErrorCode::AlreadyFinalized,
+        constraint = launch_state.is_funding_ended(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingNotEnded
+    )]
     pub launch_state: Account<'info, LaunchState>,
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
     /// CHECK: The SlotHashes sysvar is a known account, and we check the address.
     #[account(address = sysvar::slot_hashes::ID)]
     pub slot_hashes: UncheckedAccount<'info>,
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn set_seed(ctx: Context<SetSeed>) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
 
-    // Check if funding period has ended
-    let current_time = Clock::get()?.unix_timestamp;
-    require!(
-        current_time >= launch_state.funding_period_end,
-        crate::errors::ErrorCode::FundingPeriodNotEnded
-    );
-    require!(
-        launch_state.total_deposited >= launch_state.min_raise_lamports,
-        crate::errors::ErrorCode::MinRaiseNotMet
-    );
+    let total_deposited =
+        checked_mul!(launch_state.active_tickets(), launch_preset.tau_lamports)?;
 
-    require!(launch_state.vrf_seed.is_none(), crate::errors::ErrorCode::SeedAlreadySet);
+    if total_deposited < launch_preset.min_raise_lamports {
+        launch_state.set_cancelled();
 
-    // Get the most recent blockhash from the SlotHashes sysvar
+        emit!(Cancelled {
+            launch: launch_state.key(),
+            total_deposited,
+            min_raise: launch_preset.min_raise_lamports,
+        });
+
+        return Ok(());
+    }
+
     let slot_hashes = &ctx.accounts.slot_hashes;
     let data = slot_hashes.try_borrow_data()?;
 
-    // The first 8 bytes are the number of hashes, then it's a list of (slot, hash)
-    // We take the most recent one.
     let num_hashes = u64::from_le_bytes(
-        data[0..8].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?,
+        data.get(0..8)
+            .ok_or(EngineErrorCode::InvalidSlotHashesData)?
+            .try_into()
+            .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?,
     );
-    require!(num_hashes > 0, crate::errors::ErrorCode::NoRecentBlockhashes);
+    require!(num_hashes > 0, EngineErrorCode::NoRecentBlockhashes);
 
-    let num_hashes_u64 = num_hashes;
-    let one = 1_u64;
-    let forty = 40_u64;
+    const ONE: u64 = 1;
+    const FORTY: u64 = 40;
 
     let num_hashes_minus_1 =
-        num_hashes_u64.checked_sub(one).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
-    let offset = num_hashes_minus_1
-        .checked_mul(forty)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?;
+        num_hashes.checked_sub(ONE).ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-    // Position of the last hash: 8 bytes for num_hashes + (num_hashes - 1) * 40 bytes per entry
+    let offset = checked_mul!(num_hashes_minus_1, FORTY)?;
+
     let last_hash_pos = 8u64
         .checked_add(offset)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?
         .checked_add(8)
-        .ok_or(crate::errors::ErrorCode::ArithmeticOverflow)?; // 8 for slot
+        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     let start = last_hash_pos as usize;
-    let end =
-        last_hash_pos.checked_add(32).ok_or(crate::errors::ErrorCode::ArithmeticOverflow)? as usize;
+    let end = checked_add!(last_hash_pos, 32)? as usize;
 
-    let seed: [u8; 32] =
-        data[start..end].try_into().map_err(|_| crate::errors::ErrorCode::InvalidSlotHashesData)?;
+    let slice = data
+        .get(start..end)
+        .ok_or(EngineErrorCode::InvalidSlotHashesData)?;
 
-    launch_state.vrf_seed = Some(seed);
+    let seed: [u8; 32] = slice
+        .try_into()
+        .map_err(|_| EngineErrorCode::InvalidSlotHashesData)?;
 
-    // Hash the seed for security (don't expose raw seed)
+    let funding_started_at = launch_state
+        .funding_started_at()
+        .ok_or(EngineErrorCode::InvalidState)?;
+    let funding_ended_at = checked_add!(funding_started_at, launch_preset.funding_duration_seconds)?;
+
+    let launch_key = launch_state.key();
+    launch_state.set_seeded(seed, funding_ended_at);
+
     let seed_hash = keccak::hash(&seed);
 
-    emit!(SeedSet {
-        launch: ctx.accounts.launch_state.key(),
+    emit!(Seeded {
+        launch: launch_key,
         seed_hash: seed_hash.0,
     });
 

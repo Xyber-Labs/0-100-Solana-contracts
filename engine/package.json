@@ -3,12 +3,9 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "build": "anchor build -- --features test,anchor-test,devnet && cp target/types/engine.ts target/idl/engine.json ts-sdk/idl/ && cd ts-sdk && yarn install -f && yarn build",
+    "build": "anchor build -- --features devnet && cp target/types/* target/idl/* ts-sdk/idl/ && cd ts-sdk/ && yarn install -f && yarn build",
     "dump:raydium": "bash tests/dump-raydium.sh",
-    "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts",
-    "test:litesvm:basic": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm|Full flow' --invert",
-    "test:litesvm:raydium": "yarn dump:raydium && ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'raydium clmm'",
-    "test:litesvm:full": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts --grep 'Full flow'"
+    "test:litesvm": "ts-mocha -p ./tsconfig.json -t 1000000 tests/litesvm.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
@@ -22,7 +19,7 @@
     "bs58": "^6.0.0",
     "commander": "^14.0.1",
     "decimal.js": "^10.6.0",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.6.13"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

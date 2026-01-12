@@ -48,7 +48,7 @@ pub struct Claim<'info> {
     pub nonce: Box<Account<'info, Nonce>>,
 
     #[account(
-        constraint = mint.key() == launch_state.base_mint.unwrap()
+        constraint = launch_state.base_mint() == Some(mint.key())
             || mint.key() == engine::constants::WSOL_MINT @ ErrorCode::InvalidTokenMint
     )]
     pub mint: Box<Account<'info, Mint>>,

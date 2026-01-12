@@ -3,16 +3,21 @@ use anchor_spl::token::{Mint, Token};
 use raydium_amm_v3::states::AmmConfig;
 
 use crate::{
+    checked_mul,
     constants::AMM_CONFIG_INDEX,
     errors::ErrorCode,
     LaunchState,
-    RAYDIUM_CLMM_PROGRAM_ID, utils::clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange},
+    RAYDIUM_CLMM_PROGRAM_ID, state::LaunchPreset,
+    utils::clmm::{ClmmOrder, get_liquidity_range_impl, LiquidityRange},
 };
 
 #[derive(Accounts)]
 pub struct GetLiquidityRange<'info> {
     #[account(constraint = launch_state.to_account_info().owner == &crate::ID @ ErrorCode::InvalidAuthority)]
     pub launch_state: Box<Account<'info, LaunchState>>,
+
+    #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK:
     pub base_mint: Account<'info, Mint>,
@@ -36,9 +41,14 @@ pub struct GetLiquidityRange<'info> {
 }
 
 pub fn get_liquidity_range(ctx: Context<GetLiquidityRange>) -> Result<LiquidityRange> {
+    let launch_state = &ctx.accounts.launch_state;
+
+    let total_deposited = checked_mul!(launch_state.active_tickets(), ctx.accounts.launch_preset.tau_lamports)?;
+
     let tick_spacing = ctx.accounts.raydium_amm_config.tick_spacing;
     let order = ClmmOrder::from_inputs(
-        &ctx.accounts.launch_state,
+        &ctx.accounts.launch_preset,
+        total_deposited,
         &ctx.accounts.quote_mint,
         &ctx.accounts.base_mint,
         &ctx.accounts.raydium_quote_vault,

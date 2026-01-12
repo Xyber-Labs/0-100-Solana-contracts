@@ -1,52 +1,59 @@
-use crate::utils::launch_core::{init_launch_core, InitLaunchParams};
-use crate::errors::ErrorCode as EngineErrorCode;
-use crate::{
-    constants::SEED_ROOT,
-    state::{CreatorGrant, EngineConfig, LaunchState, ProjectCounter, TokenMetadataConfig},
+use anchor_lang::{
+    prelude::*,
+    solana_program::sysvar::{clock::Clock, Sysvar},
 };
-use anchor_lang::{prelude::*, solana_program::sysvar::Sysvar};
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{self, Token, TokenAccount};
+
+use crate::{
+    checked_add,
+    constants::SEED_ROOT,
+    errors::ErrorCode as EngineErrorCode,
+    MYRIAD,
+    state::{
+        Contribution, EngineConfig, LaunchPreset, LaunchState, ProjectCounter, TokenMetadataConfig,
+    },
+};
+
+#[event]
+pub struct Initialized {
+    pub launch: Pubkey,
+    pub project_id: u64,
+    pub creator: Pubkey,
+    pub preset_id: u8,
+    pub funding_start: i64,
+    pub third_party: Option<Pubkey>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct TokenMetadataInput {
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub is_mutable: bool,
+    pub seller_fee_basis_points: u16,
+}
 
 #[derive(Accounts)]
-#[instruction(params: InitLaunchParams, project_id: u64)]
+#[instruction(preset_id: u8, nonce: u64)]
 pub struct InitLaunch<'info> {
     #[account(mut)]
     pub creator: Signer<'info>,
-
-    /// Global project counter
     #[account(
-        init_if_needed,
-        payer = creator,
-        space = 8 + ProjectCounter::INIT_SPACE,
-        seeds = [SEED_ROOT, b"project_counter"],
-        bump
+        mut, seeds = [SEED_ROOT, b"project_counter"], bump,
+        constraint = nonce == project_counter.value @ EngineErrorCode::Unauthorized
     )]
-    pub project_counter: Account<'info, ProjectCounter>,
-
+    pub project_counter: Box<Account<'info, ProjectCounter>>,
     #[account(
         init,
         payer = creator,
         space = 8 + LaunchState::INIT_SPACE,
-        seeds = [SEED_ROOT, b"launch", &project_id.to_le_bytes()],
+        seeds = [SEED_ROOT, b"launch", &nonce.to_le_bytes()],
         bump
     )]
-    pub launch_state: Account<'info, LaunchState>,
-
-    // base_mint removed from init; it will be created and recorded later during pool/mint setup
-    /// CHECK: Escrow authority PDA without data for SOL storage
+    pub launch_state: Box<Account<'info, LaunchState>>,
+    /// CHECK: PDA for SOL escrow
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
-
-    /// Creator grant account (PDA off launch_state)
-    #[account(
-        init_if_needed,
-        payer = creator,
-        space = 8 + CreatorGrant::INIT_SPACE,
-        seeds = [SEED_ROOT, b"creator", launch_state.key().as_ref()],
-        bump
-    )]
-    pub creator_grant: Account<'info, CreatorGrant>,
-
     #[account(
         init,
         payer = creator,
@@ -54,54 +61,120 @@ pub struct InitLaunch<'info> {
         seeds = [SEED_ROOT, b"token_metadata", launch_state.key().as_ref()],
         bump
     )]
-    pub token_metadata_config: Account<'info, TokenMetadataConfig>,
-
+    pub token_metadata_config: Box<Account<'info, TokenMetadataConfig>>,
+    #[account(seeds = [SEED_ROOT, b"config"], bump)]
+    pub engine_config: Box<Account<'info, EngineConfig>>,
     #[account(
-        seeds = [SEED_ROOT, b"config"],
+        mut, token::mint = engine_config.xyber_mint, token::authority = creator,
+        constraint = creator_xyber_ata.amount >= launch_preset.creation_fee @ EngineErrorCode::InsufficientFeeBalance
+    )]
+    pub creator_xyber_ata: Box<Account<'info, TokenAccount>>,
+    #[account(mut, token::mint = engine_config.xyber_mint, token::authority = engine_config.treasury)]
+    pub treasury_xyber_ata: Box<Account<'info, TokenAccount>>,
+    #[account(
+        seeds = [SEED_ROOT, b"preset", &[preset_id]],
+        bump,
+        constraint = launch_preset.is_enabled @ EngineErrorCode::PresetDisabled
+    )]
+    pub launch_preset: Box<Account<'info, LaunchPreset>>,
+    /// CHECK: Raw winners bitmap, initialized as zero-sized, reallocated on deposit
+    #[account(
+        init,
+        payer = creator,
+        space = 0,
+        seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()],
         bump
     )]
-    pub engine_config: Account<'info, EngineConfig>,
-
-    #[account(mut)]
-    pub creator_xyber_ata: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub treasury_xyber_ata: Account<'info, TokenAccount>,
-
+    pub winners_bitmap: UncheckedAccount<'info>,
+    /// CHECK: Raw inactive bitmap, initialized as zero-sized, reallocated on deposit
+    #[account(
+        init,
+        payer = creator,
+        space = 0,
+        seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()],
+        bump
+    )]
+    pub inactive_bitmap: UncheckedAccount<'info>,
+    #[account(
+        init,
+        payer = creator,
+        space = 8 + Contribution::INIT_SPACE,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), creator.key().as_ref()],
+        bump
+    )]
+    pub creator_contribution: Box<Account<'info, Contribution>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
 pub fn init_launch(
     ctx: Context<InitLaunch>,
-    params: InitLaunchParams,
-    project_id: u64,
+    _preset_id: u8,
+    nonce: u64,
+    funding_start_timestamp: i64,
+    meta: TokenMetadataInput,
 ) -> Result<()> {
-    // Only admins can call direct init_launch in non-test builds
-    if cfg!(not(feature = "test")) {
-        let is_admin = ctx
-            .accounts
-            .engine_config
-            .admins
-            .iter()
-            .any(|k| *k == ctx.accounts.creator.key());
-        require!(is_admin, EngineErrorCode::Unauthorized);
+    let p = &ctx.accounts.launch_preset;
+    let creator = &ctx.accounts.creator;
+
+    validate_meta(&meta)?;
+
+    let fee = p.creation_fee;
+    if fee > 0 {
+        let creator_xyber_ata = &ctx.accounts.creator_xyber_ata;
+        let treasury_xyber_ata = &ctx.accounts.treasury_xyber_ata;
+
+        let cpi_accounts = token::Transfer {
+            from: creator_xyber_ata.to_account_info(),
+            to: treasury_xyber_ata.to_account_info(),
+            authority: creator.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
+        token::transfer(cpi_ctx, fee)?;
     }
-    init_launch_core(
-        &ctx.accounts.creator,
-        &mut ctx.accounts.project_counter,
-        &mut ctx.accounts.launch_state,
-        &ctx.accounts.escrow_authority,
-        &mut ctx.accounts.creator_grant,
-        &mut ctx.accounts.token_metadata_config,
-        &ctx.accounts.engine_config,
-        &ctx.accounts.creator_xyber_ata,
-        &ctx.accounts.treasury_xyber_ata,
-        &ctx.accounts.system_program,
-        &ctx.accounts.token_program,
-        params,
-        project_id,
-    )
+
+    let counter = &mut ctx.accounts.project_counter;
+
+    counter.value = checked_add!(counter.value, 1)?;
+
+    let now = Clock::get()?.unix_timestamp;
+    let start = if funding_start_timestamp <= now { now } else { funding_start_timestamp };
+
+    let state = &mut ctx.accounts.launch_state;
+    state.project_id = nonce;
+    state.creator = creator.key();
+    state.preset = ctx.accounts.launch_preset.key();
+    state.created_at = now;
+    state.set_funding_started_at(start);
+
+    emit!(Initialized {
+        launch: state.key(),
+        project_id: nonce,
+        creator: creator.key(),
+        preset_id: p.id,
+        funding_start: start,
+        third_party: get_third_party_signer(ctx.remaining_accounts),
+    });
+
+    let token_meta = &mut ctx.accounts.token_metadata_config;
+    token_meta.launch = state.key();
+    token_meta.name = meta.name;
+    token_meta.symbol = meta.symbol;
+    token_meta.uri = meta.uri;
+    token_meta.is_mutable = meta.is_mutable;
+    token_meta.seller_fee_basis_points = meta.seller_fee_basis_points;
+
+    Ok(())
 }
 
-#[cfg(test)]
-mod tests {}
+fn validate_meta(meta: &TokenMetadataInput) -> Result<()> {
+    require!(meta.seller_fee_basis_points <= MYRIAD as u16, EngineErrorCode::InvalidParams);
+    require!(meta.name.len() <= 32, EngineErrorCode::InvalidParams);
+    require!(meta.symbol.len() <= 10, EngineErrorCode::InvalidParams);
+    require!(meta.uri.len() <= 200, EngineErrorCode::InvalidParams);
+    Ok(())
+}
+
+fn get_third_party_signer(remaining_accounts: &[AccountInfo]) -> Option<Pubkey> {
+    remaining_accounts.first().and_then(|acc| if acc.is_signer { Some(*acc.key) } else { None })
+}

@@ -1,102 +1,122 @@
+use anchor_lang::{prelude::*, solana_program};
+
 use crate::{
+    checked_add,
     constants::SEED_ROOT,
     errors::ErrorCode as EngineErrorCode,
-    events::Withdrawn,
-    state::{LaunchState, RosterShard, UserContribution},
+    state::{Contribution, LaunchPreset, LaunchState},
+    utils::lottery::LotteryRaw,
 };
-use anchor_lang::{prelude::*, solana_program::sysvar::clock::Clock};
+
+#[event]
+pub struct Withdrawn {
+    pub launch: Pubkey,
+    pub contributor: Pubkey,
+    pub amount: u64,
+}
 
 #[derive(Accounts)]
+#[instruction(amount: u64)]
 pub struct Withdraw<'info> {
     #[account(mut)]
-    pub user: Signer<'info>,
-    #[account(mut)]
+    pub contributor: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [SEED_ROOT, b"contributor", launch_state.key().as_ref(), contributor.key().as_ref()],
+        bump,
+        constraint = contribution.withdraw_count < launch_preset.withdrawal_limit @ EngineErrorCode::LimitExceeded
+    )]
+    pub contribution: Account<'info, Contribution>,
+
+    #[account(
+        mut,
+        constraint = launch_state.is_funding_active(launch_preset.funding_duration_seconds, clock.unix_timestamp) @ EngineErrorCode::FundingInactive
+    )]
     pub launch_state: Account<'info, LaunchState>,
-    #[account(mut, seeds = [SEED_ROOT, b"user", launch_state.key().as_ref(), user.key().as_ref()], bump)]
-    pub user_contribution: Account<'info, UserContribution>,
-    
-    #[account(mut, constraint = roster_shard.launch == launch_state.key())]
-    pub roster_shard: Account<'info, RosterShard>,
+
+    #[account(address = launch_state.preset @ EngineErrorCode::MalformedPreset)]
+    pub launch_preset: Account<'info, LaunchPreset>,
+
+    /// CHECK: Raw winners bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    pub winners_bitmap: UncheckedAccount<'info>,
+
+    /// CHECK: Raw inactive bitmap, validated via seeds
+    #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
+    pub inactive_bitmap: UncheckedAccount<'info>,
+
     /// CHECK: Escrow authority PDA without data for SOL storage
     #[account(mut, seeds = [SEED_ROOT, b"escrow_authority", launch_state.key().as_ref()], bump)]
     pub escrow_authority: UncheckedAccount<'info>,
 
-    /// CHECK: This is the launch account referenced by the roster
-    #[account(address = launch_state.key())]
-    pub launch: UncheckedAccount<'info>,
-
+    pub clock: Sysvar<'info, Clock>,
     pub system_program: Program<'info, System>,
 }
 
 pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
     let launch_state = &mut ctx.accounts.launch_state;
+    let launch_preset = &ctx.accounts.launch_preset;
+    let contribution = &mut ctx.accounts.contribution;
 
-    let current_time = Clock::get()?.unix_timestamp;
-    require!(current_time >= launch_state.funding_period_start, EngineErrorCode::FundingPeriodNotStarted);
-    require!(current_time < launch_state.funding_period_end, EngineErrorCode::FundingPeriodEnded);
-    // Creator must use privileged creator_withdraw, not user withdraw
-    require!(ctx.accounts.user.key() != launch_state.creator, EngineErrorCode::Unauthorized);
-    let user = &mut ctx.accounts.user_contribution;
-    require!(user.deposited >= amount, EngineErrorCode::InsufficientDeposit);
+    require!(amount > 0 && amount % launch_preset.tau_lamports == 0, EngineErrorCode::BadAmount);
+    let tickets_to_remove = amount / launch_preset.tau_lamports;
+
+    require!(
+        contribution.total_tickets()? >= tickets_to_remove,
+        EngineErrorCode::InsufficientDeposit
+    );
+    let removed_ranges = contribution.remove_tickets(tickets_to_remove);
+
+    {
+        let winners_info = ctx.accounts.winners_bitmap.to_account_info();
+        let inactive_info = ctx.accounts.inactive_bitmap.to_account_info();
+        let mut winners_data = winners_info.try_borrow_mut_data()?;
+        let mut inactive_data = inactive_info.try_borrow_mut_data()?;
+
+        let mut lottery =
+            LotteryRaw::new(&mut **launch_state, &mut winners_data[..], &mut inactive_data[..]);
+
+        let added_inactive: u64 = removed_ranges.iter().map(|r| r.count()).sum();
+        lottery.add_inactive(added_inactive);
+
+        for range in &removed_ranges {
+            lottery.clear_range(range);
+            for i in range.start..range.end {
+                lottery.set_inactive_bit(i);
+            }
+        }
+    }
+
+    contribution.withdraw_count = checked_add!(contribution.withdraw_count, 1)?;
 
     let launch_key = launch_state.key();
-    let escrow_authority_seeds = &[
+    let signer_seeds: &[&[u8]] = &[
         SEED_ROOT,
         b"escrow_authority",
         launch_key.as_ref(),
         &[ctx.bumps.escrow_authority],
     ];
-    let signers = &[&escrow_authority_seeds[..]];
 
-    anchor_lang::system_program::transfer(
-        CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            anchor_lang::system_program::Transfer {
-                from: ctx.accounts.escrow_authority.to_account_info(),
-                to: ctx.accounts.user.to_account_info(),
-            },
-            signers,
-        ),
+    let transfer_ix = solana_program::system_instruction::transfer(
+        &ctx.accounts.escrow_authority.key(),
+        &ctx.accounts.contributor.key(),
         amount,
+    );
+    solana_program::program::invoke_signed(
+        &transfer_ix,
+        &[
+            ctx.accounts.escrow_authority.to_account_info(),
+            ctx.accounts.contributor.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+        &[signer_seeds],
     )?;
-
-    // recompute tickets
-    let old_tickets = user.ticket_count;
-    user.deposited =
-        user.deposited.checked_sub(amount).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    let new_tickets = (user
-        .deposited
-        .checked_div(launch_state.tau_lamports)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?) as u32;
-    let lost = old_tickets.checked_sub(new_tickets).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    user.ticket_count = new_tickets;
-
-    // Sharded roster decrement
-    let shard = &mut ctx.accounts.roster_shard;
-    require!(user.shard_id == shard.shard_id, EngineErrorCode::Unauthorized);
-    let u = user.idx_in_shard as usize;
-    if shard.counts.len() <= u {
-        shard.counts.resize(u + 1, 0);
-    }
-    shard.counts[u] =
-        shard.counts[u].checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    shard.prefix.clear();
-    shard.total_in_shard = 0; // prevent stale reads pre-finalization
-    launch_state.total_tickets =
-        launch_state.total_tickets.checked_sub(lost).ok_or(EngineErrorCode::ArithmeticOverflow)?;
-    launch_state.total_deposited = launch_state
-        .total_deposited
-        .checked_sub(amount)
-        .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
     emit!(Withdrawn {
         launch: launch_state.key(),
-        user: ctx.accounts.user.key(),
-        amount,
-        tickets_before: old_tickets,
-        tickets_after: new_tickets,
-        total_deposited: launch_state.total_deposited,
-        total_tickets: launch_state.total_tickets,
+        contributor: ctx.accounts.contributor.key(),
+        amount
     });
 
     Ok(())

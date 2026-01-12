@@ -11,23 +11,27 @@ export function loadKeypair(path: string): anchor.web3.Keypair {
 
 export function parsePresetParams(p: any) {
   return {
+    id: Number(p.id),
+    isEnabled: Boolean(p.isEnabled),
     hardCapLamports: new BN(String(p.hardCapLamports)),
     minRaiseLamports: new BN(String(p.minRaiseLamports)),
     perWalletCap: new BN(String(p.perWalletCap)),
     tauLamports: new BN(String(p.tauLamports)),
     baseTotalAllocation: new BN(String(p.baseTotalAllocation)),
     baseSaleBasisPoints: new BN(String(p.baseSaleBasisPoints)),
-    teamAllocationBasisPoints: p.teamAllocationBasisPoints !== undefined ? Number(p.teamAllocationBasisPoints) : 1000,
-    fundingDurationSeconds: p.fundingDurationSeconds !== undefined ? Number(p.fundingDurationSeconds) : 0,
-    unlockTimeSec: p.unlockTimeSec !== undefined ? Number(p.unlockTimeSec) : 0,
-    rosterShardCap: Number(p.rosterShardCap),
-    rosterShardsTotal: Number(p.rosterShardsTotal),
-    creatorInitialDepositLamports: new BN(String(p.creatorInitialDepositLamports ?? "0")),
-    creatorDailyLamportsLimit: new BN(String(p.creatorDailyLamportsLimit ?? "0")),
-    creatorClaimLockPeriodSec: new BN(String(p.creatorClaimLockPeriodSec)),
-    creatorMaxDepositLamports: new BN(String(p.creatorMaxDepositLamports)),
-    poolCreationGracePeriodSec: p.poolCreationGracePeriodSec !== undefined ? Number(p.poolCreationGracePeriodSec) : 0,
-    teamVestingDurationSec: p.teamVestingDurationSec !== undefined ? Number(p.teamVestingDurationSec) : 365 * 24 * 60 * 60,
+    teamAllocationBasisPoints: Number(p.teamAllocationBasisPoints),
+    fundingDurationSeconds: Number(p.fundingDurationSeconds),
+    unlockTimeSec: Number(p.unlockTimeSec),
+    creatorPeriodUnlock: new BN(String(p.creatorPeriodUnlock)),
+    creatorPeriodSec: Number(p.creatorPeriodSec),
+    creatorMaxDeposit: new BN(String(p.creatorMaxDeposit)),
+    poolCreationGracePeriodSec: Number(p.poolCreationGracePeriodSec),
+    teamDurationSec: Number(p.teamDurationSec),
+    teamPeriodSec: Number(p.teamPeriodSec),
+    contributorDurationSec: Number(p.contributorDurationSec ?? 1),
+    contributorPeriodSec: Number(p.contributorPeriodSec ?? 1),
+    withdrawalLimit: Number(p.withdrawalLimit),
+    creationFee: new BN(String(p.creationFee)),
   };
 }
 
@@ -88,16 +92,18 @@ export function injectSlotHashesForRange(
   client: any,
   rangeStart: bigint,
   rangeEnd: bigint,
-  numHashes = 512
+  numHashes = 512,
+  randomSeed?: bigint
 ) {
   const sysvar = new anchor.web3.PublicKey("SysvarS1otHashes111111111111111111111111111");
   const currentClock = client.getClock();
   const data = Buffer.alloc(8 + numHashes * 40);
   data.writeBigUInt64LE(BigInt(numHashes), 0);
+  const xorMask = randomSeed ?? BigInt(0);
   for (let i = 0; i < numHashes; i++) {
     const offset = 8 + i * 40;
     data.writeBigUInt64LE(currentClock.slot + BigInt(i + 1), offset);
-    const h = i === numHashes - 1 ? rangeStart : rangeEnd;
+    const h = i === numHashes - 1 ? rangeStart ^ xorMask : rangeEnd ^ xorMask;
     toUint256BE(h).copy(data, offset + 8);
   }
   client.setAccount(sysvar, {

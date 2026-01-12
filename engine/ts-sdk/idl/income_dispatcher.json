@@ -1665,7 +1665,7 @@
       ],
       "accounts": [
         {
-          "name": "admin",
+          "name": "multisig",
           "writable": true,
           "signer": true
         },
@@ -1716,6 +1716,10 @@
         }
       ],
       "args": [
+        {
+          "name": "new_multisig",
+          "type": "pubkey"
+        },
         {
           "name": "backend",
           "type": "pubkey"
@@ -1862,46 +1866,41 @@
     },
     {
       "code": 6004,
-      "name": "RecipientNotFound",
-      "msg": "Recipient not found in distribution"
-    },
-    {
-      "code": 6005,
       "name": "InvalidPoolState",
       "msg": "Invalid pool state account"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "InvalidTokenMint",
       "msg": "Invalid token mint"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "InvalidNonce",
       "msg": "Invalid nonce"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "InvalidCalculator",
       "msg": "Invalid calculator"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "NotAllowed",
       "msg": "Not allowed"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "SerializationError",
       "msg": "Serialization error"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "NothingToClaim",
       "msg": "Nothing to claim"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "InvalidParameter",
       "msg": "Invalid parameter"
     }
@@ -1961,10 +1960,8 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "admin",
-            "type": {
-              "option": "pubkey"
-            }
+            "name": "multisig",
+            "type": "pubkey"
           },
           {
             "name": "backend",
@@ -2027,25 +2024,12 @@
             "type": "pubkey"
           },
           {
-            "name": "creation_fee",
-            "type": "u64"
-          },
-          {
             "name": "xyber_mint",
             "type": "pubkey"
           },
           {
-            "name": "admins",
-            "type": {
-              "array": [
-                "pubkey",
-                3
-              ]
-            }
-          },
-          {
-            "name": "threshold",
-            "type": "u8"
+            "name": "multisig",
+            "type": "pubkey"
           }
         ]
       }
@@ -2101,15 +2085,71 @@
       }
     },
     {
+      "name": "LaunchPhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Funding",
+            "fields": [
+              {
+                "name": "started_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Seeded",
+            "fields": [
+              {
+                "name": "seed",
+                "type": {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                }
+              },
+              {
+                "name": "funding_ended_at",
+                "type": "i64"
+              }
+            ]
+          },
+          {
+            "name": "Finalized",
+            "fields": [
+              {
+                "name": "tokens_per_ticket",
+                "type": "u64"
+              },
+              {
+                "name": "claims_opened_at",
+                "type": "i64"
+              },
+              {
+                "name": "pool",
+                "type": {
+                  "defined": {
+                    "name": "PoolStatus"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
       "name": "LaunchState",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "created_at",
-            "docs": [
-              "Unix timestamp (seconds) when the launch was created"
-            ],
             "type": "i64"
           },
           {
@@ -2121,162 +2161,23 @@
             "type": "pubkey"
           },
           {
-            "name": "hard_cap_lamports",
+            "name": "preset",
+            "type": "pubkey"
+          },
+          {
+            "name": "bits_allocated",
             "type": "u64"
           },
           {
-            "name": "min_raise_lamports",
+            "name": "inactive_count",
             "type": "u64"
           },
           {
-            "name": "per_wallet_cap",
-            "type": "u64"
-          },
-          {
-            "name": "tau_lamports",
-            "type": "u64"
-          },
-          {
-            "name": "unlock_time_sec",
-            "type": "i64"
-          },
-          {
-            "name": "base_mint",
+            "name": "phase",
             "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "base_total_allocation",
-            "type": "u64"
-          },
-          {
-            "name": "base_sale_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_end",
-            "type": "i64"
-          },
-          {
-            "name": "total_deposited",
-            "type": "u64"
-          },
-          {
-            "name": "total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "k_capacity",
-            "type": "u32"
-          },
-          {
-            "name": "vrf_seed",
-            "type": {
-              "option": {
-                "array": [
-                  "u8",
-                  32
-                ]
+              "defined": {
+                "name": "LaunchPhase"
               }
-            }
-          },
-          {
-            "name": "selection_processed",
-            "type": "u32"
-          },
-          {
-            "name": "selection_finalized",
-            "type": "bool"
-          },
-          {
-            "name": "threshold_score",
-            "type": {
-              "option": "u128"
-            }
-          },
-          {
-            "name": "roster_shards",
-            "type": "u16"
-          },
-          {
-            "name": "roster_initialized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "roster_finalized_up_to",
-            "type": "i32"
-          },
-          {
-            "name": "public_total_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "roster_shard_cap",
-            "type": "u16"
-          },
-          {
-            "name": "roster_highest_used_shard",
-            "type": "u16"
-          },
-          {
-            "name": "tokens_per_ticket",
-            "type": {
-              "option": "u64"
-            }
-          },
-          {
-            "name": "creator_reserved_tickets",
-            "type": "u32"
-          },
-          {
-            "name": "creator_grant_present",
-            "type": "bool"
-          },
-          {
-            "name": "claims_opened_at",
-            "type": {
-              "option": "i64"
-            }
-          },
-          {
-            "name": "creator_claim_lock_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "creator_initial_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "creator_max_deposit",
-            "type": "u64"
-          },
-          {
-            "name": "funding_period_start",
-            "type": "i64"
-          },
-          {
-            "name": "pool_creation_grace_period_sec",
-            "type": "i64"
-          },
-          {
-            "name": "team_allocation_basis_points",
-            "type": "u64"
-          },
-          {
-            "name": "team_vesting_duration_sec",
-            "type": "i64"
-          },
-          {
-            "name": "raydium_pool_state",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "raydium_position_nft_mint",
-            "type": {
-              "option": "pubkey"
             }
           }
         ]
@@ -2290,6 +2191,47 @@
           {
             "name": "nonce",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NotCreated"
+          },
+          {
+            "name": "Created",
+            "fields": [
+              {
+                "name": "base_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "pool_state",
+                "type": "pubkey"
+              }
+            ]
+          },
+          {
+            "name": "LiquidityAdded",
+            "fields": [
+              {
+                "name": "base_mint",
+                "type": "pubkey"
+              },
+              {
+                "name": "pool_state",
+                "type": "pubkey"
+              },
+              {
+                "name": "position_nft_mint",
+                "type": "pubkey"
+              }
+            ]
           }
         ]
       }
