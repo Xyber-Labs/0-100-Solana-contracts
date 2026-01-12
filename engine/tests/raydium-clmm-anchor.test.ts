@@ -1147,7 +1147,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     );
 
     const xyberAmount = BigInt(1_000_000_000_000); // 1M XYBER (6 decimals)
-    const { mintTo } = await import("@solana/spl-token");
     await mintTo(
       provider.connection,
       multisigKeypair,
