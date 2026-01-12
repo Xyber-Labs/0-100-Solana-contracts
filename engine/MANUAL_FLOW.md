@@ -298,14 +298,14 @@ After claims are opened, participants can check their vesting status:
 ```bash
 # Check Sale bucket vesting for a buyer
 anchor run vesting --provider.cluster localnet -- info \
-  --project-id 1 \
+  --project-id 0 \
   --participant ./keys/buyer1.json
 ```
 
 ```bash
 # Check Team bucket vesting for creator
 anchor run vesting --provider.cluster localnet -- info \
-  --project-id 1 \
+  --project-id 0 \
   --participant ./keys/creator.json \
   --bucket 1
 ```
@@ -317,14 +317,14 @@ Participants can claim their vested tokens as they unlock:
 ```bash
 # Buyer claims from Sale bucket
 anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 1 \
+  --project-id 0 \
   --participant-keypair ./keys/buyer1.json
 ```
 
 ```bash
 # Creator claims from Team bucket
 anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 1 \
+  --project-id 0 \
   --participant-keypair ./keys/creator.json \
   --bucket 1
 ```
@@ -332,7 +332,7 @@ anchor run vesting --provider.cluster localnet -- claim \
 ```bash
 # Creator can also claim from Sale bucket (if participated)
 anchor run vesting --provider.cluster localnet -- claim \
-  --project-id 1 \
+  --project-id 0 \
   --participant-keypair ./keys/creator.json \
   --bucket 0
 ```
@@ -345,13 +345,13 @@ If the launch is cancelled (min raise not met), full refund is available.
 ```bash
 # Check refund info
 anchor run refund --provider.cluster localnet -- info \
-  --project-id 1 \
+  --project-id 0 \
   --participant ./keys/buyer1.json
 ```
 
 ```bash
 # Claim refunds for losing tickets or cancelled launches
 anchor run refund --provider.cluster localnet -- claim \
-  --project-id 1 \
+  --project-id 0 \
   --user-keypair ./keys/buyer1.json
 ```
