@@ -348,3 +348,10 @@ anchor run refund --provider.cluster localnet -- info \
   --project-id 1 \
   --participant ./keys/buyer1.json
 ```
+
+```bash
+# Claim refunds for losing tickets or cancelled launches
+anchor run refund --provider.cluster localnet -- claim \
+  --project-id 1 \
+  --user-keypair ./keys/buyer1.json
+```
