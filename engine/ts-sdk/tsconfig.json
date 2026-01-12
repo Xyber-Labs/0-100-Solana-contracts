@@ -16,7 +16,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "paths": {
-      "@xyber-labs/0-100-sdk": ["../ts-sdk/src/engine"]
+      "@xyber-labs/0-100-devnet": ["../ts-sdk/src/engine"]
     }
   },
   "include": [

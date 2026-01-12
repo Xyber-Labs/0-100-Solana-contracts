@@ -14,7 +14,7 @@ import Decimal from "decimal.js";
 
 import * as utils from "./utils";
 import { loadKeypair } from "./utils";
-import { EngineSDK, IncomeDispatcherSDK, Role } from "@xyber-labs/0-100-sdk";
+import { EngineSDK, IncomeDispatcherSDK, Role } from "@xyber-labs/0-100-devnet";
 
 describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   const provider = anchor.AnchorProvider.env();

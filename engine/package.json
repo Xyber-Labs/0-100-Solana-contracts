@@ -15,7 +15,7 @@
     "@metaplex-foundation/umi-web3js-adapters": "^1.0.0",
     "@raydium-io/raydium-sdk-v2": "^0.2.30-alpha",
     "@solana/spl-token": "^0.4.14",
-    "@xyber-labs/0-100-sdk": "file:./ts-sdk",
+    "@xyber-labs/0-100-devnet": "file:./ts-sdk",
     "bs58": "^6.0.0",
     "commander": "^14.0.1",
     "decimal.js": "^10.6.0",

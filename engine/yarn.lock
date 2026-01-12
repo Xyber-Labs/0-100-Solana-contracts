@@ -429,7 +429,7 @@
   resolved "https://registry.npmjs.org/@ungap/promise-all-settled/-/promise-all-settled-1.1.2.tgz"
   integrity sha512-sL/cEvJWAnClXw0wHk85/2L0G6Sj8UB0Ctc1TEMbKSsmpRosqhwj9gWgFRZSrBr2f9tiXISwNhCPmlfqUqyb9Q==
 
-"@xyber-labs/0-100-sdk@file:./ts-sdk":
+"@xyber-labs/0-100-devnet@file:./ts-sdk":
   version "0.1.15"
   dependencies:
     "@coral-xyz/anchor" "^0.31.1"

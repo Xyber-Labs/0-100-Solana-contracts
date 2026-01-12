@@ -1,5 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
-import { IncomeDispatcherSDK } from "@xyber-labs/0-100-sdk";
+import { IncomeDispatcherSDK } from "@xyber-labs/0-100-devnet";
 
 export function initializeDispatcherSdk() {
   const provider = anchor.AnchorProvider.env();

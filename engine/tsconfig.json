@@ -8,7 +8,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "paths": {
-      "@xyber-labs/0-100-sdk": ["./ts-sdk/src/index"]
+      "@xyber-labs/0-100-devnet": ["./ts-sdk/src/index"]
     }
   }
 }

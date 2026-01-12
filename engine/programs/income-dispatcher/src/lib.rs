@@ -16,8 +16,14 @@ declare_id!("xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z");
 #[cfg(not(feature = "devnet"))]
 declare_id!("xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6");
 
+#[cfg(feature = "devnet")]
+#[constant]
+pub const DISPATCHER_SEED_ROOT: &[u8] = b"devnet-1";
+
+#[cfg(not(feature = "devnet"))]
 #[constant]
 pub const DISPATCHER_SEED_ROOT: &[u8] = b"income-dispatcher";
+
 
 #[program]
 pub mod income_dispatcher {

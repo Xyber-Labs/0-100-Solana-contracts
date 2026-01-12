@@ -1,7 +1,13 @@
 use anchor_lang::prelude::*;
 
+#[cfg(feature = "devnet")]
+#[constant]
+pub const SEED_ROOT: &[u8] = b"devnet-1";
+
+#[cfg(not(feature = "devnet"))]
 #[constant]
 pub const SEED_ROOT: &[u8] = b"root-0-100-1";
+
 
 #[cfg(not(feature = "devnet"))]
 #[constant]
