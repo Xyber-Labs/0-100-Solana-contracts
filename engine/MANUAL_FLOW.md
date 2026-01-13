@@ -288,7 +288,7 @@ anchor run dispatcher-init --provider.cluster ${CLUSTER} -- \
   --backend $(solana address -k ${CLUSTER}/backend.json) \
   --platform-wallet $(solana address -k ${CLUSTER}/platform.json) \
   --community-wallet $(solana address -k ${CLUSTER}/backend.json) \
-  --signer-keypair ./${CLUSTER}/deployer.json \
+  --signer-keypair ${CLUSTER}/deployer.json \
   --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
@@ -299,7 +299,7 @@ anchor run dispatcher-init --provider.cluster ${CLUSTER} -- \
   --backend $(solana address -k ${CLUSTER}/backend.json) \
   --platform-wallet $(solana address -k ${CLUSTER}/platform.json) \
   --community-wallet $(solana address -k ${CLUSTER}/backend.json) \
-  --signer-keypair ./${CLUSTER}/multisig.json \
+  --signer-keypair ${CLUSTER}/multisig.json \
   --new-multisig $(solana address -k ${CLUSTER}/multisig.json)
 ```
 
@@ -311,14 +311,14 @@ After claims are opened, participants can check their vesting status:
 # Check Sale bucket vesting for a buyer
 anchor run vesting --provider.cluster ${CLUSTER} -- info \
   --project-id ${PROJECT_ID} \
-  --participant ./${CLUSTER}/buyer1.json
+  --participant ${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Check Team bucket vesting for creator
 anchor run vesting --provider.cluster ${CLUSTER} -- info \
   --project-id ${PROJECT_ID} \
-  --participant ./${CLUSTER}/creator.json \
+  --participant ${CLUSTER}/creator.json \
   --bucket 1
 ```
 
@@ -330,14 +330,14 @@ Participants can claim their vested tokens as they unlock:
 # Buyer claims from Sale bucket
 anchor run vesting --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
-  --participant-keypair ./${CLUSTER}/buyer1.json
+  --participant-keypair ${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Creator claims from Team bucket
 anchor run vesting --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
-  --participant-keypair ./${CLUSTER}/creator.json \
+  --participant-keypair ${CLUSTER}/creator.json \
   --bucket 1
 ```
 
@@ -345,7 +345,7 @@ anchor run vesting --provider.cluster ${CLUSTER} -- claim \
 # Creator can also claim from Sale bucket (if participated)
 anchor run vesting --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
-  --participant-keypair ./${CLUSTER}/creator.json \
+  --participant-keypair ${CLUSTER}/creator.json \
   --bucket 0
 ```
 
@@ -358,12 +358,12 @@ If the launch is cancelled (min raise not met), full refund is available.
 # Check refund info
 anchor run refund --provider.cluster ${CLUSTER} -- info \
   --project-id ${PROJECT_ID} \
-  --participant ./${CLUSTER}/buyer1.json
+  --participant ${CLUSTER}/buyer1.json
 ```
 
 ```bash
 # Claim refunds for losing tickets or cancelled launches
 anchor run refund --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
-  --user-keypair ./${CLUSTER}/buyer1.json
+  --user-keypair ${CLUSTER}/buyer1.json
 ```
