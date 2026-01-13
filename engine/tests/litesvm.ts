@@ -140,7 +140,7 @@ describe("engine litesvm", () => {
     sdk = EngineSDK.create(provider as any, program as any, adminKeypair);
 
     // Load deployer keypair (required for first init_engine_config)
-    const deployerKeypairPath = path.resolve(__dirname, "../keys/deployer.json");
+    const deployerKeypairPath = path.resolve(__dirname, "../localnet/deployer.json");
     const deployerSecret = JSON.parse(fs.readFileSync(deployerKeypairPath, "utf8"));
     deployerKeypair = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(deployerSecret));
 
