@@ -13,8 +13,14 @@ in `tests/raydium-clmm-anchor.test.ts`.
 ## Local Validator Setup
 
 ```bash
-export CLUSTER=devnet
-export PROJECT_ID=1
+  export CLUSTER=localnet
+  export PROJECT_ID=0
+
+  if [[ "$CLUSTER" == "localnet" ]]; then
+      export SCLUSTER=localhost
+  else
+      export SCLUSTER=$CLUSTER
+  fi
 ```
 
 ### 0. Download Required Programs
@@ -54,10 +60,10 @@ Verify that Raydium CLMM program and AmmConfig are loaded:
 
 ```bash
 # Raydium CLMM Program ID (devnet)
-solana account DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH --url localhost
+solana account DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH --url  ${SCLUSTER}
 
 # AmmConfig Account (devnet, index=2)
-solana account FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q --url localhost
+solana account FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q --url  ${SCLUSTER}
 ```
 
 Both should exist and be owned by the Raydium CLMM program.
@@ -74,16 +80,16 @@ anchor build -- --features devnet
 
 ```bash
 # Deploy Engine program
-anchor deploy --provider.cluster localnet --program-name engine --program-keypair keys/deploy-keypair.json
+anchor deploy --provider.cluster ${CLUSTER} --program-name engine --program-keypair ${CLUSTER}/engine.json
 sleep 5
-anchor idl init --provider.cluster localnet --filepath target/idl/engine.json $(solana address -k keys/deploy-keypair.json)
+anchor idl init --provider.cluster ${CLUSTER} --filepath target/idl/engine.json $(solana address -k ${CLUSTER}/engine.json)
 ```
 
 ```bash
 # Deploy Income Dispatcher program
-anchor deploy --provider.cluster localnet --program-name income_dispatcher --program-keypair keys/dispatcher.json
+anchor deploy --provider.cluster ${CLUSTER} --program-name income_dispatcher --program-keypair ${CLUSTER}/dispatcher.json
 sleep 2
-anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatcher.json $(solana address -k keys/dispatcher.json)
+anchor idl init --provider.cluster ${CLUSTER} --filepath target/idl/income_dispatcher.json $(solana address -k ${CLUSTER}/dispatcher.json)
 ```
 
 ### 2. Setup: Airdrop SOL to Wallets
@@ -91,21 +97,21 @@ anchor idl init --provider.cluster localnet --filepath target/idl/income_dispatc
 Before initializing the engine configuration, ensure all wallets have sufficient SOL:
 
 ```bash
-solana airdrop 100 $(solana address -k keys/multisig.json) --url localhost
-solana airdrop 100 $(solana address -k keys/deployer.json) --url localhost
-solana airdrop 100 $(solana address -k keys/platform.json) --url localhost
-solana airdrop 9000 $(solana address -k keys/backend.json) --url localhost
-solana airdrop 10000 $(solana address -k keys/creator.json) --url localhost
-solana airdrop 10000 $(solana address -k keys/buyer1.json) --url localhost
-solana airdrop 10000 $(solana address -k keys/buyer2.json) --url localhost
-solana airdrop 10000 $(solana address -k keys/buyer3.json) --url localhost
-solana airdrop 10000 $(solana address -k keys/buyer4.json) --url localhost
-solana airdrop 100 $(solana address -k keys/treasure.json) --url localhost
+solana airdrop 100 $(solana address -k ${CLUSTER}/multisig.json) --url ${SCLUSTER}
+solana airdrop 100 $(solana address -k ${CLUSTER}/deployer.json) --url ${SCLUSTER}
+solana airdrop 100 $(solana address -k ${CLUSTER}/platform.json) --url ${SCLUSTER}
+solana airdrop 9000 $(solana address -k ${CLUSTER}/backend.json) --url ${SCLUSTER}
+solana airdrop 10000 $(solana address -k ${CLUSTER}/creator.json) --url ${SCLUSTER}
+solana airdrop 10000 $(solana address -k ${CLUSTER}/buyer1.json) --url ${SCLUSTER}
+solana airdrop 10000 $(solana address -k ${CLUSTER}/buyer2.json) --url ${SCLUSTER}
+solana airdrop 10000 $(solana address -k ${CLUSTER}/buyer3.json) --url ${SCLUSTER}
+solana airdrop 10000 $(solana address -k ${CLUSTER}/buyer4.json) --url ${SCLUSTER}
+solana airdrop 100 $(solana address -k ${CLUSTER}/treasure.json) --url ${SCLUSTER}
 ```
 
 **Note:** Adjust amounts based on your testing needs. These amounts match the test suite.
 
-**Important:** The `keys/deployer.json` keypair is required for initializing the Income Dispatcher program.
+**Important:** The `${CLUSTER}/deployer.json` keypair is required for initializing the Income Dispatcher program.
 The deployer public key must match the `DEPLOYER` constant in the contract.
 
 ### 3. Create XYBER Token Mint
@@ -113,15 +119,13 @@ The deployer public key must match the `DEPLOYER` constant in the contract.
 Create XYBER token mint (if not exists):
 
 ```bash
-export XYBER_MINT=$(solana address -k keys/xyber-mint.json)
-export CREATOR=$(solana address -k keys/creator.json)
-export MULTISIG=$(solana address -k keys/multisig.json)
-
-
+export XYBER_MINT=$(solana address -k ${CLUSTER}/xyber-mint.json)
+export CREATOR=$(solana address -k ${CLUSTER}/creator.json)
+export MULTISIG=$(solana address -k ${CLUSTER}/multisig.json)
 
 # Create XYBER token mint
 spl-token create-token \
-  --url localhost \
+  --url ${SCLUSTER} \
   --fee-payer ${CLUSTER}/multisig.json \
   --mint-authority ${CLUSTER}/multisig.json \
   --decimals 6 \
@@ -130,18 +134,18 @@ spl-token create-token \
 # Create token account for creator
 spl-token create-account $XYBER_MINT \
   --owner $CREATOR \
-  --url ${CLUSTER} \
+  --url ${SCLUSTER} \
   --fee-payer ${CLUSTER}/creator.json
 
 # Create token account for treasury
 export TREASURY=$(solana address -k ${CLUSTER}/treasure.json)
 spl-token create-account $XYBER_MINT \
   --owner $TREASURY \
-  --url ${CLUSTER} \
+  --url ${SCLUSTER} \
   --fee-payer ${CLUSTER}/multisig.json
 
 # Mint tokens to creator
-spl-token mint --url ${CLUSTER} --recipient-owner $CREATOR --mint-authority ${CLUSTER}/multisig.json $XYBER_MINT 1000000000
+spl-token mint --url ${SCLUSTER} --recipient-owner $CREATOR --mint-authority ${CLUSTER}/multisig.json $XYBER_MINT 1000000000
 ```
 
 ### 4. Initialize Engine Configuration
@@ -177,8 +181,8 @@ To add more SOL later:
 solana transfer \
   $(solana find-program-derived-address DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7 string:root-0-100-1 string:realloc_funds) \
   5 \
-  --url localhost \
-  --fee-payer keys/multisig.json
+  --url ${SCLUSTER} \
+  --fee-payer ${CLUSTER}/multisig.json
 ```
 
 ### 6. Create Launch Preset
