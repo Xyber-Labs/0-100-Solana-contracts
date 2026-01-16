@@ -74,6 +74,18 @@ impl<C, W, I> LotteryRaw<C, W, I> {
         }
         data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
     }
+
+    /// Set all bits in the given range to the specified value (static method for direct bitmap manipulation)
+    pub fn set_range_raw(data: &mut [u8], range: &TicketRange, value: bool) {
+        for i in range.start..range.end {
+            Self::write_bitmap_bit(data, i, value);
+        }
+    }
+
+    /// Check if all bits in the bitmap are zero
+    pub fn is_bitmap_empty(data: &[u8]) -> bool {
+        data.iter().all(|b| *b == 0)
+    }
 }
 
 impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> {
@@ -173,15 +185,11 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
 
     pub(crate) fn set_range(&mut self, range: TicketRange, value: bool) {
         msg!("Range: {:?}", range);
-        for i in range.start..range.end {
-            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, value);
-        }
+        Self::set_range_raw(self.winners_bitmap.as_mut(), &range, value);
     }
 
     pub(crate) fn clear_range(&mut self, range: &TicketRange) {
-        for i in range.start..range.end {
-            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, false);
-        }
+        Self::set_range_raw(self.winners_bitmap.as_mut(), range, false);
     }
 }
 

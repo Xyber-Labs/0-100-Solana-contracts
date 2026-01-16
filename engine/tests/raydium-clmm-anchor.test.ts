@@ -462,6 +462,21 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log("   Base Vault:", baseVault.toString());
   });
 
+  it("Step 11a: closeBitmaps fails before claims", async () => {
+    console.log("=== Step 11a: closeBitmaps Fails Before Claims ===");
+
+    await utils.doAndCheckError(
+      sdk.closeBitmaps({
+        launch: launchPda,
+        rentRecipient: multisigKeypair.publicKey,
+        signers: [multisigKeypair],
+      }),
+      "ClaimsNotComplete"
+    );
+
+    console.log("✅ closeBitmaps correctly rejected (claims not complete)");
+  });
+
   it("Step 12: Add liquidity to CLMM pool", async () => {
     console.log("=== Step 12: Add Liquidity ===");
     const addClmmLiquidityTx = await sdk.addClmmLiquidityTx({
@@ -683,6 +698,57 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     assert.ok(saleDiff.lte(new BN(creatorTickets)), `Total sale claimed should equal creator's sale share (diff: ${saleDiff.toString()})`);
 
     console.log(`\n✅ Creator vesting verified - sale and team tokens vest correctly`);
+  });
+
+  it("Step 12c: closeBitmaps succeeds after all claims", async () => {
+    console.log("=== Step 12c: closeBitmaps After All Claims ===");
+
+    const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
+    const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(launchPda);
+
+    const winnersBitmapBefore = await provider.connection.getAccountInfo(winnersBitmapPda);
+    const inactiveBitmapBefore = await provider.connection.getAccountInfo(inactiveBitmapPda);
+
+    if (!winnersBitmapBefore) {
+      throw new Error("Winners bitmap account not found");
+    }
+    if (!inactiveBitmapBefore) {
+      throw new Error("Inactive bitmap account not found");
+    }
+
+    const winnersBitmapRentBefore = winnersBitmapBefore.lamports;
+    const inactiveBitmapRentBefore = inactiveBitmapBefore.lamports;
+
+    console.log(`Winners bitmap: ${winnersBitmapBefore.data.length} bytes, ${winnersBitmapRentBefore / 1e9} SOL rent`);
+    console.log(`Inactive bitmap: ${inactiveBitmapBefore.data.length} bytes, ${inactiveBitmapRentBefore / 1e9} SOL rent`);
+
+    const rentRecipient = multisigKeypair.publicKey;
+    const recipientBalanceBefore = await provider.connection.getBalance(rentRecipient);
+
+    const { signature, winnersBitmap, inactiveBitmap } = await sdk.closeBitmaps({
+      launch: launchPda,
+      rentRecipient,
+      signers: [multisigKeypair],
+    });
+
+    console.log("✅ closeBitmaps executed");
+    console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
+
+    // Verify bitmaps are closed
+    const winnersBitmapAfter = await provider.connection.getAccountInfo(winnersBitmapPda);
+    const inactiveBitmapAfter = await provider.connection.getAccountInfo(inactiveBitmapPda);
+
+    assert.equal(winnersBitmapAfter, null, "Winners bitmap should be closed");
+    assert.equal(inactiveBitmapAfter, null, "Inactive bitmap should be closed");
+
+    // Verify rent was returned
+    const recipientBalanceAfter = await provider.connection.getBalance(rentRecipient);
+    const rentReturned = recipientBalanceAfter - recipientBalanceBefore;
+
+    console.log(`Rent returned: ${rentReturned / 1e9} SOL`);
+    assert.ok(rentReturned > 0, "Rent should be returned to recipient");
+
+    console.log("✅ Bitmaps closed successfully, rent returned");
   });
 
   it("Step 13: Perform trading on Raydium CLMM pool", async () => {

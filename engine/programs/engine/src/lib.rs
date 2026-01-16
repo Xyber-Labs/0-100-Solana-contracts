@@ -109,6 +109,12 @@ pub mod engine {
     ) -> Result<()> {
         instructions::claim_clmm_fees(ctx)
     }
+
+    /// Close bitmap accounts after all claims are complete.
+    /// Returns rent to the specified recipient.
+    pub fn close_bitmaps(ctx: Context<CloseBitmaps>) -> Result<()> {
+        instructions::close_bitmaps(ctx)
+    }
 }
 
 const MYRIAD: u128 = 10000;

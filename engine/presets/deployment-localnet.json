@@ -4,7 +4,7 @@
   "hardCapLamports": 450000000000,
   "minRaiseLamports": 100000000000,
   "perWalletCap": 200000000000,
-  "tauLamports": 100000000,
+  "tauLamports": 50000000,
   "baseTotalAllocation": 1000000000000000000,
   "baseSaleBasisPoints": 4814,
   "teamAllocationBasisPoints": 1000,
@@ -16,8 +16,8 @@
   "poolCreationGracePeriodSec": 60,
   "teamDurationSec": 60,
   "teamPeriodSec": 10,
-  "contributorDurationSec": 60,
-  "contributorPeriodSec": 10,
+  "contributorDurationSec": 1,
+  "contributorPeriodSec": 1,
   "withdrawalLimit": 3,
   "creationFee": 100000000
 }

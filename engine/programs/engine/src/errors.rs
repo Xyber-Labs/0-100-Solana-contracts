@@ -70,4 +70,6 @@ pub enum ErrorCode {
     InvalidParams,
     #[msg("Invalid state")]
     InvalidState,
+    #[msg("Claims not complete - winner bits still set")]
+    ClaimsNotComplete,
 }

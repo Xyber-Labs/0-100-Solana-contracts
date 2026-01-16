@@ -335,6 +335,7 @@
         },
         {
           "name": "winners_bitmap",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -948,6 +949,130 @@
         },
         {
           "name": "vault_1_mint"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_bitmaps",
+      "docs": [
+        "Close bitmap accounts after all claims are complete.",
+        "Returns rent to the specified recipient."
+      ],
+      "discriminator": [
+        21,
+        224,
+        131,
+        32,
+        74,
+        161,
+        166,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "rent_recipient",
+          "writable": true
+        },
+        {
+          "name": "launch_state"
+        },
+        {
+          "name": "winners_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -3072,6 +3197,19 @@
   ],
   "events": [
     {
+      "name": "BitmapsClosed",
+      "discriminator": [
+        93,
+        118,
+        23,
+        241,
+        1,
+        61,
+        40,
+        90
+      ]
+    },
+    {
       "name": "Cancelled",
       "discriminator": [
         136,
@@ -3346,6 +3484,11 @@
       "code": 6033,
       "name": "InvalidState",
       "msg": "Invalid state"
+    },
+    {
+      "code": 6034,
+      "name": "ClaimsNotComplete",
+      "msg": "Claims not complete - winner bits still set"
     }
   ],
   "types": [
@@ -3419,6 +3562,26 @@
                 3
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BitmapsClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports_returned",
+            "type": "u64"
           }
         ]
       }

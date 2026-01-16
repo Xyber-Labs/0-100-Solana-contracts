@@ -33,7 +33,7 @@ pub struct Claim<'info> {
     pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
-    #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
     pub winners_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: Raw inactive bitmap, validated via seeds
@@ -86,7 +86,7 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
 
-    let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
+    let mut winners_data = ctx.accounts.winners_bitmap.try_borrow_mut_data()?;
     let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
     let lottery = LotteryRaw::new(&**launch_state, &winners_data[..], &inactive_data[..]);
@@ -131,6 +131,14 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
     );
     token::transfer(cpi_ctx, to_claim)?;
     tickets_claimed.value = available_to_claim;
+
+    // Clear winner bits when Sale allocation is fully claimed
+    if bucket == Bucket::Sale && available_to_claim == allocation {
+        for range in &contribution.ticket_ranges {
+            LotteryRaw::<(), (), ()>::set_range_raw(&mut winners_data, range, false);
+        }
+        tickets_claimed.value = 0;
+    }
 
     emit!(Claimed {
         launch: launch_state.key(),

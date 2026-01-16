@@ -51,6 +51,61 @@ program
         bucket,
       });
 
+      // Debug: fetch contribution and winners bitmap
+      if (bucket === 0) {
+        const [contributionPda] = sdk.getContributionPda(launchPda, participant);
+        const { data: contribution } = await sdk.fetchContribution(launchPda, participant);
+        const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
+        const winnersBitmapAccount = await sdk.program.provider.connection.getAccountInfo(winnersBitmapPda);
+
+        console.log("\n[DEBUG] Contribution ticket ranges:");
+        contribution.ticketRanges.forEach((range: any, i: number) => {
+          const start = range.start.toNumber();
+          const end = range.end.toNumber();
+          console.log(`  Range ${i}: [${start}, ${end}) = ${end - start} tickets`);
+
+          if (winnersBitmapAccount) {
+            const winnersData = winnersBitmapAccount.data;
+            let count = 0;
+            const firstBits = [];
+            const lastBits = [];
+
+            for (let j = start; j < end; j++) {
+              const byteIndex = Math.floor(j / 8);
+              const bitIndex = j % 8;
+              const bit = (winnersData[byteIndex] & (1 << bitIndex)) !== 0;
+              if (bit) count++;
+
+              if (j < start + 5) {
+                firstBits.push(`${j}:${bit ? 1 : 0}`);
+              }
+              if (j >= end - 5) {
+                lastBits.push(`${j}:${bit ? 1 : 0}`);
+              }
+            }
+
+            console.log(`    Winning bits: ${count}/${end - start}`);
+            console.log(`    First bits: [${firstBits.join(', ')}]`);
+            console.log(`    Last bits: [${lastBits.join(', ')}]`);
+
+            // Show bytes
+            const startByte = Math.floor(start / 8);
+            const endByte = Math.floor((end - 1) / 8);
+            const bytesHex = [];
+            for (let b = startByte; b <= Math.min(startByte + 3, endByte); b++) {
+              bytesHex.push(`${b}:0x${winnersData[b].toString(16).padStart(2, '0')}`);
+            }
+            if (endByte > startByte + 3) {
+              bytesHex.push('...');
+              for (let b = Math.max(endByte - 3, startByte + 4); b <= endByte; b++) {
+                bytesHex.push(`${b}:0x${winnersData[b].toString(16).padStart(2, '0')}`);
+              }
+            }
+            console.log(`    Bytes: [${bytesHex.join(', ')}]`);
+          }
+        });
+      }
+
       const claimsOpenedAt = phase.finalized.claimsOpenedAt.toNumber();
       const now = Math.floor(Date.now() / 1000);
       const elapsed = Math.max(0, now - claimsOpenedAt);
@@ -104,11 +159,17 @@ program
   .requiredOption("--project-id <number>", "Project ID")
   .requiredOption("--participant-keypair <path>", "Participant keypair path")
   .option("--bucket <number>", "Bucket (0 = Sale, 1 = Team)", "0")
+  .option("--compute-units <number>", "Compute units limit (max 1400000)", "500000")
   .action(async (opts) => {
     await runWithSdk(async ({ provider, sdk }) => {
       const projectId = new BN(opts.projectId);
       const bucket = parseInt(opts.bucket);
       const participantKeypair = loadKeypair(opts.participantKeypair);
+      const computeUnits = Number(opts.computeUnits);
+
+      if (!Number.isInteger(computeUnits) || computeUnits < 1 || computeUnits > 1_400_000) {
+        throw new Error("compute-units must be 1..1400000");
+      }
 
       const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
       const { data: launchState } = await sdk.fetchLaunch(launchPda);
@@ -121,6 +182,7 @@ program
       console.log("  Participant:", participantKeypair.publicKey.toBase58());
       console.log("  Bucket:", bucket === 0 ? "Sale" : "Team");
       console.log("  Is Creator:", participantKeypair.publicKey.equals(launchState.creator) ? "Yes" : "No");
+      console.log("  Compute Units:", computeUnits);
 
       if (!phase.finalized?.claimsOpenedAt) {
         console.log("\n❌ Claims not opened yet.");
@@ -149,6 +211,7 @@ program
         baseMint,
         bucket,
         participantKeypair,
+        computeUnits,
       });
 
       const vestingAfter = await sdk.getVestingConfig({
