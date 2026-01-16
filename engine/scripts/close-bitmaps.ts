@@ -1,4 +1,5 @@
 import { BN } from "@coral-xyz/anchor";
+import { PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 
 import { getExplorerUrl, loadKeypair, runWithSdk } from "./utils";
@@ -10,6 +11,7 @@ async function main() {
     .allowExcessArguments(false)
     .requiredOption("--project-id <number>", "Project ID")
     .requiredOption("--multisig-keypair <path>", "Multisig keypair file")
+    .option("--rent-recipient <pubkey>", "Rent recipient address (default: realloc_funds PDA)")
     .option("--info", "Display bitmap info without closing")
     .parse(process.argv);
 
@@ -21,12 +23,16 @@ async function main() {
     const [launchPda] = sdk.getLaunchPdaByProjectId(projectId);
     const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
     const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(launchPda);
+    const [reallocFunds] = sdk.getReallocFundsPda();
+
+    const rentRecipient = opts.rentRecipient ? new PublicKey(opts.rentRecipient) : reallocFunds;
 
     console.log("Close Bitmaps:");
     console.log("  Project ID:", projectId.toString());
     console.log("  Launch PDA:", launchPda.toBase58());
     console.log("  Winners Bitmap:", winnersBitmapPda.toBase58());
     console.log("  Inactive Bitmap:", inactiveBitmapPda.toBase58());
+    console.log("  Rent Recipient:", rentRecipient.toBase58());
 
     const { data: launchState } = await sdk.fetchLaunch(launchPda);
 
@@ -70,7 +76,8 @@ async function main() {
 
     const { signature } = await sdk.closeBitmaps({
       launch: launchPda,
-      rentRecipient: multisig.publicKey,
+      multisig: multisig.publicKey,
+      rentRecipient,
       signers: [multisig],
     });
 

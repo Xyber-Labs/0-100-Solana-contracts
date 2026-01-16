@@ -109,35 +109,48 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
             .map_err(|_| ErrorCode::ArithmeticOverflow)?;
 
     let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)?;
-    require!(to_claim > 0, ErrorCode::NothingToClaim);
 
-    let seeds: &[&[u8]] = &[
-        SEED_ROOT,
-        b"escrow_authority",
-        &launch_state.key().to_bytes(),
-        &[ctx.bumps.escrow_authority],
-    ];
-    let signer_seeds = &[seeds];
+    // Check if we should clear bits (Sale bucket with full vesting completed)
+    let should_clear_bits = bucket == Bucket::Sale && available_to_claim == allocation;
 
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.base_escrow_ata.to_account_info(),
-        to: ctx.accounts.participant_ata.to_account_info(),
-        authority: ctx.accounts.escrow_authority.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signer_seeds,
-    );
-    token::transfer(cpi_ctx, to_claim)?;
-    tickets_claimed.value = available_to_claim;
+    msg!("Claim debug: bucket={:?} allocation={} available={} to_claim={} periods={}/{} should_clear={}",
+        bucket, allocation, available_to_claim, to_claim, periods_passed, periods_count, should_clear_bits);
 
-    // Clear winner bits when Sale allocation is fully claimed
-    if bucket == Bucket::Sale && available_to_claim == allocation {
+    // Allow claim to succeed if there are bits to clear, even if to_claim == 0
+    // This handles the case where user claimed before full vesting, then calls claim again
+    require!(to_claim > 0 || should_clear_bits, ErrorCode::NothingToClaim);
+
+    // Only transfer if there are tokens to claim
+    if to_claim > 0 {
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"escrow_authority",
+            &launch_state.key().to_bytes(),
+            &[ctx.bumps.escrow_authority],
+        ];
+        let signer_seeds = &[seeds];
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.base_escrow_ata.to_account_info(),
+            to: ctx.accounts.participant_ata.to_account_info(),
+            authority: ctx.accounts.escrow_authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        token::transfer(cpi_ctx, to_claim)?;
+    }
+
+    // Update claimed amount and clear bits if needed
+    if should_clear_bits {
         for range in &contribution.ticket_ranges {
             LotteryRaw::<(), (), ()>::set_range_raw(&mut winners_data, range, false);
         }
         tickets_claimed.value = 0;
+    } else {
+        tickets_claimed.value = available_to_claim;
     }
 
     emit!(Claimed {

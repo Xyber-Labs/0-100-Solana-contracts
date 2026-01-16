@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{checked_add, constants::SEED_ROOT, errors::ErrorCode, state::LaunchState, utils::lottery::LotteryRaw};
+use crate::{checked_add, constants::SEED_ROOT, errors::ErrorCode, state::{EngineConfig, LaunchState}, utils::lottery::LotteryRaw};
 
 #[event]
 pub struct BitmapsClosed {
@@ -11,6 +11,12 @@ pub struct BitmapsClosed {
 
 #[derive(Accounts)]
 pub struct CloseBitmaps<'info> {
+    #[account(mut, address = engine_config.multisig @ ErrorCode::Unauthorized)]
+    pub multisig: Signer<'info>,
+
+    #[account(seeds = [SEED_ROOT, b"config"], bump)]
+    pub engine_config: Account<'info, EngineConfig>,
+
     /// CHECK: Any account can receive the rent
     #[account(mut)]
     pub rent_recipient: UncheckedAccount<'info>,

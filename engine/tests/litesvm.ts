@@ -910,11 +910,13 @@ describe("engine litesvm", () => {
     console.log(`✅ Step 4: CLMM pool created`);
 
     // === Step 4a: Verify closeBitmaps fails before any claims ===
+    const [reallocFunds] = sdk.getReallocFundsPda();
     await doAndCheckError(
       (async () => {
         const { transaction: closeTx } = await sdk.closeBitmapsTx({
           launch: testLaunch,
-          rentRecipient: multisig.publicKey,
+          multisig: multisig.publicKey,
+          rentRecipient: reallocFunds,
         });
         sendTx(client, multisig.publicKey, [adminKeypair], closeTx);
       })(),
@@ -955,7 +957,8 @@ describe("engine litesvm", () => {
       (async () => {
         const { transaction: closeTx } = await sdk.closeBitmapsTx({
           launch: testLaunch,
-          rentRecipient: multisig.publicKey,
+          multisig: multisig.publicKey,
+          rentRecipient: reallocFunds,
         });
         sendTx(client, multisig.publicKey, [adminKeypair], closeTx);
       })(),
@@ -1051,7 +1054,8 @@ describe("engine litesvm", () => {
     try {
       const { transaction: closeTx } = await sdk.closeBitmapsTx({
         launch: testLaunch,
-        rentRecipient: multisig.publicKey,
+        multisig: multisig.publicKey,
+        rentRecipient: reallocFunds,
       });
       sendTx(client, multisig.publicKey, [adminKeypair], closeTx);
       console.log(`✅ Step 9: Bitmaps closed, rent reclaimed`);

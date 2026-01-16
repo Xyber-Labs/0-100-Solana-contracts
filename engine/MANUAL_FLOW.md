@@ -235,6 +235,9 @@ anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} -
 
 # Deposit 3 (150 SOL)
 anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 150000000000 --user-keypair ${CLUSTER}/buyer3.json
+
+# Deposit 4 (5 SOL)
+anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 5000000000 --user-keypair ${CLUSTER}/creator.json
 ```
 
 ### Step 3: Wait for Funding Period
@@ -257,6 +260,7 @@ anchor run set-seed --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 Finalize the lottery by running the winner selection algorithm:
 
 ```bash
+
 anchor run finalize-lottery --provider.cluster ${CLUSTER} -- \
   --project-id ${PROJECT_ID} \
   --compute-units 1400000
@@ -334,7 +338,7 @@ Participants can claim their vested tokens as they unlock:
 # For large ticket ranges, increase compute units
   anchor run vesting --provider.cluster ${CLUSTER} -- claim \
     --project-id ${PROJECT_ID} \
-    --participant-keypair ${CLUSTER}/buyer3.json \
+    --participant-keypair ${CLUSTER}/buyer1.json \
     --compute-units 1000000
 ```
 
@@ -390,7 +394,7 @@ anchor run close-bitmaps --provider.cluster ${CLUSTER} -- \
 ```
 
 ```bash
-# Close bitmaps and reclaim rent
+# Close bitmaps and reclaim rent (returns to realloc_funds PDA by default)
 anchor run close-bitmaps --provider.cluster ${CLUSTER} -- \
   --project-id ${PROJECT_ID} \
   --multisig-keypair ${CLUSTER}/multisig.json
@@ -401,4 +405,4 @@ The script will:
 - Verify that the launch is finalized
 - Check that the winners bitmap is completely empty (all Sale claims complete)
 - Close both winners and inactive bitmap accounts
-- Return the rent to the multisig wallet
+- Return the rent to the specified recipient (default: `realloc_funds` PDA)

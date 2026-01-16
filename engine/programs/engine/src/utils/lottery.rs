@@ -265,6 +265,12 @@ fn read_word(bitmap: &[u8], word_idx: usize) -> u64 {
     u64::from_le_bytes(bitmap[off..off + 8].try_into().expect("Bitmap word access out of bounds"))
 }
 
+fn get_word_mut(bitmap: &mut [u8], word_idx: usize) -> &mut u64 {
+    let off = word_idx * 8;
+    let ptr = bitmap[off..off + 8].as_mut_ptr() as *mut u64;
+    unsafe { &mut *ptr }
+}
+
 impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I: AsRef<[u8]>>
     LotteryRaw<C, W, I>
 {
@@ -275,18 +281,30 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
         }
         let start_word = index / Self::BITS_PER_WORD;
         let start_bit = index % Self::BITS_PER_WORD;
+        let last_word_idx = bits_allocated / Self::BITS_PER_WORD;
+        let tail = bits_allocated % Self::BITS_PER_WORD;
+        let last_word_mask = if tail == 0 { u64::MAX } else { (1u64 << tail) - 1 };
 
         for i in 0..=self.vec_len() as u64 {
             let word_idx = (start_word + i) as usize % self.vec_len() as usize;
-            let winners = read_word(self.winners_bitmap.as_ref(), word_idx);
+
+            let winners_word = get_word_mut(self.winners_bitmap.as_mut(), word_idx);
+            if *winners_word == u64::MAX {
+                continue;
+            };
             let inactive = read_word(self.inactive_bitmap.as_ref(), word_idx);
-            let mask = if i == 0 { u64::MAX << start_bit } else { u64::MAX };
-            let avail = !(winners | inactive) & mask;
+
+            let mut avail = !(*winners_word | inactive);
+            if i == 0 {
+                avail &= u64::MAX << start_bit
+            };
+            if word_idx as u64 == last_word_idx {
+                avail &= last_word_mask
+            };
+
             if avail != 0 {
                 let bit_pos = avail.trailing_zeros();
-                let off = word_idx * 8;
-                self.winners_bitmap.as_mut()[off..off + 8]
-                    .copy_from_slice(&(winners | (1u64 << bit_pos)).to_le_bytes());
+                *winners_word |= 1u64 << bit_pos;
                 return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
             }
         }
@@ -305,7 +323,20 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
 
         let active_tickets = self.active_tickets();
 
-        let winners = if capacity >= active_tickets {
+        msg!(
+            "finalize: capacity={}, active={}, bits_allocated={}",
+            capacity,
+            active_tickets,
+            bits_allocated
+        );
+
+        let already_set: u64 =
+            self.winners_bitmap.as_ref().iter().map(|b| b.count_ones() as u64).sum();
+        let lottery_capacity = capacity.saturating_sub(already_set);
+
+        let winners = if lottery_capacity == 0 {
+            already_set
+        } else if lottery_capacity >= active_tickets {
             for i in 0..bits_allocated {
                 if self.is_inactive(i) {
                     continue;
@@ -315,10 +346,10 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
             active_tickets
         } else {
             let mut set_count = 0u64;
-            for batch_idx in 0..capacity.div_ceil(8) {
+            for batch_idx in 0..lottery_capacity.div_ceil(8) {
                 let rolls = Self::hash_roll_batch(seed, batch_idx);
                 for roll in rolls {
-                    if set_count >= capacity {
+                    if set_count >= lottery_capacity {
                         break;
                     }
                     self.try_set_winner_bit(roll as u64 % active_tickets)
@@ -326,7 +357,7 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
                     set_count += 1;
                 }
             }
-            capacity
+            already_set + lottery_capacity
         };
 
         let tokens_per_ticket = total_tokens / winners;

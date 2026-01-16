@@ -357,11 +357,13 @@ const EngineSDK = {
 
     async function closeBitmaps(args: {
       launch: anchor.web3.PublicKey;
+      multisig: anchor.web3.PublicKey;
       rentRecipient: anchor.web3.PublicKey;
       signers: anchor.web3.Keypair[];
     }): Promise<{ signature: string; winnersBitmap: anchor.web3.PublicKey; inactiveBitmap: anchor.web3.PublicKey }> {
       const { transaction, winnersBitmap, inactiveBitmap } = await txBuilder.closeBitmapsTx({
         launch: args.launch,
+        multisig: args.multisig,
         rentRecipient: args.rentRecipient,
       });
 

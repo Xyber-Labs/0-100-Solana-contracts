@@ -1043,6 +1043,7 @@ export class TxBuilder {
 
   async closeBitmapsIx(params: {
     launch: web3.PublicKey;
+    multisig: web3.PublicKey;
     rentRecipient: web3.PublicKey;
   }): Promise<{
     instruction: web3.TransactionInstruction;
@@ -1051,10 +1052,13 @@ export class TxBuilder {
   }> {
     const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
     const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
+    const [engineConfig] = this.getConfigPda();
 
     const instruction = await this.program.methods
       .closeBitmaps()
       .accountsStrict({
+        multisig: params.multisig,
+        engineConfig,
         rentRecipient: params.rentRecipient,
         launchState: params.launch,
         winnersBitmap,
@@ -1067,6 +1071,7 @@ export class TxBuilder {
 
   async closeBitmapsTx(params: {
     launch: web3.PublicKey;
+    multisig: web3.PublicKey;
     rentRecipient: web3.PublicKey;
   }): Promise<{
     transaction: web3.Transaction;

@@ -43,6 +43,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   let baseTokenAta: anchor.web3.PublicKey;
   let quoteVault: anchor.web3.PublicKey;
   let baseVault: anchor.web3.PublicKey;
+  let reallocFunds: anchor.web3.PublicKey;
 
   let raydiumPositionNftMint: anchor.web3.PublicKey;
   let raydiumPositionNftAccount: anchor.web3.PublicKey;
@@ -265,6 +266,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     launchPda = launch;
+    [reallocFunds] = sdk.getReallocFundsPda();
 
     console.log("✅ Launch initialized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
@@ -417,6 +419,13 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log("✅ Lottery finalized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, prepSig));
+
+    // Wait for contributor vesting duration so buyers can claim full allocation
+    const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
+    const waitTime = preset.contributorDurationSec * 1000 + 500;
+    console.log(`Waiting ${waitTime}ms for contributor vesting to complete...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    console.log("✅ Contributor vesting period complete");
   });
 
   it("Step 9: Prepare quote mint", async () => {
@@ -468,7 +477,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     await utils.doAndCheckError(
       sdk.closeBitmaps({
         launch: launchPda,
-        rentRecipient: multisigKeypair.publicKey,
+        multisig: multisigKeypair.publicKey,
+        rentRecipient: reallocFunds,
         signers: [multisigKeypair],
       }),
       "ClaimsNotComplete"
@@ -536,9 +546,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log(`Active tickets: ${activeTickets}, k_capacity: ${kCapacity.toString()}, winning: ${winningTickets}`);
     console.log(`Tokens per ticket (from lottery): ${tokensPerTicket.toString()}`);
 
-    // Wait for contributor vesting period
-    await new Promise(resolve => setTimeout(resolve, preset.contributorPeriodSec * 1000 + 1000));
-
     const buyers = [buyer1Keypair, buyer2Keypair, buyer3Keypair];
     let totalClaimed = new BN(0);
 
@@ -604,6 +611,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     const creatorSaleShare = tokensPerTicket.muln(creatorTickets);
 
     // Creator sale vesting: creatorPeriodUnlock per period, calculated as SOL per period / tau
+    // IMPORTANT: Contract uses winning_tickets (not total) for duration calculation
+    // Use total tickets as upper bound since we can't easily determine exact winning count
     const creatorDepositLamports = BigInt(creatorTickets) * BigInt(preset.tauLamports.toString());
     const periodsForSale = Math.ceil(Number(creatorDepositLamports) / Number(preset.creatorPeriodUnlock.toString()));
     const teamPeriods = preset.teamDurationSec / preset.teamPeriodSec;
@@ -703,6 +712,42 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   it("Step 12c: closeBitmaps succeeds after all claims", async () => {
     console.log("=== Step 12c: closeBitmaps After All Claims ===");
 
+    // Wait additional time to ensure all vesting completed and claims processed
+    console.log("\n--- Waiting for all vesting periods to complete ---");
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log("✅ Additional wait complete");
+
+    // Check ClaimedTokens state for all participants
+    console.log("\n--- Checking ClaimedTokens state for all participants ---");
+    const allParticipants = [
+      { kp: buyer1Keypair, name: "buyer1" },
+      { kp: buyer2Keypair, name: "buyer2" },
+      { kp: buyer3Keypair, name: "buyer3" },
+      { kp: creatorKeypair, name: "creator" }
+    ];
+
+    for (const { kp, name } of allParticipants) {
+      const saleClaimed = await sdk.fetchTicketsClaimed(launchPda, 0, kp.publicKey);
+      console.log(`${name}: Sale bucket claimed = ${saleClaimed.toString()} tokens`);
+    }
+
+    // Force one more claim for each participant to ensure bits are cleared
+    console.log("\n--- Force final claims to ensure bits cleared ---");
+    for (const { kp, name } of allParticipants) {
+      try {
+        await sdk.claim({ launch: launchPda, baseMint, participantKeypair: kp, bucket: 0 });
+        console.log(`${name}: Additional claim succeeded`);
+      } catch (e: any) {
+        if (e.message?.includes("NothingToClaim")) {
+          console.log(`${name}: NothingToClaim (expected)`);
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    console.log("\n--- Closing bitmaps after all claims complete ---");
+
     const [winnersBitmapPda] = sdk.getWinnersBitmapPda(launchPda);
     const [inactiveBitmapPda] = sdk.getInactiveBitmapPda(launchPda);
 
@@ -722,12 +767,12 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log(`Winners bitmap: ${winnersBitmapBefore.data.length} bytes, ${winnersBitmapRentBefore / 1e9} SOL rent`);
     console.log(`Inactive bitmap: ${inactiveBitmapBefore.data.length} bytes, ${inactiveBitmapRentBefore / 1e9} SOL rent`);
 
-    const rentRecipient = multisigKeypair.publicKey;
-    const recipientBalanceBefore = await provider.connection.getBalance(rentRecipient);
+    const recipientBalanceBefore = await provider.connection.getBalance(reallocFunds);
 
     const { signature, winnersBitmap, inactiveBitmap } = await sdk.closeBitmaps({
       launch: launchPda,
-      rentRecipient,
+      multisig: multisigKeypair.publicKey,
+      rentRecipient: reallocFunds,
       signers: [multisigKeypair],
     });
 
@@ -741,8 +786,8 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     assert.equal(winnersBitmapAfter, null, "Winners bitmap should be closed");
     assert.equal(inactiveBitmapAfter, null, "Inactive bitmap should be closed");
 
-    // Verify rent was returned
-    const recipientBalanceAfter = await provider.connection.getBalance(rentRecipient);
+    // Verify rent was returned to realloc_funds
+    const recipientBalanceAfter = await provider.connection.getBalance(reallocFunds);
     const rentReturned = recipientBalanceAfter - recipientBalanceBefore;
 
     console.log(`Rent returned: ${rentReturned / 1e9} SOL`);
@@ -750,7 +795,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log("✅ Bitmaps closed successfully, rent returned");
   });
-
   it("Step 13: Perform trading on Raydium CLMM pool", async () => {
     console.log("=== Step 13: Perform Trading on Raydium CLMM Pool ===");
 
