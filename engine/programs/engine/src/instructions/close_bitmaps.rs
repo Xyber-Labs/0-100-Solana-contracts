@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{constants::SEED_ROOT, errors::ErrorCode, state::LaunchState, utils::lottery::LotteryRaw};
+use crate::{checked_add, constants::SEED_ROOT, errors::ErrorCode, state::LaunchState, utils::lottery::LotteryRaw};
 
 #[event]
 pub struct BitmapsClosed {
@@ -15,9 +15,7 @@ pub struct CloseBitmaps<'info> {
     #[account(mut)]
     pub rent_recipient: UncheckedAccount<'info>,
 
-    #[account(
-        constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized,
-    )]
+    #[account(constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized)]
     pub launch_state: Account<'info, LaunchState>,
 
     /// CHECK: Raw winners bitmap - validated by seeds
@@ -30,11 +28,7 @@ pub struct CloseBitmaps<'info> {
     pub winners_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: Raw inactive bitmap - validated by seeds
-    #[account(
-        mut,
-        seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()],
-        bump,
-    )]
+    #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
     pub inactive_bitmap: UncheckedAccount<'info>,
 }
 
@@ -64,8 +58,7 @@ pub fn close_bitmaps(ctx: Context<CloseBitmaps>) -> Result<()> {
     emit!(BitmapsClosed {
         launch: launch_key,
         rent_recipient: rent_recipient_key,
-        lamports_returned: winners_lamports.checked_add(inactive_lamports)
-            .ok_or(ErrorCode::ArithmeticOverflow)?,
+        lamports_returned: checked_add!(winners_lamports, inactive_lamports)?,
     });
 
     Ok(())
@@ -76,24 +69,7 @@ fn close_account<'info>(
     recipient: &UncheckedAccount<'info>,
 ) -> Result<u64> {
     let lamports = account.lamports();
-    if lamports == 0 {
-        return Ok(0);
-    }
-
-    // Zero out the data first (before modifying lamports)
-    let mut data = account.try_borrow_mut_data()?;
-    data.fill(0);
-    drop(data);
-
-    // Use checked_sub pattern (same as deposit.rs) instead of direct assignment
-    **account.try_borrow_mut_lamports()? = account
-        .lamports()
-        .checked_sub(lamports)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-    **recipient.try_borrow_mut_lamports()? = recipient
-        .lamports()
-        .checked_add(lamports)
-        .ok_or(ErrorCode::ArithmeticOverflow)?;
-
+    account.sub_lamports(lamports)?;
+    recipient.add_lamports(lamports)?;
     Ok(lamports)
 }
