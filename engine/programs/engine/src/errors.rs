@@ -72,4 +72,6 @@ pub enum ErrorCode {
     InvalidState,
     #[msg("Claims not complete - winner bits still set")]
     ClaimsNotComplete,
+    #[msg("Lottery already completed")]
+    LotteryCompleted,
 }

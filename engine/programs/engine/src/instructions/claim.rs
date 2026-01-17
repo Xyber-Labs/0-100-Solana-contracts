@@ -26,7 +26,7 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
-    #[account(mut, constraint = launch_state.is_lottery_in_progress() @ ErrorCode::NotFinalized)]
+    #[account(mut, constraint = launch_state.is_lottery_in_progress() @ ErrorCode::LotteryCompleted)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]

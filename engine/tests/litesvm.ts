@@ -432,12 +432,12 @@ describe("engine litesvm", () => {
     assert.equal(totalTickets, 100, "Should have 100 tickets for 10 SOL deposit");
 
     const { data: lottery } = await sdk.fetchLaunch(launchState);
-    assert.equal(lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
+    assert.equal(lottery.lottery.bitsAllocated.toNumber(), 100, "bits_allocated should be 100");
   });
 
   it("Allows withdrawals", async () => {
     const { data: lotteryInitial } = await sdk.fetchLaunch(launchState);
-    const initialBitsAllocated = lotteryInitial.bitsAllocated.toNumber();
+    const initialBitsAllocated = lotteryInitial.lottery.bitsAllocated.toNumber();
     assert.equal(initialBitsAllocated, 100, "Initial bits_allocated from previous test");
 
     const depositor = await createAndFundAccount(client, 20);
@@ -457,7 +457,7 @@ describe("engine litesvm", () => {
     assert.equal(contribBefore.ticketRanges[0].end.toNumber(), 150, "Range end should be 150");
 
     const { data: lotteryAfterDeposit } = await sdk.fetchLaunch(launchState);
-    assert.equal(lotteryAfterDeposit.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
+    assert.equal(lotteryAfterDeposit.lottery.bitsAllocated.toNumber(), 150, "bits_allocated should be 150 after deposit");
 
     const balanceBefore = client.getBalance(depositor.publicKey);
 
@@ -479,8 +479,8 @@ describe("engine litesvm", () => {
     assert.equal(contribAfter.ticketRanges[0].end.toNumber(), 130, "Range end should be 130 after withdraw");
 
     const { data: lotteryAfterWithdraw } = await sdk.fetchLaunch(launchState);
-    assert.equal(lotteryAfterWithdraw.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
-    assert.equal(lotteryAfterWithdraw.inactiveCount.toNumber(), 20, "inactive_count should be 20 after withdrawing 20 tickets");
+    assert.equal(lotteryAfterWithdraw.lottery.bitsAllocated.toNumber(), 150, "bits_allocated unchanged after withdrawal");
+    assert.equal(lotteryAfterWithdraw.lottery.inactiveCount.toNumber(), 20, "inactive_count should be 20 after withdrawing 20 tickets");
   });
 
   it("Project ID increments correctly", async () => {
@@ -1248,10 +1248,10 @@ describe("engine litesvm", () => {
     const bitmapData = winnersBitmapInfo?.data ?? new Uint8Array(0);
     const totalWords = Math.ceil(bitmapData.length / 8);
     const numSegments = 64;
-    console.log(`\nBitmap distribution (${totalWords} words, ${lottery.bitsAllocated.toString()} allocated, ${activeTickets} active):`);
+    console.log(`\nBitmap distribution (${totalWords} words, ${lottery.lottery.bitsAllocated.toString()} allocated, ${activeTickets} active):`);
 
     // Count winners per segment (divide evenly across allocated bits, not array length)
-    const bitsAllocated = lottery.bitsAllocated.toNumber();
+    const bitsAllocated = lottery.lottery.bitsAllocated.toNumber();
     const segmentCounts: number[] = [];
     const bitsPerSegment = Math.ceil(bitsAllocated / numSegments);
 
@@ -1289,7 +1289,7 @@ describe("engine litesvm", () => {
     const launchAccountInfo = client.getAccount(testLaunch);
     const launchRent = launchAccountInfo?.lamports ?? BigInt(0);
     const launchSize = launchAccountInfo?.data.length ?? 0;
-    const inactiveCount = lottery.inactiveCount.toNumber();
+    const inactiveCount = lottery.lottery.inactiveCount.toNumber();
     console.log(`LaunchState account: ${launchSize} bytes, ${inactiveCount} inactive tickets, ${Number(launchRent) / 1e9} SOL rent`);
 
     const winnersBitmapRent = winnersBitmapInfo?.lamports ?? BigInt(0);
