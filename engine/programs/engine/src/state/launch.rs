@@ -1,5 +1,26 @@
 use anchor_lang::prelude::*;
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug)]
+pub enum LotteryStatus {
+    InProgress { claimed_tickets: u64 },
+    Completed,
+    Closed,
+}
+
+impl Default for LotteryStatus {
+    fn default() -> Self {
+        LotteryStatus::InProgress { claimed_tickets: 0 }
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
+pub struct Lottery {
+    pub bits_allocated: u64,
+    pub inactive_count: u64,
+    pub total_winning_tickets: u64,
+    pub status: LotteryStatus,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, InitSpace, PartialEq, Debug, Default)]
 pub enum PoolStatus {
     #[default]
@@ -45,9 +66,8 @@ pub struct LaunchState {
     pub project_id: u64,
     pub creator: Pubkey,
     pub preset: Pubkey,
-    pub bits_allocated: u64,
-    pub inactive_count: u64,
     pub phase: LaunchPhase,
+    pub lottery: Lottery,
 }
 
 impl AsRef<LaunchState> for LaunchState {
@@ -77,6 +97,24 @@ impl LaunchState {
 
     pub(crate) fn is_cancelled(&self) -> bool {
         matches!(self.phase, LaunchPhase::Cancelled)
+    }
+
+    pub(crate) fn is_lottery_in_progress(&self) -> bool {
+        matches!(
+            self,
+            LaunchState {
+                phase: LaunchPhase::Finalized { .. },
+                lottery: Lottery {
+                    status: LotteryStatus::InProgress { .. },
+                    ..
+                },
+                ..
+            }
+        )
+    }
+
+    pub(crate) fn is_lottery_completed(&self) -> bool {
+        matches!(self.lottery.status, LotteryStatus::Completed)
     }
 
     pub(crate) fn set_funding_started_at(&mut self, started_at: i64) {
@@ -138,8 +176,8 @@ impl LaunchState {
     }
 
     pub(crate) fn active_tickets(&self) -> u64 {
-        assert!(self.bits_allocated >= self.inactive_count);
-        self.bits_allocated - self.inactive_count
+        assert!(self.lottery.bits_allocated >= self.lottery.inactive_count);
+        self.lottery.bits_allocated - self.lottery.inactive_count
     }
 
     pub fn base_mint(&self) -> Option<Pubkey> {

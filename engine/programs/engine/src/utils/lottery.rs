@@ -91,7 +91,7 @@ impl<C, W, I> LotteryRaw<C, W, I> {
 impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> {
     #[inline]
     pub fn bits_allocated(&self) -> u64 {
-        self.control.as_ref().bits_allocated
+        self.control.as_ref().lottery.bits_allocated
     }
 
     #[inline]
@@ -105,7 +105,7 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
     }
 
     #[inline]
-    fn tokens_per_ticket(&self) -> u64 {
+    pub(crate) fn tokens_per_ticket(&self) -> u64 {
         match self.control.as_ref().phase {
             LaunchPhase::Funding { .. } => 0,
             LaunchPhase::Seeded { .. } => 0,
@@ -164,11 +164,17 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
 impl<C: AsMut<LaunchState>, W, I> LotteryRaw<C, W, I> {
     #[inline]
     pub fn add_inactive(&mut self, count: u64) {
-        self.control.as_mut().inactive_count += count;
+        self.control.as_mut().lottery.inactive_count += count;
     }
 
     #[inline]
-    fn set_phase_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
+    fn set_phase_finalized(
+        &mut self,
+        tokens_per_ticket: u64,
+        claims_opened_at: i64,
+        total_winning_tickets: u64,
+    ) {
+        self.control.as_mut().lottery.total_winning_tickets = total_winning_tickets;
         self.control.as_mut().phase = LaunchPhase::Finalized {
             tokens_per_ticket,
             claims_opened_at,
@@ -195,9 +201,9 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
 
 impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W, I> LotteryRaw<C, W, I> {
     pub fn allocate_tickets(&mut self, count: u64) -> TicketRange {
-        let start = self.control.as_ref().bits_allocated;
+        let start = self.control.as_ref().lottery.bits_allocated;
         let end = start.checked_add(count).expect("ticket allocation overflow");
-        self.control.as_mut().bits_allocated = end;
+        self.control.as_mut().lottery.bits_allocated = end;
         TicketRange::new(start, end)
     }
 }
@@ -214,11 +220,11 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> 
 {
     pub(crate) fn take_tickets(&mut self, count: u64) -> Vec<TicketRange> {
         let mut taken = Vec::new();
-        if self.control.as_ref().inactive_count == 0 || count == 0 {
+        if self.control.as_ref().lottery.inactive_count == 0 || count == 0 {
             return taken;
         }
 
-        let bits_allocated = self.control.as_ref().bits_allocated;
+        let bits_allocated = self.control.as_ref().lottery.bits_allocated;
         let vec_len = self.vec_len() as usize;
         let mut collected = 0u64;
         let mut current: Option<TicketRange> = None;
@@ -255,7 +261,7 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> 
             taken.push(r);
         }
 
-        self.control.as_mut().inactive_count -= collected;
+        self.control.as_mut().lottery.inactive_count -= collected;
         taken
     }
 }
@@ -361,7 +367,7 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
         };
 
         let tokens_per_ticket = total_tokens / winners;
-        self.set_phase_finalized(tokens_per_ticket, claims_opened_at);
+        self.set_phase_finalized(tokens_per_ticket, claims_opened_at, winners);
 
         Ok(winners)
     }
@@ -369,6 +375,8 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
 
 #[cfg(test)]
 mod tests {
+    use crate::state::Lottery;
+
     use super::*;
 
     fn make_bitmap(words: &[u64]) -> Vec<u8> {
@@ -385,8 +393,11 @@ mod tests {
 
     fn state(bits_allocated: u64, inactive_count: u64) -> LaunchState {
         LaunchState {
-            bits_allocated,
-            inactive_count,
+            lottery: Lottery {
+                bits_allocated,
+                inactive_count,
+                ..Default::default()
+            },
             phase: LaunchPhase::default(),
             ..Default::default()
         }
@@ -542,8 +553,11 @@ mod tests {
     #[test]
     fn test_sale_allocation() {
         let s = LaunchState {
-            bits_allocated: 64,
-            inactive_count: 0,
+            lottery: Lottery {
+                bits_allocated: 64,
+                inactive_count: 0,
+                ..Default::default()
+            },
             phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 1000,
                 claims_opened_at: 1000,
@@ -560,8 +574,11 @@ mod tests {
     #[test]
     fn test_sale_allocation_partial() {
         let s = LaunchState {
-            bits_allocated: 64,
-            inactive_count: 0,
+            lottery: Lottery {
+                bits_allocated: 64,
+                inactive_count: 0,
+                ..Default::default()
+            },
             phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 500,
                 claims_opened_at: 1000,

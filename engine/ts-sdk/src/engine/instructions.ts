@@ -572,17 +572,9 @@ const EngineSDK = {
       }
     }
 
-    // Find project by project ID
     async function findProjectById(projectId: number) {
-      try {
-        const allProjects = await fetchAllProjects();
-        return (
-          allProjects.find((project) => project.projectId === projectId) || null
-        );
-      } catch (error) {
-        console.error("Error finding project by ID:", error);
-        return null;
-      }
+      const [launchPda] = getLaunchPdaByProjectId(projectId);
+      return getProjectByLaunchPda(launchPda);
     }
 
     // Get project by launch PDA

@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/engine.json`.
  */
 export type Engine = {
-  "address": "DhKVzFTjzax7MeLEqiEXmEhm6ERSjehYaamqai5oPKZ7",
+  "address": "xybbtDz3bo6zgUHEnM8sgX7ZeftDhdRi1Hw8tBncu3p",
   "metadata": {
     "name": "engine",
     "version": "0.1.0",
@@ -231,7 +231,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
@@ -284,7 +284,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quoteTokenProgram",
@@ -334,14 +334,14 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState"
+          "name": "launchState",
+          "writable": true
         },
         {
           "name": "launchPreset"
         },
         {
           "name": "winnersBitmap",
-          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -803,43 +803,43 @@ export type Engine = {
               "value": [
                 14,
                 86,
-                241,
-                145,
-                40,
-                148,
-                215,
-                139,
-                118,
-                13,
-                61,
-                172,
-                126,
-                110,
-                141,
-                174,
-                80,
-                63,
-                192,
-                137,
-                114,
+                238,
+                250,
+                96,
                 59,
-                236,
-                99,
-                216,
-                183,
-                139,
-                243,
+                185,
+                36,
+                107,
+                71,
+                201,
+                136,
+                1,
+                190,
+                45,
+                72,
+                224,
                 49,
-                8,
-                216,
-                3
+                210,
+                122,
+                196,
+                162,
+                164,
+                169,
+                20,
+                224,
+                81,
+                151,
+                62,
+                95,
+                245,
+                51
               ]
             }
           }
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "launchState"
@@ -1021,7 +1021,8 @@ export type Engine = {
           "writable": true
         },
         {
-          "name": "launchState"
+          "name": "launchState",
+          "writable": true
         },
         {
           "name": "winnersBitmap",
@@ -1286,7 +1287,7 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
@@ -1318,7 +1319,7 @@ export type Engine = {
         },
         {
           "name": "raydiumProgram",
-          "address": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+          "address": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
         },
         {
           "name": "quoteTokenProgram",
@@ -1907,45 +1908,45 @@ export type Engine = {
                 "kind": "const",
                 "value": [
                   0,
-                  2
+                  4
                 ]
               }
             ],
             "program": {
               "kind": "const",
               "value": [
-                184,
-                152,
-                151,
-                52,
-                252,
-                179,
-                140,
-                145,
-                104,
-                216,
-                83,
-                199,
-                83,
-                182,
-                184,
-                164,
-                54,
-                16,
-                205,
-                211,
-                37,
-                175,
-                187,
-                199,
+                165,
+                213,
+                202,
+                158,
+                4,
+                207,
+                93,
+                181,
+                144,
+                183,
+                20,
+                186,
                 47,
-                212,
-                21,
-                54,
-                219,
-                205,
-                194,
-                88
+                227,
+                44,
+                177,
+                89,
+                19,
+                63,
+                193,
+                193,
+                146,
+                183,
+                34,
+                87,
+                253,
+                7,
+                211,
+                156,
+                176,
+                64,
+                30
               ]
             }
           }
@@ -3982,18 +3983,18 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "bitsAllocated",
-            "type": "u64"
-          },
-          {
-            "name": "inactiveCount",
-            "type": "u64"
-          },
-          {
             "name": "phase",
             "type": {
               "defined": {
                 "name": "launchPhase"
+              }
+            }
+          },
+          {
+            "name": "lottery",
+            "type": {
+              "defined": {
+                "name": "lottery"
               }
             }
           }
@@ -4020,6 +4021,57 @@ export type Engine = {
           {
             "name": "tickArrayUpperStartIndex",
             "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lottery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bitsAllocated",
+            "type": "u64"
+          },
+          {
+            "name": "inactiveCount",
+            "type": "u64"
+          },
+          {
+            "name": "totalWinningTickets",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "lotteryStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "lotteryStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "inProgress",
+            "fields": [
+              {
+                "name": "claimedTickets",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "completed"
+          },
+          {
+            "name": "closed"
           }
         ]
       }
@@ -4231,7 +4283,7 @@ export type Engine = {
     {
       "name": "ammConfigIndex",
       "type": "u16",
-      "value": "2"
+      "value": "4"
     },
     {
       "name": "baseTokenDecimals",
@@ -4241,7 +4293,7 @@ export type Engine = {
     {
       "name": "deployer",
       "type": "pubkey",
-      "value": "3paTDrXrsXjh9J3KLwSNup3nMPRSbSjS1h3iYTKPfqbP"
+      "value": "DFjKPfGgJP9N7eAXfiEdniboRMHEoUFwjtVvtrcrm7o6"
     },
     {
       "name": "dispatcherSeedRoot",
@@ -4251,12 +4303,12 @@ export type Engine = {
     {
       "name": "incomeDispatcherProgramId",
       "type": "pubkey",
-      "value": "xybsGBqV6ZMx3aDoriQxHKU2dzR7kLAtR2ACA87216z"
+      "value": "xybMB4dB3ogkzAojYMWTtjqPFgXKP6A7rbbFjAdfJa6"
     },
     {
       "name": "raydiumClmmProgramId",
       "type": "pubkey",
-      "value": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH"
+      "value": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
     },
     {
       "name": "seedRoot",

@@ -5,10 +5,10 @@ use anchor_spl::{
 };
 
 use crate::{
-    checked_mul, checked_sub,
+    checked_add, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode,
-    state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
+    state::{Bucket, Contribution, LaunchPreset, LaunchState, LotteryStatus, TicketsClaimed},
     utils::lottery::LotteryRaw,
 };
 
@@ -26,14 +26,14 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
-    #[account(constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized)]
+    #[account(mut, constraint = launch_state.is_lottery_in_progress() @ ErrorCode::NotFinalized)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
     pub launch_preset: Account<'info, LaunchPreset>,
 
     /// CHECK: Raw winners bitmap, validated via seeds
-    #[account(mut, seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
+    #[account(seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()], bump)]
     pub winners_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: Raw inactive bitmap, validated via seeds
@@ -79,14 +79,14 @@ pub struct Claim<'info> {
 }
 
 pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
-    let launch_state = &ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let tickets_claimed = &mut ctx.accounts.tickets_claimed;
     let participant = ctx.accounts.participant.key();
     let contribution = &ctx.accounts.contribution;
     let is_creator = participant == launch_state.creator;
 
-    let mut winners_data = ctx.accounts.winners_bitmap.try_borrow_mut_data()?;
+    let winners_data = ctx.accounts.winners_bitmap.try_borrow_data()?;
     let inactive_data = ctx.accounts.inactive_bitmap.try_borrow_data()?;
 
     let lottery = LotteryRaw::new(&**launch_state, &winners_data[..], &inactive_data[..]);
@@ -110,17 +110,6 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
 
     let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)?;
 
-    // Check if we should clear bits (Sale bucket with full vesting completed)
-    let should_clear_bits = bucket == Bucket::Sale && available_to_claim == allocation;
-
-    msg!("Claim debug: bucket={:?} allocation={} available={} to_claim={} periods={}/{} should_clear={}",
-        bucket, allocation, available_to_claim, to_claim, periods_passed, periods_count, should_clear_bits);
-
-    // Allow claim to succeed if there are bits to clear, even if to_claim == 0
-    // This handles the case where user claimed before full vesting, then calls claim again
-    require!(to_claim > 0 || should_clear_bits, ErrorCode::NothingToClaim);
-
-    // Only transfer if there are tokens to claim
     if to_claim > 0 {
         let seeds: &[&[u8]] = &[
             SEED_ROOT,
@@ -143,14 +132,27 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
         token::transfer(cpi_ctx, to_claim)?;
     }
 
-    // Update claimed amount and clear bits if needed
-    if should_clear_bits {
-        for range in &contribution.ticket_ranges {
-            LotteryRaw::<(), (), ()>::set_range_raw(&mut winners_data, range, false);
+    tickets_claimed.value = available_to_claim;
+
+    if bucket == Bucket::Sale && to_claim > 0 {
+        let LotteryStatus::InProgress {
+            claimed_tickets: current_claimed_tickets,
+        } = launch_state.lottery.status
+        else {
+            panic!("is_lottery_in_progress constraint violated")
+        };
+
+        let tokens_per_ticket = lottery.tokens_per_ticket();
+        let claimed_tickets_now = to_claim / tokens_per_ticket;
+
+        let new_claimed_tickets = checked_add!(current_claimed_tickets, claimed_tickets_now)?;
+        if new_claimed_tickets >= launch_state.lottery.total_winning_tickets {
+            launch_state.lottery.status = LotteryStatus::Completed;
+        } else {
+            launch_state.lottery.status = LotteryStatus::InProgress {
+                claimed_tickets: new_claimed_tickets,
+            };
         }
-        tickets_claimed.value = 0;
-    } else {
-        tickets_claimed.value = available_to_claim;
     }
 
     emit!(Claimed {

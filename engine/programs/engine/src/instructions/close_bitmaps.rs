@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::{checked_add, constants::SEED_ROOT, errors::ErrorCode, state::{EngineConfig, LaunchState}, utils::lottery::LotteryRaw};
+use crate::{checked_add, constants::SEED_ROOT, errors::ErrorCode, state::{EngineConfig, LaunchState, LotteryStatus}};
 
 #[event]
 pub struct BitmapsClosed {
@@ -21,7 +21,7 @@ pub struct CloseBitmaps<'info> {
     #[account(mut)]
     pub rent_recipient: UncheckedAccount<'info>,
 
-    #[account(constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized)]
+    #[account(mut, constraint = launch_state.is_lottery_completed() @ ErrorCode::ClaimsNotComplete)]
     pub launch_state: Account<'info, LaunchState>,
 
     /// CHECK: Raw winners bitmap - validated by seeds
@@ -29,22 +29,12 @@ pub struct CloseBitmaps<'info> {
         mut,
         seeds = [SEED_ROOT, b"winners_bitmap", launch_state.key().as_ref()],
         bump,
-        constraint = is_bitmap_empty(&winners_bitmap) @ ErrorCode::ClaimsNotComplete,
     )]
     pub winners_bitmap: UncheckedAccount<'info>,
 
     /// CHECK: Raw inactive bitmap - validated by seeds
     #[account(mut, seeds = [SEED_ROOT, b"inactive_bitmap", launch_state.key().as_ref()], bump)]
     pub inactive_bitmap: UncheckedAccount<'info>,
-}
-
-fn is_bitmap_empty(account: &UncheckedAccount) -> bool {
-    let data = match account.try_borrow_data() {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
-
-    LotteryRaw::<(), (), ()>::is_bitmap_empty(&data)
 }
 
 pub fn close_bitmaps(ctx: Context<CloseBitmaps>) -> Result<()> {
@@ -60,6 +50,8 @@ pub fn close_bitmaps(ctx: Context<CloseBitmaps>) -> Result<()> {
         &ctx.accounts.inactive_bitmap,
         &ctx.accounts.rent_recipient,
     )?;
+
+    ctx.accounts.launch_state.lottery.status = LotteryStatus::Closed;
 
     emit!(BitmapsClosed {
         launch: launch_key,
