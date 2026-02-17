@@ -1,6 +1,6 @@
 ### 0-100 Engine (Solana) — Fair Launch + CLMM
 
-In short: this is an on-chain engine for a fair token launch on Solana. It collects SOL deposits, distributes “tickets” (multiples of τ), randomly and transparently selects winners, creates a liquidity pool on Raydium CLMM, and opens token claiming for users and the creator under strict rules (escrow, refunds, vesting, limits).
+In short: this is an on-chain engine for a fair token launch on Solana. It collects SOL deposits, distributes “tickets” (multiples of τ), randomly and transparently selects winners, creates a liquidity pool on Raydium CLMM, and opens token claiming for users and the creator under strict rules (escrow, refunds, vesting, limits)
 
 ### Key Features
 
