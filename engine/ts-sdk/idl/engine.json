@@ -328,7 +328,8 @@
           "signer": true
         },
         {
-          "name": "launch_state"
+          "name": "launch_state",
+          "writable": true
         },
         {
           "name": "launch_preset"
@@ -948,6 +949,171 @@
         },
         {
           "name": "vault_1_mint"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_bitmaps",
+      "docs": [
+        "Close bitmap accounts after all claims are complete.",
+        "Returns rent to the specified recipient."
+      ],
+      "discriminator": [
+        21,
+        224,
+        131,
+        32,
+        74,
+        161,
+        166,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "multisig",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engine_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_recipient",
+          "writable": true
+        },
+        {
+          "name": "launch_state",
+          "writable": true
+        },
+        {
+          "name": "winners_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactive_bitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch_state"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -3072,6 +3238,19 @@
   ],
   "events": [
     {
+      "name": "BitmapsClosed",
+      "discriminator": [
+        93,
+        118,
+        23,
+        241,
+        1,
+        61,
+        40,
+        90
+      ]
+    },
+    {
       "name": "Cancelled",
       "discriminator": [
         136,
@@ -3346,6 +3525,16 @@
       "code": 6033,
       "name": "InvalidState",
       "msg": "Invalid state"
+    },
+    {
+      "code": 6034,
+      "name": "ClaimsNotComplete",
+      "msg": "Claims not complete - winner bits still set"
+    },
+    {
+      "code": 6035,
+      "name": "LotteryCompleted",
+      "msg": "Lottery already completed"
     }
   ],
   "types": [
@@ -3419,6 +3608,26 @@
                 3
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BitmapsClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "rent_recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamports_returned",
+            "type": "u64"
           }
         ]
       }
@@ -3773,18 +3982,18 @@
             "type": "pubkey"
           },
           {
-            "name": "bits_allocated",
-            "type": "u64"
-          },
-          {
-            "name": "inactive_count",
-            "type": "u64"
-          },
-          {
             "name": "phase",
             "type": {
               "defined": {
                 "name": "LaunchPhase"
+              }
+            }
+          },
+          {
+            "name": "lottery",
+            "type": {
+              "defined": {
+                "name": "Lottery"
               }
             }
           }
@@ -3811,6 +4020,57 @@
           {
             "name": "tick_array_upper_start_index",
             "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Lottery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bits_allocated",
+            "type": "u64"
+          },
+          {
+            "name": "inactive_count",
+            "type": "u64"
+          },
+          {
+            "name": "total_winning_tickets",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "LotteryStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LotteryStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "InProgress",
+            "fields": [
+              {
+                "name": "claimed_tickets",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "Completed"
+          },
+          {
+            "name": "Closed"
           }
         ]
       }

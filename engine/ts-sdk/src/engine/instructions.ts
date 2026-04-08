@@ -61,7 +61,7 @@ const EngineSDK = {
       }
 
       const rawTx = tx.serialize();
-      const signature = await conn.sendRawTransaction(rawTx, { skipPreflight: true });
+      const signature = await conn.sendRawTransaction(rawTx);
 
       await conn.confirmTransaction(signature, "confirmed");
       return signature;
@@ -341,16 +341,34 @@ const EngineSDK = {
       baseMint: anchor.web3.PublicKey;
       bucket: number;
       participantKeypair: anchor.web3.Keypair;
+      computeUnits?: number;
     }): Promise<{ signature: string; participantAta: anchor.web3.PublicKey }> {
       const { transaction, participantAta } = await txBuilder.claimTx({
         launch: args.launch,
         baseMint: args.baseMint,
         participant: args.participantKeypair.publicKey,
         bucket: args.bucket,
+        computeUnits: args.computeUnits,
       });
 
       const signature = await sendAndMaybeConfirm(transaction, [args.participantKeypair]);
       return { signature, participantAta };
+    }
+
+    async function closeBitmaps(args: {
+      launch: anchor.web3.PublicKey;
+      multisig: anchor.web3.PublicKey;
+      rentRecipient: anchor.web3.PublicKey;
+      signers: anchor.web3.Keypair[];
+    }): Promise<{ signature: string; winnersBitmap: anchor.web3.PublicKey; inactiveBitmap: anchor.web3.PublicKey }> {
+      const { transaction, winnersBitmap, inactiveBitmap } = await txBuilder.closeBitmapsTx({
+        launch: args.launch,
+        multisig: args.multisig,
+        rentRecipient: args.rentRecipient,
+      });
+
+      const signature = await sendAndMaybeConfirm(transaction, args.signers);
+      return { signature, winnersBitmap, inactiveBitmap };
     }
 
     async function initEngineConfig(args: {
@@ -554,17 +572,9 @@ const EngineSDK = {
       }
     }
 
-    // Find project by project ID
     async function findProjectById(projectId: number) {
-      try {
-        const allProjects = await fetchAllProjects();
-        return (
-          allProjects.find((project) => project.projectId === projectId) || null
-        );
-      } catch (error) {
-        console.error("Error finding project by ID:", error);
-        return null;
-      }
+      const [launchPda] = getLaunchPdaByProjectId(projectId);
+      return getProjectByLaunchPda(launchPda);
     }
 
     // Get project by launch PDA
@@ -649,26 +659,32 @@ const EngineSDK = {
 
       const tokensPerTicket = extractTokensPerTicket(launchState.phase);
       const winningTickets = countWinningInRanges(contribution.ticketRanges, winnersData);
-      const allocation = new BN(winningTickets).mul(new BN(tokensPerTicket));
+      let allocation = new BN(winningTickets).mul(new BN(tokensPerTicket));
 
-      if (isCreator) {
-        const deposit = new BN(winningTickets).mul(preset.tauLamports);
-        const periods = BN.max(deposit.div(preset.creatorPeriodUnlock), new BN(1));
-        const duration = periods.mul(preset.creatorPeriodSec);
-        return {
-          allocation,
-          durationSec: duration,
-          periodSec: preset.creatorPeriodSec,
-          claimed,
-        };
+      // If bits are cleared (winningTickets == 0) but user has claimed, use claimed as allocation
+      // This happens after full claim when contract clears winner bits (claim.rs:136-140)
+      if (winningTickets === 0 && claimed.gt(new BN(0))) {
+        allocation = claimed;
       }
 
-      return {
-        allocation,
-        durationSec: preset.contributorDurationSec,
-        periodSec: preset.contributorPeriodSec,
-        claimed,
-      };
+      return isCreator
+        ? (() => {
+            const deposit = new BN(winningTickets).mul(preset.tauLamports);
+            const periods = BN.max(deposit.div(preset.creatorPeriodUnlock), new BN(1));
+            const duration = periods.mul(preset.creatorPeriodSec);
+            return {
+              allocation,
+              durationSec: duration,
+              periodSec: preset.creatorPeriodSec,
+              claimed,
+            };
+          })()
+        : {
+            allocation,
+            durationSec: preset.contributorDurationSec,
+            periodSec: preset.contributorPeriodSec,
+            claimed,
+          };
     }
 
     /** Returns all PDAs for a given projectId. Convenient for initialization. */
@@ -715,6 +731,7 @@ const EngineSDK = {
       withdraw,
       refund,
       claim,
+      closeBitmaps,
       finalizeLottery,
       createClmmPool,
       addClmmLiquidity,
@@ -737,6 +754,8 @@ const EngineSDK = {
       claimIx: txBuilder.claimIx.bind(txBuilder),
       claimRefundTx: txBuilder.claimRefundTx.bind(txBuilder),
       claimRefundIx: txBuilder.claimRefundIx.bind(txBuilder),
+      closeBitmapsTx: txBuilder.closeBitmapsTx.bind(txBuilder),
+      closeBitmapsIx: txBuilder.closeBitmapsIx.bind(txBuilder),
       createClmmPoolTx: txBuilder.createClmmPoolTx.bind(txBuilder),
       finalizeLotteryTx: txBuilder.finalizeLotteryTx.bind(txBuilder),
       addClmmLiquidityTx: txBuilder.addClmmLiquidityTx.bind(txBuilder),

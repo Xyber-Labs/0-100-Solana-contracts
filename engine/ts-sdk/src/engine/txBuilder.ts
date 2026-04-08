@@ -640,9 +640,14 @@ export class TxBuilder {
     baseMint: web3.PublicKey;
     participant: web3.PublicKey;
     bucket: number;
+    computeUnits?: number;
   }): Promise<{ transaction: web3.Transaction; participantAta: web3.PublicKey }> {
     const { instruction, participantAta } = await this.claimIx(params);
-    const transaction = new web3.Transaction().add(instruction);
+    const preIxs: web3.TransactionInstruction[] = [];
+    if (typeof params.computeUnits === "number") {
+      preIxs.push(web3.ComputeBudgetProgram.setComputeUnitLimit({ units: params.computeUnits }));
+    }
+    const transaction = new web3.Transaction().add(...preIxs, instruction);
     transaction.feePayer = params.participant;
     return { transaction, participantAta };
   }
@@ -701,7 +706,7 @@ export class TxBuilder {
     if (!info) {
       throw new Error("Winners bitmap not found");
     }
-    return info.data.slice(8);
+    return info.data;
   }
 
   extractBaseMint(launchState: any): web3.PublicKey | null {
@@ -1034,6 +1039,48 @@ export class TxBuilder {
       .add(instruction);
 
     return { transaction, ...rest };
+  }
+
+  async closeBitmapsIx(params: {
+    launch: web3.PublicKey;
+    multisig: web3.PublicKey;
+    rentRecipient: web3.PublicKey;
+  }): Promise<{
+    instruction: web3.TransactionInstruction;
+    winnersBitmap: web3.PublicKey;
+    inactiveBitmap: web3.PublicKey;
+  }> {
+    const [winnersBitmap] = this.getWinnersBitmapPda(params.launch);
+    const [inactiveBitmap] = this.getInactiveBitmapPda(params.launch);
+    const [engineConfig] = this.getConfigPda();
+
+    const instruction = await this.program.methods
+      .closeBitmaps()
+      .accountsStrict({
+        multisig: params.multisig,
+        engineConfig,
+        rentRecipient: params.rentRecipient,
+        launchState: params.launch,
+        winnersBitmap,
+        inactiveBitmap,
+      })
+      .instruction();
+
+    return { instruction, winnersBitmap, inactiveBitmap };
+  }
+
+  async closeBitmapsTx(params: {
+    launch: web3.PublicKey;
+    multisig: web3.PublicKey;
+    rentRecipient: web3.PublicKey;
+  }): Promise<{
+    transaction: web3.Transaction;
+    winnersBitmap: web3.PublicKey;
+    inactiveBitmap: web3.PublicKey;
+  }> {
+    const { instruction, winnersBitmap, inactiveBitmap } = await this.closeBitmapsIx(params);
+    const transaction = new web3.Transaction().add(instruction);
+    return { transaction, winnersBitmap, inactiveBitmap };
   }
 
   async getLiquidityRange(params: {

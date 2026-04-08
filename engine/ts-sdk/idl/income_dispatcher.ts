@@ -2171,6 +2171,30 @@ export type IncomeDispatcher = {
             "type": "pubkey"
           },
           {
+            "name": "phase",
+            "type": {
+              "defined": {
+                "name": "launchPhase"
+              }
+            }
+          },
+          {
+            "name": "lottery",
+            "type": {
+              "defined": {
+                "name": "lottery"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "lottery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
             "name": "bitsAllocated",
             "type": "u64"
           },
@@ -2179,12 +2203,39 @@ export type IncomeDispatcher = {
             "type": "u64"
           },
           {
-            "name": "phase",
+            "name": "totalWinningTickets",
+            "type": "u64"
+          },
+          {
+            "name": "status",
             "type": {
               "defined": {
-                "name": "launchPhase"
+                "name": "lotteryStatus"
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "lotteryStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "inProgress",
+            "fields": [
+              {
+                "name": "claimedTickets",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "completed"
+          },
+          {
+            "name": "closed"
           }
         ]
       }

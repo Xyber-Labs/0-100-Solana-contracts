@@ -74,12 +74,24 @@ impl<C, W, I> LotteryRaw<C, W, I> {
         }
         data[word_offset..word_offset + 8].copy_from_slice(&word.to_le_bytes());
     }
+
+    /// Set all bits in the given range to the specified value (static method for direct bitmap manipulation)
+    pub fn set_range_raw(data: &mut [u8], range: &TicketRange, value: bool) {
+        for i in range.start..range.end {
+            Self::write_bitmap_bit(data, i, value);
+        }
+    }
+
+    /// Check if all bits in the bitmap are zero
+    pub fn is_bitmap_empty(data: &[u8]) -> bool {
+        data.iter().all(|b| *b == 0)
+    }
 }
 
 impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> {
     #[inline]
     pub fn bits_allocated(&self) -> u64 {
-        self.control.as_ref().bits_allocated
+        self.control.as_ref().lottery.bits_allocated
     }
 
     #[inline]
@@ -93,7 +105,7 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
     }
 
     #[inline]
-    fn tokens_per_ticket(&self) -> u64 {
+    pub(crate) fn tokens_per_ticket(&self) -> u64 {
         match self.control.as_ref().phase {
             LaunchPhase::Funding { .. } => 0,
             LaunchPhase::Seeded { .. } => 0,
@@ -152,11 +164,17 @@ impl<C: AsRef<LaunchState>, W: AsRef<[u8]>, I: AsRef<[u8]>> LotteryRaw<C, W, I> 
 impl<C: AsMut<LaunchState>, W, I> LotteryRaw<C, W, I> {
     #[inline]
     pub fn add_inactive(&mut self, count: u64) {
-        self.control.as_mut().inactive_count += count;
+        self.control.as_mut().lottery.inactive_count += count;
     }
 
     #[inline]
-    fn set_phase_finalized(&mut self, tokens_per_ticket: u64, claims_opened_at: i64) {
+    fn set_phase_finalized(
+        &mut self,
+        tokens_per_ticket: u64,
+        claims_opened_at: i64,
+        total_winning_tickets: u64,
+    ) {
+        self.control.as_mut().lottery.total_winning_tickets = total_winning_tickets;
         self.control.as_mut().phase = LaunchPhase::Finalized {
             tokens_per_ticket,
             claims_opened_at,
@@ -173,23 +191,19 @@ impl<C, W: AsMut<[u8]>, I> LotteryRaw<C, W, I> {
 
     pub(crate) fn set_range(&mut self, range: TicketRange, value: bool) {
         msg!("Range: {:?}", range);
-        for i in range.start..range.end {
-            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, value);
-        }
+        Self::set_range_raw(self.winners_bitmap.as_mut(), &range, value);
     }
 
     pub(crate) fn clear_range(&mut self, range: &TicketRange) {
-        for i in range.start..range.end {
-            Self::write_bitmap_bit(self.winners_bitmap.as_mut(), i, false);
-        }
+        Self::set_range_raw(self.winners_bitmap.as_mut(), range, false);
     }
 }
 
 impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W, I> LotteryRaw<C, W, I> {
     pub fn allocate_tickets(&mut self, count: u64) -> TicketRange {
-        let start = self.control.as_ref().bits_allocated;
+        let start = self.control.as_ref().lottery.bits_allocated;
         let end = start.checked_add(count).expect("ticket allocation overflow");
-        self.control.as_mut().bits_allocated = end;
+        self.control.as_mut().lottery.bits_allocated = end;
         TicketRange::new(start, end)
     }
 }
@@ -206,11 +220,11 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> 
 {
     pub(crate) fn take_tickets(&mut self, count: u64) -> Vec<TicketRange> {
         let mut taken = Vec::new();
-        if self.control.as_ref().inactive_count == 0 || count == 0 {
+        if self.control.as_ref().lottery.inactive_count == 0 || count == 0 {
             return taken;
         }
 
-        let bits_allocated = self.control.as_ref().bits_allocated;
+        let bits_allocated = self.control.as_ref().lottery.bits_allocated;
         let vec_len = self.vec_len() as usize;
         let mut collected = 0u64;
         let mut current: Option<TicketRange> = None;
@@ -247,7 +261,7 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> 
             taken.push(r);
         }
 
-        self.control.as_mut().inactive_count -= collected;
+        self.control.as_mut().lottery.inactive_count -= collected;
         taken
     }
 }
@@ -255,6 +269,12 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsRef<[u8]>, I: AsMut<[u8]> 
 fn read_word(bitmap: &[u8], word_idx: usize) -> u64 {
     let off = word_idx * 8;
     u64::from_le_bytes(bitmap[off..off + 8].try_into().expect("Bitmap word access out of bounds"))
+}
+
+fn get_word_mut(bitmap: &mut [u8], word_idx: usize) -> &mut u64 {
+    let off = word_idx * 8;
+    let ptr = bitmap[off..off + 8].as_mut_ptr() as *mut u64;
+    unsafe { &mut *ptr }
 }
 
 impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I: AsRef<[u8]>>
@@ -267,18 +287,30 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
         }
         let start_word = index / Self::BITS_PER_WORD;
         let start_bit = index % Self::BITS_PER_WORD;
+        let last_word_idx = bits_allocated / Self::BITS_PER_WORD;
+        let tail = bits_allocated % Self::BITS_PER_WORD;
+        let last_word_mask = if tail == 0 { u64::MAX } else { (1u64 << tail) - 1 };
 
         for i in 0..=self.vec_len() as u64 {
             let word_idx = (start_word + i) as usize % self.vec_len() as usize;
-            let winners = read_word(self.winners_bitmap.as_ref(), word_idx);
+
+            let winners_word = get_word_mut(self.winners_bitmap.as_mut(), word_idx);
+            if *winners_word == u64::MAX {
+                continue;
+            };
             let inactive = read_word(self.inactive_bitmap.as_ref(), word_idx);
-            let mask = if i == 0 { u64::MAX << start_bit } else { u64::MAX };
-            let avail = !(winners | inactive) & mask;
+
+            let mut avail = !(*winners_word | inactive);
+            if i == 0 {
+                avail &= u64::MAX << start_bit
+            };
+            if word_idx as u64 == last_word_idx {
+                avail &= last_word_mask
+            };
+
             if avail != 0 {
                 let bit_pos = avail.trailing_zeros();
-                let off = word_idx * 8;
-                self.winners_bitmap.as_mut()[off..off + 8]
-                    .copy_from_slice(&(winners | (1u64 << bit_pos)).to_le_bytes());
+                *winners_word |= 1u64 << bit_pos;
                 return Some(word_idx as u64 * Self::BITS_PER_WORD + bit_pos as u64);
             }
         }
@@ -297,7 +329,20 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
 
         let active_tickets = self.active_tickets();
 
-        let winners = if capacity >= active_tickets {
+        msg!(
+            "finalize: capacity={}, active={}, bits_allocated={}",
+            capacity,
+            active_tickets,
+            bits_allocated
+        );
+
+        let already_set: u64 =
+            self.winners_bitmap.as_ref().iter().map(|b| b.count_ones() as u64).sum();
+        let lottery_capacity = capacity.saturating_sub(already_set);
+
+        let winners = if lottery_capacity == 0 {
+            already_set
+        } else if lottery_capacity >= active_tickets {
             for i in 0..bits_allocated {
                 if self.is_inactive(i) {
                     continue;
@@ -307,10 +352,10 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
             active_tickets
         } else {
             let mut set_count = 0u64;
-            for batch_idx in 0..capacity.div_ceil(8) {
+            for batch_idx in 0..lottery_capacity.div_ceil(8) {
                 let rolls = Self::hash_roll_batch(seed, batch_idx);
                 for roll in rolls {
-                    if set_count >= capacity {
+                    if set_count >= lottery_capacity {
                         break;
                     }
                     self.try_set_winner_bit(roll as u64 % active_tickets)
@@ -318,11 +363,11 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
                     set_count += 1;
                 }
             }
-            capacity
+            already_set + lottery_capacity
         };
 
         let tokens_per_ticket = total_tokens / winners;
-        self.set_phase_finalized(tokens_per_ticket, claims_opened_at);
+        self.set_phase_finalized(tokens_per_ticket, claims_opened_at, winners);
 
         Ok(winners)
     }
@@ -330,6 +375,8 @@ impl<C: AsMut<LaunchState> + AsRef<LaunchState>, W: AsMut<[u8]> + AsRef<[u8]>, I
 
 #[cfg(test)]
 mod tests {
+    use crate::state::Lottery;
+
     use super::*;
 
     fn make_bitmap(words: &[u64]) -> Vec<u8> {
@@ -346,8 +393,11 @@ mod tests {
 
     fn state(bits_allocated: u64, inactive_count: u64) -> LaunchState {
         LaunchState {
-            bits_allocated,
-            inactive_count,
+            lottery: Lottery {
+                bits_allocated,
+                inactive_count,
+                ..Default::default()
+            },
             phase: LaunchPhase::default(),
             ..Default::default()
         }
@@ -503,8 +553,11 @@ mod tests {
     #[test]
     fn test_sale_allocation() {
         let s = LaunchState {
-            bits_allocated: 64,
-            inactive_count: 0,
+            lottery: Lottery {
+                bits_allocated: 64,
+                inactive_count: 0,
+                ..Default::default()
+            },
             phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 1000,
                 claims_opened_at: 1000,
@@ -521,8 +574,11 @@ mod tests {
     #[test]
     fn test_sale_allocation_partial() {
         let s = LaunchState {
-            bits_allocated: 64,
-            inactive_count: 0,
+            lottery: Lottery {
+                bits_allocated: 64,
+                inactive_count: 0,
+                ..Default::default()
+            },
             phase: LaunchPhase::Finalized {
                 tokens_per_ticket: 500,
                 claims_opened_at: 1000,

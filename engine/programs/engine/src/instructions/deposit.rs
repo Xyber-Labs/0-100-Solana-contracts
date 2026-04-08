@@ -276,8 +276,10 @@ fn realloc_raw<'info>(
                 .checked_sub(current_lamports)
                 .ok_or(EngineErrorCode::ArithmeticOverflow)?;
 
-            **payer.try_borrow_mut_lamports()? =
-                payer.lamports().checked_sub(diff).ok_or(EngineErrorCode::InsufficientFeeBalance)?;
+            **payer.try_borrow_mut_lamports()? = payer
+                .lamports()
+                .checked_sub(diff)
+                .ok_or(EngineErrorCode::InsufficientFeeBalance)?;
             **account.try_borrow_mut_lamports()? =
                 current_lamports.checked_add(diff).ok_or(EngineErrorCode::ArithmeticOverflow)?;
         }

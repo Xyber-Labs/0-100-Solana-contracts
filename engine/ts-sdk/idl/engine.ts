@@ -334,7 +334,8 @@ export type Engine = {
           "signer": true
         },
         {
-          "name": "launchState"
+          "name": "launchState",
+          "writable": true
         },
         {
           "name": "launchPreset"
@@ -954,6 +955,171 @@ export type Engine = {
         },
         {
           "name": "vault1Mint"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeBitmaps",
+      "docs": [
+        "Close bitmap accounts after all claims are complete.",
+        "Returns rent to the specified recipient."
+      ],
+      "discriminator": [
+        21,
+        224,
+        131,
+        32,
+        74,
+        161,
+        166,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "multisig",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "engineConfig",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "rentRecipient",
+          "writable": true
+        },
+        {
+          "name": "launchState",
+          "writable": true
+        },
+        {
+          "name": "winnersBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  115,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
+        },
+        {
+          "name": "inactiveBitmap",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  116,
+                  45,
+                  48,
+                  45,
+                  49,
+                  48,
+                  48,
+                  45,
+                  49
+                ]
+              },
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  110,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  101,
+                  95,
+                  98,
+                  105,
+                  116,
+                  109,
+                  97,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launchState"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -3078,6 +3244,19 @@ export type Engine = {
   ],
   "events": [
     {
+      "name": "bitmapsClosed",
+      "discriminator": [
+        93,
+        118,
+        23,
+        241,
+        1,
+        61,
+        40,
+        90
+      ]
+    },
+    {
       "name": "cancelled",
       "discriminator": [
         136,
@@ -3352,6 +3531,16 @@ export type Engine = {
       "code": 6033,
       "name": "invalidState",
       "msg": "Invalid state"
+    },
+    {
+      "code": 6034,
+      "name": "claimsNotComplete",
+      "msg": "Claims not complete - winner bits still set"
+    },
+    {
+      "code": 6035,
+      "name": "lotteryCompleted",
+      "msg": "Lottery already completed"
     }
   ],
   "types": [
@@ -3425,6 +3614,26 @@ export type Engine = {
                 3
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "bitmapsClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "launch",
+            "type": "pubkey"
+          },
+          {
+            "name": "rentRecipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "lamportsReturned",
+            "type": "u64"
           }
         ]
       }
@@ -3779,18 +3988,18 @@ export type Engine = {
             "type": "pubkey"
           },
           {
-            "name": "bitsAllocated",
-            "type": "u64"
-          },
-          {
-            "name": "inactiveCount",
-            "type": "u64"
-          },
-          {
             "name": "phase",
             "type": {
               "defined": {
                 "name": "launchPhase"
+              }
+            }
+          },
+          {
+            "name": "lottery",
+            "type": {
+              "defined": {
+                "name": "lottery"
               }
             }
           }
@@ -3817,6 +4026,57 @@ export type Engine = {
           {
             "name": "tickArrayUpperStartIndex",
             "type": "i32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lottery",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bitsAllocated",
+            "type": "u64"
+          },
+          {
+            "name": "inactiveCount",
+            "type": "u64"
+          },
+          {
+            "name": "totalWinningTickets",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "lotteryStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "lotteryStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "inProgress",
+            "fields": [
+              {
+                "name": "claimedTickets",
+                "type": "u64"
+              }
+            ]
+          },
+          {
+            "name": "completed"
+          },
+          {
+            "name": "closed"
           }
         ]
       }

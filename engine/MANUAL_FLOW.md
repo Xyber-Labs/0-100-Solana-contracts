@@ -235,6 +235,9 @@ anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} -
 
 # Deposit 3 (150 SOL)
 anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 150000000000 --user-keypair ${CLUSTER}/buyer3.json
+
+# Deposit 4 (5 SOL)
+anchor run deposit --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID} --amount 5000000000 --user-keypair ${CLUSTER}/creator.json
 ```
 
 ### Step 3: Wait for Funding Period
@@ -257,7 +260,10 @@ anchor run set-seed --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
 Finalize the lottery by running the winner selection algorithm:
 
 ```bash
-anchor run finalize-lottery --provider.cluster ${CLUSTER} -- --project-id ${PROJECT_ID}
+
+anchor run finalize-lottery --provider.cluster ${CLUSTER} -- \
+  --project-id ${PROJECT_ID} \
+  --compute-units 1400000
 ```
 
 ### Step 6: Create CLMM Pool
@@ -319,18 +325,21 @@ anchor run vesting --provider.cluster ${CLUSTER} -- info \
 anchor run vesting --provider.cluster ${CLUSTER} -- info \
   --project-id ${PROJECT_ID} \
   --participant ${CLUSTER}/creator.json \
-  --bucket 1
+  --bucket 0
 ```
 
 ### Step 10: Claim Vested Tokens
 
 Participants can claim their vested tokens as they unlock:
 
+**Note:** For participants with large ticket ranges (>1000 tickets), you may need to increase compute units:
+
 ```bash
-# Buyer claims from Sale bucket
-anchor run vesting --provider.cluster ${CLUSTER} -- claim \
-  --project-id ${PROJECT_ID} \
-  --participant-keypair ${CLUSTER}/buyer1.json
+# For large ticket ranges, increase compute units
+  anchor run vesting --provider.cluster ${CLUSTER} -- claim \
+    --project-id ${PROJECT_ID} \
+    --participant-keypair ${CLUSTER}/buyer1.json \
+    --compute-units 1000000
 ```
 
 ```bash
@@ -338,7 +347,7 @@ anchor run vesting --provider.cluster ${CLUSTER} -- claim \
 anchor run vesting --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
   --participant-keypair ${CLUSTER}/creator.json \
-  --bucket 1
+  --bucket 0
 ```
 
 ```bash
@@ -358,7 +367,7 @@ If the launch is cancelled (min raise not met), full refund is available.
 # Check refund info
 anchor run refund --provider.cluster ${CLUSTER} -- info \
   --project-id ${PROJECT_ID} \
-  --participant ${CLUSTER}/buyer1.json
+  --participant ${CLUSTER}/buyer2.json
 ```
 
 ```bash
@@ -367,3 +376,33 @@ anchor run refund --provider.cluster ${CLUSTER} -- claim \
   --project-id ${PROJECT_ID} \
   --user-keypair ${CLUSTER}/buyer1.json
 ```
+
+### Step 12: Close Bitmaps (after all claims complete)
+
+After all participants have fully claimed their Sale allocations, the multisig can close the bitmap accounts and reclaim
+the rent.
+
+**IMPORTANT:** This can only be done when ALL winning tickets have been fully claimed (i.e., the winners bitmap is
+completely empty).
+
+```bash
+# Check bitmap state before closing
+anchor run close-bitmaps --provider.cluster ${CLUSTER} -- \
+  --project-id ${PROJECT_ID} \
+  --multisig-keypair ${CLUSTER}/multisig.json \
+  --info
+```
+
+```bash
+# Close bitmaps and reclaim rent (returns to realloc_funds PDA by default)
+anchor run close-bitmaps --provider.cluster ${CLUSTER} -- \
+  --project-id ${PROJECT_ID} \
+  --multisig-keypair ${CLUSTER}/multisig.json
+```
+
+The script will:
+
+- Verify that the launch is finalized
+- Check that the winners bitmap is completely empty (all Sale claims complete)
+- Close both winners and inactive bitmap accounts
+- Return the rent to the specified recipient (default: `realloc_funds` PDA)

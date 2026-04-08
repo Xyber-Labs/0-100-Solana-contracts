@@ -5,10 +5,10 @@ use anchor_spl::{
 };
 
 use crate::{
-    checked_mul, checked_sub,
+    checked_add, checked_mul, checked_sub,
     constants::SEED_ROOT,
     errors::ErrorCode,
-    state::{Bucket, Contribution, LaunchPreset, LaunchState, TicketsClaimed},
+    state::{Bucket, Contribution, LaunchPreset, LaunchState, LotteryStatus, TicketsClaimed},
     utils::lottery::LotteryRaw,
 };
 
@@ -26,7 +26,7 @@ pub struct Claim<'info> {
     #[account(mut)]
     pub participant: Signer<'info>,
 
-    #[account(constraint = launch_state.is_finalized() @ ErrorCode::NotFinalized)]
+    #[account(mut, constraint = launch_state.is_lottery_in_progress() @ ErrorCode::LotteryCompleted)]
     pub launch_state: Account<'info, LaunchState>,
 
     #[account(address = launch_state.preset @ ErrorCode::MalformedPreset)]
@@ -79,7 +79,7 @@ pub struct Claim<'info> {
 }
 
 pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
-    let launch_state = &ctx.accounts.launch_state;
+    let launch_state = &mut ctx.accounts.launch_state;
     let launch_preset = &ctx.accounts.launch_preset;
     let tickets_claimed = &mut ctx.accounts.tickets_claimed;
     let participant = ctx.accounts.participant.key();
@@ -109,28 +109,51 @@ pub fn claim(ctx: Context<Claim>, bucket: Bucket) -> Result<()> {
             .map_err(|_| ErrorCode::ArithmeticOverflow)?;
 
     let to_claim = checked_sub!(available_to_claim, tickets_claimed.value)?;
-    require!(to_claim > 0, ErrorCode::NothingToClaim);
 
-    let seeds: &[&[u8]] = &[
-        SEED_ROOT,
-        b"escrow_authority",
-        &launch_state.key().to_bytes(),
-        &[ctx.bumps.escrow_authority],
-    ];
-    let signer_seeds = &[seeds];
+    if to_claim > 0 {
+        let seeds: &[&[u8]] = &[
+            SEED_ROOT,
+            b"escrow_authority",
+            &launch_state.key().to_bytes(),
+            &[ctx.bumps.escrow_authority],
+        ];
+        let signer_seeds = &[seeds];
 
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.base_escrow_ata.to_account_info(),
-        to: ctx.accounts.participant_ata.to_account_info(),
-        authority: ctx.accounts.escrow_authority.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signer_seeds,
-    );
-    token::transfer(cpi_ctx, to_claim)?;
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.base_escrow_ata.to_account_info(),
+            to: ctx.accounts.participant_ata.to_account_info(),
+            authority: ctx.accounts.escrow_authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        token::transfer(cpi_ctx, to_claim)?;
+    }
+
     tickets_claimed.value = available_to_claim;
+
+    if bucket == Bucket::Sale && to_claim > 0 {
+        let LotteryStatus::InProgress {
+            claimed_tickets: current_claimed_tickets,
+        } = launch_state.lottery.status
+        else {
+            panic!("is_lottery_in_progress constraint violated")
+        };
+
+        let tokens_per_ticket = lottery.tokens_per_ticket();
+        let claimed_tickets_now = to_claim / tokens_per_ticket;
+
+        let new_claimed_tickets = checked_add!(current_claimed_tickets, claimed_tickets_now)?;
+        if new_claimed_tickets >= launch_state.lottery.total_winning_tickets {
+            launch_state.lottery.status = LotteryStatus::Completed;
+        } else {
+            launch_state.lottery.status = LotteryStatus::InProgress {
+                claimed_tickets: new_claimed_tickets,
+            };
+        }
+    }
 
     emit!(Claimed {
         launch: launch_state.key(),

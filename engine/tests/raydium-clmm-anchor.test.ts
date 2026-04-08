@@ -43,6 +43,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
   let baseTokenAta: anchor.web3.PublicKey;
   let quoteVault: anchor.web3.PublicKey;
   let baseVault: anchor.web3.PublicKey;
+  let reallocFunds: anchor.web3.PublicKey;
 
   let raydiumPositionNftMint: anchor.web3.PublicKey;
   let raydiumPositionNftAccount: anchor.web3.PublicKey;
@@ -265,6 +266,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     });
 
     launchPda = launch;
+    [reallocFunds] = sdk.getReallocFundsPda();
 
     console.log("✅ Launch initialized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, signature));
@@ -348,7 +350,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     // Calculate total deposited from lottery data
     const { data: lottery } = await sdk.fetchLaunch(launchPda);
     const tauLamports = presetConfig.tauLamports;
-    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const activeTickets = lottery.lottery.bitsAllocated.toNumber() - lottery.lottery.inactiveCount.toNumber();
     const totalDeposited = BigInt(activeTickets) * BigInt(tauLamports);
     const totalSOL = Number(totalDeposited) / anchor.web3.LAMPORTS_PER_SOL;
     console.log(
@@ -417,6 +419,13 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
 
     console.log("✅ Lottery finalized");
     console.log("Explorer url:", utils.getExplorerUrl(provider, prepSig));
+
+    // Wait for contributor vesting duration so buyers can claim full allocation
+    const { data: preset } = await sdk.fetchLaunchPreset(PRESET_ID);
+    const waitTime = preset.contributorDurationSec * 1000 + 500;
+    console.log(`Waiting ${waitTime}ms for contributor vesting to complete...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    console.log("✅ Contributor vesting period complete");
   });
 
   it("Step 9: Prepare quote mint", async () => {
@@ -507,7 +516,7 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       .mul(new BN(preset.baseSaleBasisPoints))
       .div(new BN(10000));
 
-    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const activeTickets = lottery.lottery.bitsAllocated.toNumber() - lottery.lottery.inactiveCount.toNumber();
     const kCapacity = new BN(preset.hardCapLamports.toString()).div(new BN(preset.tauLamports.toString()));
     const winningTickets = Math.min(activeTickets, kCapacity.toNumber());
 
@@ -520,9 +529,6 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
     console.log(`Sale allocation: ${saleAllocation.toString()}`);
     console.log(`Active tickets: ${activeTickets}, k_capacity: ${kCapacity.toString()}, winning: ${winningTickets}`);
     console.log(`Tokens per ticket (from lottery): ${tokensPerTicket.toString()}`);
-
-    // Wait for contributor vesting period
-    await new Promise(resolve => setTimeout(resolve, preset.contributorPeriodSec * 1000 + 1000));
 
     const buyers = [buyer1Keypair, buyer2Keypair, buyer3Keypair];
     let totalClaimed = new BN(0);
@@ -582,13 +588,15 @@ describe("Raydium CLMM Pool Creation - Fast Flow", () => {
       (sum: number, r: any) => sum + (r.end.toNumber() - r.start.toNumber()),
       0
     );
-    const activeTickets = lottery.bitsAllocated.toNumber() - lottery.inactiveCount.toNumber();
+    const activeTickets = lottery.lottery.bitsAllocated.toNumber() - lottery.lottery.inactiveCount.toNumber();
     const kCapacity = new BN(preset.hardCapLamports.toString()).div(new BN(preset.tauLamports.toString()));
     const divisor = BN.min(new BN(activeTickets), kCapacity);
     const tokensPerTicket = saleAllocation.div(divisor);
     const creatorSaleShare = tokensPerTicket.muln(creatorTickets);
 
     // Creator sale vesting: creatorPeriodUnlock per period, calculated as SOL per period / tau
+    // IMPORTANT: Contract uses winning_tickets (not total) for duration calculation
+    // Use total tickets as upper bound since we can't easily determine exact winning count
     const creatorDepositLamports = BigInt(creatorTickets) * BigInt(preset.tauLamports.toString());
     const periodsForSale = Math.ceil(Number(creatorDepositLamports) / Number(preset.creatorPeriodUnlock.toString()));
     const teamPeriods = preset.teamDurationSec / preset.teamPeriodSec;
